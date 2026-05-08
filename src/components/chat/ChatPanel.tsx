@@ -1,18 +1,19 @@
 ﻿import { mockToolCalls } from '../../mocks/toolCalls';
+import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { ChatInput } from './ChatInput';
 import { ConfirmActionCard } from './ConfirmActionCard';
 import { MessageBubble } from './MessageBubble';
 import { ToolCallCard } from './ToolCallCard';
 
 export function ChatPanel() {
+  const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
+
   return (
     <div className="chat-panel">
       <div className="message-scroll">
         <div className="message-row user-row">
           <p className="message-time">10:42</p>
-          <MessageBubble role="user">
-            请分析 2026 年 5 月教学质量相关数据，找出异常指标，并给出简短结论。
-          </MessageBubble>
+          <MessageBubble role="user">{currentPrompt}</MessageBubble>
         </div>
 
         <div className="message-row ai-row">

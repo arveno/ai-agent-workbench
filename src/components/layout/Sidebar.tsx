@@ -7,7 +7,7 @@ export function Sidebar() {
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const setCurrentSessionId = useWorkbenchStore((state) => state.setCurrentSessionId);
-  const setCurrentTaskId = useWorkbenchStore((state) => state.setCurrentTaskId);
+  const startTask = useWorkbenchStore((state) => state.startTask);
 
   const handleSessionClick = (sessionId: string) => {
     setCurrentSessionId(sessionId);
@@ -17,8 +17,8 @@ export function Sidebar() {
     });
   };
 
-  const handleTaskClick = (taskId: string) => {
-    setCurrentTaskId(taskId);
+  const handleTaskClick = (taskId: string, prompt: string) => {
+    startTask(taskId, prompt);
     replaceWorkbenchUrl({
       sessionId: currentSessionId,
       taskId,
@@ -64,7 +64,7 @@ export function Sidebar() {
                 key={task.id}
                 type="button"
                 className="task-btn"
-                onClick={() => handleTaskClick(task.id)}
+                onClick={() => handleTaskClick(task.id, task.prompt)}
               >
                 <span>{task.title}</span>
                 <span aria-hidden="true">&gt;</span>
