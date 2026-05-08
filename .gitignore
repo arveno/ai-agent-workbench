@@ -153,6 +153,10 @@ desktop.ini
 
 # Build outputs
 build/
+dist-ssr
+
+# Local overrides
+*.local
 
 # Test / e2e reports
 playwright-report/
