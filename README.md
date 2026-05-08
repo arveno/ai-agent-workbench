@@ -125,6 +125,32 @@ http://127.0.0.1:5173/
 pnpm build
 ```
 
+## 真实模型接入
+
+项目预留了服务端接口 `/api/chat`，用于接入真实模型服务。
+
+当前示例使用 Groq OpenAI-compatible API。
+
+本地需要配置：
+
+```env
+GROQ_API_KEY=
+```
+
+部署到 Vercel 后，需要在：
+
+```txt
+Project Settings → Environment Variables
+```
+
+中配置：
+
+```txt
+GROQ_API_KEY
+```
+
+前端不会直接持有模型 API Key，模型请求统一通过服务端接口转发。
+
 ## 目录结构
 
 ```txt

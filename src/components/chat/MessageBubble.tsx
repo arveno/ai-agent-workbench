@@ -1,12 +1,56 @@
 ﻿import type { ReactNode } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
-  children: ReactNode;
+  content: ReactNode;
+  afterContent?: ReactNode;
 }
 
-export function MessageBubble({ role, children }: MessageBubbleProps) {
-  const roleClass = role === 'user' ? 'user-bubble' : 'ai-bubble';
+interface MarkdownMessageProps {
+  content: string;
+}
 
-  return <div className={`message-bubble ${roleClass}`}>{children}</div>;
+function MarkdownMessage({ content }: MarkdownMessageProps) {
+  return (
+    <div className="message-markdown">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ children: linkChildren, href }) =>
+            href ? (
+              <a href={href} target="_blank" rel="noreferrer">
+                {linkChildren}
+              </a>
+            ) : (
+              <span>{linkChildren}</span>
+            ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+export function MessageBubble({ role, content, afterContent }: MessageBubbleProps) {
+  const roleClass = role === 'user' ? 'user-bubble' : 'ai-bubble';
+  const isAssistantText = role === 'assistant' && typeof content === 'string';
+  const isUserText = role === 'user' && typeof content === 'string';
+
+  const renderedContent = isAssistantText ? (
+    <MarkdownMessage content={content} />
+  ) : isUserText ? (
+    <div className="message-content-text">{content}</div>
+  ) : (
+    <div className="message-content-text">{content}</div>
+  );
+
+  return (
+    <div className={`message-bubble ${roleClass}`}>
+      {renderedContent}
+      {afterContent}
+    </div>
+  );
 }

@@ -12,6 +12,7 @@ export function ChatPanel() {
   const assistantStream = useWorkbenchStore((state) => state.assistantStream);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
+  const realModelNotice = useWorkbenchStore((state) => state.realModelNotice);
   const visibleToolCallIds = useWorkbenchStore((state) => state.visibleToolCallIds);
   const confirmStatus = useWorkbenchStore((state) => state.confirmStatus);
   const finalMessage = useWorkbenchStore((state) => state.finalMessage);
@@ -26,7 +27,7 @@ export function ChatPanel() {
         <div className="message-row user-row">
           <p className="message-time">10:42</p>
           <div className="user-row-main">
-            <MessageBubble role="user">{currentPrompt}</MessageBubble>
+            <MessageBubble role="user" content={currentPrompt} />
             <div className="message-avatar message-avatar-user" aria-hidden="true">
               <AppIcon icon={icons.user} size={16} />
             </div>
@@ -38,25 +39,30 @@ export function ChatPanel() {
             <AppIcon icon={icons.brand} size={16} />
           </div>
           <div className="ai-stack">
-            <MessageBubble role="assistant">
-              {assistantStream.content}
-              {assistantStream.status === 'streaming' ? <span className="typing-cursor">▍</span> : null}
-              {assistantStream.status === 'stopped' ? (
-                <span
-                  className="status-chip"
-                  style={{
-                    marginLeft: '8px',
-                    padding: '1px 6px',
-                    borderRadius: '999px',
-                    border: '1px solid #d1d5db',
-                    color: '#6b7280',
-                    fontSize: '12px',
-                  }}
-                >
-                  已停止
-                </span>
-              ) : null}
-            </MessageBubble>
+            <MessageBubble
+              role="assistant"
+              content={assistantStream.content}
+              afterContent={
+                <>
+                  {assistantStream.status === 'streaming' ? <span className="typing-cursor">▍</span> : null}
+                  {assistantStream.status === 'stopped' ? (
+                    <span
+                      className="status-chip"
+                      style={{
+                        marginLeft: '8px',
+                        padding: '1px 6px',
+                        borderRadius: '999px',
+                        border: '1px solid #d1d5db',
+                        color: '#6b7280',
+                        fontSize: '12px',
+                      }}
+                    >
+                      已停止
+                    </span>
+                  ) : null}
+                </>
+              }
+            />
           </div>
         </div>
 
@@ -77,7 +83,10 @@ export function ChatPanel() {
             <AppIcon icon={icons.brand} size={16} />
           </div>
           <div className="ai-stack">
-            <MessageBubble role="assistant">
+            <MessageBubble
+              role="assistant"
+              content={
+                <>
               <p>根据查询结果，以下是本月教学质量的关键异常点与简要结论：</p>
               <p className="summary-list">
                 • 七年级平均分较上月下降 6.8%
@@ -85,7 +94,9 @@ export function ChatPanel() {
                 • 八年级出勤率低于基线 3.2%
                 <br />• 整体教学质量波动主要集中在周测成绩与缺勤率变化
               </p>
-            </MessageBubble>
+                </>
+              }
+            />
           </div>
         </div>
 
@@ -112,6 +123,9 @@ export function ChatPanel() {
             </button>
           </div>
         ) : null}
+        {realModelNotice ? (
+          <div className="real-model-notice">{realModelNotice}</div>
+        ) : null}
 
         {finalMessage.status === 'visible' ? (
           <div className="message-row ai-row">
@@ -119,7 +133,7 @@ export function ChatPanel() {
               <AppIcon icon={icons.brand} size={16} />
             </div>
             <div className="ai-stack">
-              <MessageBubble role="assistant">{finalMessage.content}</MessageBubble>
+              <MessageBubble role="assistant" content={finalMessage.content} />
             </div>
           </div>
         ) : null}

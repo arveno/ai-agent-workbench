@@ -62,7 +62,7 @@ export interface ChatMessage {
 export type MessageStatus = 'idle' | 'streaming' | 'done' | 'stopped';
 export type GenerationStatus = 'idle' | 'streaming' | 'done' | 'stopped' | 'error';
 export type ConfirmStatus = 'waiting' | 'confirmed' | 'cancelled';
-export type ModelProvider =
+export type ModelProviderId =
   | 'mock'
   | 'groq'
   | 'gemini'
@@ -70,9 +70,20 @@ export type ModelProvider =
   | 'openai-api-key'
   | 'codex-oauth'
   | 'ollama';
+export type ModelProvider = ModelProviderId;
+export type ModelTestStatus = 'idle' | 'testing' | 'success' | 'error';
+
+export interface ModelProviderConfig {
+  apiKey?: string;
+  baseUrl?: string;
+  modelName?: string;
+}
+
+export type ModelProviderConfigMap = Partial<Record<ModelProviderId, ModelProviderConfig>>;
+export type ModelProviderTestStatusMap = Partial<Record<ModelProviderId, ModelTestStatus>>;
 
 export interface ModelProviderOption {
-  id: ModelProvider;
+  id: ModelProviderId;
   name: string;
   description: string;
   status: 'active' | 'available' | 'reserved';

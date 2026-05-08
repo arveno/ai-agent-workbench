@@ -167,3 +167,4 @@ cypress/videos/
 # Temporary files
 *.tmp
 *.temp
+.vercel
