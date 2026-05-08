@@ -58,3 +58,17 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
 }
+
+export type MessageStatus = 'idle' | 'streaming' | 'done' | 'stopped';
+export type GenerationStatus = 'idle' | 'streaming' | 'done' | 'stopped' | 'error';
+export type ConfirmStatus = 'waiting' | 'confirmed' | 'cancelled';
+
+export interface AssistantStreamState {
+  content: string;
+  status: MessageStatus;
+}
+
+export interface FinalMessage {
+  content: string;
+  status: 'hidden' | 'visible';
+}

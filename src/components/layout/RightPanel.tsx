@@ -1,6 +1,7 @@
-﻿import { mockAgentSteps } from '../../mocks/agentSteps';
 import { mockAnalyticsResult } from '../../mocks/analytics';
 import { mockKnowledgeSources } from '../../mocks/knowledgeSources';
+import { useWorkbenchStore } from '../../stores/workbenchStore';
+import { GradeScoreChart } from '../analytics/GradeScoreChart';
 import type { AgentStepStatus } from '../../types/workbench';
 
 const CURRENT_CONCLUSION =
@@ -30,24 +31,27 @@ function getStepStatusText(status: AgentStepStatus): string {
     case 'pending':
       return '待执行';
     case 'error':
-      return '失败';
+      return '已中断';
     default:
       return '待执行';
   }
 }
 
-const maxGradeScore = Math.max(1, ...mockAnalyticsResult.gradeScores.map((grade) => grade.value));
-
 export function RightPanel() {
+  const agentSteps = useWorkbenchStore((state) => state.agentSteps);
+  const showKnowledgeSources = useWorkbenchStore((state) => state.showKnowledgeSources);
+  const showAnalyticsResult = useWorkbenchStore((state) => state.showAnalyticsResult);
+
   return (
     <aside className="right-panel">
       <div className="right-panel-content">
         <section className="right-card">
           <h2 className="right-card-title">Agent 执行步骤</h2>
           <ul className="agent-steps">
-            {mockAgentSteps.map((step, index) => {
+            {agentSteps.map((step, index) => {
               const statusClass = getStepClass(step.status);
               const isRunning = step.status === 'running';
+              const isError = step.status === 'error';
 
               return (
                 <li
@@ -55,10 +59,18 @@ export function RightPanel() {
                   className={`agent-step ${statusClass}${isRunning ? ' active' : ''}`}
                 >
                   <span className="step-main">
-                    <span className="step-dot" aria-hidden="true"></span>
-                    <span className="step-label">{`${index + 1}. ${step.title}`}</span>
+                    <span
+                      className="step-dot"
+                      aria-hidden="true"
+                      style={isError ? { background: '#ef4444' } : undefined}
+                    ></span>
+                    <span className="step-label" style={isError ? { color: '#dc2626' } : undefined}>
+                      {`${index + 1}. ${step.title}`}
+                    </span>
                   </span>
-                  <span className="step-status">{getStepStatusText(step.status)}</span>
+                  <span className="step-status" style={isError ? { color: '#dc2626' } : undefined}>
+                    {getStepStatusText(step.status)}
+                  </span>
                 </li>
               );
             })}
@@ -72,53 +84,53 @@ export function RightPanel() {
               查看全部
             </button>
           </div>
-          <div className="source-list">
-            {mockKnowledgeSources.map((source) => (
-              <article key={source.id} className="source-item">
-                <div className="source-top">
-                  <span className="source-icon" aria-hidden="true">
-                    📄
-                  </span>
-                  <strong>{source.title}</strong>
-                  <span className="match-tag">匹配度 {source.matchRate}%</span>
-                </div>
-                <p>摘要：{source.summary}</p>
-              </article>
-            ))}
-          </div>
+          {showKnowledgeSources ? (
+            <div className="source-list">
+              {mockKnowledgeSources.map((source) => (
+                <article key={source.id} className="source-item">
+                  <div className="source-top">
+                    <span className="source-icon" aria-hidden="true">
+                      📄
+                    </span>
+                    <strong>{source.title}</strong>
+                    <span className="match-tag">匹配度 {source.matchRate}%</span>
+                  </div>
+                  <p>摘要：{source.summary}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p style={{ margin: '10px 0 0', color: '#6b7280', fontSize: '13px' }}>等待知识库检索结果...</p>
+          )}
         </section>
 
         <section className="right-card">
           <h2 className="right-card-title">数据分析结果</h2>
-          <div className="kpi-grid">
-            <div className="kpi-item">
-              <p className="kpi-label">平均分</p>
-              <p className="kpi-value">{mockAnalyticsResult.kpis.averageScore.toFixed(1)}</p>
-            </div>
-            <div className="kpi-item">
-              <p className="kpi-label">出勤率</p>
-              <p className="kpi-value">{mockAnalyticsResult.kpis.attendanceRate.toFixed(1)}%</p>
-            </div>
-            <div className="kpi-item">
-              <p className="kpi-label">异常指标</p>
-              <p className="kpi-value">{mockAnalyticsResult.kpis.abnormalCount}</p>
-            </div>
-          </div>
-
-          <div className="chart-block">
-            <h3>各年级平均分对比</h3>
-            <div className="bar-chart" aria-label="各年级平均分对比">
-              {mockAnalyticsResult.gradeScores.map((gradeScore) => (
-                <div key={gradeScore.grade} className="bar-col">
-                  <div
-                    className="bar"
-                    style={{ height: `${Math.round((gradeScore.value / maxGradeScore) * 100)}%` }}
-                  ></div>
-                  <span className="bar-label">{gradeScore.grade}</span>
+          {showAnalyticsResult ? (
+            <>
+              <div className="kpi-grid">
+                <div className="kpi-item">
+                  <p className="kpi-label">平均分</p>
+                  <p className="kpi-value">{mockAnalyticsResult.kpis.averageScore.toFixed(1)}</p>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="kpi-item">
+                  <p className="kpi-label">出勤率</p>
+                  <p className="kpi-value">{mockAnalyticsResult.kpis.attendanceRate.toFixed(1)}%</p>
+                </div>
+                <div className="kpi-item">
+                  <p className="kpi-label">异常指标</p>
+                  <p className="kpi-value">{mockAnalyticsResult.kpis.abnormalCount}</p>
+                </div>
+              </div>
+
+              <div className="chart-block">
+                <h3>各年级平均分对比</h3>
+                <GradeScoreChart data={mockAnalyticsResult.gradeScores} />
+              </div>
+            </>
+          ) : (
+            <p style={{ margin: '10px 0 0', color: '#6b7280', fontSize: '13px' }}>等待数据分析结果...</p>
+          )}
         </section>
 
         <section className="right-card">

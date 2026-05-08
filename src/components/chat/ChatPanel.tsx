@@ -1,4 +1,4 @@
-﻿import { mockToolCalls } from '../../mocks/toolCalls';
+import { mockToolCalls } from '../../mocks/toolCalls';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { ChatInput } from './ChatInput';
 import { ConfirmActionCard } from './ConfirmActionCard';
@@ -7,6 +7,16 @@ import { ToolCallCard } from './ToolCallCard';
 
 export function ChatPanel() {
   const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
+  const assistantStream = useWorkbenchStore((state) => state.assistantStream);
+  const generationStatus = useWorkbenchStore((state) => state.generationStatus);
+  const errorMessage = useWorkbenchStore((state) => state.errorMessage);
+  const visibleToolCallIds = useWorkbenchStore((state) => state.visibleToolCallIds);
+  const confirmStatus = useWorkbenchStore((state) => state.confirmStatus);
+  const finalMessage = useWorkbenchStore((state) => state.finalMessage);
+  const retryCurrentTask = useWorkbenchStore((state) => state.retryCurrentTask);
+  const confirmGenerateReport = useWorkbenchStore((state) => state.confirmGenerateReport);
+  const cancelGenerateReport = useWorkbenchStore((state) => state.cancelGenerateReport);
+  const visibleToolCalls = mockToolCalls.filter((toolCall) => visibleToolCallIds.includes(toolCall.id));
 
   return (
     <div className="chat-panel">
@@ -22,13 +32,29 @@ export function ChatPanel() {
           </div>
           <div className="ai-stack">
             <MessageBubble role="assistant">
-              我将先检索相关指标口径与教学质量分析规则，再查询本月各年级成绩与出勤数据，随后给出异常项和简短分析结论。
+              {assistantStream.content}
+              {assistantStream.status === 'streaming' ? <span className="typing-cursor">▍</span> : null}
+              {assistantStream.status === 'stopped' ? (
+                <span
+                  className="status-chip"
+                  style={{
+                    marginLeft: '8px',
+                    padding: '1px 6px',
+                    borderRadius: '999px',
+                    border: '1px solid #d1d5db',
+                    color: '#6b7280',
+                    fontSize: '12px',
+                  }}
+                >
+                  已停止
+                </span>
+              ) : null}
             </MessageBubble>
           </div>
         </div>
 
         <div className="tool-card-grid">
-          {mockToolCalls.map((toolCall) => (
+          {visibleToolCalls.map((toolCall) => (
             <ToolCallCard
               key={toolCall.id}
               title={toolCall.title}
@@ -56,7 +82,40 @@ export function ChatPanel() {
           </div>
         </div>
 
-        <ConfirmActionCard />
+        <ConfirmActionCard
+          status={confirmStatus}
+          onConfirm={confirmGenerateReport}
+          onCancel={cancelGenerateReport}
+        />
+
+        {generationStatus === 'error' && errorMessage ? (
+          <div className="error-card">
+            <div className="error-card-copy">
+              <h3>执行失败</h3>
+              <p>{errorMessage}</p>
+            </div>
+            <button
+              type="button"
+              className="error-retry-btn"
+              onClick={() => {
+                void retryCurrentTask();
+              }}
+            >
+              重试
+            </button>
+          </div>
+        ) : null}
+
+        {finalMessage.status === 'visible' ? (
+          <div className="message-row ai-row">
+            <div className="agent-avatar" aria-hidden="true">
+              🤖
+            </div>
+            <div className="ai-stack">
+              <MessageBubble role="assistant">{finalMessage.content}</MessageBubble>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <ChatInput />
