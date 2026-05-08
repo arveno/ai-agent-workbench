@@ -141,3 +141,25 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Build outputs
+build/
+
+# Test / e2e reports
+playwright-report/
+test-results/
+cypress/screenshots/
+cypress/videos/
+
+# Temporary files
+*.tmp
+*.temp
