@@ -6,7 +6,7 @@ AI Agent Workbench 是一个面向 B 端教育数据分析场景的 AI 应用前
 
 ## 在线预览
 
-> 待部署后补充
+https://ai-agent-workbench.vercel.app
 
 ## 项目截图
 
