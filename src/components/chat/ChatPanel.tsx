@@ -1,5 +1,7 @@
 import { mockToolCalls } from '../../mocks/toolCalls';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import { AppIcon } from '../common/AppIcon';
+import { icons } from '../common/iconMap';
 import { ChatInput } from './ChatInput';
 import { ConfirmActionCard } from './ConfirmActionCard';
 import { MessageBubble } from './MessageBubble';
@@ -23,12 +25,17 @@ export function ChatPanel() {
       <div className="message-scroll">
         <div className="message-row user-row">
           <p className="message-time">10:42</p>
-          <MessageBubble role="user">{currentPrompt}</MessageBubble>
+          <div className="user-row-main">
+            <MessageBubble role="user">{currentPrompt}</MessageBubble>
+            <div className="message-avatar message-avatar-user" aria-hidden="true">
+              <AppIcon icon={icons.user} size={16} />
+            </div>
+          </div>
         </div>
 
         <div className="message-row ai-row">
-          <div className="agent-avatar" aria-hidden="true">
-            🤖
+          <div className="agent-avatar message-avatar message-avatar-bot" aria-hidden="true">
+            <AppIcon icon={icons.brand} size={16} />
           </div>
           <div className="ai-stack">
             <MessageBubble role="assistant">
@@ -66,8 +73,8 @@ export function ChatPanel() {
         </div>
 
         <div className="message-row ai-row">
-          <div className="agent-avatar" aria-hidden="true">
-            🤖
+          <div className="agent-avatar message-avatar message-avatar-bot" aria-hidden="true">
+            <AppIcon icon={icons.brand} size={16} />
           </div>
           <div className="ai-stack">
             <MessageBubble role="assistant">
@@ -108,8 +115,8 @@ export function ChatPanel() {
 
         {finalMessage.status === 'visible' ? (
           <div className="message-row ai-row">
-            <div className="agent-avatar" aria-hidden="true">
-              🤖
+            <div className="agent-avatar message-avatar message-avatar-bot" aria-hidden="true">
+              <AppIcon icon={icons.brand} size={16} />
             </div>
             <div className="ai-stack">
               <MessageBubble role="assistant">{finalMessage.content}</MessageBubble>

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import { AppIcon } from '../common/AppIcon';
+import { icons } from '../common/iconMap';
 
 const MAX_PROMPT_LENGTH = 2000;
 
@@ -41,11 +43,17 @@ export function ChatInput() {
       />
       <div className="composer-footer">
         <div className="composer-tools">
-          <button type="button" className="composer-tool-btn">
-            附件
+          <button type="button" className="composer-tool-btn input-tool-button">
+            <span className="icon-text-inline">
+              <AppIcon icon={icons.attachment} size={14} />
+              <span>附件</span>
+            </span>
           </button>
-          <button type="button" className="composer-tool-btn">
-            模板
+          <button type="button" className="composer-tool-btn input-tool-button">
+            <span className="icon-text-inline">
+              <AppIcon icon={icons.template} size={14} />
+              <span>模板</span>
+            </span>
           </button>
         </div>
         <div className="composer-actions">
@@ -56,6 +64,7 @@ export function ChatInput() {
             type="button"
             className={[
               'send-btn',
+              'send-button',
               sendDisabled ? 'send-btn-disabled' : '',
               isStreaming ? 'send-btn-streaming' : '',
             ]
@@ -64,7 +73,10 @@ export function ChatInput() {
             onClick={handleSend}
             disabled={sendDisabled}
           >
-            {isStreaming ? '生成中' : '发送'}
+            <span className="icon-text-inline">
+              <AppIcon icon={isStreaming ? icons.stepCurrent : icons.send} size={14} />
+              <span>{isStreaming ? '生成中' : '发送'}</span>
+            </span>
           </button>
         </div>
       </div>

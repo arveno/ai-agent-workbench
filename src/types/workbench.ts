@@ -62,6 +62,21 @@ export interface ChatMessage {
 export type MessageStatus = 'idle' | 'streaming' | 'done' | 'stopped';
 export type GenerationStatus = 'idle' | 'streaming' | 'done' | 'stopped' | 'error';
 export type ConfirmStatus = 'waiting' | 'confirmed' | 'cancelled';
+export type ModelProvider =
+  | 'mock'
+  | 'groq'
+  | 'gemini'
+  | 'openrouter'
+  | 'openai-api-key'
+  | 'codex-oauth'
+  | 'ollama';
+
+export interface ModelProviderOption {
+  id: ModelProvider;
+  name: string;
+  description: string;
+  status: 'active' | 'available' | 'reserved';
+}
 
 export interface AssistantStreamState {
   content: string;

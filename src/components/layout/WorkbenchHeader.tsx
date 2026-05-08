@@ -1,6 +1,8 @@
 import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { GenerationStatus } from '../../types/workbench';
+import { AppIcon } from '../common/AppIcon';
+import { icons } from '../common/iconMap';
 
 const DEFAULT_HEADER_TITLE = '本月教学数据分析';
 const TASK_STATUS_SUFFIX = '已检索 3 条知识库资料 · 已生成 1 个图表';
@@ -51,20 +53,23 @@ export function WorkbenchHeader() {
         : '#9ca3af';
 
   return (
-    <header className="workspace-header">
-      <div className="workspace-heading">
+    <header className="workbench-header">
+      <div className="header-main">
         <div className="workspace-title-row">
-          <h2>{headerTitle}</h2>
-          <span className="title-star" aria-hidden="true">
-            ☆
-          </span>
+          <div className="workbench-title-icon" aria-hidden="true">
+            <AppIcon icon={icons.task} size={18} />
+          </div>
+          <h2 className="header-title">{headerTitle}</h2>
+          <button type="button" className="title-star-button" aria-label="收藏">
+            <AppIcon icon={icons.star} size={16} />
+          </button>
         </div>
         <p className="workspace-subtitle">
-          <span className="live-dot" aria-hidden="true" style={{ background: dotColor }}></span>
+          <span className="header-status-dot" aria-hidden="true" style={{ background: dotColor }}></span>
           {taskStatusPrefix} · {taskStatusSuffix}
         </p>
       </div>
-      <div className="workspace-actions">
+      <div className="task-action-group">
         <button
           type="button"
           className="header-btn btn-stop"
@@ -78,12 +83,6 @@ export function WorkbenchHeader() {
         </button>
         <button type="button" className="header-btn btn-mock-fail" onClick={triggerMockError}>
           模拟失败
-        </button>
-        <button type="button" className="header-btn">
-          分享
-        </button>
-        <button type="button" className="header-btn icon-btn" aria-label="更多">
-          ⋮
         </button>
       </div>
     </header>

@@ -2,6 +2,8 @@ import { mockAnalyticsResult } from '../../mocks/analytics';
 import { mockKnowledgeSources } from '../../mocks/knowledgeSources';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { GradeScoreChart } from '../analytics/GradeScoreChart';
+import { AppIcon } from '../common/AppIcon';
+import { icons, type IconKey } from '../common/iconMap';
 import type { AgentStepStatus } from '../../types/workbench';
 
 const CURRENT_CONCLUSION =
@@ -37,6 +39,21 @@ function getStepStatusText(status: AgentStepStatus): string {
   }
 }
 
+function getStepIcon(status: AgentStepStatus): IconKey {
+  switch (status) {
+    case 'success':
+      return 'stepDone';
+    case 'running':
+      return 'stepCurrent';
+    case 'pending':
+      return 'stepPending';
+    case 'error':
+      return 'alert';
+    default:
+      return 'stepPending';
+  }
+}
+
 export function RightPanel() {
   const agentSteps = useWorkbenchStore((state) => state.agentSteps);
   const showKnowledgeSources = useWorkbenchStore((state) => state.showKnowledgeSources);
@@ -46,12 +63,14 @@ export function RightPanel() {
     <aside className="right-panel">
       <div className="right-panel-content">
         <section className="right-card">
-          <h2 className="right-card-title">Agent 执行步骤</h2>
+          <h2 className="panel-section-title">
+            <AppIcon icon={icons.agent} size={16} />
+            <span>Agent 执行步骤</span>
+          </h2>
           <ul className="agent-steps">
             {agentSteps.map((step, index) => {
               const statusClass = getStepClass(step.status);
               const isRunning = step.status === 'running';
-              const isError = step.status === 'error';
 
               return (
                 <li
@@ -59,18 +78,12 @@ export function RightPanel() {
                   className={`agent-step ${statusClass}${isRunning ? ' active' : ''}`}
                 >
                   <span className="step-main">
-                    <span
-                      className="step-dot"
-                      aria-hidden="true"
-                      style={isError ? { background: '#ef4444' } : undefined}
-                    ></span>
-                    <span className="step-label" style={isError ? { color: '#dc2626' } : undefined}>
-                      {`${index + 1}. ${step.title}`}
+                    <span className={`step-icon-wrap step-icon-${step.status}`} aria-hidden="true">
+                      <AppIcon icon={icons[getStepIcon(step.status)]} size={16} />
                     </span>
+                    <span className="step-label">{`${index + 1}. ${step.title}`}</span>
                   </span>
-                  <span className="step-status" style={isError ? { color: '#dc2626' } : undefined}>
-                    {getStepStatusText(step.status)}
-                  </span>
+                  <span className="step-status">{getStepStatusText(step.status)}</span>
                 </li>
               );
             })}
@@ -79,7 +92,10 @@ export function RightPanel() {
 
         <section className="right-card">
           <div className="right-card-head">
-            <h2 className="right-card-title">知识库来源</h2>
+            <h2 className="panel-section-title">
+              <AppIcon icon={icons.knowledge} size={16} />
+              <span>知识库来源</span>
+            </h2>
             <button type="button" className="view-all-btn">
               查看全部
             </button>
@@ -90,7 +106,7 @@ export function RightPanel() {
                 <article key={source.id} className="source-item">
                   <div className="source-top">
                     <span className="source-icon" aria-hidden="true">
-                      📄
+                      <AppIcon icon={icons.document} size={16} />
                     </span>
                     <strong>{source.title}</strong>
                     <span className="match-tag">匹配度 {source.matchRate}%</span>
@@ -105,19 +121,31 @@ export function RightPanel() {
         </section>
 
         <section className="right-card">
-          <h2 className="right-card-title">数据分析结果</h2>
+          <h2 className="panel-section-title">
+            <AppIcon icon={icons.chart} size={16} />
+            <span>数据分析结果</span>
+          </h2>
           {showAnalyticsResult ? (
             <>
               <div className="kpi-grid">
                 <div className="kpi-item">
+                  <span className="kpi-icon" aria-hidden="true">
+                    <AppIcon icon={icons.chart} size={14} />
+                  </span>
                   <p className="kpi-label">平均分</p>
                   <p className="kpi-value">{mockAnalyticsResult.kpis.averageScore.toFixed(1)}</p>
                 </div>
                 <div className="kpi-item">
+                  <span className="kpi-icon" aria-hidden="true">
+                    <AppIcon icon={icons.chart} size={14} />
+                  </span>
                   <p className="kpi-label">出勤率</p>
                   <p className="kpi-value">{mockAnalyticsResult.kpis.attendanceRate.toFixed(1)}%</p>
                 </div>
                 <div className="kpi-item">
+                  <span className="kpi-icon" aria-hidden="true">
+                    <AppIcon icon={icons.alert} size={14} />
+                  </span>
                   <p className="kpi-label">异常指标</p>
                   <p className="kpi-value">{mockAnalyticsResult.kpis.abnormalCount}</p>
                 </div>
@@ -134,7 +162,10 @@ export function RightPanel() {
         </section>
 
         <section className="right-card">
-          <h2 className="right-card-title">当前结论</h2>
+          <h2 className="panel-section-title">
+            <AppIcon icon={icons.alert} size={16} />
+            <span>当前结论</span>
+          </h2>
           <p className="conclusion-text">{CURRENT_CONCLUSION}</p>
         </section>
       </div>

@@ -1,9 +1,11 @@
 ﻿import { useEffect } from 'react';
 import './App.css';
 import { ChatPanel } from './components/chat/ChatPanel';
+import { AppHeader } from './components/layout/AppHeader';
 import { RightPanel } from './components/layout/RightPanel';
 import { Sidebar } from './components/layout/Sidebar';
 import { WorkbenchHeader } from './components/layout/WorkbenchHeader';
+import { ModelConnectModal } from './components/model/ModelConnectModal';
 import { useWorkbenchStore } from './stores/workbenchStore';
 import { parseWorkbenchUrl, replaceWorkbenchUrl } from './utils/urlState';
 
@@ -22,15 +24,21 @@ function App() {
   }, [hydrateFromUrl]);
 
   return (
-    <div className="app-shell">
-      <Sidebar />
+    <div className="app-root">
+      <AppHeader />
 
-      <main className="main-panel">
-        <WorkbenchHeader />
-        <ChatPanel />
-      </main>
+      <div className="app-body">
+        <Sidebar />
 
-      <RightPanel />
+        <main className="main-workspace">
+          <WorkbenchHeader />
+          <ChatPanel />
+        </main>
+
+        <RightPanel />
+      </div>
+
+      <ModelConnectModal />
     </div>
   );
 }

@@ -2,6 +2,20 @@
 import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
+import { AppIcon } from '../common/AppIcon';
+import { icons, type IconKey } from '../common/iconMap';
+
+function getTaskIcon(taskId: string): IconKey {
+  if (taskId === 't_month_analytics') {
+    return 'search';
+  }
+
+  if (taskId === 't_abnormal_reason') {
+    return 'alert';
+  }
+
+  return 'document';
+}
 
 export function Sidebar() {
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
@@ -28,16 +42,11 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-content">
-        <div className="brand-block">
-          <div className="brand-icon">🤖</div>
-          <div className="brand-copy">
-            <h1>AI Agent Workbench</h1>
-            <p>教育数据分析助手</p>
-          </div>
-        </div>
-
         <button type="button" className="new-chat-btn">
-          + 新建会话
+          <span className="icon-text-inline">
+            <AppIcon icon={icons.plus} size={16} />
+            <span>新建会话</span>
+          </span>
         </button>
 
         <section className="sidebar-section">
@@ -49,7 +58,10 @@ export function Sidebar() {
                 className={`session-item${session.id === currentSessionId ? ' active' : ''}`}
                 onClick={() => handleSessionClick(session.id)}
               >
-                <span className="session-name">{session.title}</span>
+                <span className="session-name-wrap">
+                  <AppIcon icon={icons.document} size={14} />
+                  <span className="session-name">{session.title}</span>
+                </span>
                 <span className="session-time">{session.updatedAt}</span>
               </li>
             ))}
@@ -66,8 +78,13 @@ export function Sidebar() {
                 className="task-btn"
                 onClick={() => handleTaskClick(task.id, task.prompt)}
               >
-                <span>{task.title}</span>
-                <span aria-hidden="true">&gt;</span>
+                <span className="task-name-wrap">
+                  <AppIcon icon={icons[getTaskIcon(task.id)]} size={14} />
+                  <span>{task.title}</span>
+                </span>
+                <span className="task-arrow" aria-hidden="true">
+                  <AppIcon icon={icons.chevronRight} size={14} />
+                </span>
               </button>
             ))}
           </div>
@@ -85,7 +102,9 @@ export function Sidebar() {
 
       <div className="sidebar-footer">
         <div className="user-block">
-          <div className="user-avatar" aria-hidden="true"></div>
+          <div className="sidebar-user-avatar user-avatar" aria-hidden="true">
+            <AppIcon icon={icons.user} size={16} />
+          </div>
           <div className="user-copy">
             <p className="user-name">张老师</p>
             <p className="user-status">
@@ -94,8 +113,8 @@ export function Sidebar() {
             </p>
           </div>
         </div>
-        <button type="button" className="settings-btn" aria-label="设置">
-          ⚙
+        <button type="button" className="settings-btn icon-button" aria-label="设置">
+          <AppIcon icon={icons.settings} size={16} />
         </button>
       </div>
     </aside>

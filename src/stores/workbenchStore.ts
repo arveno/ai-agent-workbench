@@ -8,6 +8,7 @@ import type {
   ConfirmStatus,
   FinalMessage,
   GenerationStatus,
+  ModelProvider,
 } from '../types/workbench';
 import { streamText } from '../utils/streamText';
 
@@ -46,6 +47,8 @@ interface WorkbenchState {
   showAnalyticsResult: boolean;
   confirmStatus: ConfirmStatus;
   finalMessage: FinalMessage;
+  currentModelProvider: ModelProvider;
+  isModelModalOpen: boolean;
   streamRunId: number;
   setCurrentSessionId: (sessionId: string) => void;
   setCurrentTaskId: (taskId: string) => void;
@@ -63,6 +66,9 @@ interface WorkbenchState {
   retryCurrentTask: () => Promise<void>;
   confirmGenerateReport: () => Promise<void>;
   cancelGenerateReport: () => void;
+  openModelModal: () => void;
+  closeModelModal: () => void;
+  setCurrentModelProvider: (provider: ModelProvider) => void;
   stopGenerating: () => void;
   regenerate: () => Promise<void>;
   startAssistantStream: () => Promise<void>;
@@ -89,6 +95,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     content: '',
     status: 'hidden',
   },
+  currentModelProvider: 'mock',
+  isModelModalOpen: false,
   streamRunId: 0,
   setCurrentSessionId: (sessionId) => {
     set({ currentSessionId: sessionId });
@@ -255,6 +263,15 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         step.status === 'running' ? { ...step, status: 'error' } : step
       ),
     }));
+  },
+  openModelModal: () => {
+    set({ isModelModalOpen: true });
+  },
+  closeModelModal: () => {
+    set({ isModelModalOpen: false });
+  },
+  setCurrentModelProvider: (provider) => {
+    set({ currentModelProvider: provider });
   },
   stopGenerating: () => {
     set((state) => ({
