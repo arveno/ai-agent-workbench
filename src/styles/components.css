@@ -1,0 +1,48 @@
+.icon-button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: #f8fafc;
+}
+
+.icon-text-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-box-32 {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.icon-box-36 {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.icon-box-soft-blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.icon-box-soft-gray {
+  background: #f8fafc;
+  color: #64748b;
+}

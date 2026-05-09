@@ -34,9 +34,6 @@ export function WorkbenchHeader() {
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
-  const triggerMockError = useWorkbenchStore((state) => state.triggerMockError);
-  const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
-  const regenerate = useWorkbenchStore((state) => state.regenerate);
   const currentTask = mockTasks.find((task) => task.id === currentTaskId);
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const headerTitle = currentSession?.title || currentTask?.title || DEFAULT_HEADER_TITLE;
@@ -47,7 +44,6 @@ export function WorkbenchHeader() {
       : generationStatus === 'error'
         ? ERROR_STATUS_SUFFIX
         : TASK_STATUS_SUFFIX;
-  const isStreaming = generationStatus === 'streaming';
   const dotColor =
     generationStatus === 'streaming' || generationStatus === 'done'
       ? '#22c55e'
@@ -71,22 +67,6 @@ export function WorkbenchHeader() {
           <span className="header-status-dot" aria-hidden="true" style={{ background: dotColor }}></span>
           {taskStatusPrefix} · {taskStatusSuffix}
         </p>
-      </div>
-      <div className="task-action-group">
-        <button
-          type="button"
-          className="header-btn btn-stop"
-          onClick={stopGenerating}
-          disabled={!isStreaming}
-        >
-          停止生成
-        </button>
-        <button type="button" className="header-btn btn-regenerate" onClick={regenerate}>
-          重新生成
-        </button>
-        <button type="button" className="header-btn btn-mock-fail" onClick={triggerMockError}>
-          模拟失败
-        </button>
       </div>
     </header>
   );

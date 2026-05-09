@@ -6,6 +6,7 @@ interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: ReactNode;
   afterContent?: ReactNode;
+  actions?: ReactNode;
 }
 
 interface MarkdownMessageProps {
@@ -34,7 +35,7 @@ function MarkdownMessage({ content }: MarkdownMessageProps) {
   );
 }
 
-export function MessageBubble({ role, content, afterContent }: MessageBubbleProps) {
+export function MessageBubble({ role, content, afterContent, actions }: MessageBubbleProps) {
   const roleClass = role === 'user' ? 'user-bubble' : 'ai-bubble';
   const isAssistantText = role === 'assistant' && typeof content === 'string';
   const isUserText = role === 'user' && typeof content === 'string';
@@ -48,9 +49,12 @@ export function MessageBubble({ role, content, afterContent }: MessageBubbleProp
   );
 
   return (
-    <div className={`message-bubble ${roleClass}`}>
-      {renderedContent}
-      {afterContent}
+    <div className="message-content-wrap">
+      <div className={`message-bubble ${roleClass}`}>
+        {renderedContent}
+        {afterContent}
+      </div>
+      {actions ? <div className="message-copy-actions">{actions}</div> : null}
     </div>
   );
 }

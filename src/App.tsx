@@ -1,5 +1,4 @@
 ﻿import { useEffect } from 'react';
-import './App.css';
 import { ChatPanel } from './components/chat/ChatPanel';
 import { AppHeader } from './components/layout/AppHeader';
 import { RightPanel } from './components/layout/RightPanel';

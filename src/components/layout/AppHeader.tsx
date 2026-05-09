@@ -56,12 +56,19 @@ export function AppHeader() {
           <span className="model-arrow">⌄</span>
         </button>
 
-        <button className="connect-model-button" onClick={openModelModal} type="button">
-          连接模型
+        <button className="header-action-button" type="button">
+          <AppIcon icon={icons.database} size={15} />
+          <span>数据源</span>
         </button>
 
-        <button className="header-icon-button icon-button" type="button" aria-label="分享">
-          <AppIcon icon={icons.share} size={16} />
+        <button className="header-action-button" type="button">
+          <AppIcon icon={icons.settings} size={15} />
+          <span>工具库</span>
+        </button>
+
+        <button className="header-action-button" type="button">
+          <AppIcon icon={icons.agent} size={15} />
+          <span>工作流</span>
         </button>
 
         <button className="header-icon-button icon-button" type="button" aria-label="更多">

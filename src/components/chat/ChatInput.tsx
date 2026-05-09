@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
@@ -8,15 +8,18 @@ const MAX_PROMPT_LENGTH = 2000;
 
 export function ChatInput() {
   const [value, setValue] = useState('');
+  const [isComposing, setIsComposing] = useState(false);
+  const isComposingRef = useRef(false);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
+  const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const isStreaming = generationStatus === 'streaming';
   const trimmedValue = value.trim();
   const isEmpty = trimmedValue.length === 0;
-  const sendDisabled = isEmpty || isStreaming;
+  const sendDisabled = isEmpty;
 
   const handleSend = () => {
-    if (sendDisabled) {
+    if (isStreaming || sendDisabled) {
       return;
     }
 
@@ -24,20 +27,49 @@ export function ChatInput() {
     setValue('');
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleSend();
+  const handlePrimaryAction = () => {
+    if (isStreaming) {
+      stopGenerating();
+      return;
     }
+
+    handleSend();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    if (event.shiftKey) {
+      return;
+    }
+
+    if (isComposing || isComposingRef.current || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    handleSend();
   };
 
   return (
     <div className="composer">
       <textarea
-        className="composer-input"
+        className="composer-input chat-input-textarea"
         placeholder="继续输入问题，或让 AI 生成报告..."
         value={value}
         onChange={(event) => setValue(event.target.value)}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+          setIsComposing(true);
+        }}
+        onCompositionEnd={() => {
+          window.setTimeout(() => {
+            isComposingRef.current = false;
+            setIsComposing(false);
+          }, 0);
+        }}
         onKeyDown={handleKeyDown}
         maxLength={MAX_PROMPT_LENGTH}
       />
@@ -63,20 +95,15 @@ export function ChatInput() {
           <button
             type="button"
             className={[
-              'send-btn',
-              'send-button',
-              sendDisabled ? 'send-btn-disabled' : '',
-              isStreaming ? 'send-btn-streaming' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            onClick={handleSend}
-            disabled={sendDisabled}
+              'composer-action-button',
+              isStreaming ? 'composer-stop-button' : 'composer-send-button',
+            ].join(' ')}
+            onClick={handlePrimaryAction}
+            disabled={!isStreaming && sendDisabled}
+            aria-label={isStreaming ? '停止生成' : '发送'}
+            title={isStreaming ? '停止生成' : '发送'}
           >
-            <span className="icon-text-inline">
-              <AppIcon icon={isStreaming ? icons.stepCurrent : icons.send} size={14} />
-              <span>{isStreaming ? '生成中' : '发送'}</span>
-            </span>
+            <AppIcon icon={isStreaming ? icons.stop : icons.send} size={16} />
           </button>
         </div>
       </div>

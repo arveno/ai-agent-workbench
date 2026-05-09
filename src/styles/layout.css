@@ -1,0 +1,71 @@
+.app-root {
+  width: 100%;
+  max-width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #f5f7fb;
+  color: #111827;
+}
+
+.app-body {
+  width: 100%;
+  max-width: 100%;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  overflow-x: hidden;
+  background: #f5f7fb;
+}
+
+.main-panel,
+.main-workspace {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: #f5f7fb;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat-panel {
+  flex: 1;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+  padding: 0 20px 16px;
+}
+
+.right-panel {
+  width: 420px;
+  flex: 0 0 420px;
+  flex-shrink: 0;
+  min-width: 0;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.right-panel-content {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

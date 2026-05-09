@@ -104,3 +104,78 @@ export interface FinalMessage {
   content: string;
   status: 'hidden' | 'visible';
 }
+
+export interface SessionSlice {
+  sessions: WorkbenchSession[];
+  currentSessionId: string;
+  currentTaskId: string;
+  currentPrompt: string;
+  activeAssistantMessageId: string;
+  persistSessions: (sessions: WorkbenchSession[]) => void;
+  createSession: () => string;
+  switchSession: (sessionId: string) => void;
+  setCurrentSessionId: (sessionId: string) => void;
+  setCurrentTaskId: (taskId: string) => void;
+  setCurrentPrompt: (prompt: string) => void;
+  upsertCurrentSessionMessages: (messages: WorkbenchMessage[]) => void;
+  updateCurrentSessionAssistantMessage: (messageId: string, content: string) => void;
+  startTask: (taskId: string, prompt: string) => void;
+  hydrateFromUrl: (state: { sessionId?: string; taskId?: string }) => void;
+}
+
+export interface GenerationSlice {
+  generationStatus: GenerationStatus;
+  errorMessage?: string;
+  realModelNotice: string;
+  assistantStream: AssistantStreamState;
+  agentSteps: AgentStep[];
+  visibleToolCallIds: string[];
+  showKnowledgeSources: boolean;
+  showAnalyticsResult: boolean;
+  confirmStatus: ConfirmStatus;
+  finalMessage: FinalMessage;
+  streamRunId: number;
+  sendPrompt: (prompt: string) => void;
+  regenerateFromAssistantMessage: (assistantMessageId: string) => void;
+  runPromptWithCurrentModel: (prompt: string) => Promise<void>;
+  setRealModelNotice: (notice: string) => void;
+  setAssistantStream: (stream: AssistantStreamState) => void;
+  setShowKnowledgeSources: (visible: boolean) => void;
+  setShowAnalyticsResult: (visible: boolean) => void;
+  resetAgentSteps: () => void;
+  setAgentStepStatus: (stepId: string, status: AgentStepStatus) => void;
+  showToolCall: (toolCallId: string) => void;
+  resetVisibleToolCalls: () => void;
+  runAgentStepsPreview: (runId: number) => Promise<void>;
+  triggerMockError: () => void;
+  retryCurrentTask: () => Promise<void>;
+  confirmGenerateReport: () => Promise<void>;
+  cancelGenerateReport: () => void;
+  stopGenerating: () => void;
+  regenerate: () => Promise<void>;
+  startAssistantStream: () => Promise<void>;
+}
+
+export interface ModelSlice {
+  currentModelProvider: ModelProvider;
+  isModelModalOpen: boolean;
+  modelConfigs: ModelProviderConfigMap;
+  modelTestStatusMap: ModelProviderTestStatusMap;
+  openModelModal: () => void;
+  closeModelModal: () => void;
+  setCurrentModelProvider: (provider: ModelProviderId) => void;
+  saveModelConfig: (providerId: ModelProviderId, config: ModelProviderConfig) => void;
+  clearModelConfig: (providerId: ModelProviderId) => void;
+  setModelTestStatus: (providerId: ModelProviderId, status: ModelTestStatus) => void;
+}
+
+export interface UiSlice {
+  isDataSourcePanelOpen: boolean;
+  isToolLibraryPanelOpen: boolean;
+  isWorkflowPanelOpen: boolean;
+  setDataSourcePanelOpen: (open: boolean) => void;
+  setToolLibraryPanelOpen: (open: boolean) => void;
+  setWorkflowPanelOpen: (open: boolean) => void;
+}
+
+export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice;
