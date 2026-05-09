@@ -286,6 +286,7 @@ export interface SessionSlice {
   setCurrentPrompt: (prompt: string) => void;
   upsertCurrentSessionMessages: (messages: WorkbenchMessage[]) => void;
   updateCurrentSessionAssistantMessage: (messageId: string, content: string) => void;
+  appendUserMessageToCurrentSession: (content: string) => void;
   appendAssistantMessageToCurrentSession: (content: string) => void;
   startTask: (taskId: string, prompt: string) => void;
   hydrateFromUrl: (state: { sessionId?: string; taskId?: string }) => void;
@@ -341,6 +342,7 @@ export interface UiSlice {
   isDataSourceModalOpen: boolean;
   isToolLibraryModalOpen: boolean;
   isWorkflowModalOpen: boolean;
+  chatDraft: string;
   currentAgentRun: AgentRunResult | null;
   agentRunStatus: 'idle' | 'running' | 'success' | 'error';
   agentRunErrorMessage: string | null;
@@ -350,6 +352,8 @@ export interface UiSlice {
   closeToolLibraryModal: () => void;
   openWorkflowModal: () => void;
   closeWorkflowModal: () => void;
+  setChatDraft: (value: string) => void;
+  clearChatDraft: () => void;
   runCurrentAgentAnalysis: () => Promise<void>;
   clearCurrentAgentRun: () => void;
 }

@@ -2,8 +2,6 @@ import type { StateCreator } from 'zustand';
 import type { UiSlice, WorkbenchStore } from '../../types/workbench';
 import { runAgentAnalysis } from '../../services/agentRunApi';
 
-const DEFAULT_AGENT_PROMPT = '分析本月教学质量数据，找出异常指标';
-
 function buildAgentConclusionMessage(conclusion: string, notice?: string): string {
   const normalizedConclusion = conclusion.trim();
 
@@ -28,6 +26,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   isDataSourceModalOpen: false,
   isToolLibraryModalOpen: false,
   isWorkflowModalOpen: false,
+  chatDraft: '',
   currentAgentRun: null,
   agentRunStatus: 'idle',
   agentRunErrorMessage: null,
@@ -49,8 +48,24 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   closeWorkflowModal: () => {
     set({ isWorkflowModalOpen: false });
   },
+  setChatDraft: (value) => {
+    set({ chatDraft: value });
+  },
+  clearChatDraft: () => {
+    set({ chatDraft: '' });
+  },
   runCurrentAgentAnalysis: async () => {
     const state = get();
+    const prompt = state.chatDraft.trim();
+
+    if (!prompt) {
+      set({
+        agentRunStatus: 'error',
+        agentRunErrorMessage: '请输入要分析的问题后再运行真实 Agent。',
+      });
+      return;
+    }
+
     const apiKey = state.modelConfigs.groq?.apiKey?.trim();
 
     set({
@@ -60,7 +75,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
     try {
       const response = await runAgentAnalysis({
-        prompt: DEFAULT_AGENT_PROMPT,
+        prompt,
         provider: 'supabase',
         apiKey: apiKey || undefined,
       });
@@ -77,9 +92,13 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           agentRunErrorMessage: null,
         });
 
+        get().appendUserMessageToCurrentSession(prompt);
+
         if (assistantMessage) {
           get().appendAssistantMessageToCurrentSession(assistantMessage);
         }
+
+        get().clearChatDraft();
 
         return;
       }

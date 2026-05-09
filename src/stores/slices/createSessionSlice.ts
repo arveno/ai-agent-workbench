@@ -5,6 +5,7 @@ import type { SessionSlice, WorkbenchStore } from '../../types/workbench';
 import { createMessageId } from '../../utils/message';
 import {
   createInitialAgentSteps,
+  createSessionTitle,
   createSessionId,
   initialWorkbenchState,
   persistWorkbenchSessions,
@@ -144,6 +145,48 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
       return {
         sessions: nextSessions,
+      };
+    });
+  },
+  appendUserMessageToCurrentSession: (content) => {
+    const normalizedContent = content.trim();
+
+    if (!normalizedContent) {
+      return;
+    }
+
+    set((state) => {
+      const now = Date.now();
+      const userMessage = {
+        id: createMessageId('user'),
+        role: 'user' as const,
+        content: normalizedContent,
+        createdAt: now,
+      };
+
+      const nextSessions = sortSessionsByUpdatedAt(
+        state.sessions.map((session) => {
+          if (session.id !== state.currentSessionId) {
+            return session;
+          }
+
+          const shouldRenameSession = session.title === '新会话' || session.messages.length === 0;
+
+          return {
+            ...session,
+            title: shouldRenameSession ? createSessionTitle(normalizedContent) : session.title,
+            updatedAt: now,
+            taskId: state.currentTaskId,
+            messages: [...session.messages, userMessage],
+          };
+        })
+      );
+
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+        currentPrompt: normalizedContent,
       };
     });
   },

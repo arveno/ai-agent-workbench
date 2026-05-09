@@ -7,14 +7,16 @@ import { icons } from '../common/iconMap';
 const MAX_PROMPT_LENGTH = 2000;
 
 export function ChatInput() {
-  const [value, setValue] = useState('');
   const [isComposing, setIsComposing] = useState(false);
   const isComposingRef = useRef(false);
+  const chatDraft = useWorkbenchStore((state) => state.chatDraft);
+  const setChatDraft = useWorkbenchStore((state) => state.setChatDraft);
+  const clearChatDraft = useWorkbenchStore((state) => state.clearChatDraft);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const isStreaming = generationStatus === 'streaming';
-  const trimmedValue = value.trim();
+  const trimmedValue = chatDraft.trim();
   const isEmpty = trimmedValue.length === 0;
   const sendDisabled = isEmpty;
 
@@ -24,7 +26,7 @@ export function ChatInput() {
     }
 
     sendPrompt(trimmedValue);
-    setValue('');
+    clearChatDraft();
   };
 
   const handlePrimaryAction = () => {
@@ -58,8 +60,8 @@ export function ChatInput() {
       <textarea
         className="composer-input chat-input-textarea"
         placeholder="继续输入问题，或让 AI 生成报告..."
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
+        value={chatDraft}
+        onChange={(event) => setChatDraft(event.target.value)}
         onCompositionStart={() => {
           isComposingRef.current = true;
           setIsComposing(true);
@@ -90,7 +92,7 @@ export function ChatInput() {
         </div>
         <div className="composer-actions">
           <span className="composer-count">
-            {value.length} / {MAX_PROMPT_LENGTH}
+            {chatDraft.length} / {MAX_PROMPT_LENGTH}
           </span>
           <button
             type="button"
