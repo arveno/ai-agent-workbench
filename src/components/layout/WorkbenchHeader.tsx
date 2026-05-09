@@ -30,13 +30,16 @@ function getGenerationLabel(status: GenerationStatus): string {
 }
 
 export function WorkbenchHeader() {
+  const sessions = useWorkbenchStore((state) => state.sessions);
+  const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const triggerMockError = useWorkbenchStore((state) => state.triggerMockError);
   const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const regenerate = useWorkbenchStore((state) => state.regenerate);
   const currentTask = mockTasks.find((task) => task.id === currentTaskId);
-  const headerTitle = currentTask?.title ?? DEFAULT_HEADER_TITLE;
+  const currentSession = sessions.find((session) => session.id === currentSessionId);
+  const headerTitle = currentSession?.title || currentTask?.title || DEFAULT_HEADER_TITLE;
   const taskStatusPrefix = getGenerationLabel(generationStatus);
   const taskStatusSuffix =
     generationStatus === 'idle'

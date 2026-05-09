@@ -1,5 +1,6 @@
 .app-root {
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
   height: 100vh;
   overflow: hidden;
   display: flex;
@@ -9,10 +10,14 @@
 }
 
 .app-body {
+  width: 100%;
+  max-width: 100%;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   overflow: hidden;
+  overflow-x: hidden;
   background: #f5f7fb;
 }
 
@@ -20,8 +25,10 @@ html,
 body,
 #root {
   width: 100%;
+  max-width: 100%;
   height: 100%;
   overflow: hidden;
+  overflow-x: hidden;
 }
 
 .app-header {
@@ -140,6 +147,7 @@ body,
 .sidebar {
   width: 280px;
   flex: 0 0 280px;
+  flex-shrink: 0;
   height: 100%;
   padding: 20px;
   box-sizing: border-box;
@@ -224,6 +232,7 @@ body,
 }
 
 .session-item {
+  min-width: 0;
   height: 36px;
   display: flex;
   align-items: center;
@@ -244,6 +253,8 @@ body,
 }
 
 .session-name {
+  min-width: 0;
+  flex: 1;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -252,9 +263,11 @@ body,
 
 .session-name-wrap {
   display: inline-flex;
+  flex: 1;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .session-time {
@@ -406,8 +419,10 @@ body,
   height: auto;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
+  overflow-x: hidden;
   padding: 0 20px 16px;
 }
 
@@ -510,6 +525,7 @@ body,
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .workbench-title-icon {
@@ -524,6 +540,8 @@ body,
 }
 
 .header-title {
+  min-width: 0;
+  flex: 1;
   margin: 0;
   font-size: 22px;
   line-height: 1.2;
@@ -641,7 +659,8 @@ body,
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.55;
-  max-width: min(760px, 100%);
+  max-width: min(780px, 100%);
+  min-width: 0;
   box-sizing: border-box;
   word-break: break-word;
 }
@@ -702,6 +721,8 @@ body,
 }
 
 .message-content-text {
+  max-width: 100%;
+  min-width: 0;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -717,7 +738,8 @@ body,
 }
 
 .message-markdown {
-  max-width: min(760px, 100%);
+  max-width: 100%;
+  min-width: 0;
   color: #0f172a;
   font-size: 14px;
   line-height: 1.75;
@@ -1141,6 +1163,8 @@ body,
 .right-panel {
   width: 420px;
   flex: 0 0 420px;
+  flex-shrink: 0;
+  min-width: 0;
   height: 100%;
   padding: 16px;
   box-sizing: border-box;

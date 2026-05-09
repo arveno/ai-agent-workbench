@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { mockAgentSteps } from '../mocks/agentSteps';
+import { mockSessions } from '../mocks/sessions';
 import { mockTasks } from '../mocks/tasks';
 import type {
   AgentStep,
@@ -14,18 +15,20 @@ import type {
   ModelProviderTestStatusMap,
   ModelTestStatus,
   ModelProvider,
+  WorkbenchMessage,
+  WorkbenchSession,
 } from '../types/workbench';
 import { streamGroqChat } from '../services/chatApi';
 import { streamText } from '../utils/streamText';
 
 const DEFAULT_TASK_ID = 't_month_analytics';
-const DEFAULT_PROMPT = '请分析 2026 年 5 月教学质量相关数据，找出异常指标，并给出简短结论。';
 const DEFAULT_ASSISTANT_REPLY =
   '我将先检索相关指标口径与教学质量分析规则，再查询本月各年级成绩与出勤数据，随后给出异常项和简短分析结论。';
 const FINAL_REPORT_SUMMARY =
   '已基于当前数据生成简短分析结论：本月教学质量整体保持稳定，但七年级平均分和八年级出勤率出现明显波动，建议优先查看七年级周测成绩明细和八年级班级出勤记录，并将两个指标加入后续跟踪。';
 const MODEL_CONFIG_SESSION_KEY = 'ai-agent-workbench-model-configs';
 const MODEL_PROVIDER_SESSION_KEY = 'ai-agent-workbench-current-model-provider';
+const WORKBENCH_SESSIONS_SESSION_KEY = 'ai-agent-workbench-sessions';
 
 const modelProviderIds: ModelProviderId[] = [
   'mock',
@@ -36,6 +39,165 @@ const modelProviderIds: ModelProviderId[] = [
   'codex-oauth',
   'ollama',
 ];
+
+function createSessionId(): string {
+  return `s_${Date.now()}`;
+}
+
+function createMessageId(prefix: 'user' | 'assistant'): string {
+  return `m_${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createSessionTitle(prompt: string): string {
+  const normalizedPrompt = prompt.trim().replace(/\s+/g, ' ');
+  return normalizedPrompt.length > 16 ? `${normalizedPrompt.slice(0, 16)}...` : normalizedPrompt || '新会话';
+}
+
+function sortSessionsByUpdatedAt(sessions: WorkbenchSession[]): WorkbenchSession[] {
+  return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function createDefaultSessions(): WorkbenchSession[] {
+  return sortSessionsByUpdatedAt(mockSessions.map((session) => ({ ...session })));
+}
+
+function normalizeWorkbenchMessage(rawValue: unknown): WorkbenchMessage | null {
+  if (!rawValue || typeof rawValue !== 'object') {
+    return null;
+  }
+
+  const message = rawValue as Partial<WorkbenchMessage>;
+
+  if (
+    typeof message.id !== 'string' ||
+    (message.role !== 'user' && message.role !== 'assistant') ||
+    typeof message.content !== 'string' ||
+    typeof message.createdAt !== 'number'
+  ) {
+    return null;
+  }
+
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: message.createdAt,
+  };
+}
+
+function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
+  if (!rawValue || typeof rawValue !== 'object') {
+    return null;
+  }
+
+  const session = rawValue as Partial<WorkbenchSession>;
+
+  if (typeof session.id !== 'string' || typeof session.title !== 'string') {
+    return null;
+  }
+
+  const messages =
+    Array.isArray(session.messages) ?
+      session.messages
+        .map((message) => normalizeWorkbenchMessage(message))
+        .filter((message): message is WorkbenchMessage => message !== null) :
+      [];
+
+  return {
+    id: session.id,
+    title: session.title,
+    updatedAt: typeof session.updatedAt === 'number' ? session.updatedAt : Date.now(),
+    taskId: typeof session.taskId === 'string' ? session.taskId : undefined,
+    messages,
+  };
+}
+
+function persistWorkbenchSessions(sessions: WorkbenchSession[]): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.setItem(WORKBENCH_SESSIONS_SESSION_KEY, JSON.stringify(sessions));
+}
+
+function getInitialSessions(): WorkbenchSession[] {
+  const defaultSessions = createDefaultSessions();
+
+  if (typeof window === 'undefined') {
+    return defaultSessions;
+  }
+
+  const rawValue = window.sessionStorage.getItem(WORKBENCH_SESSIONS_SESSION_KEY);
+
+  if (!rawValue) {
+    return defaultSessions;
+  }
+
+  try {
+    const parsedValue = JSON.parse(rawValue) as unknown;
+
+    if (!Array.isArray(parsedValue) || parsedValue.length === 0) {
+      return defaultSessions;
+    }
+
+    const normalizedSessions = parsedValue
+      .map((session) => normalizeWorkbenchSession(session))
+      .filter((session): session is WorkbenchSession => session !== null);
+
+    if (normalizedSessions.length === 0) {
+      return defaultSessions;
+    }
+
+    return sortSessionsByUpdatedAt(normalizedSessions);
+  } catch {
+    return defaultSessions;
+  }
+}
+
+function getSessionLatestPrompt(session: WorkbenchSession): string {
+  const userMessage = [...session.messages].reverse().find((message) => message.role === 'user');
+  return userMessage?.content ?? '';
+}
+
+function getSessionLatestAssistantReply(session: WorkbenchSession): string {
+  const assistantMessage = [...session.messages].reverse().find((message) => message.role === 'assistant');
+  return assistantMessage?.content ?? '';
+}
+
+function updateCurrentSessionAssistantInSessions(
+  sessions: WorkbenchSession[],
+  currentSessionId: string,
+  messageId: string,
+  content: string
+): WorkbenchSession[] {
+  return sortSessionsByUpdatedAt(
+    sessions.map((session) => {
+      if (session.id !== currentSessionId) {
+        return session;
+      }
+
+      const assistantMessageIndex = session.messages.findIndex((message) => message.id === messageId);
+      const assistantMessage = session.messages[assistantMessageIndex];
+
+      if (assistantMessageIndex === -1 || assistantMessage?.role !== 'assistant') {
+        return session;
+      }
+
+      const nextMessages = [...session.messages];
+
+      nextMessages[assistantMessageIndex] = {
+        ...nextMessages[assistantMessageIndex],
+        content,
+      };
+
+      return {
+        ...session,
+        messages: nextMessages,
+        updatedAt: Date.now(),
+      };
+    })
+  );
+}
 
 function createInitialAgentSteps(): AgentStep[] {
   return [
@@ -105,8 +267,18 @@ function getInitialModelProvider(modelConfigs: ModelProviderConfigMap): ModelPro
 
 const initialModelConfigs = getInitialModelConfigs();
 const initialModelProvider = getInitialModelProvider(initialModelConfigs);
+const initialSessions = getInitialSessions();
+const initialCurrentSession = initialSessions[0];
+const initialCurrentTaskId = initialCurrentSession?.taskId ?? DEFAULT_TASK_ID;
+const initialPromptFromSession = initialCurrentSession ? getSessionLatestPrompt(initialCurrentSession) : '';
+const initialAssistantReplyFromSession = initialCurrentSession
+  ? getSessionLatestAssistantReply(initialCurrentSession)
+  : '';
+const initialActiveAssistantMessageId =
+  [...(initialCurrentSession?.messages ?? [])].reverse().find((message) => message.role === 'assistant')?.id ?? '';
 
 interface WorkbenchState {
+  sessions: WorkbenchSession[];
   currentSessionId: string;
   currentTaskId: string;
   currentPrompt: string;
@@ -124,10 +296,16 @@ interface WorkbenchState {
   isModelModalOpen: boolean;
   modelConfigs: ModelProviderConfigMap;
   modelTestStatusMap: ModelProviderTestStatusMap;
+  activeAssistantMessageId: string;
   streamRunId: number;
+  persistSessions: (sessions: WorkbenchSession[]) => void;
+  createSession: () => string;
+  switchSession: (sessionId: string) => void;
   setCurrentSessionId: (sessionId: string) => void;
   setCurrentTaskId: (taskId: string) => void;
   setCurrentPrompt: (prompt: string) => void;
+  upsertCurrentSessionMessages: (messages: WorkbenchMessage[]) => void;
+  updateCurrentSessionAssistantMessage: (messageId: string, content: string) => void;
   sendPrompt: (prompt: string) => void;
   runPromptWithCurrentModel: (prompt: string) => Promise<void>;
   setRealModelNotice: (notice: string) => void;
@@ -157,20 +335,23 @@ interface WorkbenchState {
 }
 
 export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
-  currentSessionId: 's_001',
-  currentTaskId: DEFAULT_TASK_ID,
-  currentPrompt: DEFAULT_PROMPT,
-  generationStatus: 'done',
+  sessions: initialSessions,
+  currentSessionId: initialCurrentSession?.id ?? 's_001',
+  currentTaskId: initialCurrentTaskId,
+  currentPrompt: initialPromptFromSession,
+  generationStatus: initialAssistantReplyFromSession ? 'done' : 'idle',
   errorMessage: undefined,
   realModelNotice: '',
   assistantStream: {
-    content: DEFAULT_ASSISTANT_REPLY,
-    status: 'done',
+    content: initialAssistantReplyFromSession,
+    status: initialAssistantReplyFromSession ? 'done' : 'idle',
   },
-  agentSteps: mockAgentSteps.map((step) => ({ ...step })),
-  visibleToolCallIds: ['tool_knowledge_search', 'tool_query_data'],
-  showKnowledgeSources: true,
-  showAnalyticsResult: true,
+  agentSteps: initialAssistantReplyFromSession ?
+    mockAgentSteps.map((step) => ({ ...step })) :
+    createInitialAgentSteps(),
+  visibleToolCallIds: initialAssistantReplyFromSession ? ['tool_knowledge_search', 'tool_query_data'] : [],
+  showKnowledgeSources: Boolean(initialAssistantReplyFromSession),
+  showAnalyticsResult: Boolean(initialAssistantReplyFromSession),
   confirmStatus: 'waiting',
   finalMessage: {
     content: '',
@@ -180,7 +361,93 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   isModelModalOpen: false,
   modelConfigs: initialModelConfigs,
   modelTestStatusMap: {},
+  activeAssistantMessageId: initialActiveAssistantMessageId,
   streamRunId: 0,
+  persistSessions: (sessions) => {
+    persistWorkbenchSessions(sortSessionsByUpdatedAt(sessions));
+  },
+  createSession: () => {
+    const sessionId = createSessionId();
+    const now = Date.now();
+    const newSession: WorkbenchSession = {
+      id: sessionId,
+      title: '新会话',
+      updatedAt: now,
+      taskId: get().currentTaskId,
+      messages: [],
+    };
+
+    set((state) => {
+      const nextSessions = sortSessionsByUpdatedAt([newSession, ...state.sessions]);
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+        currentSessionId: sessionId,
+        currentPrompt: '',
+        assistantStream: {
+          content: '',
+          status: 'idle',
+        },
+        activeAssistantMessageId: '',
+        generationStatus: 'idle',
+        realModelNotice: '',
+        errorMessage: undefined,
+        visibleToolCallIds: [],
+        showKnowledgeSources: false,
+        showAnalyticsResult: false,
+        confirmStatus: 'waiting',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+        agentSteps: createInitialAgentSteps(),
+      };
+    });
+
+    return sessionId;
+  },
+  switchSession: (sessionId) => {
+    set((state) => {
+      const nextSession = state.sessions.find((session) => session.id === sessionId);
+
+      if (!nextSession) {
+        return state;
+      }
+
+      const userMessage = [...nextSession.messages].reverse().find((message) => message.role === 'user');
+      const assistantMessage = [...nextSession.messages]
+        .reverse()
+        .find((message) => message.role === 'assistant');
+
+      const hasAssistantReply = Boolean(assistantMessage?.content?.trim());
+
+      return {
+        currentSessionId: nextSession.id,
+        currentTaskId: nextSession.taskId ?? state.currentTaskId,
+        currentPrompt: userMessage?.content ?? '',
+        activeAssistantMessageId: assistantMessage?.id ?? '',
+        assistantStream: {
+          content: assistantMessage?.content ?? '',
+          status: hasAssistantReply ? 'done' : 'idle',
+        },
+        generationStatus: hasAssistantReply ? 'done' : 'idle',
+        realModelNotice: '',
+        errorMessage: undefined,
+        confirmStatus: 'waiting',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+        visibleToolCallIds: hasAssistantReply ? ['tool_knowledge_search', 'tool_query_data'] : [],
+        showKnowledgeSources: hasAssistantReply,
+        showAnalyticsResult: hasAssistantReply,
+        agentSteps: hasAssistantReply ?
+          mockAgentSteps.map((step) => ({ ...step })) :
+          createInitialAgentSteps(),
+      };
+    });
+  },
   setCurrentSessionId: (sessionId) => {
     set({ currentSessionId: sessionId });
   },
@@ -189,6 +456,45 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   },
   setCurrentPrompt: (prompt) => {
     set({ currentPrompt: prompt });
+  },
+  upsertCurrentSessionMessages: (messages) => {
+    set((state) => {
+      const now = Date.now();
+      const nextSessions = sortSessionsByUpdatedAt(
+        state.sessions.map((session) =>
+          session.id === state.currentSessionId
+            ? {
+                ...session,
+                messages,
+                updatedAt: now,
+                taskId: state.currentTaskId,
+              }
+            : session
+        )
+      );
+
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+      };
+    });
+  },
+  updateCurrentSessionAssistantMessage: (messageId, content) => {
+    set((state) => {
+      const nextSessions = updateCurrentSessionAssistantInSessions(
+        state.sessions,
+        state.currentSessionId,
+        messageId,
+        content
+      );
+
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+      };
+    });
   },
   sendPrompt: (prompt) => {
     const trimmedPrompt = prompt.trim();
@@ -215,26 +521,79 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     const groqApiKey = snapshot.modelConfigs.groq?.apiKey?.trim();
     const shouldUseGroq = snapshot.currentModelProvider === 'groq' && Boolean(groqApiKey);
     const runId = snapshot.streamRunId + 1;
+    const now = Date.now();
+    const nextMessages: WorkbenchMessage[] = [
+      {
+        id: createMessageId('user'),
+        role: 'user',
+        content: trimmedPrompt,
+        createdAt: now,
+      },
+      {
+        id: createMessageId('assistant'),
+        role: 'assistant',
+        content: '',
+        createdAt: now + 1,
+      },
+    ];
+    const assistantMessageId = nextMessages[1].id;
 
-    set({
-      currentPrompt: trimmedPrompt,
-      streamRunId: runId,
-      generationStatus: 'streaming',
-      errorMessage: undefined,
-      realModelNotice: '',
-      assistantStream: {
-        content: '',
-        status: 'streaming',
-      },
-      agentSteps: createInitialAgentSteps(),
-      visibleToolCallIds: [],
-      showKnowledgeSources: false,
-      showAnalyticsResult: false,
-      confirmStatus: 'waiting',
-      finalMessage: {
-        content: '',
-        status: 'hidden',
-      },
+    set((state) => {
+      let hasCurrentSession = false;
+      const sessions = state.sessions.map((session) => {
+        if (session.id !== state.currentSessionId) {
+          return session;
+        }
+
+        hasCurrentSession = true;
+        const shouldRenameSession = session.title === '新会话' || session.messages.length === 0;
+
+        return {
+          ...session,
+          title: shouldRenameSession ? createSessionTitle(trimmedPrompt) : session.title,
+          updatedAt: now,
+          taskId: state.currentTaskId,
+          messages: [...session.messages, ...nextMessages],
+        };
+      });
+
+      const nextSessions = hasCurrentSession
+        ? sortSessionsByUpdatedAt(sessions)
+        : sortSessionsByUpdatedAt([
+            ...sessions,
+            {
+              id: state.currentSessionId,
+              title: createSessionTitle(trimmedPrompt),
+              updatedAt: now,
+              taskId: state.currentTaskId,
+              messages: nextMessages,
+            },
+          ]);
+
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+        currentPrompt: trimmedPrompt,
+        activeAssistantMessageId: assistantMessageId,
+        streamRunId: runId,
+        generationStatus: 'streaming',
+        errorMessage: undefined,
+        realModelNotice: '',
+        assistantStream: {
+          content: '',
+          status: 'streaming',
+        },
+        agentSteps: createInitialAgentSteps(),
+        visibleToolCallIds: [],
+        showKnowledgeSources: false,
+        showAnalyticsResult: false,
+        confirmStatus: 'waiting',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+      };
     });
     void get().runAgentStepsPreview(runId);
 
@@ -248,11 +607,23 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
             return;
           }
 
-          set({
-            assistantStream: {
-              content,
-              status: 'streaming',
-            },
+          set((state) => {
+            const updatedSessions = updateCurrentSessionAssistantInSessions(
+              state.sessions,
+              state.currentSessionId,
+              assistantMessageId,
+              content
+            );
+
+            persistWorkbenchSessions(updatedSessions);
+
+            return {
+              sessions: updatedSessions,
+              assistantStream: {
+                content,
+                status: 'streaming',
+              },
+            };
           });
         },
         {
@@ -280,12 +651,24 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         return;
       }
 
-      set({
-        generationStatus: result === 'stopped' ? 'stopped' : 'done',
-        assistantStream: {
-          content: current.assistantStream.content,
-          status: result === 'stopped' ? 'stopped' : 'done',
-        },
+      set((state) => {
+        const updatedSessions = updateCurrentSessionAssistantInSessions(
+          state.sessions,
+          state.currentSessionId,
+          assistantMessageId,
+          current.assistantStream.content
+        );
+
+        persistWorkbenchSessions(updatedSessions);
+
+        return {
+          sessions: updatedSessions,
+          generationStatus: result === 'stopped' ? 'stopped' : 'done',
+          assistantStream: {
+            content: current.assistantStream.content,
+            status: result === 'stopped' ? 'stopped' : 'done',
+          },
+        };
       });
     };
 
@@ -305,12 +688,25 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
             return;
           }
 
-          set((state) => ({
-            assistantStream: {
-              content: state.assistantStream.content + chunk,
-              status: 'streaming',
-            },
-          }));
+          set((state) => {
+            const nextContent = state.assistantStream.content + chunk;
+            const nextSessions = updateCurrentSessionAssistantInSessions(
+              state.sessions,
+              state.currentSessionId,
+              assistantMessageId,
+              nextContent
+            );
+
+            persistWorkbenchSessions(nextSessions);
+
+            return {
+              sessions: nextSessions,
+              assistantStream: {
+                content: nextContent,
+                status: 'streaming',
+              },
+            };
+          });
         },
       });
       const current = get();
@@ -319,12 +715,24 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         return;
       }
 
-      set({
-        assistantStream: {
-          content: current.assistantStream.content,
-          status: 'done',
-        },
-        generationStatus: 'done',
+      set((state) => {
+        const updatedSessions = updateCurrentSessionAssistantInSessions(
+          state.sessions,
+          state.currentSessionId,
+          assistantMessageId,
+          current.assistantStream.content
+        );
+
+        persistWorkbenchSessions(updatedSessions);
+
+        return {
+          sessions: updatedSessions,
+          assistantStream: {
+            content: current.assistantStream.content,
+            status: 'done',
+          },
+          generationStatus: 'done',
+        };
       });
     } catch {
       const current = get();
@@ -577,20 +985,65 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     await get().runPromptWithCurrentModel(get().currentPrompt);
   },
   startTask: (taskId, prompt) => {
-    set({
-      currentTaskId: taskId,
+    set((state) => {
+      const nextSessions = state.sessions.map((session) =>
+        session.id === state.currentSessionId
+          ? {
+              ...session,
+              taskId,
+            }
+          : session
+      );
+
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+        currentTaskId: taskId,
+      };
     });
 
     void get().runPromptWithCurrentModel(prompt);
   },
   hydrateFromUrl: (state) => {
-    const nextTaskId = state.taskId ?? DEFAULT_TASK_ID;
-    const matchedTask = mockTasks.find((task) => task.id === nextTaskId);
+    set((currentState) => {
+      const fallbackSession = currentState.sessions[0];
+      const nextSession =
+        currentState.sessions.find((session) => session.id === state.sessionId) ?? fallbackSession;
+      const nextTaskId = state.taskId ?? nextSession?.taskId ?? DEFAULT_TASK_ID;
+      const matchedTask = mockTasks.find((task) => task.id === nextTaskId);
+      const userMessage = [...(nextSession?.messages ?? [])]
+        .reverse()
+        .find((message) => message.role === 'user');
+      const assistantMessage = [...(nextSession?.messages ?? [])]
+        .reverse()
+        .find((message) => message.role === 'assistant');
+      const hasAssistantReply = Boolean(assistantMessage?.content?.trim());
 
-    set({
-      currentSessionId: state.sessionId ?? 's_001',
-      currentTaskId: nextTaskId,
-      currentPrompt: matchedTask?.prompt ?? DEFAULT_PROMPT,
+      return {
+        currentSessionId: nextSession?.id ?? currentState.currentSessionId,
+        currentTaskId: matchedTask?.id ?? DEFAULT_TASK_ID,
+        currentPrompt: userMessage?.content ?? '',
+        activeAssistantMessageId: assistantMessage?.id ?? '',
+        assistantStream: {
+          content: assistantMessage?.content ?? '',
+          status: hasAssistantReply ? 'done' : 'idle',
+        },
+        generationStatus: hasAssistantReply ? 'done' : 'idle',
+        realModelNotice: '',
+        errorMessage: undefined,
+        confirmStatus: 'waiting',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+        visibleToolCallIds: hasAssistantReply ? ['tool_knowledge_search', 'tool_query_data'] : [],
+        showKnowledgeSources: hasAssistantReply,
+        showAnalyticsResult: hasAssistantReply,
+        agentSteps: hasAssistantReply ?
+          mockAgentSteps.map((step) => ({ ...step })) :
+          createInitialAgentSteps(),
+      };
     });
   },
 }));

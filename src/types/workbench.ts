@@ -5,11 +5,22 @@ export type KnowledgeSourceId = string;
 
 export type AgentStepStatus = 'pending' | 'running' | 'success' | 'error';
 
-export interface Session {
+export interface WorkbenchMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: number;
+}
+
+export interface WorkbenchSession {
   id: SessionId;
   title: string;
-  updatedAt: string;
+  updatedAt: number;
+  messages: WorkbenchMessage[];
+  taskId?: string;
 }
+
+export type Session = WorkbenchSession;
 
 export interface ExampleTask {
   id: TaskId;
@@ -52,12 +63,7 @@ export interface AnalyticsResult {
   }>;
 }
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  createdAt: string;
-}
+export type ChatMessage = WorkbenchMessage;
 
 export type MessageStatus = 'idle' | 'streaming' | 'done' | 'stopped';
 export type GenerationStatus = 'idle' | 'streaming' | 'done' | 'stopped' | 'error';

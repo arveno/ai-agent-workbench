@@ -1,5 +1,4 @@
-﻿import { mockSessions } from '../../mocks/sessions';
-import { mockTasks } from '../../mocks/tasks';
+﻿import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { AppIcon } from '../common/AppIcon';
@@ -17,17 +16,28 @@ function getTaskIcon(taskId: string): IconKey {
   return 'document';
 }
 
+function formatSessionTime(updatedAt: number): string {
+  const date = new Date(updatedAt);
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+  return `${hour}:${minute}`;
+}
+
 export function Sidebar() {
+  const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
-  const setCurrentSessionId = useWorkbenchStore((state) => state.setCurrentSessionId);
+  const createSession = useWorkbenchStore((state) => state.createSession);
+  const switchSession = useWorkbenchStore((state) => state.switchSession);
   const startTask = useWorkbenchStore((state) => state.startTask);
+  const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
 
   const handleSessionClick = (sessionId: string) => {
-    setCurrentSessionId(sessionId);
+    const session = sortedSessions.find((item) => item.id === sessionId);
+    switchSession(sessionId);
     replaceWorkbenchUrl({
       sessionId,
-      taskId: currentTaskId,
+      taskId: session?.taskId ?? currentTaskId,
     });
   };
 
@@ -39,10 +49,18 @@ export function Sidebar() {
     });
   };
 
+  const handleCreateSession = () => {
+    const sessionId = createSession();
+    replaceWorkbenchUrl({
+      sessionId,
+      taskId: currentTaskId,
+    });
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-content">
-        <button type="button" className="new-chat-btn">
+        <button type="button" className="new-chat-btn" onClick={handleCreateSession}>
           <span className="icon-text-inline">
             <AppIcon icon={icons.plus} size={16} />
             <span>新建会话</span>
@@ -52,7 +70,7 @@ export function Sidebar() {
         <section className="sidebar-section">
           <h2 className="section-title">会话列表</h2>
           <ul className="session-list">
-            {mockSessions.map((session) => (
+            {sortedSessions.map((session) => (
               <li
                 key={session.id}
                 className={`session-item${session.id === currentSessionId ? ' active' : ''}`}
@@ -62,7 +80,7 @@ export function Sidebar() {
                   <AppIcon icon={icons.document} size={14} />
                   <span className="session-name">{session.title}</span>
                 </span>
-                <span className="session-time">{session.updatedAt}</span>
+                <span className="session-time">{formatSessionTime(session.updatedAt)}</span>
               </li>
             ))}
           </ul>

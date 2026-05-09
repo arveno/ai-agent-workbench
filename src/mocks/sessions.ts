@@ -1,11 +1,65 @@
-﻿import type { Session } from '../types/workbench';
+import type { WorkbenchSession } from '../types/workbench';
 
-export const mockSessions: Session[] = [
-  { id: 's_001', title: '本月教学数据分析', updatedAt: '10:42' },
-  { id: 's_002', title: '七年级成绩异常排查', updatedAt: '昨天' },
-  { id: 's_003', title: '生成简短分析报告', updatedAt: '周一' },
-  { id: 's_004', title: '班级出勤情况分析', updatedAt: '周日' },
-  { id: 's_005', title: '期中考试成绩分析', updatedAt: '5-18' },
-  { id: 's_006', title: '学科均衡性评估', updatedAt: '5-17' },
-  { id: 's_007', title: '教师教学效果分析', updatedAt: '5-16' },
+const now = Date.now();
+
+export const mockSessions: WorkbenchSession[] = [
+  {
+    id: 's_001',
+    title: '本月教学数据分析',
+    updatedAt: now - 5 * 60 * 1000,
+    taskId: 't_month_analytics',
+    messages: [
+      {
+        id: 'm_user_default',
+        role: 'user',
+        content: '请分析 2026 年 5 月教学质量相关数据，找出异常指标，并给出简短结论。',
+        createdAt: now - 5 * 60 * 1000,
+      },
+      {
+        id: 'm_assistant_default',
+        role: 'assistant',
+        content:
+          '我将先检索相关指标口径与教学质量分析规则，再查询本月各年级成绩与出勤数据，随后给出异常项和简短分析结论。',
+        createdAt: now - 5 * 60 * 1000 + 1,
+      },
+    ],
+  },
+  {
+    id: 's_002',
+    title: '七年级成绩异常排查',
+    updatedAt: now - 24 * 60 * 60 * 1000,
+    taskId: 't_abnormal_reason',
+    messages: [],
+  },
+  {
+    id: 's_003',
+    title: '生成简短分析报告',
+    updatedAt: now - 2 * 24 * 60 * 60 * 1000,
+    taskId: 't_report',
+    messages: [],
+  },
+  {
+    id: 's_004',
+    title: '班级出勤情况分析',
+    updatedAt: now - 3 * 24 * 60 * 60 * 1000,
+    messages: [],
+  },
+  {
+    id: 's_005',
+    title: '期中考试成绩分析',
+    updatedAt: now - 4 * 24 * 60 * 60 * 1000,
+    messages: [],
+  },
+  {
+    id: 's_006',
+    title: '学科均衡性评估',
+    updatedAt: now - 5 * 24 * 60 * 60 * 1000,
+    messages: [],
+  },
+  {
+    id: 's_007',
+    title: '教师教学效果分析',
+    updatedAt: now - 6 * 24 * 60 * 60 * 1000,
+    messages: [],
+  },
 ];
