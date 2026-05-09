@@ -30,6 +30,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   currentAgentRun: null,
   agentRunStatus: 'idle',
   agentRunErrorMessage: null,
+  currentReportRunId: null,
+  reportActionState: 'skipped',
   openDataSourceModal: () => {
     set({ isDataSourceModalOpen: true });
   },
@@ -81,6 +83,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         content: '',
         status: 'hidden',
       },
+      currentReportRunId: null,
+      reportActionState: 'skipped',
     });
 
     try {
@@ -111,6 +115,14 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           visibleToolCallIds: [],
           showKnowledgeSources: false,
           showAnalyticsResult: false,
+          currentReportRunId:
+            isDataAnalysisRun && response.run.status === 'success' && Boolean(response.run.conclusion.trim())
+              ? response.run.id
+              : null,
+          reportActionState:
+            isDataAnalysisRun && response.run.status === 'success' && Boolean(response.run.conclusion.trim())
+              ? 'pending'
+              : 'skipped',
         });
 
         if (assistantMessage) {
@@ -127,6 +139,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         agentRunErrorMessage: response.errorMessage,
         generationStatus: 'error',
         confirmStatus: 'cancelled',
+        currentReportRunId: null,
+        reportActionState: 'skipped',
       });
     } catch {
       set({
@@ -134,6 +148,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         agentRunErrorMessage: 'Agent Run 执行失败，请检查数据源连接或服务端状态。',
         generationStatus: 'error',
         confirmStatus: 'cancelled',
+        currentReportRunId: null,
+        reportActionState: 'skipped',
       });
     }
   },
@@ -142,6 +158,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       currentAgentRun: null,
       agentRunStatus: 'idle',
       agentRunErrorMessage: null,
+      currentReportRunId: null,
+      reportActionState: 'skipped',
     });
   },
 });

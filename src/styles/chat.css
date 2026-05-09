@@ -268,6 +268,107 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.agent-tool-summary {
+  margin-left: 42px;
+  max-width: calc(100% - 42px);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.agent-tool-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-tool-summary-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.agent-tool-summary-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.agent-tool-summary-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.agent-tool-summary-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.agent-tool-summary-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.agent-tool-summary-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-tool-summary-title {
+  font-size: 13px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.agent-tool-summary-description {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.agent-tool-summary-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.agent-tool-summary-status {
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 700;
+}
+
+.agent-tool-summary-status-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.agent-tool-summary-elapsed {
+  color: #64748b;
+}
+
 .tool-card {
   border: 1px solid #e5e7eb;
   border-radius: 12px;

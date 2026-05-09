@@ -453,8 +453,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
 
     if (currentState.currentModelProvider === 'groq') {
       if (
-        currentState.confirmStatus !== 'waiting' ||
         !currentRun ||
+        currentState.currentReportRunId !== currentRun.id ||
+        currentState.reportActionState !== 'pending' ||
         currentRun.status !== 'success' ||
         !isDataAnalysisRun ||
         !currentRun.conclusion.trim()
@@ -467,6 +468,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       set({
         activeAssistantMessageId: runConclusionMessageId,
         confirmStatus: 'confirmed',
+        reportActionState: 'generated',
         finalMessage: {
           content: '',
           status: 'hidden',
@@ -513,8 +515,11 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
   },
   cancelGenerateReport: () => {
     if (get().currentModelProvider === 'groq') {
+      const currentRun = get().currentAgentRun;
       set({
         confirmStatus: 'cancelled',
+        reportActionState: 'skipped',
+        currentReportRunId: currentRun?.id ?? null,
         finalMessage: {
           content: '',
           status: 'hidden',

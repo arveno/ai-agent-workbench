@@ -189,6 +189,7 @@ export interface WorkflowStepDefinition {
 
 export type AgentRunStatus = 'running' | 'success' | 'error';
 export type AgentRunPlanIntent = 'capability_intro' | 'data_analysis' | 'unsupported';
+export type ReportActionState = 'pending' | 'generated' | 'skipped';
 
 export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
 
@@ -354,6 +355,8 @@ export interface UiSlice {
   currentAgentRun: AgentRunResult | null;
   agentRunStatus: 'idle' | 'running' | 'success' | 'error';
   agentRunErrorMessage: string | null;
+  currentReportRunId: string | null;
+  reportActionState: ReportActionState;
   openDataSourceModal: () => void;
   closeDataSourceModal: () => void;
   openToolLibraryModal: () => void;

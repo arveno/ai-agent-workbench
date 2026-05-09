@@ -63,6 +63,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentAgentRun: null,
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
+        currentReportRunId: null,
+        reportActionState: 'skipped',
       };
     });
 
@@ -105,6 +107,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentAgentRun: null,
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
+        currentReportRunId: null,
+        reportActionState: 'skipped',
       };
     });
   },
@@ -298,6 +302,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentAgentRun: null,
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
+        currentReportRunId: null,
+        reportActionState: 'skipped',
       };
     });
   },
