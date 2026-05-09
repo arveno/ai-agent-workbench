@@ -9,7 +9,9 @@ export function CurrentConclusionCard() {
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
   const agentRunErrorMessage = useWorkbenchStore((state) => state.agentRunErrorMessage);
-  const isFallbackConclusion = currentAgentRun?.conclusionSource === 'fallback';
+  const runIntent = currentAgentRun?.plan?.intent;
+  const isDataAnalysisRun = runIntent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations?.length);
+  const isFallbackConclusion = currentAgentRun?.conclusionSource === 'fallback' && isDataAnalysisRun;
   const conclusionNotice = currentAgentRun?.conclusionNotice;
   const conclusionText =
     agentRunStatus === 'error'
@@ -25,7 +27,13 @@ export function CurrentConclusionCard() {
         <AppIcon icon={icons.alert} size={16} />
         <span>当前结论</span>
       </h2>
-      {currentAgentRun?.conclusionSource === 'model' ? (
+      {runIntent === 'capability_intro' ? (
+        <div className="conclusion-source-badge conclusion-source-badge-capability">能力说明</div>
+      ) : null}
+      {runIntent === 'unsupported' ? (
+        <div className="conclusion-source-badge conclusion-source-badge-unsupported">暂不支持</div>
+      ) : null}
+      {isDataAnalysisRun && currentAgentRun?.conclusionSource === 'model' ? (
         <div className="conclusion-source-badge">Groq 生成</div>
       ) : null}
       {isFallbackConclusion ? (

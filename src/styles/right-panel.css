@@ -462,6 +462,16 @@
   font-weight: 700;
 }
 
+.conclusion-source-badge-capability {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.conclusion-source-badge-unsupported {
+  background: #f1f5f9;
+  color: #475569;
+}
+
 .conclusion-fallback-notice {
   margin-top: 10px;
   border: 1px solid #fcd9a5;
@@ -477,6 +487,22 @@
   margin: 10px 0 0;
   color: #6b7280;
   font-size: 13px;
+}
+
+.right-panel-empty-state {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.right-panel-empty-state strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #334155;
 }
 
 .run-chart-summary {

@@ -27,6 +27,8 @@ const DATASOURCE_META = [
 
 export function DataSourceCard() {
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+  const isDataAnalysisRun =
+    currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations?.length);
   const runProviderLabel = currentAgentRun?.provider === 'postgresql' ? 'PostgreSQL' : 'Supabase';
   const runTitle = `${runProviderLabel} / Agent Run`;
   const runSubtitle = `当前 Run 使用 ${runProviderLabel} 数据源完成分析`;
@@ -34,7 +36,7 @@ export function DataSourceCard() {
     ? new Date(currentAgentRun.createdAt).toLocaleString('zh-CN', { hour12: false })
     : '-';
 
-  const runtimeMeta = currentAgentRun
+  const runtimeMeta = currentAgentRun && isDataAnalysisRun
     ? [
         { label: '数据源类型', value: runProviderLabel },
         { label: 'Run 状态', value: currentAgentRun.status === 'success' ? '已执行' : currentAgentRun.status },
@@ -59,22 +61,35 @@ export function DataSourceCard() {
                 <AppIcon icon={icons.database} size={14} />
               </span>
               <div>
-                <div className="datasource-name">{currentAgentRun ? runTitle : 'PostgreSQL / edu_analytics_prod'}</div>
-                <div className="datasource-subtitle">{currentAgentRun ? runSubtitle : '业务数据分析库'}</div>
+                <div className="datasource-name">
+                  {currentAgentRun && isDataAnalysisRun ? runTitle : 'PostgreSQL / edu_analytics_prod'}
+                </div>
+                <div className="datasource-subtitle">
+                  {currentAgentRun && isDataAnalysisRun ? runSubtitle : '业务数据分析库'}
+                </div>
               </div>
             </div>
           </div>
-          <span className="status-badge status-badge-success">{currentAgentRun ? '已执行' : '已连接'}</span>
+          <span className={`status-badge ${currentAgentRun && !isDataAnalysisRun ? 'status-badge-muted' : 'status-badge-success'}`}>
+            {currentAgentRun ? (isDataAnalysisRun ? '已执行' : '未访问') : '已连接'}
+          </span>
         </div>
 
-        <div className="datasource-meta-grid">
-          {runtimeMeta.map((item) => (
-            <div key={item.label}>
-              <div className="datasource-meta-label">{item.label}</div>
-              <div className="datasource-meta-value">{item.value}</div>
-            </div>
-          ))}
-        </div>
+        {currentAgentRun && !isDataAnalysisRun ? (
+          <div className="right-panel-empty-state">
+            <strong>本次未访问数据源</strong>
+            该请求属于能力说明或暂不支持类型，无需读取数据库。
+          </div>
+        ) : (
+          <div className="datasource-meta-grid">
+            {runtimeMeta.map((item) => (
+              <div key={item.label}>
+                <div className="datasource-meta-label">{item.label}</div>
+                <div className="datasource-meta-value">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

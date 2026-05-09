@@ -33,6 +33,8 @@ function truncateText(text: string, maxLength = 120): string {
 
 export function ToolInvocationsCard() {
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+  const isDataAnalysisRun =
+    currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations?.length);
   const runtimeTools = currentAgentRun
     ? currentAgentRun.toolInvocations.map((tool) => ({
         id: tool.id,
@@ -45,6 +47,7 @@ export function ToolInvocationsCard() {
         ...tool,
         status: 'success' as const,
       }));
+  const showEmptyState = Boolean(currentAgentRun) && runtimeTools.length === 0;
 
   return (
     <section className="right-card right-section">
@@ -58,22 +61,29 @@ export function ToolInvocationsCard() {
         </button>
       </div>
 
-      <div className="tool-invocation-list">
-        {runtimeTools.map((tool) => (
-          <div key={tool.id} className="tool-invocation-row">
-            <div className="tool-invocation-main">
-              <div className="tool-invocation-name">{tool.name}</div>
-              <div className="tool-invocation-desc">{tool.desc}</div>
+      {showEmptyState ? (
+        <div className="right-panel-empty-state">
+          <strong>本次未调用工具</strong>
+          {isDataAnalysisRun ? '当前请求未产出可展示的工具调用结果。' : '当前请求未进入数据分析流程。'}
+        </div>
+      ) : (
+        <div className="tool-invocation-list">
+          {runtimeTools.map((tool) => (
+            <div key={tool.id} className="tool-invocation-row">
+              <div className="tool-invocation-main">
+                <div className="tool-invocation-name">{tool.name}</div>
+                <div className="tool-invocation-desc">{tool.desc}</div>
+              </div>
+              <div className="tool-invocation-meta">
+                <span className={`status-badge ${tool.status === 'success' ? 'status-badge-success' : 'status-badge-error'}`}>
+                  {tool.status === 'success' ? '已完成' : '失败'}
+                </span>
+                <span>{tool.duration}</span>
+              </div>
             </div>
-            <div className="tool-invocation-meta">
-              <span className={`status-badge ${tool.status === 'success' ? 'status-badge-success' : 'status-badge-error'}`}>
-                {tool.status === 'success' ? '已完成' : '失败'}
-              </span>
-              <span>{tool.duration}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
