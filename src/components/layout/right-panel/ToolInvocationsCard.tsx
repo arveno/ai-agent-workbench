@@ -2,27 +2,6 @@ import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
 
-const TOOL_INVOCATIONS = [
-  {
-    id: 'schema_inspect',
-    name: 'schema_inspect',
-    desc: '检查数据结构',
-    duration: '180ms',
-  },
-  {
-    id: 'query_data',
-    name: 'query_data',
-    desc: '查询业务数据',
-    duration: '420ms',
-  },
-  {
-    id: 'chart_render',
-    name: 'chart_render',
-    desc: '生成图表',
-    duration: '220ms',
-  },
-] as const;
-
 function truncateText(text: string, maxLength = 120): string {
   if (text.length <= maxLength) {
     return text;
@@ -33,21 +12,34 @@ function truncateText(text: string, maxLength = 120): string {
 
 export function ToolInvocationsCard() {
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+
+  if (!currentAgentRun) {
+    return (
+      <section className="right-card right-section">
+        <div className="right-card-head">
+          <h2 className="panel-section-title">
+            <AppIcon icon={icons.settings} size={16} />
+            <span>本轮工具调用</span>
+          </h2>
+        </div>
+        <div className="right-panel-empty-state">
+          <strong>暂无工具调用</strong>
+          数据分析类请求会在这里展示 schema_inspect、aggregate_table、chart_render 等工具调用结果。
+        </div>
+      </section>
+    );
+  }
+
   const isDataAnalysisRun =
-    currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations?.length);
-  const runtimeTools = currentAgentRun
-    ? currentAgentRun.toolInvocations.map((tool) => ({
-        id: tool.id,
-        name: tool.toolName,
-        desc: truncateText(`${tool.inputSummary} -> ${tool.outputSummary}`),
-        duration: `${tool.elapsedMs}ms`,
-        status: tool.status,
-      }))
-    : TOOL_INVOCATIONS.map((tool) => ({
-        ...tool,
-        status: 'success' as const,
-      }));
-  const showEmptyState = Boolean(currentAgentRun) && runtimeTools.length === 0;
+    currentAgentRun.plan?.intent === 'data_analysis' || Boolean(currentAgentRun.toolInvocations?.length);
+  const runtimeTools = currentAgentRun.toolInvocations.map((tool) => ({
+    id: tool.id,
+    name: tool.toolName,
+    desc: truncateText(`${tool.inputSummary} -> ${tool.outputSummary}`),
+    duration: `${tool.elapsedMs}ms`,
+    status: tool.status,
+  }));
+  const showEmptyState = runtimeTools.length === 0;
 
   return (
     <section className="right-card right-section">

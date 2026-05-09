@@ -58,23 +58,14 @@ function getStepIcon(status: AgentStepStatus): IconKey {
 }
 
 export function AgentStepsCard() {
-  const agentSteps = useWorkbenchStore((state) => state.agentSteps);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const displayedSteps = currentAgentRun
-    ? currentAgentRun.steps.map((step) => ({
-        id: step.id,
-        title: step.title,
-        status: step.status,
-        description: step.description,
-        elapsedMs: step.elapsedMs,
-      }))
-    : agentSteps.map((step) => ({
-        id: step.id,
-        title: STEP_TITLE_MAP[step.id] ?? step.title,
-        status: step.status,
-        description: undefined,
-        elapsedMs: undefined,
-      }));
+  const displayedSteps = currentAgentRun?.steps.map((step) => ({
+    id: step.id,
+    title: STEP_TITLE_MAP[step.id] ?? step.title,
+    status: step.status,
+    description: step.description,
+    elapsedMs: step.elapsedMs,
+  }));
 
   return (
     <section className="right-card right-section">
@@ -82,33 +73,40 @@ export function AgentStepsCard() {
         <AppIcon icon={icons.agent} size={16} />
         <span>本轮执行步骤</span>
       </h2>
-      <ul className="agent-steps">
-        {displayedSteps.map((step, index) => {
-          const statusClass = getStepClass(step.status);
-          const isRunning = step.status === 'running';
-          const stepTitle = step.title;
-          const stepDescription = step.description;
-          const stepElapsed = typeof step.elapsedMs === 'number' ? `${step.elapsedMs}ms` : '';
+      {!currentAgentRun || !displayedSteps?.length ? (
+        <div className="right-panel-empty-state">
+          <strong>暂无执行步骤</strong>
+          输入问题后点击“运行真实 Agent”，这里会展示本轮 Agent 的执行过程。
+        </div>
+      ) : (
+        <ul className="agent-steps">
+          {displayedSteps.map((step, index) => {
+            const statusClass = getStepClass(step.status);
+            const isRunning = step.status === 'running';
+            const stepTitle = step.title;
+            const stepDescription = step.description;
+            const stepElapsed = typeof step.elapsedMs === 'number' ? `${step.elapsedMs}ms` : '';
 
-          return (
-            <li key={step.id} className={`agent-step ${statusClass}${isRunning ? ' active' : ''}`}>
-              <span className="step-main step-main-column">
-                <span className="step-main-line">
-                  <span className={`step-icon-wrap step-icon-${step.status}`} aria-hidden="true">
-                    <AppIcon icon={icons[getStepIcon(step.status)]} size={16} />
+            return (
+              <li key={step.id} className={`agent-step ${statusClass}${isRunning ? ' active' : ''}`}>
+                <span className="step-main step-main-column">
+                  <span className="step-main-line">
+                    <span className={`step-icon-wrap step-icon-${step.status}`} aria-hidden="true">
+                      <AppIcon icon={icons[getStepIcon(step.status)]} size={16} />
+                    </span>
+                    <span className="step-label">{`${index + 1}. ${stepTitle}`}</span>
                   </span>
-                  <span className="step-label">{`${index + 1}. ${stepTitle}`}</span>
+                  {stepDescription ? <span className="step-desc">{stepDescription}</span> : null}
                 </span>
-                {stepDescription ? <span className="step-desc">{stepDescription}</span> : null}
-              </span>
-              <span className="step-status">
-                {getStepStatusText(step.status)}
-                {stepElapsed ? ` · ${stepElapsed}` : ''}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+                <span className="step-status">
+                  {getStepStatusText(step.status)}
+                  {stepElapsed ? ` · ${stepElapsed}` : ''}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }
