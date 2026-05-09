@@ -247,6 +247,29 @@
   flex-shrink: 0;
 }
 
+.run-agent-button {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.run-agent-button:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.run-agent-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .header-btn {
   height: 32px;
   border: 1px solid #d1d5db;

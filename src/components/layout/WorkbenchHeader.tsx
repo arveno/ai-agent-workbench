@@ -50,6 +50,17 @@ export function WorkbenchHeader() {
       : generationStatus === 'error'
         ? '#ef4444'
         : '#9ca3af';
+  const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
+  const runCurrentAgentAnalysis = useWorkbenchStore((state) => state.runCurrentAgentAnalysis);
+
+  const runButtonLabel =
+    agentRunStatus === 'running'
+      ? '运行中...'
+      : agentRunStatus === 'success'
+        ? '重新运行'
+        : agentRunStatus === 'error'
+          ? '重试运行'
+          : '运行真实 Agent';
 
   return (
     <header className="workbench-header">
@@ -67,6 +78,18 @@ export function WorkbenchHeader() {
           <span className="header-status-dot" aria-hidden="true" style={{ background: dotColor }}></span>
           {taskStatusPrefix} · {taskStatusSuffix}
         </p>
+      </div>
+      <div className="task-action-group">
+        <button
+          type="button"
+          className="run-agent-button"
+          onClick={() => {
+            void runCurrentAgentAnalysis();
+          }}
+          disabled={agentRunStatus === 'running'}
+        >
+          {runButtonLabel}
+        </button>
       </div>
     </header>
   );

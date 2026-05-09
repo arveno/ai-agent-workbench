@@ -1,5 +1,6 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
+import { useWorkbenchStore } from '../../../stores/workbenchStore';
 
 const TOOL_INVOCATIONS = [
   {
@@ -23,6 +24,20 @@ const TOOL_INVOCATIONS = [
 ] as const;
 
 export function ToolInvocationsCard() {
+  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+  const runtimeTools = currentAgentRun
+    ? currentAgentRun.toolInvocations.map((tool) => ({
+        id: tool.id,
+        name: tool.toolName,
+        desc: `${tool.inputSummary} -> ${tool.outputSummary}`,
+        duration: `${tool.elapsedMs}ms`,
+        status: tool.status,
+      }))
+    : TOOL_INVOCATIONS.map((tool) => ({
+        ...tool,
+        status: 'success' as const,
+      }));
+
   return (
     <section className="right-card right-section">
       <div className="right-card-head">
@@ -36,14 +51,16 @@ export function ToolInvocationsCard() {
       </div>
 
       <div className="tool-invocation-list">
-        {TOOL_INVOCATIONS.map((tool) => (
+        {runtimeTools.map((tool) => (
           <div key={tool.id} className="tool-invocation-row">
             <div className="tool-invocation-main">
               <div className="tool-invocation-name">{tool.name}</div>
               <div className="tool-invocation-desc">{tool.desc}</div>
             </div>
             <div className="tool-invocation-meta">
-              <span className="status-badge status-badge-success">已完成</span>
+              <span className={`status-badge ${tool.status === 'success' ? 'status-badge-success' : 'status-badge-error'}`}>
+                {tool.status === 'success' ? '已完成' : '失败'}
+              </span>
               <span>{tool.duration}</span>
             </div>
           </div>

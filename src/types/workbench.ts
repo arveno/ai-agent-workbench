@@ -230,6 +230,18 @@ export interface AgentRunResult {
   elapsedMs: number;
 }
 
+export interface AgentRunSuccessResponse {
+  ok: true;
+  run: AgentRunResult;
+}
+
+export interface AgentRunErrorResponse {
+  ok: false;
+  errorMessage: string;
+}
+
+export type AgentRunResponse = AgentRunSuccessResponse | AgentRunErrorResponse;
+
 export interface ModelProviderConfig {
   apiKey?: string;
   baseUrl?: string;
@@ -324,12 +336,17 @@ export interface UiSlice {
   isDataSourceModalOpen: boolean;
   isToolLibraryModalOpen: boolean;
   isWorkflowModalOpen: boolean;
+  currentAgentRun: AgentRunResult | null;
+  agentRunStatus: 'idle' | 'running' | 'success' | 'error';
+  agentRunErrorMessage: string | null;
   openDataSourceModal: () => void;
   closeDataSourceModal: () => void;
   openToolLibraryModal: () => void;
   closeToolLibraryModal: () => void;
   openWorkflowModal: () => void;
   closeWorkflowModal: () => void;
+  runCurrentAgentAnalysis: () => Promise<void>;
+  clearCurrentAgentRun: () => void;
 }
 
 export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice;

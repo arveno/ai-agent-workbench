@@ -61,6 +61,20 @@
   gap: 8px;
 }
 
+.step-main-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.step-main-line {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .step-icon-wrap {
   width: 18px;
   flex: 0 0 18px;
@@ -98,6 +112,13 @@
   font-size: 12px;
   font-weight: 600;
   color: #64748b;
+}
+
+.step-desc {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .agent-step.done .step-label,
@@ -400,6 +421,11 @@
   color: #15803d;
 }
 
+.status-badge-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .status-badge-active {
   background: #dbeafe;
   color: #2563eb;
@@ -426,4 +452,39 @@
   margin: 10px 0 0;
   color: #6b7280;
   font-size: 13px;
+}
+
+.run-chart-summary {
+  margin-top: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.run-chart-title {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.run-chart-meta {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.run-chart-text {
+  margin-top: 6px;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.run-chart-points {
+  margin-top: 6px;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-word;
 }

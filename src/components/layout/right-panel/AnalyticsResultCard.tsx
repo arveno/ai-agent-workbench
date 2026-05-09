@@ -6,6 +6,8 @@ import { icons } from '../../common/iconMap';
 
 export function AnalyticsResultCard() {
   const showAnalyticsResult = useWorkbenchStore((state) => state.showAnalyticsResult);
+  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+  const chartData = currentAgentRun?.chartData;
 
   return (
     <section className="right-card right-section">
@@ -13,7 +15,18 @@ export function AnalyticsResultCard() {
         <AppIcon icon={icons.chart} size={16} />
         <span>数据分析结果</span>
       </h2>
-      {showAnalyticsResult ? (
+      {chartData ? (
+        <>
+          <div className="run-chart-summary">
+            <div className="run-chart-title">{chartData.title}</div>
+            <div className="run-chart-meta">图表类型：{chartData.chartType}</div>
+            <div className="run-chart-text">{chartData.summary}</div>
+            <div className="run-chart-points">
+              数据点：{chartData.labels.length}（labels={chartData.labels.join(', ') || '-'}）
+            </div>
+          </div>
+        </>
+      ) : showAnalyticsResult ? (
         <>
           <div className="kpi-grid">
             <div className="kpi-item">
