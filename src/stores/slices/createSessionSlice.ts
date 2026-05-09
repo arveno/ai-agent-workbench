@@ -42,6 +42,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         sessions: nextSessions,
         currentSessionId: sessionId,
         currentPrompt: '',
+        chatDraft: '',
         assistantStream: {
           content: '',
           status: 'idle',
@@ -59,6 +60,9 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
           status: 'hidden',
         },
         agentSteps: createInitialAgentSteps(),
+        currentAgentRun: null,
+        agentRunStatus: 'idle',
+        agentRunErrorMessage: null,
       };
     });
 
@@ -80,6 +84,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentSessionId: nextSession.id,
         currentTaskId: nextSession.taskId ?? state.currentTaskId,
         currentPrompt: userMessage?.content ?? '',
+        chatDraft: '',
         activeAssistantMessageId: assistantMessage?.id ?? '',
         assistantStream: {
           content: assistantMessage?.content ?? '',
@@ -97,6 +102,9 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         showKnowledgeSources: hasAssistantReply,
         showAnalyticsResult: hasAssistantReply,
         agentSteps: hasAssistantReply ? mockAgentSteps.map((step) => ({ ...step })) : createInitialAgentSteps(),
+        currentAgentRun: null,
+        agentRunStatus: 'idle',
+        agentRunErrorMessage: null,
       };
     });
   },
@@ -269,6 +277,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentSessionId: nextSession?.id ?? currentState.currentSessionId,
         currentTaskId: matchedTask?.id ?? DEFAULT_TASK_ID,
         currentPrompt: userMessage?.content ?? '',
+        chatDraft: '',
         activeAssistantMessageId: assistantMessage?.id ?? '',
         assistantStream: {
           content: assistantMessage?.content ?? '',
@@ -286,6 +295,9 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         showKnowledgeSources: hasAssistantReply,
         showAnalyticsResult: hasAssistantReply,
         agentSteps: hasAssistantReply ? mockAgentSteps.map((step) => ({ ...step })) : createInitialAgentSteps(),
+        currentAgentRun: null,
+        agentRunStatus: 'idle',
+        agentRunErrorMessage: null,
       };
     });
   },

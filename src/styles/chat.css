@@ -325,6 +325,11 @@
   background: #d1fae5;
 }
 
+.tool-state-error {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
 .tool-card h3 {
   margin: 0 0 8px;
   font-size: 14px;

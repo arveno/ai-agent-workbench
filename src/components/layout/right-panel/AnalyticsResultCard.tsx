@@ -14,7 +14,7 @@ export function AnalyticsResultCard() {
         </h2>
         <div className="right-panel-empty-state">
           <strong>暂无分析结果</strong>
-          运行数据分析类请求后，这里会展示图表数据和指标摘要。
+          发送数据分析类请求后，这里会展示图表数据和指标摘要。
         </div>
       </section>
     );

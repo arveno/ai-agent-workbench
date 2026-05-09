@@ -76,7 +76,7 @@ export function AgentStepsCard() {
       {!currentAgentRun || !displayedSteps?.length ? (
         <div className="right-panel-empty-state">
           <strong>暂无执行步骤</strong>
-          输入问题后点击“运行真实 Agent”，这里会展示本轮 Agent 的执行过程。
+          输入问题后点击发送，这里会展示本轮 Agent 的执行过程。
         </div>
       ) : (
         <ul className="agent-steps">

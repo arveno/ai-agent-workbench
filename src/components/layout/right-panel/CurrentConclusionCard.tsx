@@ -16,7 +16,7 @@ export function CurrentConclusionCard() {
         </h2>
         <div className="right-panel-empty-state">
           <strong>暂无结论</strong>
-          Agent 完成本轮执行后，会在这里展示最终分析结论或能力说明。
+          发送问题后，Agent 完成本轮执行会在这里展示最终分析结论或能力说明。
         </div>
       </section>
     );

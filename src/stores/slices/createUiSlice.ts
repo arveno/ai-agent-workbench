@@ -54,23 +54,33 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   clearChatDraft: () => {
     set({ chatDraft: '' });
   },
-  runCurrentAgentAnalysis: async () => {
+  runCurrentAgentAnalysis: async (promptOverride) => {
     const state = get();
-    const prompt = state.chatDraft.trim();
+    const prompt = (promptOverride ?? state.chatDraft).trim();
 
     if (!prompt) {
       set({
         agentRunStatus: 'error',
-        agentRunErrorMessage: '请输入要分析的问题后再运行真实 Agent。',
+        agentRunErrorMessage: '请输入要分析的问题后再发送。',
       });
       return;
     }
 
     const apiKey = state.modelConfigs.groq?.apiKey?.trim();
 
+    get().appendUserMessageToCurrentSession(prompt);
+
     set({
       agentRunStatus: 'running',
       agentRunErrorMessage: null,
+      generationStatus: 'streaming',
+      realModelNotice: '',
+      errorMessage: undefined,
+      confirmStatus: 'cancelled',
+      finalMessage: {
+        content: '',
+        status: 'hidden',
+      },
     });
 
     try {
@@ -81,6 +91,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       });
 
       if (response.ok) {
+        const isDataAnalysisRun =
+          response.run.plan?.intent === 'data_analysis' || response.run.toolInvocations.length > 0;
         const assistantMessage = buildAgentConclusionMessage(
           response.run.conclusion,
           response.run.conclusionSource === 'fallback' ? response.run.conclusionNotice : undefined
@@ -90,9 +102,16 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           currentAgentRun: response.run,
           agentRunStatus: 'success',
           agentRunErrorMessage: null,
+          generationStatus: 'done',
+          confirmStatus: isDataAnalysisRun && response.run.status === 'success' ? 'waiting' : 'cancelled',
+          finalMessage: {
+            content: '',
+            status: 'hidden',
+          },
+          visibleToolCallIds: [],
+          showKnowledgeSources: false,
+          showAnalyticsResult: false,
         });
-
-        get().appendUserMessageToCurrentSession(prompt);
 
         if (assistantMessage) {
           get().appendAssistantMessageToCurrentSession(assistantMessage);
@@ -106,11 +125,15 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       set({
         agentRunStatus: 'error',
         agentRunErrorMessage: response.errorMessage,
+        generationStatus: 'error',
+        confirmStatus: 'cancelled',
       });
     } catch {
       set({
         agentRunStatus: 'error',
         agentRunErrorMessage: 'Agent Run 执行失败，请检查数据源连接或服务端状态。',
+        generationStatus: 'error',
+        confirmStatus: 'cancelled',
       });
     }
   },

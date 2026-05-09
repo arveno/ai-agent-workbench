@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { streamGroqChat } from '../../services/chatApi';
-import type { GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
+import type { AgentRunResult, GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
 import { createMessageId } from '../../utils/message';
 import { streamText } from '../../utils/streamText';
 import {
@@ -14,6 +14,32 @@ import {
   updateCurrentSessionAssistantInSessions,
   delay,
 } from './shared';
+
+function createAgentRunReportMarkdown(run: AgentRunResult): string {
+  const providerLabel = run.provider === 'postgresql' ? 'PostgreSQL' : 'Supabase';
+  const toolNames = Array.from(new Set(run.toolInvocations.map((tool) => tool.toolName)));
+  const toolLines =
+    toolNames.length > 0 ? toolNames.map((toolName) => `- ${toolName}`).join('\n') : '- 本次未调用工具';
+
+  return [
+    '# 教学质量分析简版报告',
+    '',
+    '## 分析问题',
+    run.prompt,
+    '',
+    '## 使用数据源',
+    providerLabel,
+    '',
+    '## 调用工具',
+    toolLines,
+    '',
+    '## 分析结论',
+    run.conclusion,
+    '',
+    '## 后续建议',
+    '建议优先关注异常指标较高的学科或班级，并结合平均分、出勤率和作业完成率做进一步排查。',
+  ].join('\n');
+}
 
 export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], GenerationSlice> = (set, get) => ({
   generationStatus: initialWorkbenchState.generationStatus,
@@ -37,6 +63,13 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
+    if (get().currentModelProvider === 'groq') {
+      void get().runCurrentAgentAnalysis(trimmedPrompt);
+      return;
+    }
+
+    get().clearCurrentAgentRun();
+    get().clearChatDraft();
     void get().runPromptWithCurrentModel(trimmedPrompt);
   },
   regenerateFromAssistantMessage: (assistantMessageId) => {
@@ -413,6 +446,36 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     await get().runPromptWithCurrentModel(get().currentPrompt);
   },
   confirmGenerateReport: async () => {
+    const currentState = get();
+    const currentRun = currentState.currentAgentRun;
+    const isDataAnalysisRun =
+      currentRun?.plan?.intent === 'data_analysis' || Boolean(currentRun?.toolInvocations.length);
+
+    if (currentState.currentModelProvider === 'groq') {
+      if (
+        currentState.confirmStatus !== 'waiting' ||
+        !currentRun ||
+        currentRun.status !== 'success' ||
+        !isDataAnalysisRun ||
+        !currentRun.conclusion.trim()
+      ) {
+        return;
+      }
+
+      const runConclusionMessageId = currentState.activeAssistantMessageId;
+      get().appendAssistantMessageToCurrentSession(createAgentRunReportMarkdown(currentRun));
+      set({
+        activeAssistantMessageId: runConclusionMessageId,
+        confirmStatus: 'confirmed',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+        generationStatus: 'done',
+      });
+      return;
+    }
+
     const currentBeforeConfirm = get();
     const confirmStep = currentBeforeConfirm.agentSteps.find((step) => step.id === 'confirm');
 
@@ -449,6 +512,17 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     });
   },
   cancelGenerateReport: () => {
+    if (get().currentModelProvider === 'groq') {
+      set({
+        confirmStatus: 'cancelled',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+      });
+      return;
+    }
+
     set((state) => ({
       confirmStatus: 'cancelled',
       generationStatus: 'stopped',

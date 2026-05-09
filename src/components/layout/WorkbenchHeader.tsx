@@ -50,21 +50,6 @@ export function WorkbenchHeader() {
       : generationStatus === 'error'
         ? '#ef4444'
         : '#9ca3af';
-  const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
-  const chatDraft = useWorkbenchStore((state) => state.chatDraft);
-  const runCurrentAgentAnalysis = useWorkbenchStore((state) => state.runCurrentAgentAnalysis);
-  const isRunDisabled = agentRunStatus === 'running' || chatDraft.trim().length === 0;
-
-  const runButtonLabel =
-    agentRunStatus === 'running'
-      ? '运行中...'
-      : agentRunStatus === 'success'
-        ? '重新运行'
-        : agentRunStatus === 'error'
-          ? '重试运行'
-          : '运行真实 Agent';
-  const runButtonTitle = chatDraft.trim().length === 0 ? '请输入问题后运行真实 Agent' : runButtonLabel;
-
   return (
     <header className="workbench-header">
       <div className="header-main">
@@ -81,19 +66,6 @@ export function WorkbenchHeader() {
           <span className="header-status-dot" aria-hidden="true" style={{ background: dotColor }}></span>
           {taskStatusPrefix} · {taskStatusSuffix}
         </p>
-      </div>
-      <div className="task-action-group">
-        <button
-          type="button"
-          className="run-agent-button"
-          onClick={() => {
-            void runCurrentAgentAnalysis();
-          }}
-          disabled={isRunDisabled}
-          title={runButtonTitle}
-        >
-          {runButtonLabel}
-        </button>
       </div>
     </header>
   );

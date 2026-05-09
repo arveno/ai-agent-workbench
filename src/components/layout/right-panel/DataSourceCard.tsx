@@ -14,7 +14,7 @@ export function DataSourceCard() {
         </h2>
         <div className="right-panel-empty-state">
           <strong>尚未访问数据源</strong>
-          运行真实 Agent 后，这里会展示本次使用的数据源和执行信息。
+          发送数据分析问题后，这里会展示本次使用的数据源和执行信息。
         </div>
       </section>
     );

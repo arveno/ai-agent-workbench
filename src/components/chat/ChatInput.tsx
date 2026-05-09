@@ -11,14 +11,16 @@ export function ChatInput() {
   const isComposingRef = useRef(false);
   const chatDraft = useWorkbenchStore((state) => state.chatDraft);
   const setChatDraft = useWorkbenchStore((state) => state.setChatDraft);
-  const clearChatDraft = useWorkbenchStore((state) => state.clearChatDraft);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
-  const isStreaming = generationStatus === 'streaming';
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
+  const isStreaming = currentModelProvider === 'mock' && generationStatus === 'streaming';
+  const isAgentRunning = currentModelProvider === 'groq' && agentRunStatus === 'running';
   const trimmedValue = chatDraft.trim();
   const isEmpty = trimmedValue.length === 0;
-  const sendDisabled = isEmpty;
+  const sendDisabled = isEmpty || isAgentRunning;
 
   const handleSend = () => {
     if (isStreaming || sendDisabled) {
@@ -26,7 +28,6 @@ export function ChatInput() {
     }
 
     sendPrompt(trimmedValue);
-    clearChatDraft();
   };
 
   const handlePrimaryAction = () => {
@@ -103,7 +104,7 @@ export function ChatInput() {
             onClick={handlePrimaryAction}
             disabled={!isStreaming && sendDisabled}
             aria-label={isStreaming ? '停止生成' : '发送'}
-            title={isStreaming ? '停止生成' : '发送'}
+            title={isStreaming ? '停止生成' : isAgentRunning ? '运行中...' : '发送'}
           >
             <AppIcon icon={isStreaming ? icons.stop : icons.send} size={16} />
           </button>

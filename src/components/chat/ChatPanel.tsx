@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { mockToolCalls } from '../../mocks/toolCalls';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
@@ -26,9 +26,39 @@ const SUMMARY_MESSAGE_CONTENT = `根据查询结果，以下是本月教学质�
 - 八年级出勤率低于基线 3.2%
 - 整体教学质量波动主要集中在周测成绩与缺勤率变化`;
 
+function truncateText(text: string, maxLength = 120): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength)}...`;
+}
+
+function getRuntimeToolTitle(toolName: string): string {
+  if (toolName === 'schema_inspect') {
+    return '数据源结构读取';
+  }
+
+  if (toolName === 'aggregate_table') {
+    return '数据聚合分析';
+  }
+
+  if (toolName === 'query_table') {
+    return '数据明细查询';
+  }
+
+  if (toolName === 'chart_render') {
+    return '图表数据生成';
+  }
+
+  return toolName;
+}
+
 export function ChatPanel() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const activeAssistantMessageId = useWorkbenchStore((state) => state.activeAssistantMessageId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
@@ -42,7 +72,30 @@ export function ChatPanel() {
   const visibleToolCalls = mockToolCalls.filter((toolCall) => visibleToolCallIds.includes(toolCall.id));
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const sessionMessages = currentSession?.messages ?? [];
+  const isMockMode = currentModelProvider === 'mock';
+  const isDataAnalysisRun =
+    currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations.length);
+  const runtimeToolCalls =
+    currentAgentRun && isDataAnalysisRun
+      ? currentAgentRun.toolInvocations.map((invocation) => ({
+          id: invocation.id,
+          title: getRuntimeToolTitle(invocation.toolName),
+          toolName: invocation.toolName,
+          params: truncateText(invocation.inputSummary),
+          result: truncateText(invocation.outputSummary),
+          status: invocation.status,
+          elapsedMs: invocation.elapsedMs,
+        }))
+      : [];
   const hasConversation = sessionMessages.length > 0;
+  const shouldRenderRuntimeToolCalls = !isMockMode && runtimeToolCalls.length > 0;
+  const shouldShowAgentReportConfirm =
+    !isMockMode &&
+    Boolean(currentAgentRun) &&
+    isDataAnalysisRun &&
+    currentAgentRun?.status === 'success' &&
+    Boolean(currentAgentRun?.conclusion.trim()) &&
+    confirmStatus === 'waiting';
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -89,6 +142,7 @@ export function ChatPanel() {
     generationStatus,
     activeAssistantMessageId,
     visibleToolCalls.length,
+    runtimeToolCalls.length,
     confirmStatus,
     finalMessage.status,
     realModelNotice,
@@ -132,30 +186,50 @@ export function ChatPanel() {
           }
 
           const isActiveAssistant = message.id === activeAssistantMessageId;
-          const isStreamingAssistant = isActiveAssistant && generationStatus === 'streaming';
-          const isStoppedAssistant = isActiveAssistant && generationStatus === 'stopped';
+          const isStreamingAssistant = isMockMode && isActiveAssistant && generationStatus === 'streaming';
+          const isStoppedAssistant = isMockMode && isActiveAssistant && generationStatus === 'stopped';
+
+          const shouldRenderToolsBeforeMessage =
+            shouldRenderRuntimeToolCalls && message.id === activeAssistantMessageId;
 
           return (
-            <div key={message.id} className="message-row message-row-assistant">
-              <div className="message-avatar message-avatar-assistant" aria-hidden="true">
-                <AppIcon icon={icons.brand} size={16} />
+            <Fragment key={message.id}>
+              {shouldRenderToolsBeforeMessage ? (
+                <div className="tool-card-grid tool-card-grid-runtime">
+                  {runtimeToolCalls.map((toolCall) => (
+                    <ToolCallCard
+                      key={toolCall.id}
+                      title={toolCall.title}
+                      toolName={toolCall.toolName}
+                      params={toolCall.params}
+                      result={toolCall.result}
+                      status={toolCall.status}
+                      elapsedMs={toolCall.elapsedMs}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <div className="message-row message-row-assistant">
+                <div className="message-avatar message-avatar-assistant" aria-hidden="true">
+                  <AppIcon icon={icons.brand} size={16} />
+                </div>
+                <MessageBubble
+                  role="assistant"
+                  content={message.content}
+                  afterContent={
+                    <>
+                      {isStreamingAssistant ? <span className="typing-cursor">▍</span> : null}
+                      {isStoppedAssistant ? <span className="message-status-tag">已停止</span> : null}
+                    </>
+                  }
+                  actions={copyAction}
+                />
               </div>
-              <MessageBubble
-                role="assistant"
-                content={message.content}
-                afterContent={
-                  <>
-                    {isStreamingAssistant ? <span className="typing-cursor">▍</span> : null}
-                    {isStoppedAssistant ? <span className="message-status-tag">已停止</span> : null}
-                  </>
-                }
-                actions={copyAction}
-              />
-            </div>
+            </Fragment>
           );
         })}
 
-        {hasConversation ? (
+        {isMockMode && hasConversation ? (
           <div className="tool-card-grid">
             {visibleToolCalls.map((toolCall) => (
               <ToolCallCard
@@ -169,7 +243,7 @@ export function ChatPanel() {
           </div>
         ) : null}
 
-        {hasConversation ? (
+        {isMockMode && hasConversation ? (
           <div className="message-row message-row-assistant">
             <div className="message-avatar message-avatar-assistant" aria-hidden="true">
               <AppIcon icon={icons.brand} size={16} />
@@ -194,11 +268,25 @@ export function ChatPanel() {
           </div>
         ) : null}
 
-        {hasConversation ? (
+        {isMockMode && hasConversation ? (
           <ConfirmActionCard
             status={confirmStatus}
             onConfirm={confirmGenerateReport}
             onCancel={cancelGenerateReport}
+          />
+        ) : null}
+
+        {shouldShowAgentReportConfirm ? (
+          <ConfirmActionCard
+            status={confirmStatus}
+            onConfirm={confirmGenerateReport}
+            onCancel={cancelGenerateReport}
+            title="后续操作"
+            waitingText="是否基于本次分析生成简版报告？"
+            confirmedText="已生成简版报告。"
+            cancelledText="已跳过报告生成。"
+            confirmButtonText="生成报告"
+            cancelButtonText="暂不生成"
           />
         ) : null}
 
@@ -223,7 +311,7 @@ export function ChatPanel() {
           <div className="real-model-notice">{realModelNotice}</div>
         ) : null}
 
-        {finalMessage.status === 'visible' ? (
+        {isMockMode && finalMessage.status === 'visible' ? (
           <div className="message-row message-row-assistant">
             <div className="message-avatar message-avatar-assistant" aria-hidden="true">
               <AppIcon icon={icons.brand} size={16} />

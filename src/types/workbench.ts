@@ -362,7 +362,7 @@ export interface UiSlice {
   closeWorkflowModal: () => void;
   setChatDraft: (value: string) => void;
   clearChatDraft: () => void;
-  runCurrentAgentAnalysis: () => Promise<void>;
+  runCurrentAgentAnalysis: (promptOverride?: string) => Promise<void>;
   clearCurrentAgentRun: () => void;
 }
 
