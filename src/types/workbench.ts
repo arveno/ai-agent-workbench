@@ -82,6 +82,16 @@ export type DataSourceProviderId = 'postgresql' | 'supabase' | 'mysql';
 export type DataSourceConnectionStatus = 'idle' | 'connected' | 'disconnected' | 'testing' | 'error';
 export type ToolRiskLevel = 'low' | 'medium' | 'high';
 export type ToolStatus = 'enabled' | 'disabled' | 'comingSoon';
+export type WorkflowStepStatus = 'ready' | 'running' | 'done' | 'waiting' | 'disabled';
+export type WorkflowStepKind =
+  | 'input'
+  | 'intent'
+  | 'schema'
+  | 'toolSelect'
+  | 'toolExecute'
+  | 'chart'
+  | 'answer'
+  | 'runDisplay';
 
 export interface DataSourceProvider {
   id: DataSourceProviderId;
@@ -109,6 +119,16 @@ export interface AgentToolDefinition {
   category: 'schema' | 'query' | 'analysis' | 'render' | 'knowledge' | 'report';
   inputSummary: string;
   outputSummary: string;
+}
+
+export interface WorkflowStepDefinition {
+  id: string;
+  kind: WorkflowStepKind;
+  title: string;
+  description: string;
+  status: WorkflowStepStatus;
+  toolName?: string;
+  outputSummary?: string;
 }
 
 export interface ModelProviderConfig {
@@ -204,12 +224,13 @@ export interface ModelSlice {
 export interface UiSlice {
   isDataSourceModalOpen: boolean;
   isToolLibraryModalOpen: boolean;
-  isWorkflowPanelOpen: boolean;
+  isWorkflowModalOpen: boolean;
   openDataSourceModal: () => void;
   closeDataSourceModal: () => void;
   openToolLibraryModal: () => void;
   closeToolLibraryModal: () => void;
-  setWorkflowPanelOpen: (open: boolean) => void;
+  openWorkflowModal: () => void;
+  closeWorkflowModal: () => void;
 }
 
 export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice;

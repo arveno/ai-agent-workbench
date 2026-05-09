@@ -10,6 +10,7 @@ import './styles/right-panel.css'
 import './styles/model-modal.css'
 import './styles/datasource-modal.css'
 import './styles/tool-library-modal.css'
+import './styles/workflow-modal.css'
 import './styles/components.css'
 import App from './App.tsx'
 

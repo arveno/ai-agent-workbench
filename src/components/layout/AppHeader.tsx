@@ -4,6 +4,7 @@ import { icons } from '../common/iconMap';
 import type { ModelProvider } from '../../types/workbench';
 import { DataSourceModal } from '../datasource/DataSourceModal';
 import { ToolLibraryModal } from '../tools/ToolLibraryModal';
+import { WorkflowModal } from '../workflow/WorkflowModal';
 
 function getModelProviderLabel(provider: ModelProvider): string {
   if (provider === 'mock') {
@@ -38,6 +39,7 @@ export function AppHeader() {
   const openModelModal = useWorkbenchStore((state) => state.openModelModal);
   const openDataSourceModal = useWorkbenchStore((state) => state.openDataSourceModal);
   const openToolLibraryModal = useWorkbenchStore((state) => state.openToolLibraryModal);
+  const openWorkflowModal = useWorkbenchStore((state) => state.openWorkflowModal);
   const modelLabel = getModelProviderLabel(currentModelProvider);
 
   return (
@@ -71,7 +73,7 @@ export function AppHeader() {
             <span>工具库</span>
           </button>
 
-          <button className="header-action-button" type="button">
+          <button className="header-action-button" type="button" onClick={openWorkflowModal}>
             <AppIcon icon={icons.agent} size={15} />
             <span>工作流</span>
           </button>
@@ -83,6 +85,7 @@ export function AppHeader() {
       </header>
       <DataSourceModal />
       <ToolLibraryModal />
+      <WorkflowModal />
     </>
   );
 }
