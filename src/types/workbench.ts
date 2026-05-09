@@ -187,6 +187,49 @@ export interface WorkflowStepDefinition {
   outputSummary?: string;
 }
 
+export type AgentRunStatus = 'running' | 'success' | 'error';
+
+export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
+
+export interface AgentRunStep {
+  id: string;
+  title: string;
+  status: AgentRunStepStatus;
+  description?: string;
+  elapsedMs?: number;
+}
+
+export interface AgentToolInvocationResult {
+  id: string;
+  toolId: string;
+  toolName: string;
+  status: 'success' | 'error';
+  inputSummary: string;
+  outputSummary: string;
+  elapsedMs: number;
+}
+
+export interface AgentRunChartData {
+  title: string;
+  chartType: 'bar' | 'line';
+  labels: string[];
+  values: number[];
+  summary: string;
+}
+
+export interface AgentRunResult {
+  id: string;
+  status: AgentRunStatus;
+  prompt: string;
+  provider: DataSourceTestableProviderId;
+  steps: AgentRunStep[];
+  toolInvocations: AgentToolInvocationResult[];
+  chartData?: AgentRunChartData;
+  conclusion: string;
+  createdAt: string;
+  elapsedMs: number;
+}
+
 export interface ModelProviderConfig {
   apiKey?: string;
   baseUrl?: string;
