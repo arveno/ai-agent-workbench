@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import dotenv from 'dotenv';
-import { Pool, type QueryResultRow } from 'pg';
+import type { QueryResultRow } from 'pg';
+import { createPostgresPool, getConnectionStringByProvider } from '../../src/server/datasources/connection';
 
 type DataSourceTestableProviderId = 'postgresql' | 'supabase';
 
@@ -30,23 +30,8 @@ interface VersionQueryRow extends QueryResultRow {
   server_time?: Date | string;
 }
 
-const CONNECT_TIMEOUT_MS = 5000;
-const QUERY_TIMEOUT_MS = 5000;
-
-if (process.env.NODE_ENV !== 'production') {
-  dotenv.config({ path: `${process.cwd()}/.env.local` });
-}
-
 function isDataSourceTestableProviderId(value: unknown): value is DataSourceTestableProviderId {
   return value === 'postgresql' || value === 'supabase';
-}
-
-function resolveConnectionString(provider: DataSourceTestableProviderId): string | undefined {
-  if (provider === 'postgresql') {
-    return process.env.POSTGRES_CONNECTION_STRING;
-  }
-
-  return process.env.SUPABASE_DB_CONNECTION_STRING;
 }
 
 function parseRequestBody(body: unknown): DataSourceTestRequest {
@@ -135,12 +120,7 @@ export default async function handler(
   }
 
   const provider = providerValue;
-  const connectionString = resolveConnectionString(provider);
-
-  console.log('[datasource:test] env availability', {
-    hasPostgresConnectionString: Boolean(process.env.POSTGRES_CONNECTION_STRING),
-    hasSupabaseConnectionString: Boolean(process.env.SUPABASE_DB_CONNECTION_STRING),
-  });
+  const connectionString = getConnectionStringByProvider(provider);
 
   if (!connectionString) {
     createErrorResponse(res, {
@@ -152,19 +132,12 @@ export default async function handler(
   }
 
   const startTime = Date.now();
-  let pool: Pool | null = null;
+  const pool = createPostgresPool({
+    provider,
+    connectionString,
+  });
 
   try {
-    pool = new Pool({
-      connectionString,
-      max: 1,
-      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
-      idleTimeoutMillis: CONNECT_TIMEOUT_MS,
-      query_timeout: QUERY_TIMEOUT_MS,
-      statement_timeout: QUERY_TIMEOUT_MS,
-      ssl: provider === 'supabase' ? { rejectUnauthorized: false } : undefined,
-    });
-
     const result = await pool.query<VersionQueryRow>({
       text: 'SELECT version() AS version, now() AS server_time',
     });
@@ -192,8 +165,6 @@ export default async function handler(
       elapsedMs,
     });
   } finally {
-    if (pool) {
-      await pool.end().catch(() => undefined);
-    }
+    await pool.end().catch(() => undefined);
   }
 }
