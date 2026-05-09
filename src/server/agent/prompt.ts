@@ -3,11 +3,16 @@
 import type { SchemaInspectOutput } from '../tools/schemaInspectTool';
 import type { AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderOutput } from '../tools/chartRenderTool';
-import type { SimpleAgentIntent } from './intent';
+import type { AgentPlanGroupBy, AgentPlanMetric } from './types';
+
+interface DataAnalysisPlanFields {
+  metric: AgentPlanMetric;
+  groupBy: AgentPlanGroupBy;
+}
 
 interface AgentPromptContext {
   prompt: string;
-  intent: SimpleAgentIntent;
+  intent: DataAnalysisPlanFields;
   schemaResult: SchemaInspectOutput;
   aggregateResult: AggregateTableOutput;
   chartResult: ChartRenderOutput;
@@ -67,17 +72,17 @@ export function buildConclusionMessages(context: AgentPromptContext): Array<{ ro
 }
 
 export function buildFallbackConclusion(params: {
-  intent: SimpleAgentIntent;
+  intent: DataAnalysisPlanFields;
   chartResult: ChartRenderOutput;
 }): string {
-  const metricNameMap: Record<SimpleAgentIntent['metric'], string> = {
+  const metricNameMap: Record<AgentPlanMetric, string> = {
     avg_score: '平均分',
     attendance_rate: '出勤率',
     homework_completion_rate: '作业完成率',
     abnormal_count: '异常指标',
   };
 
-  const groupByNameMap: Record<SimpleAgentIntent['groupBy'], string> = {
+  const groupByNameMap: Record<AgentPlanGroupBy, string> = {
     subject: '学科',
     metric_month: '月份',
   };

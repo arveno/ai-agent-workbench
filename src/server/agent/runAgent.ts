@@ -6,15 +6,17 @@ import type { ChartRenderInput, ChartRenderOutput } from '../tools/chartRenderTo
 import { serverToolRegistry } from '../tools/registry';
 import type { SchemaInspectInput, SchemaInspectOutput } from '../tools/schemaInspectTool';
 import type { ServerToolContext } from '../tools/types';
+import { createCapabilityIntroConclusion, createUnsupportedConclusion } from './capabilityReply';
+import { planAgentRun } from './planner';
 import { buildConclusionMessages, buildFallbackConclusion } from './prompt';
-import { detectSimpleIntent } from './intent';
 import type {
+  AgentConclusionSource,
+  AgentPlan,
   AgentRunRequest,
   AgentRunResult,
+  AgentRunStatus,
   AgentRunStep,
   AgentToolInvocationResult,
-  AgentConclusionSource,
-  AgentRunStatus,
 } from './types';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -86,47 +88,138 @@ async function callGroqConclusion(params: {
   return content;
 }
 
+function createStep(id: string, title: string): AgentRunStep {
+  return {
+    id,
+    title,
+    status: 'pending',
+  };
+}
+
+function setStep(
+  steps: AgentRunStep[],
+  stepId: string,
+  status: AgentRunStep['status'],
+  options?: {
+    description?: string;
+    elapsedMs?: number;
+  }
+): void {
+  const step = steps.find((item) => item.id === stepId);
+
+  if (!step) {
+    return;
+  }
+
+  step.status = status;
+
+  if (options?.description !== undefined) {
+    step.description = options.description;
+  }
+
+  if (options?.elapsedMs !== undefined) {
+    step.elapsedMs = options.elapsedMs;
+  }
+}
+
+function buildNonAnalysisResult(params: {
+  runId: string;
+  runStart: number;
+  createdAt: string;
+  request: AgentRunRequest;
+  plan: AgentPlan;
+  conclusion: string;
+  routeTitle: string;
+  routeDescription: string;
+  replyTitle: string;
+}): AgentRunResult {
+  const now = Date.now();
+  const stepIntent = createStep('step_intent', '理解用户问题');
+  const stepRoute = createStep('step_route', params.routeTitle);
+  const stepReply = createStep('step_reply', params.replyTitle);
+
+  const steps = [stepIntent, stepRoute, stepReply];
+
+  setStep(steps, 'step_intent', 'success', {
+    description: `intent=${params.plan.intent}，reason=${params.plan.reason}`,
+    elapsedMs: Math.max(1, Math.floor((now - params.runStart) / 3)),
+  });
+  setStep(steps, 'step_route', 'success', {
+    description: params.routeDescription,
+    elapsedMs: Math.max(1, Math.floor((now - params.runStart) / 3)),
+  });
+  setStep(steps, 'step_reply', 'success', {
+    description: '已生成说明回复。',
+    elapsedMs: Math.max(1, Math.floor((now - params.runStart) / 3)),
+  });
+
+  const status: AgentRunStatus = 'success';
+
+  return {
+    id: params.runId,
+    status,
+    prompt: params.request.prompt,
+    provider: params.request.provider,
+    plan: params.plan,
+    steps,
+    toolInvocations: [],
+    conclusion: params.conclusion,
+    conclusionSource: 'fallback',
+    createdAt: params.createdAt,
+    elapsedMs: Date.now() - params.runStart,
+  };
+}
+
 export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult> {
   const runId = createRunId();
   const runStart = Date.now();
   const createdAt = new Date(runStart).toISOString();
 
+  ensureServerEnvLoaded();
+  const apiKey = request.apiKey?.trim() || process.env.GROQ_API_KEY?.trim() || '';
+  const plan = await planAgentRun({
+    prompt: request.prompt,
+    apiKey: apiKey || undefined,
+  });
+
+  if (plan.intent === 'capability_intro') {
+    return buildNonAnalysisResult({
+      runId,
+      runStart,
+      createdAt,
+      request,
+      plan,
+      conclusion: createCapabilityIntroConclusion(),
+      routeTitle: '判断无需进入数据分析流程',
+      routeDescription: '当前请求属于能力说明类问题，不访问数据源。',
+      replyTitle: '生成能力说明',
+    });
+  }
+
+  if (plan.intent === 'unsupported') {
+    return buildNonAnalysisResult({
+      runId,
+      runStart,
+      createdAt,
+      request,
+      plan,
+      conclusion: createUnsupportedConclusion(),
+      routeTitle: '判断当前暂不支持',
+      routeDescription: '当前请求不属于教育数据分析工作台支持范围。',
+      replyTitle: '生成说明',
+    });
+  }
+
   const steps: AgentRunStep[] = [
-    { id: 'step_create_run', title: '创建 Run', status: 'pending' },
-    { id: 'step_schema', title: '读取数据源 Schema', status: 'pending' },
-    { id: 'step_intent', title: '理解用户问题', status: 'pending' },
-    { id: 'step_aggregate', title: '执行受控聚合工具', status: 'pending' },
-    { id: 'step_chart', title: '生成图表数据', status: 'pending' },
-    { id: 'step_conclusion', title: '生成最终回复', status: 'pending' },
+    createStep('step_create_run', '创建 Run'),
+    createStep('step_intent', '理解用户问题'),
+    createStep('step_schema', '读取数据源 Schema'),
+    createStep('step_aggregate', '执行受控聚合工具'),
+    createStep('step_chart', '生成图表数据'),
+    createStep('step_conclusion', '生成最终回复'),
   ];
 
   const toolInvocations: AgentToolInvocationResult[] = [];
-
-  const setStep = (
-    stepId: AgentRunStep['id'],
-    status: AgentRunStep['status'],
-    options?: {
-      description?: string;
-      elapsedMs?: number;
-    }
-  ) => {
-    const step = steps.find((item) => item.id === stepId);
-
-    if (!step) {
-      return;
-    }
-
-    step.status = status;
-
-    if (options?.description !== undefined) {
-      step.description = options.description;
-    }
-
-    if (options?.elapsedMs !== undefined) {
-      step.elapsedMs = options.elapsedMs;
-    }
-  };
-
   const context: ServerToolContext = {
     provider: request.provider,
   };
@@ -136,14 +229,24 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
   let chartResult: ChartRenderOutput;
 
   try {
-    setStep('step_create_run', 'running');
-    setStep('step_create_run', 'success', {
+    setStep(steps, 'step_create_run', 'running');
+    setStep(steps, 'step_create_run', 'success', {
       description: `Run ID: ${runId}`,
       elapsedMs: Date.now() - runStart,
     });
 
+    const metric = plan.metric ?? 'abnormal_count';
+    const groupBy = plan.groupBy ?? 'subject';
+
+    const intentStart = Date.now();
+    setStep(steps, 'step_intent', 'running');
+    setStep(steps, 'step_intent', 'success', {
+      description: `intent=${plan.intent}, metric=${metric}, groupBy=${groupBy}`,
+      elapsedMs: Date.now() - intentStart,
+    });
+
     const schemaStart = Date.now();
-    setStep('step_schema', 'running');
+    setStep(steps, 'step_schema', 'running');
     const schemaInput: SchemaInspectInput = {
       includeColumns: true,
     };
@@ -160,24 +263,16 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       elapsedMs: Date.now() - schemaStart,
     });
 
-    setStep('step_schema', 'success', {
+    setStep(steps, 'step_schema', 'success', {
       description: `Schema=${schemaResult.schemas.join(', ') || 'public'}，表数量=${schemaResult.tableCount}`,
       elapsedMs: Date.now() - schemaStart,
     });
 
-    const intentStart = Date.now();
-    setStep('step_intent', 'running');
-    const intent = detectSimpleIntent(request.prompt);
-    setStep('step_intent', 'success', {
-      description: `metric=${intent.metric}, groupBy=${intent.groupBy}`,
-      elapsedMs: Date.now() - intentStart,
-    });
-
     const aggregateStart = Date.now();
-    setStep('step_aggregate', 'running');
+    setStep(steps, 'step_aggregate', 'running');
     const aggregateInput: AggregateTableInput = {
-      metric: intent.metric,
-      groupBy: intent.groupBy,
+      metric,
+      groupBy,
       limit: 20,
     };
 
@@ -193,16 +288,16 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       elapsedMs: Date.now() - aggregateStart,
     });
 
-    setStep('step_aggregate', 'success', {
+    setStep(steps, 'step_aggregate', 'success', {
       description: `聚合结果条数=${aggregateResult.rowCount}`,
       elapsedMs: Date.now() - aggregateStart,
     });
 
     const chartStart = Date.now();
-    setStep('step_chart', 'running');
+    setStep(steps, 'step_chart', 'running');
 
     const chartInput: ChartRenderInput = {
-      title: intent.groupBy === 'metric_month' ? '按月份趋势分析' : '按学科分布分析',
+      title: groupBy === 'metric_month' ? '按月份趋势分析' : '按学科分布分析',
       chartType: 'bar',
       labelKey: 'dimension',
       valueKey: 'value',
@@ -227,29 +322,30 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       elapsedMs: Date.now() - chartStart,
     });
 
-    setStep('step_chart', 'success', {
+    setStep(steps, 'step_chart', 'success', {
       description: chartResult.summary,
       elapsedMs: Date.now() - chartStart,
     });
 
     const conclusionStart = Date.now();
-    setStep('step_conclusion', 'running');
+    setStep(steps, 'step_conclusion', 'running');
 
-    ensureServerEnvLoaded();
-    const apiKey = request.apiKey?.trim() || process.env.GROQ_API_KEY?.trim() || '';
     let conclusion = '';
     let conclusionSource: AgentConclusionSource = 'fallback';
     let conclusionNotice: string | undefined;
 
     if (!apiKey) {
       conclusion = buildFallbackConclusion({
-        intent,
+        intent: {
+          metric,
+          groupBy,
+        },
         chartResult,
       });
       conclusionSource = 'fallback';
       conclusionNotice = '未配置 Groq API Key，当前结论由本地工具结果摘要生成。';
 
-      setStep('step_conclusion', 'success', {
+      setStep(steps, 'step_conclusion', 'success', {
         description: '未配置 Groq Key，已回退本地摘要结论。',
         elapsedMs: Date.now() - conclusionStart,
       });
@@ -257,7 +353,10 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       try {
         const messages = buildConclusionMessages({
           prompt: request.prompt,
-          intent,
+          intent: {
+            metric,
+            groupBy,
+          },
           schemaResult,
           aggregateResult,
           chartResult,
@@ -270,19 +369,22 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
         conclusionSource = 'model';
         conclusionNotice = undefined;
 
-        setStep('step_conclusion', 'success', {
+        setStep(steps, 'step_conclusion', 'success', {
           description: 'Groq 已生成最终结论。',
           elapsedMs: Date.now() - conclusionStart,
         });
       } catch {
         conclusion = buildFallbackConclusion({
-          intent,
+          intent: {
+            metric,
+            groupBy,
+          },
           chartResult,
         });
         conclusionSource = 'fallback';
         conclusionNotice = '模型生成失败，当前结论由本地工具结果摘要生成。';
 
-        setStep('step_conclusion', 'success', {
+        setStep(steps, 'step_conclusion', 'success', {
           description: 'Groq 不可用，已回退到工具结果摘要。',
           elapsedMs: Date.now() - conclusionStart,
         });
@@ -296,6 +398,7 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       status,
       prompt: request.prompt,
       provider: request.provider,
+      plan,
       steps,
       toolInvocations,
       chartData: {

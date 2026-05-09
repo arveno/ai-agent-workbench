@@ -5,6 +5,21 @@ import type { DataSourceTestableProviderId } from '../../types/workbench';
 export type AgentRunStatus = 'running' | 'success' | 'error';
 
 export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
+export type AgentPlanIntent = 'capability_intro' | 'data_analysis' | 'unsupported';
+export type AgentPlanMetric =
+  | 'avg_score'
+  | 'attendance_rate'
+  | 'homework_completion_rate'
+  | 'abnormal_count';
+export type AgentPlanGroupBy = 'subject' | 'metric_month';
+
+export interface AgentPlan {
+  intent: AgentPlanIntent;
+  shouldUseDataAnalysis: boolean;
+  reason: string;
+  metric?: AgentPlanMetric;
+  groupBy?: AgentPlanGroupBy;
+}
 
 export interface AgentRunStep {
   id: string;
@@ -39,6 +54,7 @@ export interface AgentRunResult {
   status: AgentRunStatus;
   prompt: string;
   provider: DataSourceTestableProviderId;
+  plan?: AgentPlan;
   steps: AgentRunStep[];
   toolInvocations: AgentToolInvocationResult[];
   chartData?: AgentRunChartData;

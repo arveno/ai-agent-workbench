@@ -188,6 +188,7 @@ export interface WorkflowStepDefinition {
 }
 
 export type AgentRunStatus = 'running' | 'success' | 'error';
+export type AgentRunPlanIntent = 'capability_intro' | 'data_analysis' | 'unsupported';
 
 export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
 
@@ -219,11 +220,18 @@ export interface AgentRunChartData {
 
 export type AgentConclusionSource = 'model' | 'fallback';
 
+export interface AgentRunPlanView {
+  intent: AgentRunPlanIntent;
+  shouldUseDataAnalysis: boolean;
+  reason: string;
+}
+
 export interface AgentRunResult {
   id: string;
   status: AgentRunStatus;
   prompt: string;
   provider: DataSourceTestableProviderId;
+  plan?: AgentRunPlanView;
   steps: AgentRunStep[];
   toolInvocations: AgentToolInvocationResult[];
   chartData?: AgentRunChartData;
