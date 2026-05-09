@@ -13,6 +13,7 @@ import type {
   AgentRunResult,
   AgentRunStep,
   AgentToolInvocationResult,
+  AgentConclusionSource,
   AgentRunStatus,
 } from './types';
 
@@ -237,16 +238,19 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
     ensureServerEnvLoaded();
     const apiKey = request.apiKey?.trim() || process.env.GROQ_API_KEY?.trim() || '';
     let conclusion = '';
+    let conclusionSource: AgentConclusionSource = 'fallback';
+    let conclusionNotice: string | undefined;
 
     if (!apiKey) {
       conclusion = buildFallbackConclusion({
         intent,
-        aggregateResult,
-        chartSummary: chartResult.summary,
+        chartResult,
       });
+      conclusionSource = 'fallback';
+      conclusionNotice = '未配置 Groq API Key，当前结论由本地工具结果摘要生成。';
 
       setStep('step_conclusion', 'success', {
-        description: '未配置 Groq Key，返回工具结果摘要。',
+        description: '未配置 Groq Key，已回退本地摘要结论。',
         elapsedMs: Date.now() - conclusionStart,
       });
     } else {
@@ -263,6 +267,8 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
           apiKey,
           messages,
         });
+        conclusionSource = 'model';
+        conclusionNotice = undefined;
 
         setStep('step_conclusion', 'success', {
           description: 'Groq 已生成最终结论。',
@@ -271,9 +277,10 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       } catch {
         conclusion = buildFallbackConclusion({
           intent,
-          aggregateResult,
-          chartSummary: chartResult.summary,
+          chartResult,
         });
+        conclusionSource = 'fallback';
+        conclusionNotice = '模型生成失败，当前结论由本地工具结果摘要生成。';
 
         setStep('step_conclusion', 'success', {
           description: 'Groq 不可用，已回退到工具结果摘要。',
@@ -299,6 +306,8 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
         summary: chartResult.summary,
       },
       conclusion,
+      conclusionSource,
+      conclusionNotice,
       createdAt,
       elapsedMs: Date.now() - runStart,
     };

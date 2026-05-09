@@ -68,21 +68,45 @@ export function buildConclusionMessages(context: AgentPromptContext): Array<{ ro
 
 export function buildFallbackConclusion(params: {
   intent: SimpleAgentIntent;
-  aggregateResult: AggregateTableOutput;
-  chartSummary: string;
+  chartResult: ChartRenderOutput;
 }): string {
-  const previewRows = params.aggregateResult.rows
-    .slice(0, 3)
-    .map((row, index) => `${index + 1}. ${JSON.stringify(row)}`)
-    .join('\n');
+  const metricNameMap: Record<SimpleAgentIntent['metric'], string> = {
+    avg_score: '平均分',
+    attendance_rate: '出勤率',
+    homework_completion_rate: '作业完成率',
+    abnormal_count: '异常指标',
+  };
+
+  const groupByNameMap: Record<SimpleAgentIntent['groupBy'], string> = {
+    subject: '学科',
+    metric_month: '月份',
+  };
+
+  const metricName = metricNameMap[params.intent.metric];
+  const groupByName = groupByNameMap[params.intent.groupBy];
+  const labels = params.chartResult.labels;
+  const values = params.chartResult.values;
+
+  if (labels.length === 0 || values.length === 0) {
+    return [
+      `本次分析已完成 ${metricName} 的工具执行流程，并按${groupByName}维度完成数据聚合。`,
+      '已完成数据源读取和工具执行，但当前聚合结果不足以生成明确结论。',
+      '建议补充更多样本或切换分析维度后再继续分析。',
+    ].join('\n\n');
+  }
+
+  const maxIndex = values.reduce((maxIdx, currentValue, currentIndex, array) => {
+    return currentValue > array[maxIdx] ? currentIndex : maxIdx;
+  }, 0);
+  const maxLabel = labels[maxIndex] ?? '当前维度';
+  const maxValue = values[maxIndex];
+  const topLabels = labels.slice(0, 3).join('、');
 
   return [
-    '已完成工具执行，但未配置模型 Key，暂时返回工具结果摘要。',
-    `分析指标：${params.intent.metric}`,
-    `分组维度：${params.intent.groupBy}`,
-    `聚合结果条数：${params.aggregateResult.rowCount}`,
-    `图表摘要：${params.chartSummary}`,
-    '结果预览：',
-    previewRows || '无可用结果',
-  ].join('\n');
+    `本次分析已基于真实数据源完成，并围绕“${metricName}”按${groupByName}维度执行了聚合分析。`,
+    `从当前聚合结果看，${maxLabel}在该指标上最为突出（约 ${maxValue.toFixed(2)}），建议优先关注该维度并结合班级层级进一步排查。`,
+    topLabels
+      ? `当前结果主要覆盖：${topLabels}。建议下一步联动平均分、出勤率与作业完成率进行交叉对比，定位异常成因。`
+      : '建议下一步联动平均分、出勤率与作业完成率进行交叉对比，定位异常成因。',
+  ].join('\n\n');
 }

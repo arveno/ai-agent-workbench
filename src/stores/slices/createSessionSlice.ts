@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 import { mockAgentSteps } from '../../mocks/agentSteps';
 import { mockTasks } from '../../mocks/tasks';
 import type { SessionSlice, WorkbenchStore } from '../../types/workbench';
+import { createMessageId } from '../../utils/message';
 import {
   createInitialAgentSteps,
   createSessionId,
@@ -143,6 +144,48 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
       return {
         sessions: nextSessions,
+      };
+    });
+  },
+  appendAssistantMessageToCurrentSession: (content) => {
+    const normalizedContent = content.trim();
+
+    if (!normalizedContent) {
+      return;
+    }
+
+    set((state) => {
+      const now = Date.now();
+      const assistantMessage = {
+        id: createMessageId('assistant'),
+        role: 'assistant' as const,
+        content: normalizedContent,
+        createdAt: now,
+      };
+
+      const nextSessions = sortSessionsByUpdatedAt(
+        state.sessions.map((session) =>
+          session.id === state.currentSessionId
+            ? {
+                ...session,
+                updatedAt: now,
+                taskId: state.currentTaskId,
+                messages: [...session.messages, assistantMessage],
+              }
+            : session
+        )
+      );
+
+      persistWorkbenchSessions(nextSessions);
+
+      return {
+        sessions: nextSessions,
+        activeAssistantMessageId: assistantMessage.id,
+        assistantStream: {
+          content: normalizedContent,
+          status: 'done',
+        },
+        generationStatus: 'done',
       };
     });
   },

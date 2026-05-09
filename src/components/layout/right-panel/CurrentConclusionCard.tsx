@@ -9,6 +9,8 @@ export function CurrentConclusionCard() {
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
   const agentRunErrorMessage = useWorkbenchStore((state) => state.agentRunErrorMessage);
+  const isFallbackConclusion = currentAgentRun?.conclusionSource === 'fallback';
+  const conclusionNotice = currentAgentRun?.conclusionNotice;
   const conclusionText =
     agentRunStatus === 'error'
       ? `Agent Run 执行失败：${agentRunErrorMessage ?? '未知错误'}`
@@ -23,6 +25,14 @@ export function CurrentConclusionCard() {
         <AppIcon icon={icons.alert} size={16} />
         <span>当前结论</span>
       </h2>
+      {currentAgentRun?.conclusionSource === 'model' ? (
+        <div className="conclusion-source-badge">Groq 生成</div>
+      ) : null}
+      {isFallbackConclusion ? (
+        <div className="conclusion-fallback-notice">
+          {conclusionNotice ?? '未配置模型 Key，已使用本地工具摘要兜底。'}
+        </div>
+      ) : null}
 
       <div className="conclusion-card">
         {conclusionText}

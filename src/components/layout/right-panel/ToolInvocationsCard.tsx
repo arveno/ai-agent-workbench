@@ -23,13 +23,21 @@ const TOOL_INVOCATIONS = [
   },
 ] as const;
 
+function truncateText(text: string, maxLength = 120): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength)}...`;
+}
+
 export function ToolInvocationsCard() {
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const runtimeTools = currentAgentRun
     ? currentAgentRun.toolInvocations.map((tool) => ({
         id: tool.id,
         name: tool.toolName,
-        desc: `${tool.inputSummary} -> ${tool.outputSummary}`,
+        desc: truncateText(`${tool.inputSummary} -> ${tool.outputSummary}`),
         duration: `${tool.elapsedMs}ms`,
         status: tool.status,
       }))

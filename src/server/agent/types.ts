@@ -32,6 +32,8 @@ export interface AgentRunChartData {
   summary: string;
 }
 
+export type AgentConclusionSource = 'model' | 'fallback';
+
 export interface AgentRunResult {
   id: string;
   status: AgentRunStatus;
@@ -41,6 +43,8 @@ export interface AgentRunResult {
   toolInvocations: AgentToolInvocationResult[];
   chartData?: AgentRunChartData;
   conclusion: string;
+  conclusionSource: AgentConclusionSource;
+  conclusionNotice?: string;
   createdAt: string;
   elapsedMs: number;
 }

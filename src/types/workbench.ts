@@ -217,6 +217,8 @@ export interface AgentRunChartData {
   summary: string;
 }
 
+export type AgentConclusionSource = 'model' | 'fallback';
+
 export interface AgentRunResult {
   id: string;
   status: AgentRunStatus;
@@ -226,6 +228,8 @@ export interface AgentRunResult {
   toolInvocations: AgentToolInvocationResult[];
   chartData?: AgentRunChartData;
   conclusion: string;
+  conclusionSource: AgentConclusionSource;
+  conclusionNotice?: string;
   createdAt: string;
   elapsedMs: number;
 }
@@ -282,6 +286,7 @@ export interface SessionSlice {
   setCurrentPrompt: (prompt: string) => void;
   upsertCurrentSessionMessages: (messages: WorkbenchMessage[]) => void;
   updateCurrentSessionAssistantMessage: (messageId: string, content: string) => void;
+  appendAssistantMessageToCurrentSession: (content: string) => void;
   startTask: (taskId: string, prompt: string) => void;
   hydrateFromUrl: (state: { sessionId?: string; taskId?: string }) => void;
 }
