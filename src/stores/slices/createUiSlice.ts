@@ -2,14 +2,20 @@ import type { StateCreator } from 'zustand';
 import type { UiSlice, WorkbenchStore } from '../../types/workbench';
 
 export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set) => ({
-  isDataSourcePanelOpen: false,
-  isToolLibraryPanelOpen: false,
+  isDataSourceModalOpen: false,
+  isToolLibraryModalOpen: false,
   isWorkflowPanelOpen: false,
-  setDataSourcePanelOpen: (open) => {
-    set({ isDataSourcePanelOpen: open });
+  openDataSourceModal: () => {
+    set({ isDataSourceModalOpen: true });
   },
-  setToolLibraryPanelOpen: (open) => {
-    set({ isToolLibraryPanelOpen: open });
+  closeDataSourceModal: () => {
+    set({ isDataSourceModalOpen: false });
+  },
+  openToolLibraryModal: () => {
+    set({ isToolLibraryModalOpen: true });
+  },
+  closeToolLibraryModal: () => {
+    set({ isToolLibraryModalOpen: false });
   },
   setWorkflowPanelOpen: (open) => {
     set({ isWorkflowPanelOpen: open });

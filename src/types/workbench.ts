@@ -78,6 +78,38 @@ export type ModelProviderId =
   | 'ollama';
 export type ModelProvider = ModelProviderId;
 export type ModelTestStatus = 'idle' | 'testing' | 'success' | 'error';
+export type DataSourceProviderId = 'postgresql' | 'supabase' | 'mysql';
+export type DataSourceConnectionStatus = 'idle' | 'connected' | 'disconnected' | 'testing' | 'error';
+export type ToolRiskLevel = 'low' | 'medium' | 'high';
+export type ToolStatus = 'enabled' | 'disabled' | 'comingSoon';
+
+export interface DataSourceProvider {
+  id: DataSourceProviderId;
+  name: string;
+  description: string;
+  status: DataSourceConnectionStatus;
+  enabled: boolean;
+  comingSoon?: boolean;
+  meta: {
+    connectionMode: string;
+    database?: string;
+    schemas?: string[];
+    tableCount?: number;
+    rowCountLabel?: string;
+    updatedAt?: string;
+  };
+}
+
+export interface AgentToolDefinition {
+  id: string;
+  name: string;
+  description: string;
+  status: ToolStatus;
+  riskLevel: ToolRiskLevel;
+  category: 'schema' | 'query' | 'analysis' | 'render' | 'knowledge' | 'report';
+  inputSummary: string;
+  outputSummary: string;
+}
 
 export interface ModelProviderConfig {
   apiKey?: string;
@@ -170,11 +202,13 @@ export interface ModelSlice {
 }
 
 export interface UiSlice {
-  isDataSourcePanelOpen: boolean;
-  isToolLibraryPanelOpen: boolean;
+  isDataSourceModalOpen: boolean;
+  isToolLibraryModalOpen: boolean;
   isWorkflowPanelOpen: boolean;
-  setDataSourcePanelOpen: (open: boolean) => void;
-  setToolLibraryPanelOpen: (open: boolean) => void;
+  openDataSourceModal: () => void;
+  closeDataSourceModal: () => void;
+  openToolLibraryModal: () => void;
+  closeToolLibraryModal: () => void;
   setWorkflowPanelOpen: (open: boolean) => void;
 }
 
