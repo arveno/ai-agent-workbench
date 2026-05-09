@@ -46,6 +46,13 @@
   line-height: 1.6;
 }
 
+.datasource-modal-relation-note {
+  margin: 8px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .datasource-modal-close {
   width: 32px;
   height: 32px;
@@ -121,6 +128,34 @@
   line-height: 1.55;
 }
 
+.datasource-provider-relation-hint {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.datasource-provider-badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.datasource-demo-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .datasource-provider-meta {
   margin-top: 12px;
   display: grid;
@@ -182,6 +217,42 @@
   color: #b45309;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.datasource-provider-hint:empty {
+  display: none;
+}
+
+.datasource-provider-hint-success {
+  color: #15803d;
+}
+
+.datasource-provider-hint-error {
+  color: #b91c1c;
+}
+
+.datasource-provider-table-summary {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.datasource-provider-table-summary-title {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.datasource-provider-table-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.datasource-provider-table-item {
+  margin: 2px 0;
 }
 
 .datasource-status-badge {
@@ -246,4 +317,3 @@
     grid-template-columns: 1fr;
   }
 }
-

@@ -80,6 +80,7 @@ export type ModelProvider = ModelProviderId;
 export type ModelTestStatus = 'idle' | 'testing' | 'success' | 'error';
 export type DataSourceProviderId = 'postgresql' | 'supabase' | 'mysql';
 export type DataSourceConnectionStatus = 'idle' | 'connected' | 'disconnected' | 'testing' | 'error';
+export type DataSourceTestableProviderId = Extract<DataSourceProviderId, 'postgresql' | 'supabase'>;
 export type ToolRiskLevel = 'low' | 'medium' | 'high';
 export type ToolStatus = 'enabled' | 'disabled' | 'comingSoon';
 export type WorkflowStepStatus = 'ready' | 'running' | 'done' | 'waiting' | 'disabled';
@@ -97,6 +98,8 @@ export interface DataSourceProvider {
   id: DataSourceProviderId;
   name: string;
   description: string;
+  relationHint?: string;
+  demoBadgeText?: string;
   status: DataSourceConnectionStatus;
   enabled: boolean;
   comingSoon?: boolean;
@@ -109,6 +112,59 @@ export interface DataSourceProvider {
     updatedAt?: string;
   };
 }
+
+export interface DataSourceTestSuccessResponse {
+  ok: true;
+  provider: DataSourceTestableProviderId;
+  status: 'connected';
+  elapsedMs: number;
+  serverTime: string;
+  databaseVersion?: string;
+}
+
+export interface DataSourceTestErrorResponse {
+  ok: false;
+  provider?: DataSourceTestableProviderId;
+  status: 'error';
+  errorMessage: string;
+  elapsedMs?: number;
+}
+
+export type DataSourceTestResponse = DataSourceTestSuccessResponse | DataSourceTestErrorResponse;
+
+export interface DataSourceColumnSchema {
+  columnName: string;
+  dataType: string;
+  isNullable: boolean;
+  ordinalPosition: number;
+}
+
+export interface DataSourceTableSchema {
+  schema: string;
+  tableName: string;
+  columns: DataSourceColumnSchema[];
+}
+
+export interface DataSourceSchemaSuccessResponse {
+  ok: true;
+  provider: DataSourceTestableProviderId;
+  status: 'success';
+  elapsedMs: number;
+  readAt: string;
+  schemas: string[];
+  tableCount: number;
+  tables: DataSourceTableSchema[];
+}
+
+export interface DataSourceSchemaErrorResponse {
+  ok: false;
+  provider?: DataSourceTestableProviderId;
+  status: 'error';
+  errorMessage: string;
+  elapsedMs?: number;
+}
+
+export type DataSourceSchemaResponse = DataSourceSchemaSuccessResponse | DataSourceSchemaErrorResponse;
 
 export interface AgentToolDefinition {
   id: string;
