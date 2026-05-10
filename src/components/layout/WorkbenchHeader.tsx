@@ -1,14 +1,22 @@
+import { Fragment } from 'react';
 import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { GenerationStatus, ModelProvider } from '../../types/workbench';
+import type { GenerationStatus, ModelProvider, RunSnapshot } from '../../types/workbench';
+import {
+  formatRunElapsed,
+  getRunModeLabel,
+  getRunStatusLabel,
+  getRunStatusTone,
+  type RunStatusTone,
+} from '../../utils/runViewModel';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Separator } from '../ui/separator';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { EnvironmentStatus } from './EnvironmentStatus';
 
-const DEFAULT_HEADER_TITLE = '本月教学数据分析';
-const TASK_STATUS_SUFFIX = '已检索 3 条知识库资料 · 已生成 1 个图表';
-const IDLE_STATUS_SUFFIX = '已检索 0 条知识库资料 · 已生成 0 个图表';
-const ERROR_STATUS_SUFFIX = '数据查询服务暂时不可用';
+const DEFAULT_HEADER_TITLE = '新会话';
 
 function getGenerationLabel(status: GenerationStatus): string {
   if (status === 'streaming') {
@@ -28,6 +36,26 @@ function getGenerationLabel(status: GenerationStatus): string {
   }
 
   return '待开始';
+}
+
+function getGenerationStatusTone(status: GenerationStatus): RunStatusTone {
+  if (status === 'streaming') {
+    return 'active';
+  }
+
+  if (status === 'done') {
+    return 'success';
+  }
+
+  if (status === 'stopped') {
+    return 'warning';
+  }
+
+  if (status === 'error') {
+    return 'danger';
+  }
+
+  return 'muted';
 }
 
 function getModelProviderLabel(provider: ModelProvider): string {
@@ -58,12 +86,31 @@ function getModelProviderLabel(provider: ModelProvider): string {
   return '本地 Ollama';
 }
 
+function getRunSummaryItems(currentRun: RunSnapshot | null): string[] {
+  if (!currentRun) {
+    return ['尚未开始 Run'];
+  }
+
+  const summaryItems = [
+    `工具 ${currentRun.toolInvocations.length}`,
+    `图表 ${currentRun.chartData ? 1 : 0}`,
+  ];
+  const elapsedText = formatRunElapsed(currentRun);
+
+  if (elapsedText !== '-') {
+    summaryItems.push(`耗时 ${elapsedText}`);
+  }
+
+  return summaryItems;
+}
+
 export function WorkbenchHeader() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
   const openModelModal = useWorkbenchStore((state) => state.openModelModal);
   const openDataSourceModal = useWorkbenchStore((state) => state.openDataSourceModal);
   const openToolLibraryModal = useWorkbenchStore((state) => state.openToolLibraryModal);
@@ -72,19 +119,11 @@ export function WorkbenchHeader() {
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const headerTitle = currentSession?.title || currentTask?.title || DEFAULT_HEADER_TITLE;
   const modelLabel = getModelProviderLabel(currentModelProvider);
-  const taskStatusPrefix = getGenerationLabel(generationStatus);
-  const taskStatusSuffix =
-    generationStatus === 'idle'
-      ? IDLE_STATUS_SUFFIX
-      : generationStatus === 'error'
-        ? ERROR_STATUS_SUFFIX
-        : TASK_STATUS_SUFFIX;
-  const dotColor =
-    generationStatus === 'streaming' || generationStatus === 'done'
-      ? '#22c55e'
-      : generationStatus === 'error'
-        ? '#ef4444'
-        : '#9ca3af';
+  const statusLabel = currentRun ? getRunStatusLabel(currentRun.status) : getGenerationLabel(generationStatus);
+  const statusTone = currentRun ? getRunStatusTone(currentRun.status) : getGenerationStatusTone(generationStatus);
+  const runSummaryItems = getRunSummaryItems(currentRun);
+  const modeBadgeLabel = currentRun ? getRunModeLabel(currentRun.mode) : modelLabel;
+
   return (
     <header className="workspace-header workbench-header">
       <div className="workspace-header-main header-main">
@@ -93,43 +132,54 @@ export function WorkbenchHeader() {
             <AppIcon icon={icons.task} size={18} />
           </div>
           <h2 className="header-title">{headerTitle}</h2>
-          <button type="button" className="title-star-button" aria-label="收藏">
+          <Badge variant="outline" className="workspace-mode-badge">
+            {modeBadgeLabel}
+          </Badge>
+          <Button type="button" variant="ghost" size="icon-sm" className="title-star-button" aria-label="收藏">
             <AppIcon icon={icons.star} size={16} />
-          </button>
+          </Button>
         </div>
-        <p className="workspace-subtitle">
-          <span className="header-status-dot" aria-hidden="true" style={{ background: dotColor }}></span>
-          {taskStatusPrefix} · {taskStatusSuffix}
-        </p>
+        <div className="workspace-status-row" aria-label="Run 状态摘要">
+          <Badge variant="outline" className={`workspace-status-badge workspace-status-badge-${statusTone}`}>
+            <span className="workspace-status-dot" aria-hidden="true"></span>
+            {statusLabel}
+          </Badge>
+          {runSummaryItems.map((item, index) => (
+            <Fragment key={item}>
+              {index > 0 ? <Separator orientation="vertical" className="workspace-status-separator" /> : null}
+              <span className="workspace-status-item">{item}</span>
+            </Fragment>
+          ))}
+        </div>
       </div>
 
       <div className="workspace-actions">
         <EnvironmentStatus />
 
-        <button className="model-status-pill" onClick={openModelModal} type="button">
+        <Button className="workspace-action-button model-status-pill" onClick={openModelModal} type="button" variant="outline" size="sm">
           <span className="model-dot" aria-hidden="true"></span>
           <span>模型：{modelLabel}</span>
           <span className="model-arrow">⌄</span>
-        </button>
+        </Button>
 
-        <button className="header-action-button" type="button" onClick={openDataSourceModal}>
+        <Button className="workspace-action-button" type="button" onClick={openDataSourceModal} variant="outline" size="sm">
           <AppIcon icon={icons.database} size={15} />
           <span>数据源</span>
-        </button>
+        </Button>
 
-        <button className="header-action-button" type="button" onClick={openToolLibraryModal}>
+        <Button className="workspace-action-button" type="button" onClick={openToolLibraryModal} variant="outline" size="sm">
           <AppIcon icon={icons.settings} size={15} />
           <span>工具库</span>
-        </button>
+        </Button>
 
-        <button className="header-action-button" type="button" onClick={openWorkflowModal}>
+        <Button className="workspace-action-button" type="button" onClick={openWorkflowModal} variant="outline" size="sm">
           <AppIcon icon={icons.agent} size={15} />
           <span>工作流</span>
-        </button>
+        </Button>
 
-        <button className="header-icon-button icon-button" type="button" aria-label="更多">
+        <Button className="header-icon-button icon-button" type="button" aria-label="更多" variant="outline" size="icon-sm">
           <AppIcon icon={icons.more} size={16} />
-        </button>
+        </Button>
       </div>
     </header>
   );

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { requestHealthCheck } from '../../services/healthApi';
 import type { HealthCheckResponse, HealthServiceStatus } from '../../types/health';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Skeleton } from '../ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 type HealthUiState = 'loading' | 'success' | 'warning' | 'error';
 
@@ -50,11 +54,11 @@ function getBadgeText(state: HealthUiState): string {
   }
 
   if (state === 'warning') {
-    return '部分服务未配置';
+    return '环境未完整配置';
   }
 
   if (state === 'error') {
-    return '环境状态异常';
+    return '环境检查失败';
   }
 
   return '环境检查中';
@@ -115,44 +119,67 @@ export function EnvironmentStatus() {
   }, []);
 
   return (
-    <div className="environment-status">
-      <button
-        type="button"
-        className={`environment-status-badge environment-status-badge-${uiState}`}
-        aria-label="环境状态"
-      >
-        <span className="environment-status-dot" aria-hidden="true"></span>
-        <span>{getBadgeText(uiState)}</span>
-      </button>
-
-      <div className="environment-status-popover" role="status">
-        <div className="environment-status-popover-title">{getSummaryText(health, hasFailed)}</div>
-        <div className="environment-status-row">
-          <span>运行环境</span>
-          <strong>{health?.environment ?? '-'}</strong>
-        </div>
-        <div className="environment-status-row">
-          <span>Groq</span>
-          <strong>{health ? getServiceText(health.services.groq) : '-'}</strong>
-        </div>
-        <div className="environment-status-message">
-          {health?.services.groq.message ?? '正在读取服务端模型配置状态。'}
-        </div>
-        <div className="environment-status-row">
-          <span>Supabase</span>
-          <strong>{health ? getServiceText(health.services.supabase) : '-'}</strong>
-        </div>
-        <div className="environment-status-message">
-          {health?.services.supabase.message ?? '正在检查 Supabase 数据源。'}
-        </div>
-        <div className="environment-status-row">
-          <span>PostgreSQL</span>
-          <strong>{health ? getServiceText(health.services.postgres) : '-'}</strong>
-        </div>
-        <div className="environment-status-message">
-          {health?.services.postgres.message ?? '正在检查 PostgreSQL 数据源。'}
-        </div>
-      </div>
-    </div>
+    <TooltipProvider delayDuration={120}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={`environment-status-trigger environment-status-trigger-${uiState}`}
+            aria-label="环境状态"
+          >
+            <span className="environment-status-dot" aria-hidden="true"></span>
+            <span>{getBadgeText(uiState)}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end" sideOffset={8} className="environment-status-detail">
+          <div className="environment-status-detail-title">{getSummaryText(health, hasFailed)}</div>
+          {uiState === 'loading' ? (
+            <div className="environment-status-skeleton-list">
+              <Skeleton className="environment-status-skeleton" />
+              <Skeleton className="environment-status-skeleton" />
+              <Skeleton className="environment-status-skeleton" />
+            </div>
+          ) : (
+            <>
+              <div className="environment-status-row">
+                <span>运行环境</span>
+                <Badge variant="outline" className="environment-status-value">
+                  {health?.environment ?? '-'}
+                </Badge>
+              </div>
+              <div className="environment-status-row">
+                <span>Groq</span>
+                <Badge variant="outline" className="environment-status-value">
+                  {health ? getServiceText(health.services.groq) : '-'}
+                </Badge>
+              </div>
+              <div className="environment-status-message">
+                {health?.services.groq.message ?? '正在读取服务端模型配置状态。'}
+              </div>
+              <div className="environment-status-row">
+                <span>Supabase</span>
+                <Badge variant="outline" className="environment-status-value">
+                  {health ? getServiceText(health.services.supabase) : '-'}
+                </Badge>
+              </div>
+              <div className="environment-status-message">
+                {health?.services.supabase.message ?? '正在检查 Supabase 数据源。'}
+              </div>
+              <div className="environment-status-row">
+                <span>PostgreSQL</span>
+                <Badge variant="outline" className="environment-status-value">
+                  {health ? getServiceText(health.services.postgres) : '-'}
+                </Badge>
+              </div>
+              <div className="environment-status-message">
+                {health?.services.postgres.message ?? '正在检查 PostgreSQL 数据源。'}
+              </div>
+            </>
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
