@@ -1,7 +1,9 @@
-﻿import { AppIcon } from '../common/AppIcon';
+import { AppIcon } from '../common/AppIcon';
 import { icons, type IconKey } from '../common/iconMap';
 import type { RunToolInvocation } from '../../types/run';
 import { formatToolInvocationForChat } from '../../utils/toolInvocationFormat';
+import { Badge } from '../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
 interface ToolCallCardProps {
   title: string;
@@ -79,20 +81,24 @@ export function ToolCallCard({
   const statusText = getToolStatusText(status);
 
   return (
-    <article className="tool-card">
-      <div className="tool-card-head">
+    <Card size="sm" className="tool-card">
+      <CardHeader className="tool-card-head">
         <span className={`tool-card-icon tool-card-icon-${tone}`} aria-hidden="true">
           <AppIcon icon={icons[icon]} size={14} />
         </span>
-        <span className={`tool-state ${status === 'error' ? 'tool-state-error' : ''}`}>{statusText}</span>
-      </div>
-      <h3>{formatted.displayName}</h3>
-      <p className="tool-card-category">{formatted.categoryLabel}</p>
-      <p className="tool-card-summary">{formatted.outputText || formatted.inputText}</p>
-      <p className="tool-status-line">
-        状态：{formatted.statusLabel}
-        {formatted.elapsedText !== '-' ? ` · ${formatted.elapsedText}` : ''}
-      </p>
-    </article>
+        <Badge variant="outline" className={`tool-state ${status === 'error' ? 'tool-state-error' : ''}`}>
+          {statusText}
+        </Badge>
+      </CardHeader>
+      <CardContent className="tool-card-content">
+        <CardTitle>{formatted.displayName}</CardTitle>
+        <p className="tool-card-category">{formatted.categoryLabel}</p>
+        <p className="tool-card-summary">{formatted.outputText || formatted.inputText}</p>
+        <p className="tool-status-line">
+          状态：{formatted.statusLabel}
+          {formatted.elapsedText !== '-' ? ` · ${formatted.elapsedText}` : ''}
+        </p>
+      </CardContent>
+    </Card>
   );
 }

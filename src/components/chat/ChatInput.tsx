@@ -3,6 +3,8 @@ import type { KeyboardEvent } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
+import { Button } from '../ui/button';
+import { Textarea } from '../ui/textarea';
 
 const MAX_PROMPT_LENGTH = 2000;
 
@@ -62,7 +64,7 @@ export function ChatInput() {
 
   return (
     <div className="composer">
-      <textarea
+      <Textarea
         className="composer-input chat-input-textarea"
         placeholder="继续输入问题，或让 AI 生成报告..."
         value={chatDraft}
@@ -82,24 +84,24 @@ export function ChatInput() {
       />
       <div className="composer-footer">
         <div className="composer-tools">
-          <button type="button" className="composer-tool-btn input-tool-button">
+          <Button type="button" className="composer-tool-btn input-tool-button" variant="outline" size="sm">
             <span className="icon-text-inline">
               <AppIcon icon={icons.attachment} size={14} />
               <span>附件</span>
             </span>
-          </button>
-          <button type="button" className="composer-tool-btn input-tool-button">
+          </Button>
+          <Button type="button" className="composer-tool-btn input-tool-button" variant="outline" size="sm">
             <span className="icon-text-inline">
               <AppIcon icon={icons.template} size={14} />
               <span>模板</span>
             </span>
-          </button>
+          </Button>
         </div>
         <div className="composer-actions">
           <span className="composer-count">
             {chatDraft.length} / {MAX_PROMPT_LENGTH}
           </span>
-          <button
+          <Button
             type="button"
             className={[
               'composer-action-button',
@@ -109,9 +111,11 @@ export function ChatInput() {
             disabled={!isGenerating && sendDisabled}
             aria-label={isGenerating ? '停止生成' : '发送'}
             title={isGenerating ? '停止生成' : '发送'}
+            variant={isGenerating ? 'destructive' : 'default'}
+            size="icon"
           >
             <AppIcon icon={isGenerating ? icons.stop : icons.send} size={16} />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

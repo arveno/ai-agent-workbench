@@ -3,10 +3,14 @@ import type { AgentToolInvocationResult } from '../../types/workbench';
 import type { RunToolInvocation } from '../../types/run';
 import { mockToolCalls } from '../../mocks/toolCalls';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import { formatToolInvocationForChat } from '../../utils/toolInvocationFormat';
+import { formatToolInvocationForChat, type FormattedToolInvocation } from '../../utils/toolInvocationFormat';
 import { shouldShowReportConfirm } from '../../utils/run';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
+import { Badge } from '../ui/badge';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Separator } from '../ui/separator';
 import { ChatInput } from './ChatInput';
 import { ConfirmActionCard } from './ConfirmActionCard';
 import { MessageBubble } from './MessageBubble';
@@ -29,6 +33,70 @@ const SUMMARY_MESSAGE_CONTENT = `根据查询结果，以下是本月教学质�
 - 七年级平均分较上月下降 6.8%
 - 八年级出勤率低于基线 3.2%
 - 整体教学质量波动主要集中在周测成绩与缺勤率变化`;
+
+
+function getToolSummaryStatusClass(statusLabel: string): string {
+  if (statusLabel === '异常') {
+    return 'agent-tool-summary-status-error';
+  }
+
+  if (statusLabel === '已停止') {
+    return 'agent-tool-summary-status-stopped';
+  }
+
+  if (statusLabel === '执行中') {
+    return 'agent-tool-summary-status-running';
+  }
+
+  return 'agent-tool-summary-status-success';
+}
+
+function AgentToolSummary({ items }: { items: FormattedToolInvocation[] }) {
+  return (
+    <Card size="sm" className="agent-tool-summary">
+      <CardHeader className="agent-tool-summary-header">
+        <div className="agent-tool-summary-title-row">
+          <span className="agent-tool-summary-icon" aria-hidden="true">
+            <AppIcon icon={icons.settings} size={14} />
+          </span>
+          <CardTitle>本轮工具调用</CardTitle>
+        </div>
+        <Badge variant="outline" className="agent-tool-summary-count">
+          {items.length} 个工具
+        </Badge>
+      </CardHeader>
+      <CardContent className="agent-tool-summary-content">
+        <div className="agent-tool-summary-list">
+          {items.map((item, index) => (
+            <Fragment key={item.id}>
+              {index > 0 ? <Separator className="agent-tool-summary-separator" /> : null}
+              <div className="agent-tool-summary-item">
+                <div className="agent-tool-summary-main">
+                  <div className="agent-tool-summary-title">{item.displayName}</div>
+                  <div className="agent-tool-summary-category">{item.categoryLabel}</div>
+                  <div className="agent-tool-summary-description">{item.outputText}</div>
+                </div>
+                <div className="agent-tool-summary-meta">
+                  <Badge
+                    variant="outline"
+                    className={['agent-tool-summary-status', getToolSummaryStatusClass(item.statusLabel)]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {item.statusLabel}
+                  </Badge>
+                  {item.elapsedText !== '-' ? (
+                    <span className="agent-tool-summary-elapsed">{item.elapsedText}</span>
+                  ) : null}
+                </div>
+              </div>
+            </Fragment>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function mapAgentToolInvocation(invocation: AgentToolInvocationResult): RunToolInvocation {
   return {
@@ -182,43 +250,7 @@ export function ChatPanel() {
 
           return (
             <Fragment key={message.id}>
-              {shouldRenderToolSummaryBeforeMessage ? (
-                <div className="agent-tool-summary">
-                  <div className="agent-tool-summary-header">
-                    <span className="agent-tool-summary-icon" aria-hidden="true">
-                      <AppIcon icon={icons.settings} size={14} />
-                    </span>
-                    <h3>本轮工具调用</h3>
-                  </div>
-                  <div className="agent-tool-summary-list">
-                    {runtimeToolSummaries.map((item) => (
-                      <div key={item.id} className="agent-tool-summary-item">
-                        <div className="agent-tool-summary-main">
-                          <div className="agent-tool-summary-title">{item.displayName}</div>
-                          <div className="agent-tool-summary-category">{item.categoryLabel}</div>
-                          <div className="agent-tool-summary-description">{item.outputText}</div>
-                        </div>
-                        <div className="agent-tool-summary-meta">
-                          <span
-                            className={[
-                              'agent-tool-summary-status',
-                              item.statusLabel === '异常' ? 'agent-tool-summary-status-error' : '',
-                              item.statusLabel === '已停止' ? 'agent-tool-summary-status-stopped' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' ')}
-                          >
-                            {item.statusLabel}
-                          </span>
-                          {item.elapsedText !== '-' ? (
-                            <span className="agent-tool-summary-elapsed">{item.elapsedText}</span>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+              {shouldRenderToolSummaryBeforeMessage ? <AgentToolSummary items={runtimeToolSummaries} /> : null}
 
               <div className="message-row message-row-assistant">
                 <div className="message-avatar message-avatar-assistant" aria-hidden="true">
@@ -283,43 +315,7 @@ export function ChatPanel() {
 
         {shouldShowAgentStreamingBubble ? (
           <>
-            {shouldRenderRuntimeToolSummary ? (
-              <div className="agent-tool-summary">
-                <div className="agent-tool-summary-header">
-                  <span className="agent-tool-summary-icon" aria-hidden="true">
-                    <AppIcon icon={icons.settings} size={14} />
-                  </span>
-                  <h3>本轮工具调用</h3>
-                </div>
-                <div className="agent-tool-summary-list">
-                  {runtimeToolSummaries.map((item) => (
-                    <div key={item.id} className="agent-tool-summary-item">
-                      <div className="agent-tool-summary-main">
-                        <div className="agent-tool-summary-title">{item.displayName}</div>
-                        <div className="agent-tool-summary-category">{item.categoryLabel}</div>
-                        <div className="agent-tool-summary-description">{item.outputText}</div>
-                      </div>
-                      <div className="agent-tool-summary-meta">
-                        <span
-                          className={[
-                            'agent-tool-summary-status',
-                            item.statusLabel === '异常' ? 'agent-tool-summary-status-error' : '',
-                            item.statusLabel === '已停止' ? 'agent-tool-summary-status-stopped' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                        >
-                          {item.statusLabel}
-                        </span>
-                        {item.elapsedText !== '-' ? (
-                          <span className="agent-tool-summary-elapsed">{item.elapsedText}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+            {shouldRenderRuntimeToolSummary ? <AgentToolSummary items={runtimeToolSummaries} /> : null}
 
             <div className="message-row message-row-assistant">
               <div className="message-avatar message-avatar-assistant" aria-hidden="true">
@@ -340,15 +336,17 @@ export function ChatPanel() {
               <h3>执行失败</h3>
               <p>{errorMessage}</p>
             </div>
-            <button
+            <Button
               type="button"
               className="error-retry-btn"
+              variant="outline"
+              size="sm"
               onClick={() => {
                 void retryCurrentTask();
               }}
             >
               重试
-            </button>
+            </Button>
           </div>
         ) : null}
 
