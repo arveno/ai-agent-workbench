@@ -1,4 +1,6 @@
 ﻿export type SessionId = string;
+import type { RunEvent, RunSnapshot } from './run';
+
 export type {
   RunChartData,
   RunChartSeries,
@@ -388,4 +390,12 @@ export interface UiSlice {
   clearCurrentAgentRun: () => void;
 }
 
-export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice;
+export interface RunSlice {
+  currentRun: RunSnapshot | null;
+  runEventLog: RunEvent[];
+  setCurrentRun: (run: RunSnapshot | null) => void;
+  clearCurrentRun: () => void;
+  applyRunEvent: (event: RunEvent) => void;
+}
+
+export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice & RunSlice;
