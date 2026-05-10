@@ -2,6 +2,21 @@ import type { StateCreator } from 'zustand';
 import { streamGroqChat } from '../../services/chatApi';
 import type { AgentRunResult, GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
 import { createMessageId } from '../../utils/message';
+import {
+  MOCK_RUN_STEP_IDS,
+  MOCK_RUN_TOOL_IDS,
+  createMockChartReadyEvent,
+  createMockConclusionCompletedEvent,
+  createMockReportPendingEvent,
+  createMockRunCompletedEvent,
+  createMockRunStartedEvent,
+  createMockRunStoppedEvent,
+  createMockStepCompletedEvent,
+  createMockStepStartedEvent,
+  createMockToolCompletedEvent,
+  createMockToolInvocation,
+  createMockToolStartedEvent,
+} from '../../utils/mockRun';
 import { streamText } from '../../utils/streamText';
 import {
   createInitialAgentSteps,
@@ -120,6 +135,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     const snapshot = get();
     const groqApiKey = snapshot.modelConfigs.groq?.apiKey?.trim();
     const shouldUseGroq = snapshot.currentModelProvider === 'groq' && Boolean(groqApiKey);
+    const shouldUseMockRun = snapshot.currentModelProvider === 'mock';
     const runId = snapshot.streamRunId + 1;
     const now = Date.now();
     const nextMessages: WorkbenchMessage[] = [
@@ -195,6 +211,11 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         },
       };
     });
+    if (shouldUseMockRun) {
+      const runStartedEvent = createMockRunStartedEvent(trimmedPrompt);
+      get().applyRunEvent(runStartedEvent);
+    }
+
     void get().runAgentStepsPreview(runId);
 
     const streamMockReplyForRun = async () => {
@@ -270,6 +291,14 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           },
         };
       });
+
+      const nextRun = get().currentRun;
+
+      if (nextRun?.mode === 'mock' && nextRun.status === 'running') {
+        get().applyRunEvent(createMockConclusionCompletedEvent(nextRun.id, current.assistantStream.content));
+        get().applyRunEvent(createMockReportPendingEvent(nextRun.id));
+        get().applyRunEvent(createMockRunCompletedEvent(nextRun.id, 1200));
+      }
     };
 
     if (!shouldUseGroq) {
@@ -390,38 +419,92 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     };
 
     get().resetAgentSteps();
+    const getMockRunId = () => {
+      const currentRun = get().currentRun;
+      return currentRun?.mode === 'mock' ? currentRun.id : null;
+    };
+    const startMockStep = (stepId: string, title: string) => {
+      const mockRunId = getMockRunId();
 
+      if (mockRunId) {
+        get().applyRunEvent(createMockStepStartedEvent(mockRunId, stepId, title));
+      }
+    };
+    const completeMockStep = (stepId: string, elapsedMs?: number) => {
+      const mockRunId = getMockRunId();
+
+      if (mockRunId) {
+        get().applyRunEvent(createMockStepCompletedEvent(mockRunId, stepId, elapsedMs));
+      }
+    };
+    const startMockTool = (toolKey: Parameters<typeof createMockToolInvocation>[0]) => {
+      const mockRunId = getMockRunId();
+
+      if (mockRunId) {
+        get().applyRunEvent(createMockToolStartedEvent(mockRunId, createMockToolInvocation(toolKey)));
+      }
+    };
+    const completeMockTool = (toolId: string, outputSummary: string, elapsedMs?: number) => {
+      const mockRunId = getMockRunId();
+
+      if (mockRunId) {
+        get().applyRunEvent(createMockToolCompletedEvent(mockRunId, toolId, outputSummary, elapsedMs));
+      }
+    };
+
+    startMockStep(MOCK_RUN_STEP_IDS.understandPrompt, '理解用户问题');
     get().setAgentStepStatus('understand', 'running');
     await delay(160);
     if (!isCurrentRun()) return;
     get().setAgentStepStatus('understand', 'success');
+    completeMockStep(MOCK_RUN_STEP_IDS.understandPrompt, 160);
 
+    startMockStep(MOCK_RUN_STEP_IDS.knowledgeSearch, '检索知识资料');
+    startMockTool('knowledgeSearch');
     get().setAgentStepStatus('search', 'running');
     await delay(260);
     if (!isCurrentRun()) return;
     get().setAgentStepStatus('search', 'success');
+    completeMockStep(MOCK_RUN_STEP_IDS.knowledgeSearch, 260);
     if (!isCurrentRun()) return;
     get().showToolCall('tool_knowledge_search');
+    completeMockTool(MOCK_RUN_TOOL_IDS.knowledgeSearch, '找到 3 条相关知识资料', 260);
     if (!isCurrentRun()) return;
     get().setShowKnowledgeSources(true);
 
+    startMockStep(MOCK_RUN_STEP_IDS.queryData, '查询业务数据');
+    startMockTool('queryData');
     get().setAgentStepStatus('query', 'running');
     await delay(260);
     if (!isCurrentRun()) return;
     get().setAgentStepStatus('query', 'success');
+    completeMockStep(MOCK_RUN_STEP_IDS.queryData, 260);
     if (!isCurrentRun()) return;
     get().showToolCall('tool_query_data');
+    completeMockTool(MOCK_RUN_TOOL_IDS.queryData, '返回 6 个年级统计结果', 260);
 
+    startMockStep(MOCK_RUN_STEP_IDS.generateChart, '生成分析图表');
+    startMockTool('chartRender');
     get().setAgentStepStatus('chart', 'running');
     await delay(220);
     if (!isCurrentRun()) return;
     get().setAgentStepStatus('chart', 'success');
+    completeMockStep(MOCK_RUN_STEP_IDS.generateChart, 220);
+    completeMockTool(MOCK_RUN_TOOL_IDS.chartRender, '生成 1 个柱状图数据', 220);
     if (!isCurrentRun()) return;
     get().setShowAnalyticsResult(true);
+    const mockRunId = getMockRunId();
 
+    if (mockRunId) {
+      get().applyRunEvent(createMockChartReadyEvent(mockRunId));
+    }
+
+    startMockStep(MOCK_RUN_STEP_IDS.waitConfirmation, '等待用户确认');
     get().setAgentStepStatus('confirm', 'running');
   },
   triggerMockError: () => {
+    const currentRun = get().currentRun;
+
     set((state) => ({
       generationStatus: 'error',
       errorMessage: '数据查询服务暂时不可用，请稍后重试。',
@@ -436,6 +519,14 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       },
       agentSteps: state.agentSteps.map((step) => (step.status === 'running' ? { ...step, status: 'error' } : step)),
     }));
+
+    if (currentRun?.mode === 'mock' && currentRun.status === 'running') {
+      get().applyRunEvent({
+        type: 'run_failed',
+        runId: currentRun.id,
+        errorMessage: '数据查询服务暂时不可用，请稍后重试。',
+      });
+    }
   },
   retryCurrentTask: async () => {
     set({
@@ -494,6 +585,16 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
 
     get().setAgentStepStatus('confirm', 'success');
     get().setAgentStepStatus('final', 'running');
+    const mockRun = get().currentRun;
+
+    if (mockRun?.mode === 'mock') {
+      get().applyRunEvent(createMockStepCompletedEvent(mockRun.id, MOCK_RUN_STEP_IDS.waitConfirmation));
+      get().applyRunEvent(createMockStepStartedEvent(mockRun.id, MOCK_RUN_STEP_IDS.generateConclusion, '生成最终结论'));
+      get().applyRunEvent({
+        type: 'report_generated',
+        runId: mockRun.id,
+      });
+    }
 
     await delay(600);
 
@@ -504,6 +605,12 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     }
 
     get().setAgentStepStatus('final', 'success');
+
+    const currentMockRun = get().currentRun;
+
+    if (currentMockRun?.mode === 'mock') {
+      get().applyRunEvent(createMockStepCompletedEvent(currentMockRun.id, MOCK_RUN_STEP_IDS.generateConclusion, 600));
+    }
 
     set({
       generationStatus: 'done',
@@ -539,6 +646,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     }));
   },
   stopGenerating: () => {
+    const currentRun = get().currentRun;
+    const shouldStopMockRun = currentRun?.mode === 'mock' && currentRun.status === 'running';
+
     set((state) => ({
       streamRunId: state.streamRunId + 1,
       generationStatus: 'stopped',
@@ -548,6 +658,10 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       },
       agentSteps: state.agentSteps.map((step) => (step.status === 'running' ? { ...step, status: 'error' } : step)),
     }));
+
+    if (shouldStopMockRun) {
+      get().applyRunEvent(createMockRunStoppedEvent(currentRun.id));
+    }
   },
   regenerate: async () => {
     await get().runPromptWithCurrentModel(get().currentPrompt);

@@ -1,11 +1,17 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import { shouldUseMockRun } from '../../../utils/run';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 
 export function AnalyticsResultCard() {
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
 
-  if (!currentAgentRun) {
+  const agentRun = currentAgentRun;
+
+  if (!mockRun && !agentRun) {
     return (
       <section className="right-card right-section">
         <h2 className="panel-section-title">
@@ -20,9 +26,13 @@ export function AnalyticsResultCard() {
     );
   }
 
-  const chartData = currentAgentRun.chartData;
-  const isDataAnalysisRun =
-    currentAgentRun.plan?.intent === 'data_analysis' || Boolean(currentAgentRun.toolInvocations?.length);
+  const chartData = mockRun?.chartData ?? agentRun?.chartData;
+  const isDataAnalysisRun = mockRun
+    ? mockRun.intent === 'data_analysis'
+    : agentRun?.plan?.intent === 'data_analysis' || Boolean(agentRun?.toolInvocations?.length);
+  const mockSeriesText = mockRun?.chartData
+    ? `，series=${mockRun.chartData.series.map((series) => `${series.name}:${series.values.length}`).join(', ')}`
+    : '';
 
   return (
     <section className="right-card right-section">
@@ -36,7 +46,7 @@ export function AnalyticsResultCard() {
           <div className="run-chart-meta">图表类型：{chartData.chartType}</div>
           <div className="run-chart-text">{chartData.summary}</div>
           <div className="run-chart-points">
-            数据点：{chartData.labels.length}（labels={chartData.labels.join(', ') || '-'}）
+            数据点：{chartData.labels.length}（labels={chartData.labels.join(', ') || '-'}{mockSeriesText}）
           </div>
         </div>
       ) : (

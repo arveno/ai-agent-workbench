@@ -1,6 +1,7 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import { shouldUseMockRun } from '../../../utils/run';
 
 function truncateText(text: string, maxLength = 120): string {
   if (text.length <= maxLength) {
@@ -10,10 +11,51 @@ function truncateText(text: string, maxLength = 120): string {
   return `${text.slice(0, maxLength)}...`;
 }
 
-export function ToolInvocationsCard() {
-  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+function getToolStatusLabel(status: string): string {
+  if (status === 'success') {
+    return '已完成';
+  }
 
-  if (!currentAgentRun) {
+  if (status === 'running') {
+    return '进行中';
+  }
+
+  if (status === 'pending') {
+    return '待执行';
+  }
+
+  if (status === 'skipped') {
+    return '已跳过';
+  }
+
+  return '失败';
+}
+
+function getToolStatusClass(status: string): string {
+  if (status === 'success') {
+    return 'status-badge-success';
+  }
+
+  if (status === 'running') {
+    return 'status-badge-active';
+  }
+
+  if (status === 'error') {
+    return 'status-badge-error';
+  }
+
+  return 'status-badge-muted';
+}
+
+export function ToolInvocationsCard() {
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
+  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
+  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
+
+  const agentRun = currentAgentRun;
+
+  if (!mockRun && !agentRun) {
     return (
       <section className="right-card right-section">
         <div className="right-card-head">
@@ -30,15 +72,24 @@ export function ToolInvocationsCard() {
     );
   }
 
-  const isDataAnalysisRun =
-    currentAgentRun.plan?.intent === 'data_analysis' || Boolean(currentAgentRun.toolInvocations?.length);
-  const runtimeTools = currentAgentRun.toolInvocations.map((tool) => ({
-    id: tool.id,
-    name: tool.toolName,
-    desc: truncateText(`${tool.inputSummary} -> ${tool.outputSummary}`),
-    duration: `${tool.elapsedMs}ms`,
-    status: tool.status,
-  }));
+  const isDataAnalysisRun = mockRun
+    ? mockRun.intent === 'data_analysis'
+    : agentRun?.plan?.intent === 'data_analysis' || Boolean(agentRun?.toolInvocations?.length);
+  const runtimeTools = mockRun
+    ? mockRun.toolInvocations.map((tool) => ({
+        id: tool.id,
+        name: tool.displayName || tool.toolName,
+        desc: truncateText(`${tool.inputSummary}${tool.outputSummary ? ` -> ${tool.outputSummary}` : ''}`),
+        duration: typeof tool.elapsedMs === 'number' ? `${tool.elapsedMs}ms` : '-',
+        status: tool.status,
+      }))
+    : (agentRun?.toolInvocations ?? []).map((tool) => ({
+        id: tool.id,
+        name: tool.toolName,
+        desc: truncateText(`${tool.inputSummary} -> ${tool.outputSummary}`),
+        duration: `${tool.elapsedMs}ms`,
+        status: tool.status,
+      }));
   const showEmptyState = runtimeTools.length === 0;
 
   return (
@@ -67,8 +118,8 @@ export function ToolInvocationsCard() {
                 <div className="tool-invocation-desc">{tool.desc}</div>
               </div>
               <div className="tool-invocation-meta">
-                <span className={`status-badge ${tool.status === 'success' ? 'status-badge-success' : 'status-badge-error'}`}>
-                  {tool.status === 'success' ? '已完成' : '失败'}
+                <span className={`status-badge ${getToolStatusClass(tool.status)}`}>
+                  {getToolStatusLabel(tool.status)}
                 </span>
                 <span>{tool.duration}</span>
               </div>

@@ -1,13 +1,17 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import { shouldUseMockRun } from '../../../utils/run';
 
 export function CurrentConclusionCard() {
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
   const agentRunErrorMessage = useWorkbenchStore((state) => state.agentRunErrorMessage);
+  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
 
-  if (!currentAgentRun) {
+  if (!mockRun && !currentAgentRun) {
     return (
       <section className="right-card right-section">
         <h2 className="panel-section-title">
@@ -20,6 +24,29 @@ export function CurrentConclusionCard() {
         </div>
       </section>
     );
+  }
+
+  if (mockRun) {
+    const conclusionText = mockRun.conclusion || (mockRun.status === 'running' ? '正在生成结论...' : '暂无结论');
+    const updatedText = `更新时间：${new Date(mockRun.updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
+
+    return (
+      <section className="right-card right-section">
+        <h2 className="panel-section-title">
+          <AppIcon icon={icons.alert} size={16} />
+          <span>当前结论</span>
+        </h2>
+        <div className="conclusion-source-badge">Mock 生成</div>
+        <div className="conclusion-card">
+          {conclusionText}
+          <div className="conclusion-updated-at">{updatedText}</div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!currentAgentRun) {
+    return null;
   }
 
   const runIntent = currentAgentRun?.plan?.intent;

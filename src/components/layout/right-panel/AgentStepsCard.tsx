@@ -1,5 +1,6 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { AgentStepStatus } from '../../../types/workbench';
+import type { AgentStepStatus, RunStepStatus } from '../../../types/workbench';
+import { shouldUseMockRun } from '../../../utils/run';
 import { AppIcon } from '../../common/AppIcon';
 import { icons, type IconKey } from '../../common/iconMap';
 
@@ -12,7 +13,9 @@ const STEP_TITLE_MAP: Record<string, string> = {
   final: '生成分析报告',
 };
 
-function getStepClass(status: AgentStepStatus): string {
+type DisplayedStepStatus = AgentStepStatus | RunStepStatus;
+
+function getStepClass(status: DisplayedStepStatus): string {
   switch (status) {
     case 'success':
       return 'done';
@@ -22,12 +25,14 @@ function getStepClass(status: AgentStepStatus): string {
       return 'pending';
     case 'error':
       return 'error';
+    case 'skipped':
+      return 'pending';
     default:
       return 'pending';
   }
 }
 
-function getStepStatusText(status: AgentStepStatus): string {
+function getStepStatusText(status: DisplayedStepStatus): string {
   switch (status) {
     case 'success':
       return '已完成';
@@ -37,12 +42,14 @@ function getStepStatusText(status: AgentStepStatus): string {
       return '待执行';
     case 'error':
       return '已中断';
+    case 'skipped':
+      return '已跳过';
     default:
       return '待执行';
   }
 }
 
-function getStepIcon(status: AgentStepStatus): IconKey {
+function getStepIcon(status: DisplayedStepStatus): IconKey {
   switch (status) {
     case 'success':
       return 'stepDone';
@@ -52,20 +59,33 @@ function getStepIcon(status: AgentStepStatus): IconKey {
       return 'stepPending';
     case 'error':
       return 'alert';
+    case 'skipped':
+      return 'stepPending';
     default:
       return 'stepPending';
   }
 }
 
 export function AgentStepsCard() {
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const displayedSteps = currentAgentRun?.steps.map((step) => ({
-    id: step.id,
-    title: STEP_TITLE_MAP[step.id] ?? step.title,
-    status: step.status,
-    description: step.description,
-    elapsedMs: step.elapsedMs,
-  }));
+  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
+  const displayedSteps = mockRun
+    ? mockRun.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        status: step.status,
+        description: step.description,
+        elapsedMs: step.elapsedMs,
+      }))
+    : currentAgentRun?.steps.map((step) => ({
+        id: step.id,
+        title: STEP_TITLE_MAP[step.id] ?? step.title,
+        status: step.status,
+        description: step.description,
+        elapsedMs: step.elapsedMs,
+      }));
 
   return (
     <section className="right-card right-section">
@@ -73,7 +93,7 @@ export function AgentStepsCard() {
         <AppIcon icon={icons.agent} size={16} />
         <span>本轮执行步骤</span>
       </h2>
-      {!currentAgentRun || !displayedSteps?.length ? (
+      {(!mockRun && !currentAgentRun) || !displayedSteps?.length ? (
         <div className="right-panel-empty-state">
           <strong>暂无执行步骤</strong>
           输入问题后点击发送，这里会展示本轮 Agent 的执行过程。
