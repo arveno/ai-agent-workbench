@@ -2,6 +2,8 @@ import { useWorkbenchStore } from '../../../stores/workbenchStore';
 import { getConclusionSourceLabel } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
+import { Badge } from '../../ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
 function getConclusionText(params: {
   status: string;
@@ -32,16 +34,21 @@ export function CurrentConclusionCard() {
 
   if (!currentRun) {
     return (
-      <section className="right-card right-section">
-        <h2 className="panel-section-title">
-          <AppIcon icon={icons.alert} size={16} />
-          <span>当前结论</span>
-        </h2>
-        <div className="right-panel-empty-state">
-          <strong>暂无结论</strong>
-          Agent 完成本轮执行后，会在这里展示最终结论。
-        </div>
-      </section>
+      <Card size="sm" className="right-card right-section">
+        <CardHeader className="right-card-header">
+          <CardTitle className="panel-section-title">
+            <AppIcon icon={icons.alert} size={16} />
+            <span>当前结论</span>
+          </CardTitle>
+          <CardDescription>最终结论或运行中输出</CardDescription>
+        </CardHeader>
+        <CardContent className="right-card-content">
+          <div className="right-panel-empty-state">
+            <strong>暂无结论</strong>
+            Agent 完成本轮执行后，会在这里展示最终结论。
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -54,33 +61,48 @@ export function CurrentConclusionCard() {
   const shouldShowSourceBadge = currentRun.conclusionSource !== 'none';
 
   return (
-    <section className="right-card right-section">
-      <h2 className="panel-section-title">
-        <AppIcon icon={icons.alert} size={16} />
-        <span>当前结论</span>
-      </h2>
+    <Card size="sm" className="right-card right-section">
+      <CardHeader className="right-card-header">
+        <CardTitle className="panel-section-title">
+          <AppIcon icon={icons.alert} size={16} />
+          <span>当前结论</span>
+        </CardTitle>
+        <CardDescription>当前 Run 的最终回复</CardDescription>
+      </CardHeader>
 
-      <div className="conclusion-badge-row">
-        {currentRun.status === 'running' ? <div className="conclusion-source-badge">生成中</div> : null}
-        {currentRun.status === 'stopped' ? (
-          <div className="conclusion-source-badge conclusion-source-badge-stopped">本轮已停止</div>
-        ) : null}
-        {currentRun.status === 'error' ? (
-          <div className="conclusion-source-badge conclusion-source-badge-danger">执行失败</div>
-        ) : null}
-        {shouldShowSourceBadge ? (
-          <div className="conclusion-source-badge">{getConclusionSourceLabel(currentRun.conclusionSource)}</div>
-        ) : null}
-      </div>
+      <CardContent className="right-card-content">
+        <div className="conclusion-badge-row">
+          {currentRun.status === 'running' ? (
+            <Badge variant="outline" className="conclusion-source-badge">
+              生成中
+            </Badge>
+          ) : null}
+          {currentRun.status === 'stopped' ? (
+            <Badge variant="outline" className="conclusion-source-badge conclusion-source-badge-stopped">
+              本轮已停止
+            </Badge>
+          ) : null}
+          {currentRun.status === 'error' ? (
+            <Badge variant="outline" className="conclusion-source-badge conclusion-source-badge-danger">
+              执行失败
+            </Badge>
+          ) : null}
+          {shouldShowSourceBadge ? (
+            <Badge variant="outline" className="conclusion-source-badge">
+              {getConclusionSourceLabel(currentRun.conclusionSource)}
+            </Badge>
+          ) : null}
+        </div>
 
-      {currentRun.conclusionNotice ? (
-        <div className="conclusion-fallback-notice">{currentRun.conclusionNotice}</div>
-      ) : null}
+        {currentRun.conclusionNotice ? (
+          <div className="conclusion-fallback-notice">{currentRun.conclusionNotice}</div>
+        ) : null}
 
-      <div className="conclusion-card">
-        {conclusionText}
-        <div className="conclusion-updated-at">{updatedText}</div>
-      </div>
-    </section>
+        <div className="conclusion-card">
+          {conclusionText}
+          <div className="conclusion-updated-at">{updatedText}</div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

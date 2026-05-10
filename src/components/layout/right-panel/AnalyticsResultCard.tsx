@@ -3,6 +3,8 @@ import { getChartPointCount, getChartValueExtent, isValidRunChartData } from '..
 import { RunChart } from '../../analytics/RunChart';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
+import { Badge } from '../../ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
 function formatMetricValue(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -57,63 +59,76 @@ export function AnalyticsResultCard() {
 
   if (!currentRun) {
     return (
-      <section className="right-card right-section">
-        <h2 className="panel-section-title">
-          <AppIcon icon={icons.chart} size={16} />
-          <span>数据分析结果</span>
-        </h2>
-        <div className="right-panel-empty-state">
-          <strong>暂无分析结果</strong>
-          发送数据分析类请求后，这里会展示图表和指标摘要。
-        </div>
-      </section>
+      <Card size="sm" className="right-card right-section">
+        <CardHeader className="right-card-header">
+          <CardTitle className="panel-section-title">
+            <AppIcon icon={icons.chart} size={16} />
+            <span>数据分析结果</span>
+          </CardTitle>
+          <CardDescription>图表和指标摘要</CardDescription>
+        </CardHeader>
+        <CardContent className="right-card-content">
+          <div className="right-panel-empty-state">
+            <strong>暂无分析结果</strong>
+            发送数据分析类请求后，这里会展示图表和指标摘要。
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   const isDataAnalysisRun = currentRun.intent === 'data_analysis';
 
   return (
-    <section className="right-card right-section">
-      <h2 className="panel-section-title">
-        <AppIcon icon={icons.chart} size={16} />
-        <span>数据分析结果</span>
-      </h2>
-      {isValidChartData ? (
-        <div className="run-chart-card">
-          <div className="run-chart-kpis">
-            <div className="run-chart-kpi">
-              <span className="run-chart-kpi-label">数据点</span>
-              <strong className="run-chart-kpi-value">{pointCount}</strong>
-            </div>
-            <div className="run-chart-kpi">
-              <span className="run-chart-kpi-label">最高值</span>
-              <strong className="run-chart-kpi-value">{formatMetricValue(valueExtent?.max)}</strong>
-            </div>
-            <div className="run-chart-kpi">
-              <span className="run-chart-kpi-label">最低值</span>
-              <strong className="run-chart-kpi-value">{formatMetricValue(valueExtent?.min)}</strong>
-            </div>
-          </div>
-
-          <div className="run-chart-header">
-            <div>
-              <div className="run-chart-title">{chartData.title}</div>
-              <div className="run-chart-meta">
-                {chartData.chartType === 'bar' ? '柱状图' : '折线图'} · {chartData.series.length} 组数据
+    <Card size="sm" className="right-card right-section">
+      <CardHeader className="right-card-header">
+        <CardTitle className="panel-section-title">
+          <AppIcon icon={icons.chart} size={16} />
+          <span>数据分析结果</span>
+        </CardTitle>
+        <CardDescription>{isValidChartData ? '基于 currentRun.chartData 渲染' : '等待可视化数据'}</CardDescription>
+      </CardHeader>
+      <CardContent className="right-card-content">
+        {isValidChartData ? (
+          <div className="run-chart-card">
+            <div className="run-chart-kpis">
+              <div className="run-chart-kpi">
+                <span className="run-chart-kpi-label">数据点</span>
+                <strong className="run-chart-kpi-value">{pointCount}</strong>
+              </div>
+              <div className="run-chart-kpi">
+                <span className="run-chart-kpi-label">最高值</span>
+                <strong className="run-chart-kpi-value">{formatMetricValue(valueExtent?.max)}</strong>
+              </div>
+              <div className="run-chart-kpi">
+                <span className="run-chart-kpi-label">最低值</span>
+                <strong className="run-chart-kpi-value">{formatMetricValue(valueExtent?.min)}</strong>
               </div>
             </div>
+
+            <div className="run-chart-header">
+              <div>
+                <div className="run-chart-title">{chartData.title}</div>
+                <div className="run-chart-meta">
+                  <Badge variant="outline" className="run-chart-type-badge">
+                    {chartData.chartType === 'bar' ? '柱状图' : '折线图'}
+                  </Badge>
+                  <span>{chartData.series.length} 组数据</span>
+                </div>
+              </div>
+            </div>
+
+            <RunChart chartData={chartData} />
+
+            {chartData.summary ? <div className="run-chart-text">{chartData.summary}</div> : null}
           </div>
-
-          <RunChart chartData={chartData} />
-
-          {chartData.summary ? <div className="run-chart-text">{chartData.summary}</div> : null}
-        </div>
-      ) : (
-        <div className="right-panel-empty-state">
-          <strong>{getEmptyTitle(currentRun.status)}</strong>
-          {getEmptyDescription(currentRun.status, isDataAnalysisRun)}
-        </div>
-      )}
-    </section>
+        ) : (
+          <div className="right-panel-empty-state">
+            <strong>{getEmptyTitle(currentRun.status)}</strong>
+            {getEmptyDescription(currentRun.status, isDataAnalysisRun)}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

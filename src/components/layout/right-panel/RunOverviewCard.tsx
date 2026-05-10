@@ -10,6 +10,8 @@ import {
 } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
+import { Badge } from '../../ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
 function getRunStatusBadgeClass(tone: ReturnType<typeof getRunStatusTone>): string {
   return `run-status-badge run-status-badge-${tone}`;
@@ -20,16 +22,21 @@ export function RunOverviewCard() {
 
   if (!currentRun) {
     return (
-      <section className="right-card right-section">
-        <h2 className="panel-section-title">
-          <AppIcon icon={icons.agent} size={16} />
-          <span>Run 概览</span>
-        </h2>
-        <div className="right-panel-empty-state">
-          <strong>暂无 Run</strong>
-          发送问题后，这里会展示本轮 Run 的基础信息。
-        </div>
-      </section>
+      <Card size="sm" className="right-card right-section">
+        <CardHeader className="right-card-header">
+          <CardTitle className="panel-section-title">
+            <AppIcon icon={icons.agent} size={16} />
+            <span>Run 概览</span>
+          </CardTitle>
+          <CardDescription>本轮 Run 的基础信息</CardDescription>
+        </CardHeader>
+        <CardContent className="right-card-content">
+          <div className="right-panel-empty-state">
+            <strong>暂无 Run</strong>
+            发送问题后，这里会展示本轮 Run 的基础信息。
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -43,24 +50,30 @@ export function RunOverviewCard() {
   ];
 
   return (
-    <section className="right-card right-section run-overview-card">
-      <div className="right-card-head">
-        <h2 className="panel-section-title">
-          <AppIcon icon={icons.agent} size={16} />
-          <span>Run 概览</span>
-        </h2>
-        <span className={getRunStatusBadgeClass(statusTone)}>{getRunStatusLabel(currentRun.status)}</span>
-      </div>
+    <Card size="sm" className="right-card right-section run-overview-card">
+      <CardHeader className="right-card-header right-card-head">
+        <div>
+          <CardTitle className="panel-section-title">
+            <AppIcon icon={icons.agent} size={16} />
+            <span>Run 概览</span>
+          </CardTitle>
+          <CardDescription>{getRunTitle(currentRun)}</CardDescription>
+        </div>
+        <Badge variant="outline" className={getRunStatusBadgeClass(statusTone)}>
+          {getRunStatusLabel(currentRun.status)}
+        </Badge>
+      </CardHeader>
 
-      <div className="run-overview-title">{getRunTitle(currentRun)}</div>
-      <div className="run-overview-grid">
-        {overviewItems.map((item) => (
-          <div key={item.label} className="run-overview-item">
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-          </div>
-        ))}
-      </div>
-    </section>
+      <CardContent className="right-card-content">
+        <div className="run-overview-grid">
+          {overviewItems.map((item) => (
+            <div key={item.label} className="run-overview-item">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
