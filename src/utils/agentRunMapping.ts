@@ -53,13 +53,19 @@ function mapAgentTools(agentRun: AgentRunResult): RunToolInvocation[] {
 }
 
 function mapAgentChartData(agentRun: AgentRunResult): RunChartData | undefined {
-  if (!agentRun.chartData) {
+  if (
+    !agentRun.chartData ||
+    agentRun.chartData.labels.length === 0 ||
+    agentRun.chartData.values.length === 0
+  ) {
     return undefined;
   }
 
+  const chartType = agentRun.chartData.chartType === 'line' ? 'line' : 'bar';
+
   return {
-    title: agentRun.chartData.title,
-    chartType: agentRun.chartData.chartType,
+    title: agentRun.chartData.title || '数据分析结果',
+    chartType,
     labels: agentRun.chartData.labels,
     series: [
       {

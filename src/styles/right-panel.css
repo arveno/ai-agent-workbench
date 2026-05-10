@@ -505,12 +505,55 @@
   color: #334155;
 }
 
-.run-chart-summary {
+.run-chart-card {
   margin-top: 10px;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
+  border-radius: 14px;
+  background: #ffffff;
   padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.run-chart-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.run-chart-kpi {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.run-chart-kpi-label {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.run-chart-kpi-value {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-chart-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .run-chart-title {
@@ -526,16 +569,14 @@
 }
 
 .run-chart-text {
-  margin-top: 6px;
   color: #334155;
   font-size: 12px;
   line-height: 1.6;
 }
 
-.run-chart-points {
-  margin-top: 6px;
-  color: #475569;
-  font-size: 11px;
-  line-height: 1.5;
-  word-break: break-word;
+.run-chart-container {
+  width: 100%;
+  min-width: 0;
+  height: 200px;
+  overflow: hidden;
 }

@@ -1,7 +1,38 @@
+import type { RunChartData } from '@/types/run';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import type { AgentRunChartData } from '../../../types/workbench';
+import { getChartPointCount, getChartValueExtent, isValidRunChartData } from '../../../utils/chartData';
 import { shouldUseUnifiedRun } from '../../../utils/run';
+import { RunChart } from '../../analytics/RunChart';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
+
+function mapLegacyAgentChartData(chartData: AgentRunChartData | undefined): RunChartData | undefined {
+  if (!chartData || chartData.labels.length === 0 || chartData.values.length === 0) {
+    return undefined;
+  }
+
+  return {
+    title: chartData.title || '数据分析结果',
+    chartType: chartData.chartType === 'line' ? 'line' : 'bar',
+    labels: chartData.labels,
+    series: [
+      {
+        name: chartData.title || '指标值',
+        values: chartData.values,
+      },
+    ],
+    summary: chartData.summary,
+  };
+}
+
+function formatMetricValue(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-';
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
 
 export function AnalyticsResultCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
@@ -9,6 +40,10 @@ export function AnalyticsResultCard() {
   const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
 
   const agentRun = currentAgentRun;
+  const chartData = unifiedRun?.chartData ?? mapLegacyAgentChartData(agentRun?.chartData);
+  const isValidChartData = isValidRunChartData(chartData);
+  const pointCount = getChartPointCount(chartData);
+  const valueExtent = getChartValueExtent(chartData);
 
   if (!unifiedRun && !agentRun) {
     return (
@@ -25,13 +60,9 @@ export function AnalyticsResultCard() {
     );
   }
 
-  const chartData = unifiedRun?.chartData ?? agentRun?.chartData;
   const isDataAnalysisRun = unifiedRun
     ? unifiedRun.intent === 'data_analysis'
     : agentRun?.plan?.intent === 'data_analysis' || Boolean(agentRun?.toolInvocations?.length);
-  const runSeriesText = unifiedRun?.chartData
-    ? `，series=${unifiedRun.chartData.series.map((series) => `${series.name}:${series.values.length}`).join(', ')}`
-    : '';
 
   return (
     <section className="right-card right-section">
@@ -39,18 +70,39 @@ export function AnalyticsResultCard() {
         <AppIcon icon={icons.chart} size={16} />
         <span>数据分析结果</span>
       </h2>
-      {chartData ? (
-        <div className="run-chart-summary">
-          <div className="run-chart-title">{chartData.title}</div>
-          <div className="run-chart-meta">图表类型：{chartData.chartType}</div>
-          <div className="run-chart-text">{chartData.summary}</div>
-          <div className="run-chart-points">
-            数据点：{chartData.labels.length}（labels={chartData.labels.join(', ') || '-'}{runSeriesText}）
+      {isValidChartData ? (
+        <div className="run-chart-card">
+          <div className="run-chart-kpis">
+            <div className="run-chart-kpi">
+              <span className="run-chart-kpi-label">数据点</span>
+              <strong className="run-chart-kpi-value">{pointCount}</strong>
+            </div>
+            <div className="run-chart-kpi">
+              <span className="run-chart-kpi-label">最高值</span>
+              <strong className="run-chart-kpi-value">{formatMetricValue(valueExtent?.max)}</strong>
+            </div>
+            <div className="run-chart-kpi">
+              <span className="run-chart-kpi-label">最低值</span>
+              <strong className="run-chart-kpi-value">{formatMetricValue(valueExtent?.min)}</strong>
+            </div>
           </div>
+
+          <div className="run-chart-header">
+            <div>
+              <div className="run-chart-title">{chartData.title}</div>
+              <div className="run-chart-meta">
+                {chartData.chartType === 'bar' ? '柱状图' : '折线图'} · {chartData.series.length} 组数据
+              </div>
+            </div>
+          </div>
+
+          <RunChart chartData={chartData} />
+
+          {chartData.summary ? <div className="run-chart-text">{chartData.summary}</div> : null}
         </div>
       ) : (
         <div className="right-panel-empty-state">
-          <strong>本次未生成数据分析结果</strong>
+          <strong>{unifiedRun?.status === 'running' ? '等待数据分析结果' : '暂无图表数据'}</strong>
           {unifiedRun?.status === 'running'
             ? '等待数据分析结果...'
             : isDataAnalysisRun
