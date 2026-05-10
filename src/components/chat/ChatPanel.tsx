@@ -176,7 +176,9 @@ export function ChatPanel() {
           const isStreamingAssistant = isMockMode && isActiveAssistant && generationStatus === 'streaming';
           const isStoppedAssistant = isMockMode && isActiveAssistant && generationStatus === 'stopped';
           const shouldRenderToolSummaryBeforeMessage =
-            shouldRenderRuntimeToolSummary && message.id === activeAssistantMessageId;
+            shouldRenderRuntimeToolSummary &&
+            !shouldShowAgentStreamingBubble &&
+            message.id === activeAssistantMessageId;
 
           return (
             <Fragment key={message.id}>
@@ -280,16 +282,56 @@ export function ChatPanel() {
         {shouldShowConfirm ? <ConfirmActionCard /> : null}
 
         {shouldShowAgentStreamingBubble ? (
-          <div className="message-row message-row-assistant">
-            <div className="message-avatar message-avatar-assistant" aria-hidden="true">
-              <AppIcon icon={icons.brand} size={16} />
+          <>
+            {shouldRenderRuntimeToolSummary ? (
+              <div className="agent-tool-summary">
+                <div className="agent-tool-summary-header">
+                  <span className="agent-tool-summary-icon" aria-hidden="true">
+                    <AppIcon icon={icons.settings} size={14} />
+                  </span>
+                  <h3>本轮工具调用</h3>
+                </div>
+                <div className="agent-tool-summary-list">
+                  {runtimeToolSummaries.map((item) => (
+                    <div key={item.id} className="agent-tool-summary-item">
+                      <div className="agent-tool-summary-main">
+                        <div className="agent-tool-summary-title">{item.displayName}</div>
+                        <div className="agent-tool-summary-category">{item.categoryLabel}</div>
+                        <div className="agent-tool-summary-description">{item.outputText}</div>
+                      </div>
+                      <div className="agent-tool-summary-meta">
+                        <span
+                          className={[
+                            'agent-tool-summary-status',
+                            item.statusLabel === '异常' ? 'agent-tool-summary-status-error' : '',
+                            item.statusLabel === '已停止' ? 'agent-tool-summary-status-stopped' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {item.statusLabel}
+                        </span>
+                        {item.elapsedText !== '-' ? (
+                          <span className="agent-tool-summary-elapsed">{item.elapsedText}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="message-row message-row-assistant">
+              <div className="message-avatar message-avatar-assistant" aria-hidden="true">
+                <AppIcon icon={icons.brand} size={16} />
+              </div>
+              <MessageBubble
+                role="assistant"
+                content={agentStreamingContent}
+                afterContent={<span className="typing-cursor">▍</span>}
+              />
             </div>
-            <MessageBubble
-              role="assistant"
-              content={agentStreamingContent}
-              afterContent={<span className="typing-cursor">▍</span>}
-            />
-          </div>
+          </>
         ) : null}
 
         {generationStatus === 'error' && errorMessage ? (
