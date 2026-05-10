@@ -1,3 +1,5 @@
+import type { RagSourceChunk } from './rag';
+
 export type RunMode = 'mock' | 'agent';
 
 export type RunIntent = 'capability_intro' | 'data_analysis' | 'unsupported' | 'unknown';
@@ -78,6 +80,7 @@ export interface RunSnapshot {
   dataSource?: RunDataSourceSnapshot;
   steps: RunStep[];
   toolInvocations: RunToolInvocation[];
+  sources?: RagSourceChunk[];
   chartData?: RunChartData;
   conclusion: string;
   conclusionSource: RunConclusionSource;

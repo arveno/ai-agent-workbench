@@ -818,3 +818,141 @@
   height: 200px;
   overflow: hidden;
 }
+
+.rag-source-count {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rag-source-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.rag-source-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.rag-source-header,
+.rag-source-title-row,
+.rag-source-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rag-source-header,
+.rag-source-title-row {
+  justify-content: space-between;
+}
+
+.rag-source-citation {
+  flex: 0 0 auto;
+  color: #1d4ed8;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.rag-source-score {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rag-source-title-row {
+  margin-top: 8px;
+}
+
+.rag-source-title {
+  min-width: 0;
+  margin: 0;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rag-source-chunk-title {
+  margin-top: 5px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rag-source-preview {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.rag-source-meta {
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.rag-source-badge {
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.rag-source-badge-type {
+  flex: 0 0 auto;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.rag-source-badge-used {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.rag-source-badge-muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.rag-source-updated {
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.4;
+}

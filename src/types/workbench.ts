@@ -20,6 +20,8 @@ export type {
   RunToolStatus,
 } from './run';
 
+export type { RagSourceChunk } from './rag';
+
 export type TaskId = string;
 export type ToolCallId = string;
 export type KnowledgeSourceId = string;

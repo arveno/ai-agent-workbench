@@ -13,6 +13,7 @@ import type {
   RunToolInvocation,
   RunToolStartedEvent,
 } from '@/types/run';
+import { createMockRagSources } from './ragSources';
 import { createRunId } from './run';
 
 export const MOCK_RUN_STEP_IDS = {
@@ -69,6 +70,7 @@ export function createMockRunStartedEvent(prompt: string): RunStartedEvent {
         status: 'pending',
       })),
       toolInvocations: [],
+      sources: createMockRagSources(),
       conclusion: '',
       conclusionSource: 'mock',
       reportState: 'hidden',
