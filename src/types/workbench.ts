@@ -384,6 +384,8 @@ export interface UiSlice {
   currentAgentRun: AgentRunResult | null;
   agentRunStatus: 'idle' | 'running' | 'success' | 'error';
   agentRunErrorMessage: string | null;
+  activeAgentRunRequestId: string | null;
+  activeAgentRunAbortController: AbortController | null;
   currentReportRunId: string | null;
   reportActionState: ReportActionState;
   openDataSourceModal: () => void;

@@ -24,6 +24,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     persistWorkbenchSessions(sortSessionsByUpdatedAt(sessions));
   },
   createSession: () => {
+    get().activeAgentRunAbortController?.abort();
+
     const sessionId = createSessionId();
     const now = Date.now();
     const newSession = {
@@ -65,6 +67,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         runEventLog: [],
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
+        activeAgentRunRequestId: null,
+        activeAgentRunAbortController: null,
         currentReportRunId: null,
         reportActionState: 'skipped',
       };
@@ -73,6 +77,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     return sessionId;
   },
   switchSession: (sessionId) => {
+    get().activeAgentRunAbortController?.abort();
+
     set((state) => {
       const nextSession = state.sessions.find((session) => session.id === sessionId);
 
@@ -111,6 +117,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         runEventLog: [],
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
+        activeAgentRunRequestId: null,
+        activeAgentRunAbortController: null,
         currentReportRunId: null,
         reportActionState: 'skipped',
       };
@@ -270,6 +278,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     void get().runPromptWithCurrentModel(prompt);
   },
   hydrateFromUrl: (state) => {
+    get().activeAgentRunAbortController?.abort();
+
     set((currentState) => {
       const fallbackSession = currentState.sessions[0];
       const nextSession = currentState.sessions.find((session) => session.id === state.sessionId) ?? fallbackSession;
@@ -308,6 +318,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         runEventLog: [],
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
+        activeAgentRunRequestId: null,
+        activeAgentRunAbortController: null,
         currentReportRunId: null,
         reportActionState: 'skipped',
       };

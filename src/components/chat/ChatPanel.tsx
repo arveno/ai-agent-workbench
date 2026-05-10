@@ -76,8 +76,11 @@ export function ChatPanel() {
   const hasConversation = sessionMessages.length > 0;
   const shouldRenderRuntimeToolSummary = !isMockMode && runtimeToolSummaries.length > 0;
   const shouldShowConfirm = shouldShowReportConfirm(currentRun);
-  const shouldShowAgentLoading =
-    currentRun?.mode === 'agent' && currentRun.status === 'running' && !currentRun.conclusion.trim();
+  const shouldShowAgentStreamingBubble = currentRun?.mode === 'agent' && currentRun.status === 'running';
+  const agentStreamingContent =
+    currentRun?.mode === 'agent' && currentRun.conclusion.trim()
+      ? currentRun.conclusion
+      : '正在分析问题并准备调用工具...';
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -126,6 +129,8 @@ export function ChatPanel() {
     visibleToolCalls.length,
     runtimeToolSummaries.length,
     currentRun?.reportState,
+    currentRun?.status,
+    currentRun?.conclusion,
     finalMessage.status,
     realModelNotice,
     errorMessage,
@@ -268,12 +273,16 @@ export function ChatPanel() {
 
         {shouldShowConfirm ? <ConfirmActionCard /> : null}
 
-        {shouldShowAgentLoading ? (
+        {shouldShowAgentStreamingBubble ? (
           <div className="message-row message-row-assistant">
             <div className="message-avatar message-avatar-assistant" aria-hidden="true">
               <AppIcon icon={icons.brand} size={16} />
             </div>
-            <MessageBubble role="assistant" content="正在分析问题并准备调用工具..." />
+            <MessageBubble
+              role="assistant"
+              content={agentStreamingContent}
+              afterContent={<span className="typing-cursor">▍</span>}
+            />
           </div>
         ) : null}
 

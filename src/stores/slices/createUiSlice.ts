@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
-import type { UiSlice, WorkbenchStore } from '../../types/workbench';
-import { runAgentAnalysis } from '../../services/agentRunApi';
-import { createAgentPendingRunStartedEvent, mapAgentRunResultToRunSnapshot } from '../../utils/agentRunMapping';
+import { streamAgentRunAnalysis } from '../../services/agentRunStreamApi';
+import type { RunConclusionSource, UiSlice, WorkbenchStore } from '../../types/workbench';
+import { createAgentPendingRunStartedEvent } from '../../utils/agentRunMapping';
 
 function buildAgentConclusionMessage(conclusion: string, notice?: string): string {
   const normalizedConclusion = conclusion.trim();
@@ -23,6 +23,14 @@ function buildAgentConclusionMessage(conclusion: string, notice?: string): strin
   ].join('\n');
 }
 
+function createAgentRunRequestId(): string {
+  return `agent_request_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
 export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set, get) => ({
   isDataSourceModalOpen: false,
   isToolLibraryModalOpen: false,
@@ -31,6 +39,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   currentAgentRun: null,
   agentRunStatus: 'idle',
   agentRunErrorMessage: null,
+  activeAgentRunRequestId: null,
+  activeAgentRunAbortController: null,
   currentReportRunId: null,
   reportActionState: 'skipped',
   openDataSourceModal: () => {
@@ -70,17 +80,30 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     }
 
     const apiKey = state.modelConfigs.groq?.apiKey?.trim();
+    const requestId = createAgentRunRequestId();
+    const sessionId = state.currentSessionId;
+    const abortController = new AbortController();
+    const previousAbortController = state.activeAgentRunAbortController;
     const pendingRunEvent = createAgentPendingRunStartedEvent({
       prompt,
       provider: 'supabase',
     });
-    const pendingRunId = pendingRunEvent.run.id;
+    let finalConclusion = '';
+    let finalConclusionSource: RunConclusionSource = 'fallback';
+    let finalConclusionNotice: string | undefined;
+    let hasFailed = false;
+    let hasAppendedFinalMessage = false;
+
+    previousAbortController?.abort();
 
     get().appendUserMessageToCurrentSession(prompt);
     get().applyRunEvent(pendingRunEvent);
     get().clearChatDraft();
 
     set({
+      activeAgentRunRequestId: requestId,
+      activeAgentRunAbortController: abortController,
+      currentAgentRun: null,
       agentRunStatus: 'running',
       agentRunErrorMessage: null,
       generationStatus: 'streaming',
@@ -96,36 +119,59 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     });
 
     try {
-      const response = await runAgentAnalysis({
+      await streamAgentRunAnalysis({
         prompt,
         provider: 'supabase',
         apiKey: apiKey || undefined,
+        signal: abortController.signal,
+        onEvent: (event) => {
+          const current = get();
+
+          if (current.activeAgentRunRequestId !== requestId || current.currentSessionId !== sessionId) {
+            return;
+          }
+
+          get().applyRunEvent(event);
+
+          if (event.type === 'conclusion_completed') {
+            finalConclusion = event.conclusion;
+            finalConclusionSource = event.conclusionSource;
+            finalConclusionNotice = event.conclusionNotice;
+            return;
+          }
+
+          if (event.type === 'report_pending') {
+            set({
+              currentReportRunId: event.runId,
+              reportActionState: 'pending',
+            });
+            return;
+          }
+
+          if (event.type === 'run_failed') {
+            hasFailed = true;
+            set({
+              agentRunStatus: 'error',
+              agentRunErrorMessage: event.errorMessage,
+              generationStatus: 'error',
+              confirmStatus: 'cancelled',
+              currentReportRunId: null,
+              reportActionState: 'skipped',
+            });
+          }
+        },
       });
 
-      if (get().currentRun?.id !== pendingRunId) {
+      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
         return;
       }
 
-      if (response.ok) {
-        const isDataAnalysisRun =
-          response.run.plan?.intent === 'data_analysis' || response.run.toolInvocations.length > 0;
-        const finalRun = mapAgentRunResultToRunSnapshot(response.run);
-        const assistantMessage = buildAgentConclusionMessage(
-          response.run.conclusion,
-          response.run.conclusionSource === 'fallback' ? response.run.conclusionNotice : undefined
-        );
-
-        get().applyRunEvent({
-          type: 'run_started',
-          run: finalRun,
-        });
-
+      if (!hasFailed) {
         set({
-          currentAgentRun: response.run,
           agentRunStatus: 'success',
           agentRunErrorMessage: null,
           generationStatus: 'done',
-          confirmStatus: isDataAnalysisRun && response.run.status === 'success' ? 'waiting' : 'cancelled',
+          confirmStatus: get().currentRun?.reportState === 'pending' ? 'waiting' : 'cancelled',
           finalMessage: {
             content: '',
             status: 'hidden',
@@ -133,65 +179,84 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           visibleToolCallIds: [],
           showKnowledgeSources: false,
           showAnalyticsResult: false,
-          currentReportRunId:
-            isDataAnalysisRun && response.run.status === 'success' && Boolean(response.run.conclusion.trim())
-              ? response.run.id
-              : null,
-          reportActionState:
-            isDataAnalysisRun && response.run.status === 'success' && Boolean(response.run.conclusion.trim())
-              ? 'pending'
-              : 'skipped',
+          activeAgentRunRequestId: null,
+          activeAgentRunAbortController: null,
         });
 
+        const assistantMessage = buildAgentConclusionMessage(
+          finalConclusion,
+          finalConclusionSource === 'fallback' ? finalConclusionNotice : undefined
+        );
+
         if (assistantMessage) {
+          hasAppendedFinalMessage = true;
           get().appendAssistantMessageToCurrentSession(assistantMessage);
         }
 
         return;
       }
 
-      get().applyRunEvent({
-        type: 'run_failed',
-        runId: pendingRunId,
-        errorMessage: response.errorMessage,
-      });
-
       set({
-        agentRunStatus: 'error',
-        agentRunErrorMessage: response.errorMessage,
-        generationStatus: 'error',
-        confirmStatus: 'cancelled',
-        currentReportRunId: null,
-        reportActionState: 'skipped',
+        activeAgentRunRequestId: null,
+        activeAgentRunAbortController: null,
       });
     } catch {
-      if (get().currentRun?.id !== pendingRunId) {
+      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
         return;
       }
 
+      if (isAbortError(abortController.signal.reason)) {
+        return;
+      }
+
+      const activeRunId = get().currentRun?.id ?? pendingRunEvent.run.id;
+      const errorMessage = 'Agent Run 流式请求失败，请检查数据源连接或服务端状态。';
+
       get().applyRunEvent({
         type: 'run_failed',
-        runId: pendingRunId,
-        errorMessage: 'Agent Run 执行失败，请检查数据源连接或服务端状态。',
+        runId: activeRunId,
+        errorMessage,
       });
 
       set({
         agentRunStatus: 'error',
-        agentRunErrorMessage: 'Agent Run 执行失败，请检查数据源连接或服务端状态。',
+        agentRunErrorMessage: errorMessage,
         generationStatus: 'error',
         confirmStatus: 'cancelled',
         currentReportRunId: null,
         reportActionState: 'skipped',
+        activeAgentRunRequestId: null,
+        activeAgentRunAbortController: null,
       });
+    } finally {
+      if (
+        get().activeAgentRunRequestId === requestId &&
+        get().currentSessionId === sessionId &&
+        finalConclusion.trim() &&
+        !hasFailed &&
+        !hasAppendedFinalMessage
+      ) {
+        const assistantMessage = buildAgentConclusionMessage(
+          finalConclusion,
+          finalConclusionSource === 'fallback' ? finalConclusionNotice : undefined
+        );
+
+        if (assistantMessage) {
+          get().appendAssistantMessageToCurrentSession(assistantMessage);
+        }
+      }
     }
   },
   clearCurrentAgentRun: () => {
+    get().activeAgentRunAbortController?.abort();
     set({
       currentAgentRun: null,
       currentRun: null,
       runEventLog: [],
       agentRunStatus: 'idle',
       agentRunErrorMessage: null,
+      activeAgentRunRequestId: null,
+      activeAgentRunAbortController: null,
       currentReportRunId: null,
       reportActionState: 'skipped',
     });
