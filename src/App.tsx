@@ -1,10 +1,15 @@
 ﻿import { useEffect } from 'react';
 import { ChatPanel } from './components/chat/ChatPanel';
-import { AppHeader } from './components/layout/AppHeader';
+import { DataSourceModal } from './components/datasource/DataSourceModal';
 import { RightPanel } from './components/layout/RightPanel';
 import { Sidebar } from './components/layout/Sidebar';
-import { WorkbenchHeader } from './components/layout/WorkbenchHeader';
+import { Workspace } from './components/layout/Workspace';
+import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
+import { WorkspaceInspector } from './components/layout/WorkspaceInspector';
+import { WorkspaceMain } from './components/layout/WorkspaceMain';
 import { ModelConnectModal } from './components/model/ModelConnectModal';
+import { ToolLibraryModal } from './components/tools/ToolLibraryModal';
+import { WorkflowModal } from './components/workflow/WorkflowModal';
 import { useWorkbenchStore } from './stores/workbenchStore';
 import { parseWorkbenchUrl, replaceWorkbenchUrl } from './utils/urlState';
 
@@ -23,21 +28,27 @@ function App() {
   }, [hydrateFromUrl]);
 
   return (
-    <div className="app-root">
-      <AppHeader />
+    <div className="app-shell app-root">
+      <Sidebar />
 
-      <div className="app-body">
-        <Sidebar />
+      <Workspace>
+        <WorkspaceHeader />
 
-        <main className="main-workspace">
-          <WorkbenchHeader />
-          <ChatPanel />
-        </main>
+        <div className="workspace-content">
+          <WorkspaceMain>
+            <ChatPanel />
+          </WorkspaceMain>
 
-        <RightPanel />
-      </div>
+          <WorkspaceInspector>
+            <RightPanel />
+          </WorkspaceInspector>
+        </div>
+      </Workspace>
 
       <ModelConnectModal />
+      <DataSourceModal />
+      <ToolLibraryModal />
+      <WorkflowModal />
     </div>
   );
 }

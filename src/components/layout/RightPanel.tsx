@@ -6,7 +6,7 @@ import { ToolInvocationsCard } from './right-panel/ToolInvocationsCard';
 
 export function RightPanel() {
   return (
-    <aside className="right-panel">
+    <div className="right-panel">
       <div className="right-panel-content">
         <AgentStepsCard />
         <DataSourceCard />
@@ -14,6 +14,6 @@ export function RightPanel() {
         <AnalyticsResultCard />
         <CurrentConclusionCard />
       </div>
-    </aside>
+    </div>
   );
 }

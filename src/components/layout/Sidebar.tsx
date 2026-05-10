@@ -60,6 +60,16 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-content">
+        <div className="brand-block">
+          <div className="brand-icon" aria-hidden="true">
+            <AppIcon icon={icons.brand} size={20} />
+          </div>
+          <div className="brand-copy">
+            <h1>AI Agent Workbench</h1>
+            <p>教育数据分析助手</p>
+          </div>
+        </div>
+
         <button type="button" className="new-chat-btn" onClick={handleCreateSession}>
           <span className="icon-text-inline">
             <AppIcon icon={icons.plus} size={16} />
