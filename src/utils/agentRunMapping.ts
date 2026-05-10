@@ -8,7 +8,6 @@ import type {
   RunStep,
   RunToolInvocation,
 } from '@/types/run';
-import { createRunId } from './run';
 
 type AgentProvider = 'postgresql' | 'supabase';
 
@@ -78,15 +77,18 @@ function mapAgentChartData(agentRun: AgentRunResult): RunChartData | undefined {
 }
 
 export function createAgentPendingRunStartedEvent(params: {
+  runId: string;
   prompt: string;
   provider: AgentProvider;
+  sessionId?: string;
 }): RunStartedEvent {
   const timestamp = new Date().toISOString();
 
   return {
     type: 'run_started',
     run: {
-      id: createRunId('agent_pending_run'),
+      id: params.runId,
+      sessionId: params.sessionId,
       mode: 'agent',
       status: 'running',
       intent: 'unknown',

@@ -305,9 +305,10 @@ export async function streamAgentRun(params: {
   prompt: string;
   provider: AgentProvider;
   apiKey?: string;
+  clientRunId?: string;
   emit: (event: RunEvent) => void;
 }): Promise<void> {
-  const runId = createRunId();
+  const runId = params.clientRunId?.trim() || createRunId();
   const runStart = Date.now();
   const createdAt = new Date(runStart).toISOString();
 

@@ -3,17 +3,21 @@ import { streamAgentRun } from '../../../src/server/agent/streamAgentRun';
 import type { AgentRunRequest } from '../../../src/server/agent/types';
 import type { RunEvent } from '../../../src/types/run';
 
-function parseRequestBody(body: unknown): Partial<AgentRunRequest> {
+type AgentRunStreamRequest = Partial<AgentRunRequest> & {
+  clientRunId?: unknown;
+};
+
+function parseRequestBody(body: unknown): AgentRunStreamRequest {
   if (typeof body === 'string') {
     try {
-      return JSON.parse(body) as Partial<AgentRunRequest>;
+      return JSON.parse(body) as AgentRunStreamRequest;
     } catch {
       return {};
     }
   }
 
   if (typeof body === 'object' && body !== null) {
-    return body as Partial<AgentRunRequest>;
+    return body as AgentRunStreamRequest;
   }
 
   return {};
@@ -58,6 +62,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const clientRunId =
+    typeof body.clientRunId === 'string' && body.clientRunId.trim()
+      ? body.clientRunId.trim()
+      : undefined;
+
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -68,12 +77,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prompt,
       provider: body.provider,
       apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
+      clientRunId,
       emit: (event) => writeRunEvent(res, event),
     });
   } catch {
     writeRunEvent(res, {
       type: 'run_failed',
-      runId: 'run_stream_error',
+      runId: clientRunId ?? 'run_stream_error',
       errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
     });
   } finally {

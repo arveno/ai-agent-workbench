@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand';
 import { streamAgentRunAnalysis } from '../../services/agentRunStreamApi';
 import type { RunConclusionSource, UiSlice, WorkbenchStore } from '../../types/workbench';
 import { createAgentPendingRunStartedEvent } from '../../utils/agentRunMapping';
+import { createRunId } from '../../utils/run';
 
 function buildAgentConclusionMessage(conclusion: string, notice?: string): string {
   const normalizedConclusion = conclusion.trim();
@@ -91,11 +92,14 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     const apiKey = state.modelConfigs.groq?.apiKey?.trim();
     const requestId = createAgentRunRequestId();
     const sessionId = state.currentSessionId;
+    const runId = createRunId('agent_run');
     const abortController = new AbortController();
     const previousAbortController = state.activeAgentRunAbortController;
     const pendingRunEvent = createAgentPendingRunStartedEvent({
+      runId,
       prompt,
       provider: 'supabase',
+      sessionId,
     });
     let finalConclusion = '';
     let finalConclusionSource: RunConclusionSource = 'fallback';
@@ -112,7 +116,10 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
     previousAbortController?.abort();
 
-    get().appendUserMessageToCurrentSession(prompt);
+    get().appendUserMessageToCurrentSession(prompt, {
+      runId,
+      kind: 'normal',
+    });
     get().applyRunEvent(pendingRunEvent);
     get().clearChatDraft();
 
@@ -139,6 +146,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         prompt,
         provider: 'supabase',
         apiKey: apiKey || undefined,
+        clientRunId: runId,
         signal: abortController.signal,
         onEvent: (event) => {
           const current = get();
@@ -206,7 +214,10 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
         if (assistantMessage) {
           hasAppendedFinalMessage = true;
-          get().appendAssistantMessageToCurrentSession(assistantMessage);
+          get().appendAssistantMessageToCurrentSession(assistantMessage, {
+            runId,
+            kind: 'normal',
+          });
         }
 
         return;
@@ -275,7 +286,10 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         );
 
         if (assistantMessage) {
-          get().appendAssistantMessageToCurrentSession(assistantMessage);
+          get().appendAssistantMessageToCurrentSession(assistantMessage, {
+            runId,
+            kind: 'normal',
+          });
         }
       }
     }

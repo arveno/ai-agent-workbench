@@ -6,6 +6,7 @@ import type {
   GenerationStatus,
   ModelProviderConfigMap,
   ModelProviderId,
+  RunSnapshot,
   WorkbenchMessage,
   WorkbenchMessageKind,
   WorkbenchSession,
@@ -85,6 +86,194 @@ export function createEmptySession(params?: {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isRunStatus(value: unknown): value is RunSnapshot['status'] {
+  return (
+    value === 'idle' ||
+    value === 'pending' ||
+    value === 'running' ||
+    value === 'success' ||
+    value === 'error' ||
+    value === 'stopped'
+  );
+}
+
+function isRunStepStatus(value: unknown): value is RunSnapshot['steps'][number]['status'] {
+  return (
+    value === 'pending' ||
+    value === 'running' ||
+    value === 'success' ||
+    value === 'error' ||
+    value === 'skipped' ||
+    value === 'stopped'
+  );
+}
+
+function isRunToolStatus(value: unknown): value is RunSnapshot['toolInvocations'][number]['status'] {
+  return isRunStepStatus(value);
+}
+
+function isRunMode(value: unknown): value is RunSnapshot['mode'] {
+  return value === 'mock' || value === 'agent';
+}
+
+function isRunIntent(value: unknown): value is RunSnapshot['intent'] {
+  return (
+    value === 'capability_intro' ||
+    value === 'data_analysis' ||
+    value === 'unsupported' ||
+    value === 'unknown'
+  );
+}
+
+function isRunConclusionSource(value: unknown): value is RunSnapshot['conclusionSource'] {
+  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none';
+}
+
+function isRunReportState(value: unknown): value is RunSnapshot['reportState'] {
+  return value === 'hidden' || value === 'pending' || value === 'generated' || value === 'skipped';
+}
+
+function settleInterruptedRun(run: RunSnapshot): RunSnapshot {
+  if (run.status !== 'running' && run.status !== 'pending') {
+    return run;
+  }
+
+  const timestamp = new Date().toISOString();
+
+  return {
+    ...run,
+    status: 'stopped',
+    updatedAt: timestamp,
+    steps: run.steps.map((step) =>
+      step.status === 'running'
+        ? {
+            ...step,
+            status: 'stopped',
+            completedAt: step.completedAt ?? timestamp,
+          }
+        : step,
+    ),
+    toolInvocations: run.toolInvocations.map((tool) =>
+      tool.status === 'running'
+        ? {
+            ...tool,
+            status: 'stopped',
+            completedAt: tool.completedAt ?? timestamp,
+          }
+        : tool,
+    ),
+  };
+}
+
+function normalizeRunSnapshot(rawValue: unknown): RunSnapshot | null {
+  if (!isRecord(rawValue)) {
+    return null;
+  }
+
+  const run = rawValue as Partial<RunSnapshot>;
+
+  if (
+    typeof run.id !== 'string' ||
+    (run.sessionId !== undefined && typeof run.sessionId !== 'string') ||
+    !isRunMode(run.mode) ||
+    !isRunStatus(run.status) ||
+    !isRunIntent(run.intent) ||
+    typeof run.prompt !== 'string' ||
+    !Array.isArray(run.steps) ||
+    !run.steps.every(
+      (step) =>
+        isRecord(step) &&
+        typeof step.id === 'string' &&
+        typeof step.title === 'string' &&
+        isRunStepStatus(step.status),
+    ) ||
+    !Array.isArray(run.toolInvocations) ||
+    !run.toolInvocations.every(
+      (tool) =>
+        isRecord(tool) &&
+        typeof tool.id === 'string' &&
+        typeof tool.toolId === 'string' &&
+        typeof tool.toolName === 'string' &&
+        typeof tool.displayName === 'string' &&
+        isRunToolStatus(tool.status),
+    ) ||
+    typeof run.conclusion !== 'string' ||
+    !isRunConclusionSource(run.conclusionSource) ||
+    !isRunReportState(run.reportState) ||
+    typeof run.createdAt !== 'string' ||
+    typeof run.updatedAt !== 'string'
+  ) {
+    return null;
+  }
+
+  return settleInterruptedRun(run as RunSnapshot);
+}
+
+function normalizeRunsById(rawValue: unknown): Record<string, RunSnapshot> | null {
+  if (!isRecord(rawValue)) {
+    return null;
+  }
+
+  const runsById: Record<string, RunSnapshot> = {};
+
+  for (const [runId, rawRun] of Object.entries(rawValue)) {
+    const normalizedRun = normalizeRunSnapshot(rawRun);
+
+    if (!normalizedRun || normalizedRun.id !== runId) {
+      return null;
+    }
+
+    runsById[runId] = normalizedRun;
+  }
+
+  return runsById;
+}
+
+export function getSessionLatestRun(session: WorkbenchSession | undefined): RunSnapshot | null {
+  if (!session?.latestRunId) {
+    return null;
+  }
+
+  return session.runsById[session.latestRunId] ?? null;
+}
+
+export function upsertRunIntoSessions(
+  sessions: WorkbenchSession[],
+  currentSessionId: string,
+  run: RunSnapshot,
+): WorkbenchSession[] {
+  let didUpdate = false;
+  const timestamp = Date.now();
+
+  const nextSessions = sessions.map((session) => {
+    if (session.id !== currentSessionId) {
+      return session;
+    }
+
+    didUpdate = true;
+    const runWithSession: RunSnapshot = {
+      ...run,
+      sessionId: run.sessionId ?? currentSessionId,
+    };
+
+    return {
+      ...session,
+      updatedAt: timestamp,
+      runsById: {
+        ...session.runsById,
+        [runWithSession.id]: runWithSession,
+      },
+      latestRunId: runWithSession.id,
+    };
+  });
+
+  return didUpdate ? sortSessionsByUpdatedAt(nextSessions) : sessions;
+}
+
 export function sortSessionsByUpdatedAt(sessions: WorkbenchSession[]): WorkbenchSession[] {
   return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
 }
@@ -137,14 +326,18 @@ function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
 
   const session = rawValue as Partial<WorkbenchSession>;
 
+  const runsById = normalizeRunsById(session.runsById);
+
   if (
     typeof session.id !== 'string' ||
     typeof session.title !== 'string' ||
-    !session.runsById ||
-    typeof session.runsById !== 'object' ||
-    Array.isArray(session.runsById) ||
+    !runsById ||
     (session.latestRunId !== undefined && typeof session.latestRunId !== 'string')
   ) {
+    return null;
+  }
+
+  if (session.latestRunId && !runsById[session.latestRunId]) {
     return null;
   }
 
@@ -164,7 +357,7 @@ function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
     updatedAt: typeof session.updatedAt === 'number' ? session.updatedAt : Date.now(),
     taskId: typeof session.taskId === 'string' ? session.taskId : undefined,
     messages: messages.filter((message): message is WorkbenchMessage => message !== null),
-    runsById: session.runsById,
+    runsById,
     latestRunId: session.latestRunId,
   };
 }
@@ -230,6 +423,8 @@ export function getInitialWorkbenchSessionState(): WorkbenchSessionStorageState 
     clearPersistedWorkbenchState();
     return defaultState;
   }
+
+  persistWorkbenchSessions(sessions, persistedState.activeSessionId);
 
   return {
     sessions,

@@ -17,7 +17,7 @@ import {
   createMockToolStartedEvent,
 } from '../../utils/mockRun';
 import { createRunReportMarkdown } from '../../utils/report';
-import { shouldShowReportConfirm } from '../../utils/run';
+import { createRunId, shouldShowReportConfirm } from '../../utils/run';
 import { streamText } from '../../utils/streamText';
 import {
   createWorkbenchMessage,
@@ -111,7 +111,8 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     const groqApiKey = snapshot.modelConfigs.groq?.apiKey?.trim();
     const shouldUseGroq = snapshot.currentModelProvider === 'groq' && Boolean(groqApiKey);
     const shouldUseMockRun = snapshot.currentModelProvider === 'mock';
-    const runId = snapshot.streamRunId + 1;
+    const streamRunId = snapshot.streamRunId + 1;
+    const runId = shouldUseMockRun ? createRunId('mock_run') : undefined;
     const now = Date.now();
     const nextMessages: WorkbenchMessage[] = [
       createWorkbenchMessage({
@@ -119,12 +120,14 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         kind: 'normal',
         content: trimmedPrompt,
         createdAt: now,
+        runId,
       }),
       createWorkbenchMessage({
         role: 'assistant',
         kind: 'normal',
         content: '',
         createdAt: now + 1,
+        runId,
       }),
     ];
     const assistantMessageId = nextMessages[1].id;
@@ -168,7 +171,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         sessions: nextSessions,
         currentPrompt: trimmedPrompt,
         activeAssistantMessageId: assistantMessageId,
-        streamRunId: runId,
+        streamRunId,
         generationStatus: 'streaming',
         errorMessage: undefined,
         realModelNotice: '',
@@ -187,12 +190,16 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         },
       };
     });
-    if (shouldUseMockRun) {
-      const runStartedEvent = createMockRunStartedEvent(trimmedPrompt);
+    if (shouldUseMockRun && runId) {
+      const runStartedEvent = createMockRunStartedEvent({
+        runId,
+        prompt: trimmedPrompt,
+        sessionId: snapshot.currentSessionId,
+      });
       get().applyRunEvent(runStartedEvent);
     }
 
-    void get().runAgentStepsPreview(runId);
+    void get().runAgentStepsPreview(streamRunId);
 
     const streamMockReplyForRun = async () => {
       const result = await streamText(
@@ -200,7 +207,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         (content) => {
           const current = get();
 
-          if (current.streamRunId !== runId) {
+          if (current.streamRunId !== streamRunId) {
             return;
           }
 
@@ -227,14 +234,14 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           interval: 24,
           shouldStop: () => {
             const current = get();
-            return current.streamRunId !== runId || current.generationStatus !== 'streaming';
+            return current.streamRunId !== streamRunId || current.generationStatus !== 'streaming';
           },
         }
       );
 
       const current = get();
 
-      if (current.streamRunId !== runId) {
+      if (current.streamRunId !== streamRunId) {
         return;
       }
 
@@ -289,7 +296,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         onChunk: (chunk) => {
           const current = get();
 
-          if (current.streamRunId !== runId || current.generationStatus !== 'streaming') {
+          if (current.streamRunId !== streamRunId || current.generationStatus !== 'streaming') {
             return;
           }
 
@@ -316,7 +323,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       });
       const current = get();
 
-      if (current.streamRunId !== runId || current.generationStatus !== 'streaming') {
+      if (current.streamRunId !== streamRunId || current.generationStatus !== 'streaming') {
         return;
       }
 
@@ -342,7 +349,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     } catch {
       const current = get();
 
-      if (current.streamRunId !== runId || current.generationStatus !== 'streaming') {
+      if (current.streamRunId !== streamRunId || current.generationStatus !== 'streaming') {
         return;
       }
 

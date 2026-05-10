@@ -7,6 +7,7 @@ import {
   createInitialAgentSteps,
   createWorkbenchMessage,
   createSessionTitle,
+  getSessionLatestRun,
   initialWorkbenchState,
   persistWorkbenchSessions,
   sortSessionsByUpdatedAt,
@@ -85,6 +86,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       const userMessage = [...nextSession.messages].reverse().find((message) => message.role === 'user');
       const assistantMessage = [...nextSession.messages].reverse().find((message) => message.role === 'assistant');
       const hasAssistantReply = Boolean(assistantMessage?.content?.trim());
+      const restoredRun = getSessionLatestRun(nextSession);
 
       return {
         currentSessionId: nextSession.id,
@@ -109,7 +111,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         showAnalyticsResult: hasAssistantReply,
         agentSteps: hasAssistantReply ? mockAgentSteps.map((step) => ({ ...step })) : createInitialAgentSteps(),
         currentAgentRun: null,
-        currentRun: null,
+        currentRun: restoredRun,
         runEventLog: [],
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,
@@ -121,8 +123,15 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     });
   },
   setCurrentSessionId: (sessionId) => {
+    const nextSession = get().sessions.find((session) => session.id === sessionId);
+    const restoredRun = getSessionLatestRun(nextSession);
+
     persistWorkbenchSessions(get().sessions, sessionId);
-    set({ currentSessionId: sessionId });
+    set({
+      currentSessionId: sessionId,
+      currentRun: restoredRun,
+      runEventLog: [],
+    });
   },
   setCurrentTaskId: (taskId) => {
     set({ currentTaskId: taskId });
@@ -289,6 +298,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         .reverse()
         .find((message) => message.role === 'assistant');
       const hasAssistantReply = Boolean(assistantMessage?.content?.trim());
+      const restoredRun = getSessionLatestRun(nextSession);
 
       if (nextSession) {
         persistWorkbenchSessions(currentState.sessions, nextSession.id);
@@ -317,7 +327,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         showAnalyticsResult: hasAssistantReply,
         agentSteps: hasAssistantReply ? mockAgentSteps.map((step) => ({ ...step })) : createInitialAgentSteps(),
         currentAgentRun: null,
-        currentRun: null,
+        currentRun: restoredRun,
         runEventLog: [],
         agentRunStatus: 'idle',
         agentRunErrorMessage: null,

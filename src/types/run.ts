@@ -72,6 +72,7 @@ export interface RunPlanSnapshot {
 
 export interface RunSnapshot {
   id: string;
+  sessionId?: string;
   mode: RunMode;
   status: RunStatus;
   intent: RunIntent;

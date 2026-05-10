@@ -69,6 +69,7 @@ export async function streamAgentRunAnalysis(params: {
   prompt: string;
   provider: DataSourceTestableProviderId;
   apiKey?: string;
+  clientRunId?: string;
   signal?: AbortSignal;
   onEvent: (event: RunEvent) => void;
 }): Promise<void> {
@@ -82,6 +83,7 @@ export async function streamAgentRunAnalysis(params: {
       provider: params.provider,
       modelProvider: 'groq',
       apiKey: params.apiKey,
+      clientRunId: params.clientRunId,
     }),
     signal: params.signal,
   });

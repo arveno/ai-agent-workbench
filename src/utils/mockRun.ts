@@ -14,7 +14,6 @@ import type {
   RunToolStartedEvent,
 } from '@/types/run';
 import { createMockRagSources } from './ragSources';
-import { createRunId } from './run';
 
 export const MOCK_RUN_STEP_IDS = {
   understandPrompt: 'understand_prompt',
@@ -40,17 +39,22 @@ const MOCK_RUN_STEPS = [
   { id: MOCK_RUN_STEP_IDS.generateConclusion, title: '生成最终结论' },
 ] as const;
 
-export function createMockRunStartedEvent(prompt: string): RunStartedEvent {
+export function createMockRunStartedEvent(params: {
+  runId: string;
+  prompt: string;
+  sessionId?: string;
+}): RunStartedEvent {
   const timestamp = new Date().toISOString();
 
   return {
     type: 'run_started',
     run: {
-      id: createRunId('mock_run'),
+      id: params.runId,
+      sessionId: params.sessionId,
       mode: 'mock',
       status: 'running',
       intent: 'data_analysis',
-      prompt,
+      prompt: params.prompt,
       plan: {
         intent: 'data_analysis',
         shouldUseDataAnalysis: true,
