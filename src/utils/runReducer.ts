@@ -175,10 +175,33 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
   }
 
   if (event.type === 'run_stopped') {
-    return withUpdatedAt({
-      ...currentRun,
-      status: 'stopped',
-    });
+    const stoppedAt = nowIso();
+
+    return withUpdatedAt(
+      {
+        ...currentRun,
+        status: 'stopped',
+        steps: currentRun.steps.map((step) =>
+          step.status === 'running'
+            ? {
+                ...step,
+                status: 'stopped',
+                completedAt: stoppedAt,
+              }
+            : step,
+        ),
+        toolInvocations: currentRun.toolInvocations.map((tool) =>
+          tool.status === 'running'
+            ? {
+                ...tool,
+                status: 'stopped',
+                completedAt: stoppedAt,
+              }
+            : tool,
+        ),
+      },
+      stoppedAt,
+    );
   }
 
   return currentRun;

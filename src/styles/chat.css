@@ -379,6 +379,11 @@
   color: #b91c1c;
 }
 
+.agent-tool-summary-status-stopped {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
 .agent-tool-summary-elapsed {
   color: #64748b;
 }

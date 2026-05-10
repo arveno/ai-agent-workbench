@@ -89,6 +89,10 @@ function getStatusLabel(status: RunToolInvocation['status']): string {
     return '已跳过';
   }
 
+  if (status === 'stopped') {
+    return '已停止';
+  }
+
   return '异常';
 }
 
@@ -197,6 +201,10 @@ function formatInputText(toolId: KnownToolId | null, invocation: RunToolInvocati
 function formatOutputText(toolId: KnownToolId | null, invocation: RunToolInvocation): string {
   if (invocation.status === 'error') {
     return '工具执行异常。';
+  }
+
+  if (invocation.status === 'stopped') {
+    return '工具执行已停止。';
   }
 
   const outputText = invocation.outputSummary.trim();

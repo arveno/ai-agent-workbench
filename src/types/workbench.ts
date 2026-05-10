@@ -382,7 +382,7 @@ export interface UiSlice {
   isWorkflowModalOpen: boolean;
   chatDraft: string;
   currentAgentRun: AgentRunResult | null;
-  agentRunStatus: 'idle' | 'running' | 'success' | 'error';
+  agentRunStatus: 'idle' | 'running' | 'success' | 'error' | 'stopped';
   agentRunErrorMessage: string | null;
   activeAgentRunRequestId: string | null;
   activeAgentRunAbortController: AbortController | null;

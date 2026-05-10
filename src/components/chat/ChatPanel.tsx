@@ -198,7 +198,13 @@ export function ChatPanel() {
                         </div>
                         <div className="agent-tool-summary-meta">
                           <span
-                            className={`agent-tool-summary-status${item.statusLabel === '异常' ? ' agent-tool-summary-status-error' : ''}`}
+                            className={[
+                              'agent-tool-summary-status',
+                              item.statusLabel === '异常' ? 'agent-tool-summary-status-error' : '',
+                              item.statusLabel === '已停止' ? 'agent-tool-summary-status-stopped' : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
                           >
                             {item.statusLabel}
                           </span>

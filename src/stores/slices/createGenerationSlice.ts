@@ -561,15 +561,40 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
   stopGenerating: () => {
     const currentRun = get().currentRun;
     const shouldStopMockRun = currentRun?.mode === 'mock' && currentRun.status === 'running';
+    const shouldStopAgentRun = currentRun?.mode === 'agent' && currentRun.status === 'running';
+    const agentAbortController = get().activeAgentRunAbortController;
+    const shouldStopAgentRequest = Boolean(agentAbortController) || get().agentRunStatus === 'running';
+    const partialAgentConclusion =
+      shouldStopAgentRun && currentRun.conclusion.trim()
+        ? `${currentRun.conclusion.trim()}\n\n> 已停止生成。`
+        : '';
+
+    agentAbortController?.abort();
+
+    if (shouldStopAgentRun) {
+      get().applyRunEvent({
+        type: 'run_stopped',
+        runId: currentRun.id,
+      });
+    }
+
+    if (partialAgentConclusion) {
+      get().appendAssistantMessageToCurrentSession(partialAgentConclusion);
+    }
 
     set((state) => ({
       streamRunId: state.streamRunId + 1,
       generationStatus: 'stopped',
+      agentRunStatus: shouldStopAgentRequest ? 'stopped' : state.agentRunStatus,
+      agentRunErrorMessage: shouldStopAgentRequest ? null : state.agentRunErrorMessage,
+      activeAgentRunRequestId: shouldStopAgentRequest ? null : state.activeAgentRunRequestId,
+      activeAgentRunAbortController: shouldStopAgentRequest ? null : state.activeAgentRunAbortController,
       assistantStream: {
         ...state.assistantStream,
         status: state.assistantStream.status === 'streaming' ? 'stopped' : state.assistantStream.status,
       },
       agentSteps: state.agentSteps.map((step) => (step.status === 'running' ? { ...step, status: 'error' } : step)),
+      confirmStatus: shouldStopAgentRequest ? 'cancelled' : state.confirmStatus,
     }));
 
     if (shouldStopMockRun) {

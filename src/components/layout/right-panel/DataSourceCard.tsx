@@ -33,7 +33,19 @@ export function DataSourceCard() {
       { label: '表数量', value: typeof dataSource?.tableCount === 'number' ? String(dataSource.tableCount) : '-' },
     ];
     const statusText =
-      unifiedRun.mode === 'mock' ? 'Mock' : unifiedRun.status === 'running' ? '运行中' : unifiedRun.status;
+      unifiedRun.mode === 'mock'
+        ? 'Mock'
+        : unifiedRun.status === 'running'
+          ? '运行中'
+          : unifiedRun.status === 'stopped'
+            ? '已停止'
+            : unifiedRun.status;
+    const statusClass =
+      unifiedRun.status === 'running'
+        ? 'status-badge-active'
+        : unifiedRun.status === 'stopped'
+          ? 'status-badge-stopped'
+          : 'status-badge-success';
 
     return (
       <section className="right-card right-section">
@@ -59,7 +71,7 @@ export function DataSourceCard() {
                 </div>
               </div>
             </div>
-            <span className={`status-badge ${unifiedRun.status === 'running' ? 'status-badge-active' : 'status-badge-success'}`}>
+            <span className={`status-badge ${statusClass}`}>
               {statusText}
             </span>
           </div>

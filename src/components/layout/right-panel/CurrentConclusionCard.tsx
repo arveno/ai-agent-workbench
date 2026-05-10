@@ -31,7 +31,12 @@ export function CurrentConclusionCard() {
     const conclusionText =
       unifiedRun.status === 'error'
         ? `Agent Run 执行失败：${unifiedRun.errorMessage ?? agentRunErrorMessage ?? '未知错误'}`
-        : unifiedRun.conclusion || (unifiedRun.status === 'running' ? '正在生成结论...' : '暂无结论');
+        : unifiedRun.conclusion ||
+          (unifiedRun.status === 'running'
+            ? '正在生成结论...'
+            : unifiedRun.status === 'stopped'
+              ? '本轮生成已停止。'
+              : '暂无结论');
     const updatedText = `更新时间：${new Date(unifiedRun.updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
 
     return (
@@ -48,6 +53,9 @@ export function CurrentConclusionCard() {
         ) : null}
         {unifiedRun.conclusionSource === 'model' ? <div className="conclusion-source-badge">Groq 生成</div> : null}
         {unifiedRun.conclusionSource === 'mock' ? <div className="conclusion-source-badge">Mock 生成</div> : null}
+        {unifiedRun.status === 'stopped' ? (
+          <div className="conclusion-source-badge conclusion-source-badge-unsupported">本轮生成已停止</div>
+        ) : null}
         {isFallbackConclusion ? (
           <div className="conclusion-fallback-notice">
             {unifiedRun.conclusionNotice ?? '未配置模型 Key，已使用本地工具摘要兜底。'}

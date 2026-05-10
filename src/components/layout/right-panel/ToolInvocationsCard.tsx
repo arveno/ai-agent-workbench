@@ -19,6 +19,10 @@ function getToolStatusClass(status: string): string {
     return 'status-badge-error';
   }
 
+  if (status === 'stopped') {
+    return 'status-badge-stopped';
+  }
+
   return 'status-badge-muted';
 }
 

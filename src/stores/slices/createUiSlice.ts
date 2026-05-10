@@ -28,7 +28,16 @@ function createAgentRunRequestId(): string {
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name?: unknown }).name === 'AbortError'
+  );
 }
 
 export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set, get) => ({
@@ -93,6 +102,13 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     let finalConclusionNotice: string | undefined;
     let hasFailed = false;
     let hasAppendedFinalMessage = false;
+
+    if (state.currentRun?.mode === 'agent' && state.currentRun.status === 'running') {
+      get().applyRunEvent({
+        type: 'run_stopped',
+        runId: state.currentRun.id,
+      });
+    }
 
     previousAbortController?.abort();
 
@@ -200,12 +216,29 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         activeAgentRunRequestId: null,
         activeAgentRunAbortController: null,
       });
-    } catch {
+    } catch (error) {
       if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
         return;
       }
 
-      if (isAbortError(abortController.signal.reason)) {
+      if (isAbortError(error)) {
+        const activeRun = get().currentRun;
+
+        if (activeRun?.mode === 'agent' && activeRun.status === 'running') {
+          get().applyRunEvent({
+            type: 'run_stopped',
+            runId: activeRun.id,
+          });
+        }
+
+        set({
+          agentRunStatus: 'stopped',
+          agentRunErrorMessage: null,
+          generationStatus: 'stopped',
+          confirmStatus: 'cancelled',
+          activeAgentRunRequestId: null,
+          activeAgentRunAbortController: null,
+        });
         return;
       }
 

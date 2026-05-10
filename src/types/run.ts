@@ -4,9 +4,9 @@ export type RunIntent = 'capability_intro' | 'data_analysis' | 'unsupported' | '
 
 export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
 
-export type RunStepStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped';
+export type RunStepStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
 
-export type RunToolStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped';
+export type RunToolStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
 
 export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
 

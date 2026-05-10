@@ -15,15 +15,19 @@ export function ChatInput() {
   const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
-  const isStreaming = currentModelProvider === 'mock' && generationStatus === 'streaming';
-  const isAgentRunning = currentModelProvider === 'groq' && agentRunStatus === 'running';
+  const isMockGenerating = currentModelProvider === 'mock' && generationStatus === 'streaming';
+  const isAgentRunning =
+    currentModelProvider === 'groq' &&
+    (agentRunStatus === 'running' || (currentRun?.mode === 'agent' && currentRun.status === 'running'));
+  const isGenerating = isMockGenerating || isAgentRunning;
   const trimmedValue = chatDraft.trim();
   const isEmpty = trimmedValue.length === 0;
-  const sendDisabled = isEmpty || isAgentRunning;
+  const sendDisabled = isEmpty;
 
   const handleSend = () => {
-    if (isStreaming || sendDisabled) {
+    if (isGenerating || sendDisabled) {
       return;
     }
 
@@ -31,7 +35,7 @@ export function ChatInput() {
   };
 
   const handlePrimaryAction = () => {
-    if (isStreaming) {
+    if (isGenerating) {
       stopGenerating();
       return;
     }
@@ -99,14 +103,14 @@ export function ChatInput() {
             type="button"
             className={[
               'composer-action-button',
-              isStreaming ? 'composer-stop-button' : 'composer-send-button',
+              isGenerating ? 'composer-stop-button' : 'composer-send-button',
             ].join(' ')}
             onClick={handlePrimaryAction}
-            disabled={!isStreaming && sendDisabled}
-            aria-label={isStreaming ? '停止生成' : '发送'}
-            title={isStreaming ? '停止生成' : isAgentRunning ? '运行中...' : '发送'}
+            disabled={!isGenerating && sendDisabled}
+            aria-label={isGenerating ? '停止生成' : '发送'}
+            title={isGenerating ? '停止生成' : '发送'}
           >
-            <AppIcon icon={isStreaming ? icons.stop : icons.send} size={16} />
+            <AppIcon icon={isGenerating ? icons.stop : icons.send} size={16} />
           </button>
         </div>
       </div>

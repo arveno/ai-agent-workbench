@@ -99,6 +99,10 @@
   color: #dc2626;
 }
 
+.step-icon-stopped {
+  color: #f97316;
+}
+
 .step-label {
   color: #334155;
   font-size: 13px;
@@ -139,6 +143,11 @@
 .agent-step.error .step-label,
 .agent-step.error .step-status {
   color: #dc2626;
+}
+
+.agent-step.stopped .step-label,
+.agent-step.stopped .step-status {
+  color: #c2410c;
 }
 
 .right-card-head {
@@ -450,6 +459,11 @@
 .status-badge-muted {
   background: #f1f5f9;
   color: #64748b;
+}
+
+.status-badge-stopped {
+  background: #ffedd5;
+  color: #c2410c;
 }
 
 .conclusion-card {

@@ -27,6 +27,8 @@ function getStepClass(status: DisplayedStepStatus): string {
       return 'error';
     case 'skipped':
       return 'pending';
+    case 'stopped':
+      return 'stopped';
     default:
       return 'pending';
   }
@@ -44,6 +46,8 @@ function getStepStatusText(status: DisplayedStepStatus): string {
       return '已中断';
     case 'skipped':
       return '已跳过';
+    case 'stopped':
+      return '已停止';
     default:
       return '待执行';
   }
@@ -60,6 +64,8 @@ function getStepIcon(status: DisplayedStepStatus): IconKey {
     case 'error':
       return 'alert';
     case 'skipped':
+      return 'stepPending';
+    case 'stopped':
       return 'stepPending';
     default:
       return 'stepPending';
