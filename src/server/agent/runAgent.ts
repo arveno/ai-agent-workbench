@@ -11,7 +11,11 @@ import { planAgentRun } from './planner';
 import { buildConclusionMessages, buildFallbackConclusion } from './prompt';
 import type {
   AgentConclusionSource,
+  AgentPlanComparison,
   AgentPlan,
+  AgentPlanGroupBy,
+  AgentPlanMetric,
+  AgentPlanTimeRange,
   AgentRunRequest,
   AgentRunResult,
   AgentRunStatus,
@@ -120,6 +124,73 @@ function setStep(
   if (options?.elapsedMs !== undefined) {
     step.elapsedMs = options.elapsedMs;
   }
+}
+
+function getMetricLabel(metric: AgentPlanMetric): string {
+  const metricLabelMap: Record<AgentPlanMetric, string> = {
+    avg_score: '平均分',
+    attendance_rate: '出勤率',
+    homework_completion_rate: '作业完成率',
+    abnormal_count: '异常指标',
+  };
+
+  return metricLabelMap[metric];
+}
+
+function getPlanTimeRange(plan: AgentPlan): AgentPlanTimeRange {
+  return plan.timeRange ?? { type: 'none' };
+}
+
+function getPlanComparison(plan: AgentPlan): AgentPlanComparison {
+  return plan.comparison ?? 'none';
+}
+
+function getTimeRangeLabel(timeRange: AgentPlanTimeRange): string {
+  if (timeRange.type === 'month' || timeRange.type === 'latest_available_month') {
+    return timeRange.label;
+  }
+
+  return '未指定';
+}
+
+function getEffectiveGroupBy(plan: AgentPlan, requestedGroupBy: AgentPlanGroupBy): AgentPlanGroupBy {
+  const timeRange = getPlanTimeRange(plan);
+
+  if (getPlanComparison(plan) === 'previous_month' && timeRange.type === 'month') {
+    return 'metric_month';
+  }
+
+  return requestedGroupBy;
+}
+
+function buildChartTitle(params: {
+  metric: AgentPlanMetric;
+  groupBy: AgentPlanGroupBy;
+  timeRange: AgentPlanTimeRange;
+  comparison: AgentPlanComparison;
+}): string {
+  const metricLabel = getMetricLabel(params.metric);
+  const timeRangeLabel = getTimeRangeLabel(params.timeRange);
+  const timePrefix = timeRangeLabel === '未指定' ? '' : timeRangeLabel;
+  const comparisonText = params.comparison === 'previous_month' && timePrefix ? '及上月' : '';
+  const suffix = params.groupBy === 'metric_month' ? '趋势分析' : '分布分析';
+
+  return `${timePrefix}${comparisonText}${metricLabel}${suffix}` || `${metricLabel}${suffix}`;
+}
+
+function buildAggregateOutputSummary(params: {
+  rowCount: number;
+  timeRangeLabel: string;
+}): string {
+  if (params.rowCount === 0) {
+    return params.timeRangeLabel === '未指定'
+      ? '未找到可聚合的数据。'
+      : `在 ${params.timeRangeLabel} 时间范围内未找到可聚合的数据。`;
+  }
+
+  return params.timeRangeLabel === '未指定'
+    ? `返回 ${params.rowCount} 条聚合结果`
+    : `在 ${params.timeRangeLabel} 时间范围内返回 ${params.rowCount} 条聚合结果`;
 }
 
 function buildNonAnalysisResult(params: {
@@ -236,12 +307,16 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
     });
 
     const metric = plan.metric ?? 'abnormal_count';
-    const groupBy = plan.groupBy ?? 'subject';
+    const requestedGroupBy = plan.groupBy ?? 'subject';
+    const groupBy = getEffectiveGroupBy(plan, requestedGroupBy);
+    const timeRange = getPlanTimeRange(plan);
+    const comparison = getPlanComparison(plan);
+    const timeRangeLabel = getTimeRangeLabel(timeRange);
 
     const intentStart = Date.now();
     setStep(steps, 'step_intent', 'running');
     setStep(steps, 'step_intent', 'success', {
-      description: `intent=${plan.intent}, metric=${metric}, groupBy=${groupBy}`,
+      description: `intent=${plan.intent}, metric=${metric}, groupBy=${groupBy}, timeRange=${timeRangeLabel}, comparison=${comparison}`,
       elapsedMs: Date.now() - intentStart,
     });
 
@@ -274,9 +349,16 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       metric,
       groupBy,
       limit: 20,
+      timeRange,
+      comparison,
     };
 
     aggregateResult = await serverToolRegistry.aggregate_table.execute(aggregateInput, context);
+    const aggregateTimeRangeLabel = aggregateResult.timeRangeLabel ?? timeRangeLabel;
+    const aggregateOutputSummary = buildAggregateOutputSummary({
+      rowCount: aggregateResult.rowCount,
+      timeRangeLabel: aggregateTimeRangeLabel,
+    });
 
     toolInvocations.push({
       id: createToolInvocationId(),
@@ -284,20 +366,82 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       toolName: serverToolRegistry.aggregate_table.name,
       status: 'success',
       inputSummary: stringifySummary(aggregateInput),
-      outputSummary: `返回 ${aggregateResult.rowCount} 条聚合结果`,
+      outputSummary: aggregateOutputSummary,
       elapsedMs: Date.now() - aggregateStart,
     });
 
     setStep(steps, 'step_aggregate', 'success', {
-      description: `聚合结果条数=${aggregateResult.rowCount}`,
+      description: `${aggregateOutputSummary}，metric=${metric}，groupBy=${groupBy}`,
       elapsedMs: Date.now() - aggregateStart,
     });
+
+    if (aggregateResult.rowCount === 0) {
+      const conclusionStart = Date.now();
+      setStep(steps, 'step_chart', 'success', {
+        description: '指定时间范围内无聚合结果，未生成图表数据。',
+        elapsedMs: 0,
+      });
+      setStep(steps, 'step_conclusion', 'running');
+
+      const emptyChartResult: ChartRenderOutput = {
+        title: buildChartTitle({
+          metric,
+          groupBy,
+          timeRange,
+          comparison,
+        }),
+        chartType: 'bar',
+        labels: [],
+        values: [],
+        summary: aggregateOutputSummary,
+      };
+      const conclusion = buildFallbackConclusion({
+        intent: {
+          metric,
+          groupBy,
+          timeRange,
+          comparison,
+        },
+        chartResult: emptyChartResult,
+      });
+
+      setStep(steps, 'step_conclusion', 'success', {
+        description: '指定时间范围内无数据，已生成数据不足说明。',
+        elapsedMs: Date.now() - conclusionStart,
+      });
+
+      return {
+        id: runId,
+        status: 'success',
+        prompt: request.prompt,
+        provider: request.provider,
+        plan: {
+          ...plan,
+          metric,
+          groupBy,
+          timeRange,
+          comparison,
+        },
+        steps,
+        toolInvocations,
+        conclusion,
+        conclusionSource: 'fallback',
+        conclusionNotice: '指定时间范围内未找到可聚合的数据，当前结论由本地工具结果摘要生成。',
+        createdAt,
+        elapsedMs: Date.now() - runStart,
+      };
+    }
 
     const chartStart = Date.now();
     setStep(steps, 'step_chart', 'running');
 
     const chartInput: ChartRenderInput = {
-      title: groupBy === 'metric_month' ? '按月份趋势分析' : '按学科分布分析',
+      title: buildChartTitle({
+        metric,
+        groupBy,
+        timeRange,
+        comparison,
+      }),
       chartType: 'bar',
       labelKey: 'dimension',
       valueKey: 'value',
@@ -339,6 +483,8 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
         intent: {
           metric,
           groupBy,
+          timeRange,
+          comparison,
         },
         chartResult,
       });
@@ -356,6 +502,8 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
           intent: {
             metric,
             groupBy,
+            timeRange,
+            comparison,
           },
           schemaResult,
           aggregateResult,
@@ -378,6 +526,8 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
           intent: {
             metric,
             groupBy,
+            timeRange,
+            comparison,
           },
           chartResult,
         });
@@ -398,7 +548,13 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       status,
       prompt: request.prompt,
       provider: request.provider,
-      plan,
+      plan: {
+        ...plan,
+        metric,
+        groupBy,
+        timeRange,
+        comparison,
+      },
       steps,
       toolInvocations,
       chartData: {

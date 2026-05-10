@@ -2,6 +2,7 @@
 
 import type { QueryResultRow } from 'pg';
 import { createPostgresPool, getConnectionStringByProvider } from '../datasources/connection';
+import type { AgentPlanComparison, AgentPlanTimeRange } from '../agent/types';
 import type { ServerToolDefinition, ToolCellValue, ToolRow } from './types';
 
 const METRIC_WHITELIST = [
@@ -23,13 +24,18 @@ export interface AggregateTableInput {
   metric: AggregateMetric;
   groupBy?: AggregateGroupBy;
   limit?: number;
+  timeRange?: AgentPlanTimeRange;
+  comparison?: AgentPlanComparison;
 }
 
 export interface AggregateTableOutput {
   rows: ToolRow[];
   rowCount: number;
   elapsedMs: number;
+  timeRangeLabel?: string;
 }
+
+type SqlParam = string | number;
 
 function normalizeLimit(limit?: number): number {
   if (!limit || Number.isNaN(limit)) {
@@ -87,19 +93,94 @@ function isGroupByAllowed(groupBy: string): groupBy is AggregateGroupBy {
   return (GROUP_BY_WHITELIST as readonly string[]).includes(groupBy);
 }
 
-function buildAggregateSql(input: AggregateTableInput, limit: number): { sql: string; values: number[] } {
+function getNextMonth(month: string): string {
+  if (!/^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new Error('不允许的时间范围');
+  }
+
+  const [yearValue, monthValue] = month.split('-').map((value) => Number.parseInt(value, 10));
+  const date = new Date(Date.UTC(yearValue, monthValue - 1, 1));
+  date.setUTCMonth(date.getUTCMonth() + 1);
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function getPreviousMonth(month: string): string {
+  if (!/^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new Error('不允许的时间范围');
+  }
+
+  const [yearValue, monthValue] = month.split('-').map((value) => Number.parseInt(value, 10));
+  const date = new Date(Date.UTC(yearValue, monthValue - 1, 1));
+  date.setUTCMonth(date.getUTCMonth() - 1);
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function getTimeRangeLabel(input: AggregateTableInput): string | undefined {
+  if (input.timeRange?.type === 'month') {
+    if (input.comparison === 'previous_month') {
+      return `${input.timeRange.label}及上月`;
+    }
+
+    return input.timeRange.label;
+  }
+
+  if (input.timeRange?.type === 'latest_available_month') {
+    return input.timeRange.label;
+  }
+
+  return undefined;
+}
+
+function buildTimeWhereClause(input: AggregateTableInput, values: SqlParam[]): string {
+  if (input.timeRange?.type === 'month') {
+    const startMonth = input.comparison === 'previous_month'
+      ? getPreviousMonth(input.timeRange.month)
+      : input.timeRange.month;
+    const endMonth = getNextMonth(input.timeRange.month);
+    const startParamIndex = values.length + 1;
+
+    values.push(`${startMonth}-01`);
+    const endParamIndex = values.length + 1;
+    values.push(`${endMonth}-01`);
+
+    return `where metric_month >= $${startParamIndex}::date and metric_month < $${endParamIndex}::date`;
+  }
+
+  if (input.timeRange?.type === 'latest_available_month') {
+    return 'where metric_month = (select max(metric_month) from "teaching_metrics")';
+  }
+
+  return '';
+}
+
+function getMetricAggregateExpression(metric: AggregateMetric): string {
+  if (metric === 'abnormal_count') {
+    return `sum("${metric}")::double precision`;
+  }
+
+  return `avg("${metric}")::double precision`;
+}
+
+function buildAggregateSql(input: AggregateTableInput, limit: number): { sql: string; values: SqlParam[] } {
   if (!isMetricAllowed(input.metric)) {
     throw new Error('不允许的聚合指标');
   }
+
+  const values: SqlParam[] = [];
+  const whereClause = buildTimeWhereClause(input, values);
+  const aggregateExpression = getMetricAggregateExpression(input.metric);
 
   if (!input.groupBy) {
     return {
       sql: `
         select
-          avg("${input.metric}")::double precision as value
+          ${aggregateExpression} as value
         from "teaching_metrics"
+        ${whereClause}
       `,
-      values: [],
+      values,
     };
   }
 
@@ -107,17 +188,21 @@ function buildAggregateSql(input: AggregateTableInput, limit: number): { sql: st
     throw new Error('不允许的分组维度');
   }
 
+  values.push(limit);
+  const limitParamIndex = values.length;
+
   return {
     sql: `
       select
         "${input.groupBy}" as dimension,
-        avg("${input.metric}")::double precision as value
+        ${aggregateExpression} as value
       from "teaching_metrics"
+      ${whereClause}
       group by "${input.groupBy}"
       order by value desc nulls last
-      limit $1
+      limit $${limitParamIndex}
     `,
-    values: [limit],
+    values,
   };
 }
 
@@ -154,6 +239,7 @@ export const aggregateTableTool: ServerToolDefinition<AggregateTableInput, Aggre
         rows: sanitizeRows(result.rows),
         rowCount: result.rowCount ?? result.rows.length,
         elapsedMs: Date.now() - startTime,
+        timeRangeLabel: getTimeRangeLabel(input),
       };
     } finally {
       await pool.end().catch(() => undefined);

@@ -3,11 +3,13 @@
 import type { SchemaInspectOutput } from '../tools/schemaInspectTool';
 import type { AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderOutput } from '../tools/chartRenderTool';
-import type { AgentPlanGroupBy, AgentPlanMetric } from './types';
+import type { AgentPlanComparison, AgentPlanGroupBy, AgentPlanMetric, AgentPlanTimeRange } from './types';
 
 interface DataAnalysisPlanFields {
   metric: AgentPlanMetric;
   groupBy: AgentPlanGroupBy;
+  timeRange?: AgentPlanTimeRange;
+  comparison?: AgentPlanComparison;
 }
 
 interface AgentPromptContext {
@@ -32,9 +34,17 @@ function summarizeAggregate(result: AggregateTableOutput): string {
   return `rowCount=${result.rowCount}\nrows:\n${preview || '[]'}`;
 }
 
+function getTimeRangeLabel(intent: DataAnalysisPlanFields): string {
+  if (intent.timeRange?.type === 'month' || intent.timeRange?.type === 'latest_available_month') {
+    return intent.timeRange.label;
+  }
+
+  return '未指定';
+}
+
 export function buildConclusionMessages(context: AgentPromptContext): Array<{ role: 'system' | 'user'; content: string }> {
   const systemMessage =
-    '你是一个教育数据分析助手。请基于工具结果输出简洁、可信的分析结论，不要编造工具结果中没有的数据。若数据不足请明确说明。';
+    '你是一个教育数据分析助手。请基于工具结果输出简洁、可信的分析结论，不要编造工具结果中没有的数据。若数据不足请明确说明。不能引用工具结果以外的月份或指标代替。';
 
   const userMessage = [
     '【用户问题】',
@@ -42,6 +52,7 @@ export function buildConclusionMessages(context: AgentPromptContext): Array<{ ro
     '',
     '【意图识别】',
     `metric=${context.intent.metric}, groupBy=${context.intent.groupBy}`,
+    `timeRange=${getTimeRangeLabel(context.intent)}, comparison=${context.intent.comparison ?? 'none'}`,
     '',
     '【Schema 摘要】',
     summarizeSchema(context.schemaResult),
@@ -51,6 +62,13 @@ export function buildConclusionMessages(context: AgentPromptContext): Array<{ ro
     '',
     '【图表摘要】',
     context.chartResult.summary,
+    '',
+    '【约束】',
+    `用户指定的时间范围：${getTimeRangeLabel(context.intent)}`,
+    `分析指标：${context.intent.metric}`,
+    `分组维度：${context.intent.groupBy}`,
+    '请只基于工具结果中符合该时间范围的数据生成结论。',
+    '如果工具结果为空或数据不足，请明确说明，不能引用其他月份的数据代替。',
     '',
     '请输出：',
     '1) 关键发现',
@@ -89,10 +107,19 @@ export function buildFallbackConclusion(params: {
 
   const metricName = metricNameMap[params.intent.metric];
   const groupByName = groupByNameMap[params.intent.groupBy];
+  const timeRangeLabel = getTimeRangeLabel(params.intent);
   const labels = params.chartResult.labels;
   const values = params.chartResult.values;
 
   if (labels.length === 0 || values.length === 0) {
+    if (timeRangeLabel !== '未指定') {
+      return [
+        `当前数据源中未找到符合“${timeRangeLabel}”时间范围的数据，无法完成该时间范围下的分析。`,
+        '本次不会使用其他月份的数据代替该时间范围。',
+        '建议确认数据源是否已同步该月份数据，或调整时间范围后重新分析。',
+      ].join('\n\n');
+    }
+
     return [
       `本次分析已完成 ${metricName} 的工具执行流程，并按${groupByName}维度完成数据聚合。`,
       '已完成数据源读取和工具执行，但当前聚合结果不足以生成明确结论。',
@@ -108,7 +135,7 @@ export function buildFallbackConclusion(params: {
   const topLabels = labels.slice(0, 3).join('、');
 
   return [
-    `本次分析已基于真实数据源完成，并围绕“${metricName}”按${groupByName}维度执行了聚合分析。`,
+    `本次分析已基于真实数据源完成，并围绕“${metricName}”按${groupByName}维度执行了聚合分析${timeRangeLabel !== '未指定' ? `，时间范围为“${timeRangeLabel}”` : ''}。`,
     `从当前聚合结果看，${maxLabel}在该指标上最为突出（约 ${maxValue.toFixed(2)}），建议优先关注该维度并结合班级层级进一步排查。`,
     topLabels
       ? `当前结果主要覆盖：${topLabels}。建议下一步联动平均分、出勤率与作业完成率进行交叉对比，定位异常成因。`

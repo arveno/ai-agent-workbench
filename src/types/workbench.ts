@@ -246,6 +246,14 @@ export interface AgentRunPlanView {
   intent: AgentRunPlanIntent;
   shouldUseDataAnalysis: boolean;
   reason: string;
+  metric?: 'avg_score' | 'attendance_rate' | 'homework_completion_rate' | 'abnormal_count';
+  groupBy?: 'subject' | 'metric_month';
+  timeRange?: {
+    type: 'month' | 'latest_available_month' | 'none';
+    month?: string;
+    label?: string;
+  };
+  comparison?: 'none' | 'previous_month';
 }
 
 export interface AgentRunResult {

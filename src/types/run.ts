@@ -65,6 +65,7 @@ export interface RunPlanSnapshot {
   metric?: string;
   groupBy?: string;
   timeRangeLabel?: string;
+  comparison?: 'none' | 'previous_month';
 }
 
 export interface RunSnapshot {

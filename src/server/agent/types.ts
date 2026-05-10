@@ -13,12 +13,31 @@ export type AgentPlanMetric =
   | 'abnormal_count';
 export type AgentPlanGroupBy = 'subject' | 'metric_month';
 
+export type AgentPlanTimeRange =
+  | {
+      type: 'month';
+      month: string;
+      label: string;
+    }
+  | {
+      type: 'latest_available_month';
+      label: string;
+    }
+  | {
+      type: 'none';
+      label?: string;
+    };
+
+export type AgentPlanComparison = 'none' | 'previous_month';
+
 export interface AgentPlan {
   intent: AgentPlanIntent;
   shouldUseDataAnalysis: boolean;
   reason: string;
   metric?: AgentPlanMetric;
   groupBy?: AgentPlanGroupBy;
+  timeRange?: AgentPlanTimeRange;
+  comparison?: AgentPlanComparison;
 }
 
 export interface AgentRunStep {

@@ -1,7 +1,14 @@
 /// <reference types="node" />
 
 import { ensureServerEnvLoaded } from '../datasources/connection';
-import type { AgentPlan, AgentPlanGroupBy, AgentPlanIntent, AgentPlanMetric } from './types';
+import type {
+  AgentPlan,
+  AgentPlanComparison,
+  AgentPlanGroupBy,
+  AgentPlanIntent,
+  AgentPlanMetric,
+  AgentPlanTimeRange,
+} from './types';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
@@ -36,6 +43,8 @@ const DATA_ANALYSIS_KEYWORDS = [
 ] as const;
 
 const GROUP_BY_TREND_KEYWORDS = ['趋势', '月份', '对比', '上月', '环比'] as const;
+const LATEST_MONTH_KEYWORDS = ['本月', '这个月', '当前月份'] as const;
+const PREVIOUS_MONTH_KEYWORDS = ['上月', '环比', '对比上月', '较上月'] as const;
 
 const PLANNER_SYSTEM_PROMPT = [
   '你是一个教育数据分析工作台的请求分类器。',
@@ -59,14 +68,28 @@ const PLANNER_SYSTEM_PROMPT = [
   '  "shouldUseDataAnalysis": true | false,',
   '  "reason": "简短原因",',
   '  "metric": "avg_score | attendance_rate | homework_completion_rate | abnormal_count",',
-  '  "groupBy": "subject | metric_month"',
+  '  "groupBy": "subject | metric_month",',
+  '  "timeRange": {',
+  '    "type": "month | latest_available_month | none",',
+  '    "month": "YYYY-MM",',
+  '    "label": "例如 2026 年 5 月"',
+  '  },',
+  '  "comparison": "none | previous_month"',
   '}',
   '',
   '规则：',
   '- capability_intro 的 shouldUseDataAnalysis 必须是 false',
   '- unsupported 的 shouldUseDataAnalysis 必须是 false',
   '- data_analysis 的 shouldUseDataAnalysis 必须是 true',
-  '- 如果是 data_analysis，但用户没有指定指标，默认 metric 使用 abnormal_count',
+  '- 如果用户明确提到某年某月，例如“2026 年 5 月”或“2026-05”，必须输出 timeRange.type = "month"，month = "YYYY-MM"',
+  '- 如果用户说“本月”，输出 timeRange.type = "latest_available_month"',
+  '- 如果用户说“上月 / 环比 / 对比上月”，comparison = "previous_month"',
+  '- 如果用户没有提到时间范围，timeRange.type = "none"',
+  '- 如果用户要求“异常指标 / 找出异常 / 异常情况”，metric 必须优先使用 abnormal_count',
+  '- 如果用户明确说“平均分 / 成绩 / 分数”，metric 使用 avg_score',
+  '- 如果用户明确说“出勤 / 出勤率”，metric 使用 attendance_rate',
+  '- 如果用户明确说“作业 / 完成率”，metric 使用 homework_completion_rate',
+  '- 如果是 data_analysis 但指标不明确，默认 metric 使用 abnormal_count',
   '- 如果用户提到趋势、月份、环比、上月、对比，groupBy 使用 metric_month',
   '- 否则 groupBy 使用 subject',
   '',
@@ -85,6 +108,12 @@ const PLAN_METRIC_WHITELIST: readonly AgentPlanMetric[] = [
   'abnormal_count',
 ] as const;
 const PLAN_GROUP_BY_WHITELIST: readonly AgentPlanGroupBy[] = ['subject', 'metric_month'] as const;
+const PLAN_TIME_RANGE_TYPE_WHITELIST: readonly AgentPlanTimeRange['type'][] = [
+  'month',
+  'latest_available_month',
+  'none',
+] as const;
+const PLAN_COMPARISON_WHITELIST: readonly AgentPlanComparison[] = ['none', 'previous_month'] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -110,7 +139,19 @@ function isPlanGroupBy(value: string): value is AgentPlanGroupBy {
   return (PLAN_GROUP_BY_WHITELIST as readonly string[]).includes(value);
 }
 
+function isPlanTimeRangeType(value: string): value is AgentPlanTimeRange['type'] {
+  return (PLAN_TIME_RANGE_TYPE_WHITELIST as readonly string[]).includes(value);
+}
+
+function isPlanComparison(value: string): value is AgentPlanComparison {
+  return (PLAN_COMPARISON_WHITELIST as readonly string[]).includes(value);
+}
+
 function pickMetricFromPrompt(prompt: string): AgentPlanMetric {
+  if (prompt.includes('异常')) {
+    return 'abnormal_count';
+  }
+
   if (prompt.includes('出勤') || prompt.includes('出勤率')) {
     return 'attendance_rate';
   }
@@ -123,15 +164,67 @@ function pickMetricFromPrompt(prompt: string): AgentPlanMetric {
     return 'avg_score';
   }
 
-  if (prompt.includes('异常') || prompt.includes('指标')) {
-    return 'abnormal_count';
-  }
-
   return 'abnormal_count';
 }
 
 function pickGroupByFromPrompt(prompt: string): AgentPlanGroupBy {
   return includesAnyKeyword(prompt, GROUP_BY_TREND_KEYWORDS) ? 'metric_month' : 'subject';
+}
+
+function padMonth(month: number): string {
+  return String(month).padStart(2, '0');
+}
+
+function createMonthLabel(month: string): string {
+  const [year, monthValue] = month.split('-');
+  return `${year} 年 ${Number(monthValue)} 月`;
+}
+
+export function extractExplicitMonth(prompt: string): string | null {
+  const normalizedPrompt = prompt.trim();
+  const cnMatch = normalizedPrompt.match(/(19\d{2}|20\d{2})\s*年\s*(1[0-2]|0?[1-9])\s*月/);
+  const separatorMatch = normalizedPrompt.match(/(19\d{2}|20\d{2})[-/](1[0-2]|0?[1-9])/);
+  const match = cnMatch ?? separatorMatch;
+
+  if (!match) {
+    return null;
+  }
+
+  const year = match[1];
+  const month = Number.parseInt(match[2], 10);
+
+  if (!year || Number.isNaN(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return `${year}-${padMonth(month)}`;
+}
+
+function pickTimeRangeFromPrompt(prompt: string): AgentPlanTimeRange {
+  const explicitMonth = extractExplicitMonth(prompt);
+
+  if (explicitMonth) {
+    return {
+      type: 'month',
+      month: explicitMonth,
+      label: createMonthLabel(explicitMonth),
+    };
+  }
+
+  if (includesAnyKeyword(prompt, LATEST_MONTH_KEYWORDS)) {
+    return {
+      type: 'latest_available_month',
+      label: '最新可用月份',
+    };
+  }
+
+  return {
+    type: 'none',
+  };
+}
+
+function pickComparisonFromPrompt(prompt: string): AgentPlanComparison {
+  return includesAnyKeyword(prompt, PREVIOUS_MONTH_KEYWORDS) ? 'previous_month' : 'none';
 }
 
 export function fallbackPlanAgentRun(prompt: string): AgentPlan {
@@ -156,6 +249,8 @@ export function fallbackPlanAgentRun(prompt: string): AgentPlan {
       reason: '用户在请求教学质量相关的数据分析。',
       metric: pickMetricFromPrompt(normalizedPrompt),
       groupBy: pickGroupByFromPrompt(normalizedPrompt),
+      timeRange: pickTimeRangeFromPrompt(normalizedPrompt),
+      comparison: pickComparisonFromPrompt(normalizedPrompt),
     };
   }
 
@@ -181,6 +276,52 @@ function extractJsonFromContent(content: string): string {
   }
 
   return content.trim();
+}
+
+function isValidMonthValue(value: string): boolean {
+  return /^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(value);
+}
+
+function normalizeTimeRange(raw: unknown, fallback: AgentPlanTimeRange | undefined): AgentPlanTimeRange {
+  const fallbackTimeRange = fallback ?? { type: 'none' };
+
+  if (!isRecord(raw)) {
+    return fallbackTimeRange;
+  }
+
+  const rawType = toTrimmedString(raw.type);
+
+  if (!isPlanTimeRangeType(rawType)) {
+    return fallbackTimeRange;
+  }
+
+  if (rawType === 'month') {
+    const month = toTrimmedString(raw.month);
+
+    if (!isValidMonthValue(month)) {
+      return fallbackTimeRange;
+    }
+
+    const label = toTrimmedString(raw.label) || createMonthLabel(month);
+
+    return {
+      type: 'month',
+      month,
+      label,
+    };
+  }
+
+  if (rawType === 'latest_available_month') {
+    return {
+      type: 'latest_available_month',
+      label: toTrimmedString(raw.label) || '最新可用月份',
+    };
+  }
+
+  return {
+    type: 'none',
+    label: toTrimmedString(raw.label) || undefined,
+  };
 }
 
 function normalizeAgentPlan(raw: unknown, fallback: AgentPlan): AgentPlan {
@@ -211,6 +352,11 @@ function normalizeAgentPlan(raw: unknown, fallback: AgentPlan): AgentPlan {
 
   const rawGroupBy = toTrimmedString(raw.groupBy);
   const groupBy: AgentPlanGroupBy = isPlanGroupBy(rawGroupBy) ? rawGroupBy : fallbackGroupBy;
+  const timeRange = normalizeTimeRange(raw.timeRange, fallback.timeRange);
+  const rawComparison = toTrimmedString(raw.comparison);
+  const comparison: AgentPlanComparison = isPlanComparison(rawComparison)
+    ? rawComparison
+    : fallback.comparison ?? 'none';
 
   return {
     intent,
@@ -218,6 +364,8 @@ function normalizeAgentPlan(raw: unknown, fallback: AgentPlan): AgentPlan {
     reason,
     metric,
     groupBy,
+    timeRange,
+    comparison,
   };
 }
 
@@ -241,7 +389,7 @@ async function callGroqPlanner(params: { apiKey: string; prompt: string }): Prom
         },
       ],
       temperature: 0,
-      max_tokens: 240,
+      max_tokens: 320,
       stream: false,
     }),
   });
