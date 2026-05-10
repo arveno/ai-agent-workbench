@@ -422,7 +422,6 @@ export interface UiSlice {
   isToolLibraryModalOpen: boolean;
   isWorkflowModalOpen: boolean;
   chatDraft: string;
-  currentAgentRun: AgentRunResult | null;
   agentRunStatus: 'idle' | 'running' | 'success' | 'error' | 'stopped';
   agentRunErrorMessage: string | null;
   activeAgentRunRequestId: string | null;
@@ -438,7 +437,6 @@ export interface UiSlice {
   setChatDraft: (value: string) => void;
   clearChatDraft: () => void;
   runCurrentAgentAnalysis: (promptOverride?: string) => Promise<void>;
-  clearCurrentAgentRun: () => void;
 }
 
 export interface RunSlice {

@@ -140,7 +140,17 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
-    get().clearCurrentAgentRun();
+    get().activeAgentRunAbortController?.abort();
+    set({
+      currentRun: null,
+      runEventLog: [],
+      agentRunStatus: 'idle',
+      agentRunErrorMessage: null,
+      activeAgentRunRequestId: null,
+      activeAgentRunAbortController: null,
+      currentReportRunId: null,
+      reportActionState: 'skipped',
+    });
     get().clearChatDraft();
     void get().runPromptWithCurrentModel(trimmedPrompt);
   },

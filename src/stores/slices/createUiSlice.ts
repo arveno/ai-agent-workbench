@@ -46,7 +46,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   isToolLibraryModalOpen: false,
   isWorkflowModalOpen: false,
   chatDraft: '',
-  currentAgentRun: null,
   agentRunStatus: 'idle',
   agentRunErrorMessage: null,
   activeAgentRunRequestId: null,
@@ -126,7 +125,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     set({
       activeAgentRunRequestId: requestId,
       activeAgentRunAbortController: abortController,
-      currentAgentRun: null,
       agentRunStatus: 'running',
       agentRunErrorMessage: null,
       generationStatus: 'streaming',
@@ -293,19 +291,5 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         }
       }
     }
-  },
-  clearCurrentAgentRun: () => {
-    get().activeAgentRunAbortController?.abort();
-    set({
-      currentAgentRun: null,
-      currentRun: null,
-      runEventLog: [],
-      agentRunStatus: 'idle',
-      agentRunErrorMessage: null,
-      activeAgentRunRequestId: null,
-      activeAgentRunAbortController: null,
-      currentReportRunId: null,
-      reportActionState: 'skipped',
-    });
   },
 });
