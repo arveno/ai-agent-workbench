@@ -1,4 +1,23 @@
 ﻿export type SessionId = string;
+export type {
+  RunChartData,
+  RunChartSeries,
+  RunChartType,
+  RunConclusionSource,
+  RunDataSourceSnapshot,
+  RunEvent,
+  RunIntent,
+  RunMode,
+  RunPlanSnapshot,
+  RunReportState,
+  RunSnapshot,
+  RunStatus,
+  RunStep,
+  RunStepStatus,
+  RunToolInvocation,
+  RunToolStatus,
+} from './run';
+
 export type TaskId = string;
 export type ToolCallId = string;
 export type KnowledgeSourceId = string;
