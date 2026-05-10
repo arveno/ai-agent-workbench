@@ -168,4 +168,3 @@ cypress/videos/
 *.tmp
 *.temp
 .vercel
-PROJECT_AUDIT.md
