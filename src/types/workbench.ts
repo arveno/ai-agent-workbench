@@ -2,6 +2,17 @@
 import type { RunEvent, RunSnapshot } from './run';
 
 export type {
+  ChatBlock,
+  ChatBlockType,
+  MessageChatBlock,
+  ReportConfirmChatBlock,
+  RunErrorChatBlock,
+  RunStoppedChatBlock,
+  StreamingAssistantChatBlock,
+  ToolSummaryChatBlock,
+} from './chatBlocks';
+
+export type {
   RunChartData,
   RunChartSeries,
   RunChartType,
