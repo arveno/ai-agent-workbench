@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { WorkflowStepDefinition } from '../../types/workbench';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import { PromptTemplatePanel } from './PromptTemplatePanel';
 import { WorkflowStepCard } from './WorkflowStepCard';
 
 const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
@@ -127,16 +129,33 @@ export function WorkflowModal() {
         </header>
 
         <div className="workflow-modal-body">
-          <div className="workflow-step-list">
-            {WORKFLOW_STEPS.map((step, index) => (
-              <WorkflowStepCard
-                key={step.id}
-                step={step}
-                index={index}
-                isLast={index === WORKFLOW_STEPS.length - 1}
-              />
-            ))}
-          </div>
+          <Tabs defaultValue="flow" className="workflow-tabs">
+            <TabsList className="workflow-tabs-list">
+              <TabsTrigger className="workflow-tabs-trigger" value="flow">
+                执行流程
+              </TabsTrigger>
+              <TabsTrigger className="workflow-tabs-trigger" value="prompts">
+                Prompt 模板
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="flow" className="workflow-tabs-content">
+              <div className="workflow-step-list">
+                {WORKFLOW_STEPS.map((step, index) => (
+                  <WorkflowStepCard
+                    key={step.id}
+                    step={step}
+                    index={index}
+                    isLast={index === WORKFLOW_STEPS.length - 1}
+                  />
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="prompts" className="workflow-tabs-content">
+              <PromptTemplatePanel />
+            </TabsContent>
+          </Tabs>
         </div>
 
         <footer className="workflow-modal-footer">
@@ -148,4 +167,3 @@ export function WorkflowModal() {
     </div>
   );
 }
-
