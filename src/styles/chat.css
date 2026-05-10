@@ -855,3 +855,90 @@
     max-width: 100%;
   }
 }
+
+.message-kind-tag {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.message-kind-tag-report {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.message-status-tag-error {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.run-state-card {
+  margin-left: 42px;
+  max-width: calc(100% - 42px);
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+}
+
+.run-state-card-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+}
+
+.run-state-card-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.run-state-card-badge-error {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.run-state-card-badge-stopped {
+  border-color: #fed7aa;
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.run-error-card {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+}
+
+.run-stopped-card {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+}
+
+.run-state-card-copy {
+  min-width: 0;
+}
+
+.run-state-card-copy h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.run-state-card-copy p {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
