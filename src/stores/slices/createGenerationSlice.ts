@@ -28,7 +28,6 @@ import { createRunId, shouldShowReportConfirm } from '../../utils/run';
 import { streamText } from '../../utils/streamText';
 import {
   createWorkbenchMessage,
-  createInitialAgentSteps,
   createSessionTitle,
   DEFAULT_ASSISTANT_REPLY,
   initialWorkbenchState,
@@ -118,15 +117,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
   errorMessage: undefined,
   realModelNotice: '',
   assistantStream: initialWorkbenchState.assistantStream,
-  agentSteps: initialWorkbenchState.agentSteps,
-  visibleToolCallIds: initialWorkbenchState.visibleToolCallIds,
-  showKnowledgeSources: initialWorkbenchState.showKnowledgeSources,
-  showAnalyticsResult: initialWorkbenchState.showAnalyticsResult,
   confirmStatus: 'waiting',
-  finalMessage: {
-    content: '',
-    status: 'hidden',
-  },
   streamRunId: 0,
   sendPrompt: (prompt) => {
     const trimmedPrompt = prompt.trim();
@@ -271,15 +262,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           content: '',
           status: 'streaming',
         },
-        agentSteps: createInitialAgentSteps(),
-        visibleToolCallIds: [],
-        showKnowledgeSources: false,
-        showAnalyticsResult: false,
         confirmStatus: 'waiting',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
       };
     });
     if (shouldUseMockRun && runId) {
@@ -455,34 +438,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
   setAssistantStream: (assistantStream) => {
     set({ assistantStream });
   },
-  setShowKnowledgeSources: (showKnowledgeSources) => {
-    set({ showKnowledgeSources });
-  },
-  setShowAnalyticsResult: (showAnalyticsResult) => {
-    set({ showAnalyticsResult });
-  },
-  resetAgentSteps: () => {
-    set({ agentSteps: createInitialAgentSteps() });
-  },
-  setAgentStepStatus: (stepId, status) => {
-    set((state) => ({
-      agentSteps: state.agentSteps.map((step) => (step.id === stepId ? { ...step, status } : step)),
-    }));
-  },
-  showToolCall: (toolCallId) => {
-    set((state) => {
-      if (state.visibleToolCallIds.includes(toolCallId)) {
-        return state;
-      }
-
-      return {
-        visibleToolCallIds: [...state.visibleToolCallIds, toolCallId],
-      };
-    });
-  },
-  resetVisibleToolCalls: () => {
-    set({ visibleToolCallIds: [] });
-  },
   runAgentStepsPreview: async (runId) => {
     const isCurrentRun = () => {
       const current = get();
@@ -493,7 +448,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       );
     };
 
-    get().resetAgentSteps();
     const getMockRunId = () => {
       const currentRun = get().currentRun;
       return currentRun?.mode === 'mock' ? currentRun.id : null;
@@ -528,46 +482,32 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     };
 
     startMockStep(MOCK_RUN_STEP_IDS.understandPrompt, '理解用户问题');
-    get().setAgentStepStatus('understand', 'running');
     await delay(160);
     if (!isCurrentRun()) return;
-    get().setAgentStepStatus('understand', 'success');
     completeMockStep(MOCK_RUN_STEP_IDS.understandPrompt, 160);
 
     startMockStep(MOCK_RUN_STEP_IDS.knowledgeSearch, '检索知识资料');
     startMockTool('knowledgeSearch');
-    get().setAgentStepStatus('search', 'running');
     await delay(260);
     if (!isCurrentRun()) return;
-    get().setAgentStepStatus('search', 'success');
     completeMockStep(MOCK_RUN_STEP_IDS.knowledgeSearch, 260);
     if (!isCurrentRun()) return;
-    get().showToolCall('tool_knowledge_search');
     completeMockTool(MOCK_RUN_TOOL_IDS.knowledgeSearch, '找到 3 条相关知识资料', 260);
-    if (!isCurrentRun()) return;
-    get().setShowKnowledgeSources(true);
 
     startMockStep(MOCK_RUN_STEP_IDS.queryData, '查询业务数据');
     startMockTool('queryData');
-    get().setAgentStepStatus('query', 'running');
     await delay(260);
     if (!isCurrentRun()) return;
-    get().setAgentStepStatus('query', 'success');
     completeMockStep(MOCK_RUN_STEP_IDS.queryData, 260);
     if (!isCurrentRun()) return;
-    get().showToolCall('tool_query_data');
     completeMockTool(MOCK_RUN_TOOL_IDS.queryData, '返回 6 个年级统计结果', 260);
 
     startMockStep(MOCK_RUN_STEP_IDS.generateChart, '生成分析图表');
     startMockTool('chartRender');
-    get().setAgentStepStatus('chart', 'running');
     await delay(220);
     if (!isCurrentRun()) return;
-    get().setAgentStepStatus('chart', 'success');
     completeMockStep(MOCK_RUN_STEP_IDS.generateChart, 220);
     completeMockTool(MOCK_RUN_TOOL_IDS.chartRender, '生成 1 个柱状图数据', 220);
-    if (!isCurrentRun()) return;
-    get().setShowAnalyticsResult(true);
     const mockRunId = getMockRunId();
 
     if (mockRunId) {
@@ -575,7 +515,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     }
 
     startMockStep(MOCK_RUN_STEP_IDS.waitConfirmation, '等待用户确认');
-    get().setAgentStepStatus('confirm', 'running');
   },
   triggerMockError: () => {
     const currentRun = get().currentRun;
@@ -588,11 +527,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         ...state.assistantStream,
         status: state.assistantStream.status === 'streaming' ? 'stopped' : state.assistantStream.status,
       },
-      finalMessage: {
-        content: '',
-        status: 'hidden',
-      },
-      agentSteps: state.agentSteps.map((step) => (step.status === 'running' ? { ...step, status: 'error' } : step)),
     }));
 
     if (currentRun?.mode === 'mock' && currentRun.status === 'running') {
@@ -662,10 +596,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         generationStatus: 'done',
         currentReportRunId: normalizedRunId,
         reportActionState: 'generated',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
       };
     });
   },
@@ -706,10 +636,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         generationStatus: 'done',
         currentReportRunId: normalizedRunId,
         reportActionState: 'skipped',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
       };
     });
   },
@@ -769,7 +695,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         ...state.assistantStream,
         status: state.assistantStream.status === 'streaming' ? 'stopped' : state.assistantStream.status,
       },
-      agentSteps: state.agentSteps.map((step) => (step.status === 'running' ? { ...step, status: 'error' } : step)),
       confirmStatus: shouldStopAgentRequest ? 'cancelled' : state.confirmStatus,
     }));
 

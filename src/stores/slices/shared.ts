@@ -1,7 +1,5 @@
-import { mockAgentSteps } from '../../mocks/agentSteps';
 import { mockSessions } from '../../mocks/sessions';
 import type {
-  AgentStep,
   AssistantStreamState,
   GenerationStatus,
   ModelProviderConfigMap,
@@ -477,17 +475,6 @@ export function updateCurrentSessionAssistantInSessions(
   );
 }
 
-export function createInitialAgentSteps(): AgentStep[] {
-  return [
-    { id: 'understand', title: '理解用户问题', status: 'pending' },
-    { id: 'search', title: '检索知识库', status: 'pending' },
-    { id: 'query', title: '查询业务数据', status: 'pending' },
-    { id: 'chart', title: '生成分析图表', status: 'pending' },
-    { id: 'confirm', title: '等待用户确认', status: 'pending' },
-    { id: 'final', title: '生成最终结论', status: 'pending' },
-  ];
-}
-
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -551,10 +538,6 @@ interface InitialWorkbenchState {
   activeAssistantMessageId: string;
   generationStatus: GenerationStatus;
   assistantStream: AssistantStreamState;
-  agentSteps: AgentStep[];
-  visibleToolCallIds: string[];
-  showKnowledgeSources: boolean;
-  showAnalyticsResult: boolean;
   modelConfigs: ModelProviderConfigMap;
   currentModelProvider: ModelProviderId;
 }
@@ -570,12 +553,6 @@ export const initialWorkbenchState: InitialWorkbenchState = {
     content: initialAssistantReplyFromSession,
     status: initialAssistantReplyFromSession ? 'done' : 'idle',
   },
-  agentSteps: initialAssistantReplyFromSession
-    ? mockAgentSteps.map((step) => ({ ...step }))
-    : createInitialAgentSteps(),
-  visibleToolCallIds: initialAssistantReplyFromSession ? ['tool_knowledge_search', 'tool_query_data'] : [],
-  showKnowledgeSources: Boolean(initialAssistantReplyFromSession),
-  showAnalyticsResult: Boolean(initialAssistantReplyFromSession),
   modelConfigs: initialModelConfigs,
   currentModelProvider: initialModelProvider,
 };

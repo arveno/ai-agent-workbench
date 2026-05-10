@@ -1,10 +1,8 @@
 import type { StateCreator } from 'zustand';
-import { mockAgentSteps } from '../../mocks/agentSteps';
 import { mockTasks } from '../../mocks/tasks';
 import type { SessionSlice, WorkbenchStore } from '../../types/workbench';
 import {
   createEmptySession,
-  createInitialAgentSteps,
   createWorkbenchMessage,
   createSessionTitle,
   getSessionLatestRun,
@@ -48,15 +46,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         generationStatus: 'idle',
         realModelNotice: '',
         errorMessage: undefined,
-        visibleToolCallIds: [],
-        showKnowledgeSources: false,
-        showAnalyticsResult: false,
         confirmStatus: 'waiting',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
-        agentSteps: createInitialAgentSteps(),
         currentRun: null,
         runEventLog: [],
         agentRunStatus: 'idle',
@@ -101,14 +91,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         realModelNotice: '',
         errorMessage: undefined,
         confirmStatus: 'waiting',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
-        visibleToolCallIds: hasAssistantReply ? ['tool_knowledge_search', 'tool_query_data'] : [],
-        showKnowledgeSources: hasAssistantReply,
-        showAnalyticsResult: hasAssistantReply,
-        agentSteps: hasAssistantReply ? mockAgentSteps.map((step) => ({ ...step })) : createInitialAgentSteps(),
         currentRun: restoredRun,
         runEventLog: [],
         agentRunStatus: 'idle',
@@ -316,14 +298,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         realModelNotice: '',
         errorMessage: undefined,
         confirmStatus: 'waiting',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
-        visibleToolCallIds: hasAssistantReply ? ['tool_knowledge_search', 'tool_query_data'] : [],
-        showKnowledgeSources: hasAssistantReply,
-        showAnalyticsResult: hasAssistantReply,
-        agentSteps: hasAssistantReply ? mockAgentSteps.map((step) => ({ ...step })) : createInitialAgentSteps(),
         currentRun: restoredRun,
         runEventLog: [],
         agentRunStatus: 'idle',

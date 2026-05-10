@@ -131,10 +131,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       realModelNotice: '',
       errorMessage: undefined,
       confirmStatus: 'cancelled',
-      finalMessage: {
-        content: '',
-        status: 'hidden',
-      },
       currentReportRunId: null,
       reportActionState: 'skipped',
     });
@@ -194,13 +190,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           agentRunErrorMessage: null,
           generationStatus: 'done',
           confirmStatus: get().currentRun?.reportState === 'pending' ? 'waiting' : 'cancelled',
-          finalMessage: {
-            content: '',
-            status: 'hidden',
-          },
-          visibleToolCallIds: [],
-          showKnowledgeSources: false,
-          showAnalyticsResult: false,
           activeAgentRunRequestId: null,
           activeAgentRunAbortController: null,
         });

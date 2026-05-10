@@ -43,10 +43,8 @@ export type {
 } from './toolRegistry';
 
 export type TaskId = string;
-export type ToolCallId = string;
 export type KnowledgeSourceId = string;
 
-export type AgentStepStatus = 'pending' | 'running' | 'success' | 'error';
 export type WorkbenchMessageKind = 'normal' | 'report' | 'partial' | 'error';
 
 export interface WorkbenchMessage {
@@ -75,21 +73,6 @@ export interface ExampleTask {
   title: string;
   description: string;
   prompt: string;
-}
-
-export interface AgentStep {
-  id: string;
-  title: string;
-  status: AgentStepStatus;
-}
-
-export interface ToolCall {
-  id: ToolCallId;
-  title: string;
-  toolName: string;
-  params: string;
-  result: string;
-  status: 'success' | 'running' | 'error';
 }
 
 export interface KnowledgeSource {
@@ -332,11 +315,6 @@ export interface AssistantStreamState {
   status: MessageStatus;
 }
 
-export interface FinalMessage {
-  content: string;
-  status: 'hidden' | 'visible';
-}
-
 export interface SessionSlice {
   sessions: WorkbenchSession[];
   currentSessionId: string;
@@ -374,24 +352,13 @@ export interface GenerationSlice {
   errorMessage?: string;
   realModelNotice: string;
   assistantStream: AssistantStreamState;
-  agentSteps: AgentStep[];
-  visibleToolCallIds: string[];
-  showKnowledgeSources: boolean;
-  showAnalyticsResult: boolean;
   confirmStatus: ConfirmStatus;
-  finalMessage: FinalMessage;
   streamRunId: number;
   sendPrompt: (prompt: string) => void;
   regenerateFromAssistantMessage: (assistantMessageId: string) => void;
   runPromptWithCurrentModel: (prompt: string) => Promise<void>;
   setRealModelNotice: (notice: string) => void;
   setAssistantStream: (stream: AssistantStreamState) => void;
-  setShowKnowledgeSources: (visible: boolean) => void;
-  setShowAnalyticsResult: (visible: boolean) => void;
-  resetAgentSteps: () => void;
-  setAgentStepStatus: (stepId: string, status: AgentStepStatus) => void;
-  showToolCall: (toolCallId: string) => void;
-  resetVisibleToolCalls: () => void;
   runAgentStepsPreview: (runId: number) => Promise<void>;
   triggerMockError: () => void;
   retryCurrentTask: () => Promise<void>;
