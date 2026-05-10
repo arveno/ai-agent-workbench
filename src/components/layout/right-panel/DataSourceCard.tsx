@@ -1,15 +1,14 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import { shouldUseMockRun } from '../../../utils/run';
+import { shouldUseUnifiedRun } from '../../../utils/run';
 
 export function DataSourceCard() {
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
+  const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
 
-  if (!mockRun && !currentAgentRun) {
+  if (!unifiedRun && !currentAgentRun) {
     return (
       <section className="right-card right-section">
         <h2 className="panel-section-title">
@@ -24,15 +23,17 @@ export function DataSourceCard() {
     );
   }
 
-  if (mockRun) {
-    const dataSource = mockRun.dataSource;
-    const mockMeta = [
-      { label: '数据源类型', value: dataSource?.typeLabel ?? '本地模拟数据' },
-      { label: 'Run 状态', value: mockRun.status },
-      { label: 'Run ID', value: mockRun.id },
+  if (unifiedRun) {
+    const dataSource = unifiedRun.dataSource;
+    const unifiedMeta = [
+      { label: '数据源类型', value: dataSource?.typeLabel ?? (unifiedRun.mode === 'mock' ? '本地模拟数据' : '-') },
+      { label: 'Run 状态', value: unifiedRun.status },
+      { label: 'Run ID', value: unifiedRun.id },
       { label: 'Schema', value: dataSource?.schema ?? '-' },
       { label: '表数量', value: typeof dataSource?.tableCount === 'number' ? String(dataSource.tableCount) : '-' },
     ];
+    const statusText =
+      unifiedRun.mode === 'mock' ? 'Mock' : unifiedRun.status === 'running' ? '运行中' : unifiedRun.status;
 
     return (
       <section className="right-card right-section">
@@ -49,16 +50,22 @@ export function DataSourceCard() {
                   <AppIcon icon={icons.database} size={14} />
                 </span>
                 <div>
-                  <div className="datasource-name">{dataSource?.name ?? 'Mock 教学数据源'}</div>
-                  <div className="datasource-subtitle">Mock 模式使用本地模拟数据完成演示流程</div>
+                  <div className="datasource-name">
+                    {dataSource?.name ?? (unifiedRun.mode === 'mock' ? 'Mock 教学数据源' : 'Agent Run')}
+                  </div>
+                  <div className="datasource-subtitle">
+                    {unifiedRun.mode === 'mock' ? 'Mock 模式使用本地模拟数据完成演示流程' : 'Agent 模式正在执行本轮分析'}
+                  </div>
                 </div>
               </div>
             </div>
-            <span className="status-badge status-badge-success">Mock</span>
+            <span className={`status-badge ${unifiedRun.status === 'running' ? 'status-badge-active' : 'status-badge-success'}`}>
+              {statusText}
+            </span>
           </div>
 
           <div className="datasource-meta-grid">
-            {mockMeta.map((item) => (
+            {unifiedMeta.map((item) => (
               <div key={item.label}>
                 <div className="datasource-meta-label">{item.label}</div>
                 <div className="datasource-meta-value">{item.value}</div>

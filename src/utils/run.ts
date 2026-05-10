@@ -8,6 +8,10 @@ export function shouldUseMockRun(currentModelProvider: string, run: RunSnapshot 
   return currentModelProvider === 'mock' && run?.mode === 'mock';
 }
 
+export function shouldUseUnifiedRun(run: RunSnapshot | null): run is RunSnapshot {
+  return run?.mode === 'mock' || run?.mode === 'agent';
+}
+
 export function shouldShowReportConfirm(run: RunSnapshot | null): boolean {
   return Boolean(
     run &&

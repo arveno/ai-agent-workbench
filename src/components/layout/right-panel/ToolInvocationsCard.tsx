@@ -1,7 +1,7 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import { shouldUseMockRun } from '../../../utils/run';
+import { shouldUseUnifiedRun } from '../../../utils/run';
 
 function truncateText(text: string, maxLength = 120): string {
   if (text.length <= maxLength) {
@@ -48,14 +48,13 @@ function getToolStatusClass(status: string): string {
 }
 
 export function ToolInvocationsCard() {
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
+  const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
 
   const agentRun = currentAgentRun;
 
-  if (!mockRun && !agentRun) {
+  if (!unifiedRun && !agentRun) {
     return (
       <section className="right-card right-section">
         <div className="right-card-head">
@@ -72,11 +71,11 @@ export function ToolInvocationsCard() {
     );
   }
 
-  const isDataAnalysisRun = mockRun
-    ? mockRun.intent === 'data_analysis'
+  const isDataAnalysisRun = unifiedRun
+    ? unifiedRun.intent === 'data_analysis'
     : agentRun?.plan?.intent === 'data_analysis' || Boolean(agentRun?.toolInvocations?.length);
-  const runtimeTools = mockRun
-    ? mockRun.toolInvocations.map((tool) => ({
+  const runtimeTools = unifiedRun
+    ? unifiedRun.toolInvocations.map((tool) => ({
         id: tool.id,
         name: tool.displayName || tool.toolName,
         desc: truncateText(`${tool.inputSummary}${tool.outputSummary ? ` -> ${tool.outputSummary}` : ''}`),
@@ -107,7 +106,11 @@ export function ToolInvocationsCard() {
       {showEmptyState ? (
         <div className="right-panel-empty-state">
           <strong>本次未调用工具</strong>
-          {isDataAnalysisRun ? '当前请求未产出可展示的工具调用结果。' : '当前请求未进入数据分析流程。'}
+          {unifiedRun?.status === 'running'
+            ? '等待工具调用结果...'
+            : isDataAnalysisRun
+              ? '当前请求未产出可展示的工具调用结果。'
+              : '当前请求未进入数据分析流程。'}
         </div>
       ) : (
         <div className="tool-invocation-list">

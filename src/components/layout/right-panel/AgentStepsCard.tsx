@@ -1,6 +1,6 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
 import type { AgentStepStatus, RunStepStatus } from '../../../types/workbench';
-import { shouldUseMockRun } from '../../../utils/run';
+import { shouldUseUnifiedRun } from '../../../utils/run';
 import { AppIcon } from '../../common/AppIcon';
 import { icons, type IconKey } from '../../common/iconMap';
 
@@ -67,12 +67,11 @@ function getStepIcon(status: DisplayedStepStatus): IconKey {
 }
 
 export function AgentStepsCard() {
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
-  const displayedSteps = mockRun
-    ? mockRun.steps.map((step) => ({
+  const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
+  const displayedSteps = unifiedRun
+    ? unifiedRun.steps.map((step) => ({
         id: step.id,
         title: step.title,
         status: step.status,
@@ -93,7 +92,7 @@ export function AgentStepsCard() {
         <AppIcon icon={icons.agent} size={16} />
         <span>本轮执行步骤</span>
       </h2>
-      {(!mockRun && !currentAgentRun) || !displayedSteps?.length ? (
+      {(!unifiedRun && !currentAgentRun) || !displayedSteps?.length ? (
         <div className="right-panel-empty-state">
           <strong>暂无执行步骤</strong>
           输入问题后点击发送，这里会展示本轮 Agent 的执行过程。

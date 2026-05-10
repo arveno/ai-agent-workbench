@@ -156,6 +156,7 @@ export function ChatPanel() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const activeAssistantMessageId = useWorkbenchStore((state) => state.activeAssistantMessageId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
@@ -189,6 +190,8 @@ export function ChatPanel() {
     Boolean(currentAgentRun?.conclusion.trim()) &&
     currentReportRunId === currentAgentRun?.id &&
     reportActionState === 'pending';
+  const shouldShowAgentLoading =
+    currentRun?.mode === 'agent' && currentRun.status === 'running' && !currentRun.conclusion.trim();
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -393,6 +396,15 @@ export function ChatPanel() {
             confirmButtonText="生成报告"
             cancelButtonText="暂不生成"
           />
+        ) : null}
+
+        {shouldShowAgentLoading ? (
+          <div className="message-row message-row-assistant">
+            <div className="message-avatar message-avatar-assistant" aria-hidden="true">
+              <AppIcon icon={icons.brand} size={16} />
+            </div>
+            <MessageBubble role="assistant" content="正在分析问题并准备调用工具..." />
+          </div>
         ) : null}
 
         {generationStatus === 'error' && errorMessage ? (

@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { UiSlice, WorkbenchStore } from '../../types/workbench';
 import { runAgentAnalysis } from '../../services/agentRunApi';
+import { createAgentPendingRunStartedEvent, mapAgentRunResultToRunSnapshot } from '../../utils/agentRunMapping';
 
 function buildAgentConclusionMessage(conclusion: string, notice?: string): string {
   const normalizedConclusion = conclusion.trim();
@@ -69,8 +70,15 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     }
 
     const apiKey = state.modelConfigs.groq?.apiKey?.trim();
+    const pendingRunEvent = createAgentPendingRunStartedEvent({
+      prompt,
+      provider: 'supabase',
+    });
+    const pendingRunId = pendingRunEvent.run.id;
 
     get().appendUserMessageToCurrentSession(prompt);
+    get().applyRunEvent(pendingRunEvent);
+    get().clearChatDraft();
 
     set({
       agentRunStatus: 'running',
@@ -94,13 +102,23 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         apiKey: apiKey || undefined,
       });
 
+      if (get().currentRun?.id !== pendingRunId) {
+        return;
+      }
+
       if (response.ok) {
         const isDataAnalysisRun =
           response.run.plan?.intent === 'data_analysis' || response.run.toolInvocations.length > 0;
+        const finalRun = mapAgentRunResultToRunSnapshot(response.run);
         const assistantMessage = buildAgentConclusionMessage(
           response.run.conclusion,
           response.run.conclusionSource === 'fallback' ? response.run.conclusionNotice : undefined
         );
+
+        get().applyRunEvent({
+          type: 'run_started',
+          run: finalRun,
+        });
 
         set({
           currentAgentRun: response.run,
@@ -129,10 +147,14 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           get().appendAssistantMessageToCurrentSession(assistantMessage);
         }
 
-        get().clearChatDraft();
-
         return;
       }
+
+      get().applyRunEvent({
+        type: 'run_failed',
+        runId: pendingRunId,
+        errorMessage: response.errorMessage,
+      });
 
       set({
         agentRunStatus: 'error',
@@ -143,6 +165,16 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         reportActionState: 'skipped',
       });
     } catch {
+      if (get().currentRun?.id !== pendingRunId) {
+        return;
+      }
+
+      get().applyRunEvent({
+        type: 'run_failed',
+        runId: pendingRunId,
+        errorMessage: 'Agent Run 执行失败，请检查数据源连接或服务端状态。',
+      });
+
       set({
         agentRunStatus: 'error',
         agentRunErrorMessage: 'Agent Run 执行失败，请检查数据源连接或服务端状态。',
@@ -156,6 +188,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
   clearCurrentAgentRun: () => {
     set({
       currentAgentRun: null,
+      currentRun: null,
+      runEventLog: [],
       agentRunStatus: 'idle',
       agentRunErrorMessage: null,
       currentReportRunId: null,

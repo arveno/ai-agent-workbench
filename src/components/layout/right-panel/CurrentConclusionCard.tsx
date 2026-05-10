@@ -1,17 +1,16 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import { shouldUseMockRun } from '../../../utils/run';
+import { shouldUseUnifiedRun } from '../../../utils/run';
 
 export function CurrentConclusionCard() {
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
   const agentRunErrorMessage = useWorkbenchStore((state) => state.agentRunErrorMessage);
-  const mockRun = shouldUseMockRun(currentModelProvider, currentRun) ? currentRun : null;
+  const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
 
-  if (!mockRun && !currentAgentRun) {
+  if (!unifiedRun && !currentAgentRun) {
     return (
       <section className="right-card right-section">
         <h2 className="panel-section-title">
@@ -26,9 +25,14 @@ export function CurrentConclusionCard() {
     );
   }
 
-  if (mockRun) {
-    const conclusionText = mockRun.conclusion || (mockRun.status === 'running' ? '正在生成结论...' : '暂无结论');
-    const updatedText = `更新时间：${new Date(mockRun.updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
+  if (unifiedRun) {
+    const isDataAnalysisRun = unifiedRun.intent === 'data_analysis';
+    const isFallbackConclusion = unifiedRun.conclusionSource === 'fallback' && isDataAnalysisRun;
+    const conclusionText =
+      unifiedRun.status === 'error'
+        ? `Agent Run 执行失败：${unifiedRun.errorMessage ?? agentRunErrorMessage ?? '未知错误'}`
+        : unifiedRun.conclusion || (unifiedRun.status === 'running' ? '正在生成结论...' : '暂无结论');
+    const updatedText = `更新时间：${new Date(unifiedRun.updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
 
     return (
       <section className="right-card right-section">
@@ -36,7 +40,19 @@ export function CurrentConclusionCard() {
           <AppIcon icon={icons.alert} size={16} />
           <span>当前结论</span>
         </h2>
-        <div className="conclusion-source-badge">Mock 生成</div>
+        {unifiedRun.intent === 'capability_intro' ? (
+          <div className="conclusion-source-badge conclusion-source-badge-capability">能力说明</div>
+        ) : null}
+        {unifiedRun.intent === 'unsupported' ? (
+          <div className="conclusion-source-badge conclusion-source-badge-unsupported">暂不支持</div>
+        ) : null}
+        {unifiedRun.conclusionSource === 'model' ? <div className="conclusion-source-badge">Groq 生成</div> : null}
+        {unifiedRun.conclusionSource === 'mock' ? <div className="conclusion-source-badge">Mock 生成</div> : null}
+        {isFallbackConclusion ? (
+          <div className="conclusion-fallback-notice">
+            {unifiedRun.conclusionNotice ?? '未配置模型 Key，已使用本地工具摘要兜底。'}
+          </div>
+        ) : null}
         <div className="conclusion-card">
           {conclusionText}
           <div className="conclusion-updated-at">{updatedText}</div>
