@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import { ensureServerEnvLoaded } from '../datasources/connection';
+import { generateTextWithModelGateway } from '../models/modelGateway';
 import type { AggregateTableInput, AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderInput, ChartRenderOutput } from '../tools/chartRenderTool';
 import { serverToolRegistry } from '../tools/registry';
@@ -22,9 +23,6 @@ import type {
   AgentRunStep,
   AgentToolInvocationResult,
 } from './types';
-
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 function createRunId(): string {
   return `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -50,46 +48,6 @@ function stringifySummary(value: unknown): string {
   }
 
   return `${text.slice(0, 180)}...`;
-}
-
-async function callGroqConclusion(params: {
-  apiKey: string;
-  messages: Array<{ role: 'system' | 'user'; content: string }>;
-}): Promise<string> {
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: params.messages,
-      temperature: 0.2,
-      max_tokens: 600,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Groq request failed');
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
-
-  const content = data.choices?.[0]?.message?.content?.trim();
-
-  if (!content) {
-    throw new Error('Empty Groq response');
-  }
-
-  return content;
 }
 
 function createStep(id: string, title: string): AgentRunStep {
@@ -510,10 +468,13 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
           chartResult,
         });
 
-        conclusion = await callGroqConclusion({
+        const modelResult = await generateTextWithModelGateway({
+          provider: 'groq',
           apiKey,
           messages,
+          temperature: 0.2,
         });
+        conclusion = modelResult.text;
         conclusionSource = 'model';
         conclusionNotice = undefined;
 

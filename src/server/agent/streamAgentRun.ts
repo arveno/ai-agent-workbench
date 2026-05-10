@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import { ensureServerEnvLoaded } from '../datasources/connection';
+import { streamTextWithModelGateway } from '../models/modelGateway';
 import type { AggregateTableInput, AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderInput, ChartRenderOutput } from '../tools/chartRenderTool';
 import { serverToolRegistry } from '../tools/registry';
@@ -19,18 +20,7 @@ import type {
   AgentPlanTimeRange,
 } from './types';
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.1-8b-instant';
-
 type AgentProvider = 'postgresql' | 'supabase';
-
-type GroqStreamEvent = {
-  choices?: Array<{
-    delta?: {
-      content?: string;
-    };
-  }>;
-};
 
 function createRunId(): string {
   return `run_stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -228,96 +218,6 @@ async function emitTextDeltas(params: {
       delta,
     });
   }
-}
-
-async function streamGroqConclusion(params: {
-  apiKey: string;
-  messages: Array<{ role: 'system' | 'user'; content: string }>;
-  onDelta: (delta: string) => void;
-}): Promise<string> {
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: params.messages,
-      temperature: 0.2,
-      max_tokens: 600,
-      stream: true,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Groq stream request failed');
-  }
-
-  if (!response.body) {
-    throw new Error('Groq stream body is unavailable');
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let conclusion = '';
-
-  const flushBufferLines = (): boolean => {
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-
-      if (!line || !line.startsWith('data:')) {
-        continue;
-      }
-
-      const dataText = line.slice('data:'.length).trim();
-
-      if (!dataText) {
-        continue;
-      }
-
-      if (dataText === '[DONE]') {
-        return true;
-      }
-
-      try {
-        const event = JSON.parse(dataText) as GroqStreamEvent;
-        const delta = event.choices?.[0]?.delta?.content;
-
-        if (delta) {
-          conclusion += delta;
-          params.onDelta(delta);
-        }
-      } catch {
-        // Ignore malformed model stream events and continue parsing.
-      }
-    }
-
-    return false;
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-
-    if (flushBufferLines()) {
-      return conclusion;
-    }
-  }
-
-  buffer += decoder.decode();
-  flushBufferLines();
-
-  return conclusion;
 }
 
 function emitConclusionCompleted(params: {
@@ -681,13 +581,16 @@ export async function streamAgentRun(params: {
           aggregateResult,
           chartResult,
         });
-        conclusion = await streamGroqConclusion({
+        const modelResult = await streamTextWithModelGateway({
+          provider: 'groq',
           apiKey,
           messages,
+          temperature: 0.2,
           onDelta: (delta) => {
             params.emit({ type: 'conclusion_delta', runId, delta });
           },
         });
+        conclusion = modelResult.text;
 
         if (!conclusion.trim()) {
           throw new Error('Empty Groq stream conclusion');
