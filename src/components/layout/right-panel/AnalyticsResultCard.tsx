@@ -1,30 +1,8 @@
-import type { RunChartData } from '@/types/run';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { AgentRunChartData } from '../../../types/workbench';
 import { getChartPointCount, getChartValueExtent, isValidRunChartData } from '../../../utils/chartData';
-import { shouldUseUnifiedRun } from '../../../utils/run';
 import { RunChart } from '../../analytics/RunChart';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
-
-function mapLegacyAgentChartData(chartData: AgentRunChartData | undefined): RunChartData | undefined {
-  if (!chartData || chartData.labels.length === 0 || chartData.values.length === 0) {
-    return undefined;
-  }
-
-  return {
-    title: chartData.title || '数据分析结果',
-    chartType: chartData.chartType === 'line' ? 'line' : 'bar',
-    labels: chartData.labels,
-    series: [
-      {
-        name: chartData.title || '指标值',
-        values: chartData.values,
-      },
-    ],
-    summary: chartData.summary,
-  };
-}
 
 function formatMetricValue(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -34,18 +12,50 @@ function formatMetricValue(value: number | undefined): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+function getEmptyTitle(status: string | undefined): string {
+  if (status === 'running') {
+    return '等待数据分析结果';
+  }
+
+  if (status === 'stopped') {
+    return '本轮已停止，未生成图表';
+  }
+
+  if (status === 'error') {
+    return '本轮执行异常，未生成图表';
+  }
+
+  return '暂无分析结果';
+}
+
+function getEmptyDescription(status: string | undefined, isDataAnalysisRun: boolean): string {
+  if (status === 'running') {
+    return '等待数据分析结果...';
+  }
+
+  if (status === 'stopped') {
+    return '当前 Run 已停止，未产出可展示的图表数据。';
+  }
+
+  if (status === 'error') {
+    return '当前 Run 执行异常，未产出可展示的图表数据。';
+  }
+
+  if (isDataAnalysisRun) {
+    return '当前运行未产出可展示的图表数据。';
+  }
+
+  return '仅数据分析类请求会生成图表和指标摘要。';
+}
+
 export function AnalyticsResultCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
-  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
-
-  const agentRun = currentAgentRun;
-  const chartData = unifiedRun?.chartData ?? mapLegacyAgentChartData(agentRun?.chartData);
+  const chartData = currentRun?.chartData;
   const isValidChartData = isValidRunChartData(chartData);
   const pointCount = getChartPointCount(chartData);
   const valueExtent = getChartValueExtent(chartData);
 
-  if (!unifiedRun && !agentRun) {
+  if (!currentRun) {
     return (
       <section className="right-card right-section">
         <h2 className="panel-section-title">
@@ -54,15 +64,13 @@ export function AnalyticsResultCard() {
         </h2>
         <div className="right-panel-empty-state">
           <strong>暂无分析结果</strong>
-          发送数据分析类请求后，这里会展示图表数据和指标摘要。
+          发送数据分析类请求后，这里会展示图表和指标摘要。
         </div>
       </section>
     );
   }
 
-  const isDataAnalysisRun = unifiedRun
-    ? unifiedRun.intent === 'data_analysis'
-    : agentRun?.plan?.intent === 'data_analysis' || Boolean(agentRun?.toolInvocations?.length);
+  const isDataAnalysisRun = currentRun.intent === 'data_analysis';
 
   return (
     <section className="right-card right-section">
@@ -102,12 +110,8 @@ export function AnalyticsResultCard() {
         </div>
       ) : (
         <div className="right-panel-empty-state">
-          <strong>{unifiedRun?.status === 'running' ? '等待数据分析结果' : '暂无图表数据'}</strong>
-          {unifiedRun?.status === 'running'
-            ? '等待数据分析结果...'
-            : isDataAnalysisRun
-              ? '当前运行未产出可展示的图表数据。'
-              : '仅数据分析类请求会生成图表和指标摘要。'}
+          <strong>{getEmptyTitle(currentRun.status)}</strong>
+          {getEmptyDescription(currentRun.status, isDataAnalysisRun)}
         </div>
       )}
     </section>

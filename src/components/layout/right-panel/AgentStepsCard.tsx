@@ -1,136 +1,87 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { AgentStepStatus, RunStepStatus } from '../../../types/workbench';
-import { shouldUseUnifiedRun } from '../../../utils/run';
+import type { RunStepStatus } from '../../../types/workbench';
+import { getStepStatusLabel } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons, type IconKey } from '../../common/iconMap';
 
-const STEP_TITLE_MAP: Record<string, string> = {
-  understand: '理解用户问题',
-  search: '检索知识资料',
-  query: '查询业务数据',
-  chart: '生成分析结果',
-  confirm: '等待用户确认',
-  final: '生成分析报告',
-};
-
-type DisplayedStepStatus = AgentStepStatus | RunStepStatus;
-
-function getStepClass(status: DisplayedStepStatus): string {
-  switch (status) {
-    case 'success':
-      return 'done';
-    case 'running':
-      return 'in-progress';
-    case 'pending':
-      return 'pending';
-    case 'error':
-      return 'error';
-    case 'skipped':
-      return 'pending';
-    case 'stopped':
-      return 'stopped';
-    default:
-      return 'pending';
+function getStepClass(status: RunStepStatus): string {
+  if (status === 'success') {
+    return 'done';
   }
+
+  if (status === 'running') {
+    return 'in-progress';
+  }
+
+  if (status === 'error') {
+    return 'error';
+  }
+
+  if (status === 'stopped') {
+    return 'stopped';
+  }
+
+  return 'pending';
 }
 
-function getStepStatusText(status: DisplayedStepStatus): string {
-  switch (status) {
-    case 'success':
-      return '已完成';
-    case 'running':
-      return '进行中';
-    case 'pending':
-      return '待执行';
-    case 'error':
-      return '已中断';
-    case 'skipped':
-      return '已跳过';
-    case 'stopped':
-      return '已停止';
-    default:
-      return '待执行';
+function getStepIcon(status: RunStepStatus): IconKey {
+  if (status === 'success') {
+    return 'stepDone';
   }
-}
 
-function getStepIcon(status: DisplayedStepStatus): IconKey {
-  switch (status) {
-    case 'success':
-      return 'stepDone';
-    case 'running':
-      return 'stepCurrent';
-    case 'pending':
-      return 'stepPending';
-    case 'error':
-      return 'alert';
-    case 'skipped':
-      return 'stepPending';
-    case 'stopped':
-      return 'stepPending';
-    default:
-      return 'stepPending';
+  if (status === 'running') {
+    return 'stepCurrent';
   }
+
+  if (status === 'error') {
+    return 'alert';
+  }
+
+  return 'stepPending';
 }
 
 export function AgentStepsCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
-  const currentAgentRun = useWorkbenchStore((state) => state.currentAgentRun);
-  const unifiedRun = shouldUseUnifiedRun(currentRun) ? currentRun : null;
-  const displayedSteps = unifiedRun
-    ? unifiedRun.steps.map((step) => ({
-        id: step.id,
-        title: step.title,
-        status: step.status,
-        description: step.description,
-        elapsedMs: step.elapsedMs,
-      }))
-    : currentAgentRun?.steps.map((step) => ({
-        id: step.id,
-        title: STEP_TITLE_MAP[step.id] ?? step.title,
-        status: step.status,
-        description: step.description,
-        elapsedMs: step.elapsedMs,
-      }));
+  const displayedSteps = currentRun?.steps ?? [];
 
   return (
     <section className="right-card right-section">
       <h2 className="panel-section-title">
         <AppIcon icon={icons.agent} size={16} />
-        <span>本轮执行步骤</span>
+        <span>执行时间线</span>
       </h2>
-      {(!unifiedRun && !currentAgentRun) || !displayedSteps?.length ? (
+      {!currentRun || displayedSteps.length === 0 ? (
         <div className="right-panel-empty-state">
           <strong>暂无执行步骤</strong>
-          输入问题后点击发送，这里会展示本轮 Agent 的执行过程。
+          发送问题后，这里会展示本轮 Run 的执行时间线。
         </div>
       ) : (
-        <ul className="agent-steps">
+        <ol className="run-step-timeline">
           {displayedSteps.map((step, index) => {
             const statusClass = getStepClass(step.status);
+            const markerStatusClass = step.status === 'skipped' ? 'pending' : step.status;
             const isRunning = step.status === 'running';
-            const stepTitle = step.title;
-            const stepDescription = step.description;
             const stepElapsed = typeof step.elapsedMs === 'number' ? `${step.elapsedMs}ms` : '';
 
             return (
-              <li key={step.id} className={`agent-step ${statusClass}${isRunning ? ' active' : ''}`}>
-                <span className="step-main step-main-column">
-                  <span className="step-main-line">
-                    <span className={`step-icon-wrap step-icon-${step.status}`} aria-hidden="true">
-                      <AppIcon icon={icons[getStepIcon(step.status)]} size={16} />
+              <li key={step.id} className={`run-step-item ${statusClass}${isRunning ? ' active' : ''}`}>
+                <span className={`run-step-marker step-icon-${markerStatusClass}`} aria-hidden="true">
+                  <AppIcon icon={icons[getStepIcon(step.status)]} size={15} />
+                </span>
+                <div className="run-step-content">
+                  <div className="run-step-main">
+                    <span className="run-step-title">{`${index + 1}. ${step.title}`}</span>
+                    <span className={`run-step-status run-step-status-${statusClass}`}>
+                      {getStepStatusLabel(step.status)}
                     </span>
-                    <span className="step-label">{`${index + 1}. ${stepTitle}`}</span>
-                  </span>
-                  {stepDescription ? <span className="step-desc">{stepDescription}</span> : null}
-                </span>
-                <span className="step-status">
-                  {getStepStatusText(step.status)}
-                  {stepElapsed ? ` · ${stepElapsed}` : ''}
-                </span>
+                  </div>
+                  {step.description ? <div className="run-step-description">{step.description}</div> : null}
+                  {stepElapsed ? <div className="run-step-meta">耗时：{stepElapsed}</div> : null}
+                </div>
               </li>
             );
           })}
-        </ul>
+        </ol>
       )}
     </section>
   );
