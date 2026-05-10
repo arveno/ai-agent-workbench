@@ -1,23 +1,50 @@
 import { useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { WorkbenchToolCategory } from '../../types/workbench';
+import type { WorkbenchToolDefinition } from '../../types/workbench';
 import { WORKBENCH_TOOL_DEFINITIONS } from '../../utils/toolRegistryView';
 import { ToolCard } from './ToolCard';
 
-const TOOL_GROUPS: Array<{ title: string; categories: WorkbenchToolCategory[] }> = [
+type ToolTabId = 'all' | WorkbenchToolDefinition['status'];
+
+interface ToolTabDefinition {
+  id: ToolTabId;
+  label: string;
+  description: string;
+}
+
+const TOOL_TABS: ToolTabDefinition[] = [
   {
-    title: 'Schema 工具',
-    categories: ['schema'],
+    id: 'all',
+    label: '全部工具',
+    description: '当前工作台可展示的服务端工具、前端模拟工具与规划中工具。',
   },
   {
-    title: '查询与分析工具',
-    categories: ['query', 'analysis', 'render'],
+    id: 'connected',
+    label: '已接入',
+    description: '已经接入服务端或当前执行链路的工具。',
   },
   {
-    title: '知识与报告工具',
-    categories: ['knowledge', 'report'],
+    id: 'mock',
+    label: '前端模拟',
+    description: '用于演示 RAG 来源、报告生成等前端能力的模拟工具。',
+  },
+  {
+    id: 'planned',
+    label: '规划中',
+    description: '后续阶段预留接入的工具能力。',
   },
 ];
+
+function getToolsByTab(tabId: ToolTabId): WorkbenchToolDefinition[] {
+  if (tabId === 'all') {
+    return WORKBENCH_TOOL_DEFINITIONS;
+  }
+
+  return WORKBENCH_TOOL_DEFINITIONS.filter((tool) => tool.status === tabId);
+}
 
 export function ToolLibraryModal() {
   const isToolLibraryModalOpen = useWorkbenchStore((state) => state.isToolLibraryModalOpen);
@@ -63,40 +90,65 @@ export function ToolLibraryModal() {
           <div>
             <h3 className="tool-library-modal-title">工具库配置</h3>
             <p className="tool-library-modal-description">
-              配置 Agent 可使用的受控工具。第一版工具由服务端注册和执行，模型不能直接执行任意 SQL。
+              查看当前 Agent 可使用的受控工具、执行位置与风险等级。模型不能直接执行任意 SQL。
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon"
             className="tool-library-modal-close"
             onClick={closeToolLibraryModal}
             aria-label="关闭"
           >
             ×
-          </button>
+          </Button>
         </header>
 
         <div className="tool-library-modal-body">
-          {TOOL_GROUPS.map((group) => {
-            const tools = WORKBENCH_TOOL_DEFINITIONS.filter((tool) => group.categories.includes(tool.category));
+          <Tabs defaultValue="all" className="tool-library-tabs">
+            <TabsList className="tool-library-tabs-list">
+              {TOOL_TABS.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="tool-library-tab-trigger">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-            return (
-              <section key={group.title} className="tool-section">
-                <h4 className="tool-section-title">{group.title}</h4>
-                <div className="tool-grid">
-                  {tools.map((tool) => (
-                    <ToolCard key={tool.id} tool={tool} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+            {TOOL_TABS.map((tab) => {
+              const tools = getToolsByTab(tab.id);
+
+              return (
+                <TabsContent key={tab.id} value={tab.id} className="tool-library-tab-content">
+                  <div className="tool-library-tab-heading">
+                    <div>
+                      <h4 className="tool-library-tab-title">{tab.label}</h4>
+                      <p className="tool-library-tab-description">{tab.description}</p>
+                    </div>
+                    <span className="tool-library-count">{tools.length} 个工具</span>
+                  </div>
+
+                  <ScrollArea className="tool-library-scroll">
+                    {tools.length > 0 ? (
+                      <div className="tool-library-grid">
+                        {tools.map((tool) => (
+                          <ToolCard key={tool.id} tool={tool} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="tool-empty-state">暂无该类型工具</div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+              );
+            })}
+          </Tabs>
         </div>
 
         <footer className="tool-library-modal-footer">
-          <button type="button" className="tool-library-modal-close-button" onClick={closeToolLibraryModal}>
+          <Button type="button" variant="outline" onClick={closeToolLibraryModal}>
             关闭
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
