@@ -140,20 +140,6 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
     });
   }
 
-  if (event.type === 'report_generated') {
-    return withUpdatedAt({
-      ...currentRun,
-      reportState: 'generated',
-    });
-  }
-
-  if (event.type === 'report_skipped') {
-    return withUpdatedAt({
-      ...currentRun,
-      reportState: 'skipped',
-    });
-  }
-
   if (event.type === 'run_completed') {
     return withUpdatedAt(
       {

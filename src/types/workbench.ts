@@ -364,8 +364,6 @@ export interface GenerationSlice {
   retryCurrentTask: () => Promise<void>;
   generateReportForRun: (runId: string) => void;
   skipReportForRun: (runId: string) => void;
-  confirmGenerateReport: () => Promise<void>;
-  cancelGenerateReport: () => void;
   stopGenerating: () => void;
   regenerate: () => Promise<void>;
   startAssistantStream: () => Promise<void>;

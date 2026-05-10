@@ -10,8 +10,6 @@ const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
   'conclusion_delta',
   'conclusion_completed',
   'report_pending',
-  'report_generated',
-  'report_skipped',
   'run_completed',
   'run_failed',
   'run_stopped',

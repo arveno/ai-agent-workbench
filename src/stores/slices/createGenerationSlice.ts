@@ -24,7 +24,7 @@ import {
   createMockToolStartedEvent,
 } from '../../utils/mockRun';
 import { createRunReportMarkdown } from '../../utils/report';
-import { createRunId, shouldShowReportConfirm } from '../../utils/run';
+import { createRunId } from '../../utils/run';
 import { streamText } from '../../utils/streamText';
 import {
   createWorkbenchMessage,
@@ -638,24 +638,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         reportActionState: 'skipped',
       };
     });
-  },
-  confirmGenerateReport: async () => {
-    const currentRun = get().currentRun;
-
-    if (!currentRun || !shouldShowReportConfirm(currentRun)) {
-      return;
-    }
-
-    get().generateReportForRun(currentRun.id);
-  },
-  cancelGenerateReport: () => {
-    const currentRun = get().currentRun;
-
-    if (!currentRun || !shouldShowReportConfirm(currentRun)) {
-      return;
-    }
-
-    get().skipReportForRun(currentRun.id);
   },
   stopGenerating: () => {
     const currentRun = get().currentRun;

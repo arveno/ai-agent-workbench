@@ -157,16 +157,6 @@ export interface RunReportPendingEvent {
   runId: string;
 }
 
-export interface RunReportGeneratedEvent {
-  type: 'report_generated';
-  runId: string;
-}
-
-export interface RunReportSkippedEvent {
-  type: 'report_skipped';
-  runId: string;
-}
-
 export interface RunCompletedEvent {
   type: 'run_completed';
   runId: string;
@@ -195,8 +185,6 @@ export type RunEvent =
   | RunConclusionDeltaEvent
   | RunConclusionCompletedEvent
   | RunReportPendingEvent
-  | RunReportGeneratedEvent
-  | RunReportSkippedEvent
   | RunCompletedEvent
   | RunFailedEvent
   | RunStoppedEvent;
