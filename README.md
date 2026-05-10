@@ -2,9 +2,9 @@
 
 AI Agent Workbench 是一个面向 B 端教育数据分析场景的 AI 应用工作台 Demo。
 
-它不是一个普通聊天框，而是一个具备 **Agent Planner、真实数据源连接、服务端受控工具调用、执行过程可视化、数据分析结论生成和报告确认流程** 的 AI 应用前端项目。
+它不是普通聊天框，而是围绕 Agent Planner、真实数据源、服务端受控工具、Run Trace、流式输出、Prompt 配置、模型网关、RAG 来源展示和报告确认构建的 AI Workbench。
 
-项目重点展示 AI 应用在前端侧的复杂交互组织能力，以及前端主导项目中对轻量后端、真实数据源和 Agent 执行链路的整合能力。
+项目重点展示 AI 应用前端在复杂交互、Agentic UI、LLM 流式输出、工具调用可视化、轻量后端和真实数据源整合方面的工程能力。
 
 ---
 
@@ -14,121 +14,167 @@ https://ai-agent-workbench.vercel.app
 
 ---
 
-## 项目截图
-
-> 待补充截图
-
----
-
 ## 项目定位
 
-本项目以“AI 应用工作台”而不是“单轮聊天框”为核心形态。
+本项目定位为：
 
-它展示的是一个真实 AI 应用前端常见的完整闭环：
+```txt
+AI Agent Workbench / AI 应用工作台
+```
+
+面向场景：
+
+```txt
+B 端教育数据分析
+```
+
+核心目标不是做一个普通 AI 聊天机器人，而是做一个小而完整的 AI Workbench 闭环：
 
 ```txt
 用户输入问题
   ↓
 Agent Planner 判断任务类型
   ↓
-根据任务类型选择执行流程
+真实数据源 + 服务端受控工具链
   ↓
-数据分析类请求访问真实数据源
+模型流式生成结论或 fallback 本地摘要
   ↓
-服务端受控工具执行
+聊天区展示过程摘要和结论
   ↓
-聊天区展示工具摘要与结论
-  ↓
-右侧展示完整 Run 过程
+右侧 Inspector 展示完整 Run Trace
   ↓
 用户确认是否生成简版报告
 ```
 
-项目当前聚焦教育数据分析场景，使用 Supabase 托管 PostgreSQL 作为真实 Demo 数据源，同时保留通用 PostgreSQL 数据源接入能力展示。
+---
+
+## 当前核心能力
+
+- Sidebar + Workspace 工作台布局
+- Tailwind CSS + shadcn/ui 基础组件
+- Mock / Agent 双模式
+- 统一 Run 状态模型
+- Mock / Agent 共享 `currentRun` 展示结构
+- Agent Run SSE 流式事件
+- ChatGPT 类发送 / 停止体验
+- Run Trace 右侧观察面板
+- Supabase / PostgreSQL 数据源连接
+- 数据源连接测试
+- 数据库 Schema 读取
+- 服务端 Tool Registry
+- Agent Planner
+- 时间范围、指标、维度约束
+- 图表数据结构统一
+- ECharts 图表展示
+- 工具调用 formatter
+- 报告确认与 Markdown 报告生成
+- Prompt 配置中心
+- Model Gateway
+- RAG Source / Citation UI
+- 环境健康检查
+- Vercel Serverless API
 
 ---
 
-## 核心能力
-
-### 工作台交互
-
-- 左中右三栏式 AI Agent 工作台布局
-- 左侧会话列表与示例任务
-- 中间聊天区展示用户问题、工具调用摘要、AI 结论和报告确认
-- 右侧展示完整 Agent Run 执行过程
-- URL-First 页面状态恢复
-- 多轮会话本地持久化
-- Markdown 回复渲染
-- 中文输入法组合输入处理
-- 发送入口收口：输入框 + 发送按钮为唯一主入口
-
-### Agent 执行链路
-
-- 服务端 Agent Planner 判断任务类型
-- 支持三类任务：
-  - `capability_intro`：能力说明类问题
-  - `data_analysis`：数据分析类问题
-  - `unsupported`：暂不支持类问题
-- 数据分析类请求进入真实 Agent Run
-- 非数据分析类请求不访问数据源、不调用工具
-- Agent Run 结果写入当前会话
-- 右侧同步展示本轮执行步骤、数据源、工具调用、分析结果和结论
-
-### 真实数据源
-
-- Supabase PostgreSQL 真实连接
-- 通用 PostgreSQL 数据源能力展示
-- 数据源连接测试 API
-- 数据库 Schema 读取 API
-- 服务端读取数据库连接串
-- 前端不保存数据库连接串
-- 前端不直接连接数据库
-
-### 服务端工具能力
-
-已实现服务端 Tool Registry，当前工具包括：
-
-- `schema_inspect`：读取数据库结构
-- `query_table`：受控查询白名单表
-- `aggregate_table`：受控聚合教学指标
-- `chart_render`：生成前端图表数据结构
-
-工具调用全部在服务端执行，前端只展示结果。
-
-### 模型与兜底
-
-- Mock 演示模式：保证公开 Demo 稳定可用
-- Groq 免费 API 接入
-- BYOK API Key 输入
-- API Key 仅保存在当前浏览器 `sessionStorage`
-- API Key 不进入 URL
-- API Key 不写入代码仓库
-- 服务端支持 `GROQ_API_KEY` 环境变量
-- Groq 不可用或未配置时，Agent Run 使用本地工具摘要兜底
-- 兜底结论会明确提示来源，不伪装成模型生成
-
-### 报告确认流程
-
-数据分析类 Agent Run 成功后，聊天区会出现后续操作：
+## 主流程
 
 ```txt
-是否基于本次分析生成简版报告？
+用户输入问题
+  ↓
+点击发送
+  ↓
+创建 Run
+  ↓
+Agent Planner 判断任务类型
+  ↓
+capability_intro / data_analysis / unsupported
+  ↓
+数据分析类进入受控工具链
+  ↓
+schema_inspect
+  ↓
+aggregate_table / query_table
+  ↓
+chart_render
+  ↓
+Groq 流式生成结论或 fallback 本地摘要
+  ↓
+聊天区展示工具摘要和结论
+  ↓
+右侧展示 Run Trace
+  ↓
+用户确认是否生成报告
 ```
-
-用户可以选择：
-
-- 生成报告
-- 暂不生成
-
-生成报告时，会基于当前 Agent Run 结果生成 Markdown 简版报告，不使用假数据。
 
 ---
 
-## 当前任务类型
+## 工作台布局
 
-### 1. 能力说明类
+当前页面采用 Sidebar + Workspace 信息架构。
 
-示例：
+```txt
+App Shell
+├─ Sidebar
+└─ Workspace
+   ├─ Workspace Header
+   ├─ Workspace Main
+   └─ Workspace Inspector
+```
+
+### Sidebar
+
+左侧 Sidebar 负责全局导航：
+
+- 品牌信息
+- 新建会话
+- 会话列表
+- 示例任务
+- 用户信息占位
+
+### Workspace Header
+
+Workspace Header 负责当前会话上下文入口：
+
+- 当前会话标题
+- Run 状态摘要
+- 模型配置入口
+- 数据源入口
+- 工具库入口
+- 工作流入口
+- 环境状态提示
+
+### Workspace Main
+
+Workspace Main 是当前会话主工作区：
+
+- 用户消息
+- Assistant 回复
+- 工具调用摘要
+- 流式生成状态
+- 报告确认
+- 输入框
+
+### Workspace Inspector
+
+Workspace Inspector 是右侧 Run Trace 面板：
+
+- Run 概览
+- 执行时间线
+- 当前数据源
+- 工具调用
+- 检索来源
+- 数据分析图表
+- 当前结论
+
+---
+
+## Agent Run 流程
+
+Agent Run 分为三类任务。
+
+### capability_intro
+
+用户询问系统能力或使用方式，例如：
 
 ```txt
 你能做什么？
@@ -141,45 +187,37 @@ Agent Planner 判断任务类型
 ```txt
 不访问数据库
 不调用工具
-直接返回能力说明
-右侧展示本次未访问数据源 / 未调用工具 / 未生成分析结果
+返回能力说明
+右侧展示说明类 Run 和空态卡片
 ```
 
----
+### data_analysis
 
-### 2. 数据分析类
-
-示例：
+用户要求分析教学质量、成绩、出勤率、作业完成率、异常指标、趋势或对比，例如：
 
 ```txt
-分析本月教学质量数据，找出异常指标
+分析 2026 年 5 月教学质量数据，找出异常指标
 ```
 
 执行逻辑：
 
 ```txt
-Agent Planner 判断为 data_analysis
+Planner 识别时间范围、指标、维度
   ↓
-读取数据库 Schema
+schema_inspect 读取 schema
   ↓
-执行受控聚合工具
+aggregate_table / query_table 执行受控查询或聚合
   ↓
-生成图表数据
+chart_render 生成图表数据
   ↓
-生成分析结论
+Model Gateway 调用 Groq 生成结论
   ↓
-聊天区展示工具摘要和结论
-  ↓
-右侧展示完整 Run 详情
-  ↓
-可选择生成简版报告
+如果模型不可用，使用 fallback 本地摘要
 ```
 
----
+### unsupported
 
-### 3. 暂不支持类
-
-示例：
+用户输入超出当前工作台范围的问题，例如：
 
 ```txt
 帮我写一首诗
@@ -190,146 +228,227 @@ Agent Planner 判断为 data_analysis
 ```txt
 不访问数据库
 不调用工具
-返回当前工作台暂不支持说明
+返回暂不支持说明
 ```
 
 ---
 
-## 主流程
+## Mock 与真实 Agent 模式
 
-```txt
-用户输入问题
-  ↓
-点击发送
-  ↓
-/api/agent/run
-  ↓
-Agent Planner 判断任务类型
-  ↓
-根据 intent 分流
+### Mock 模式
 
-capability_intro:
-  直接返回能力说明
+Mock 模式用于稳定演示：
 
-unsupported:
-  返回暂不支持说明
+- 使用本地模拟 RunEvent
+- 不依赖真实模型
+- 不依赖真实数据库
+- 仍然写入统一 `currentRun`
+- 右侧 Run Trace、工具调用、图表、RAG 来源和报告确认都可展示
 
-data_analysis:
-  schema_inspect
-    ↓
-  aggregate_table / query_table
-    ↓
-  chart_render
-    ↓
-  Groq 生成结论或 fallback 本地摘要
-    ↓
-  聊天区展示工具摘要和结论
-    ↓
-  右侧展示完整 Run
-    ↓
-  用户确认是否生成报告
-```
+### Agent 模式
+
+Agent 模式使用真实后端链路：
+
+- 调用 `/api/agent/run/stream`
+- 通过 fetch + ReadableStream 消费 SSE
+- 每个 RunEvent 更新 `currentRun`
+- 支持流式结论输出
+- 支持停止 / 中断
+- 支持右侧 Run Trace 逐步更新
+
+两种模式共享同一套 UI 展示结构和统一 Run 状态模型。
 
 ---
 
-## 模型接入状态
+## 数据源能力
 
-| 模型方式 | 当前状态 |
-|---|---|
-| Mock 演示模式 | 已完成，保留稳定演示流程 |
-| Groq 免费 API | 已接入 Agent Run 主流程 |
-| Gemini API | 配置入口预留 |
-| OpenRouter Free | 配置入口预留 |
-| OpenAI API Key | 配置入口预留 |
-| OpenAI / Codex OAuth | 仅保留入口，不实现登录授权 |
-| 本地 Ollama | 配置入口预留 |
+当前 Demo 使用 Supabase 托管 PostgreSQL 作为真实数据源，同时保留通用 PostgreSQL 数据源能力展示。
 
----
-
-## 数据源接入状态
-
-| 数据源 | 当前状态 |
-|---|---|
-| Supabase PostgreSQL | 当前 Demo 实际使用的数据源 |
-| PostgreSQL | 通用 PostgreSQL 数据源能力展示 |
-| MySQL | 入口预留，暂未接入 |
-
-说明：
-
-Supabase 底层使用 PostgreSQL。当前 Demo 使用 Supabase 托管 PostgreSQL 作为真实数据源，同时保留通用 PostgreSQL 接入能力展示。
-
----
-
-## 已实现 API
-
-### 模型相关
-
-```txt
-POST /api/chat
-```
-
-用于服务端转发 Groq 请求，支持模型连接测试和基础模型调用能力。
-
----
-
-### 数据源相关
+已支持 API：
 
 ```txt
 POST /api/datasources/test
-```
-
-测试服务端是否可以连接 PostgreSQL / Supabase 数据源。
-
-```txt
 POST /api/datasources/schema
 ```
 
-读取数据库结构信息，包括 schema、table 和 column 信息。
+能力：
+
+- PostgreSQL / Supabase 连接测试
+- 读取 public schema
+- 返回表、字段、字段类型、nullable 等结构信息
+- 前端不直接连接数据库
+- 数据库连接串只在服务端环境变量中使用
+
+相关环境变量：
+
+```env
+SUPABASE_DB_CONNECTION_STRING=
+POSTGRES_CONNECTION_STRING=
+```
+
+不要把真实值写入仓库。
 
 ---
 
-### Agent Run
+## 工具调用能力
+
+当前服务端 Tool Registry 已实现：
+
+| 工具 | 说明 | 当前状态 |
+|---|---|---|
+| `schema_inspect` | 读取数据库结构 | 已接入，服务端执行 |
+| `query_table` | 受控数据查询 | 已接入，服务端执行 |
+| `aggregate_table` | 受控聚合分析 | 已接入，服务端执行 |
+| `chart_render` | 图表数据生成 | 已接入，服务端执行 |
+| `knowledge_search` | RAG 来源模拟展示 | 前端模拟 |
+| `report_generate` | Markdown 报告生成 | 前端模拟 |
+
+安全原则：
 
 ```txt
-POST /api/agent/run
+模型不能直接执行 SQL
+所有数据访问必须经过服务端 Tool Registry
+表、字段、指标和 limit 都受白名单限制
 ```
 
-执行完整 Agent Run 流程。
+---
 
-包括：
+## Run Trace
 
-- Planner 判断任务类型
-- 数据分析类执行受控工具链
-- 非数据分析类直接返回说明
-- 返回 steps、toolInvocations、chartData、conclusion 等 Run 结果
+右侧 Workspace Inspector 展示完整 Run Trace：
+
+- Run ID
+- Run 模式：Mock / Agent
+- Run 状态：running / success / error / stopped
+- 任务类型：capability_intro / data_analysis / unsupported
+- 执行时间线
+- 当前数据源
+- 工具调用记录
+- RAG 检索来源
+- ECharts 图表
+- 当前结论
+- 结论来源：模型生成 / 本地摘要 / Mock 生成
+
+Run Trace 由统一 `RunSnapshot` 和 `RunEvent` 驱动。
+
+---
+
+## Prompt 配置中心
+
+Prompt 配置中心位于“工作流”弹窗中的 `Prompt 模板` Tab。
+
+当前支持：
+
+- Planner Prompt
+- Analysis Prompt
+- Report Prompt
+- Fallback Summary Prompt
+
+能力：
+
+- 查看模板
+- 编辑模板
+- 保存到 `sessionStorage`
+- 恢复当前模板默认值
+- 恢复全部默认值
+
+当前限制：
+
+```txt
+Prompt 模板目前只做前端配置展示，暂未接入后端 Agent 执行 prompt。
+```
+
+---
+
+## Model Gateway
+
+服务端已抽象 Model Gateway：
+
+```txt
+Agent Run / Stream
+  ↓
+ModelGateway
+  ↓
+Provider Adapter
+```
+
+当前 provider 状态：
+
+| Provider | 状态 |
+|---|---|
+| Groq | 已实现 generateText / streamText |
+| OpenAI | Adapter stub |
+| OpenRouter | Adapter stub |
+| Gemini | Adapter stub |
+| Ollama | Adapter stub |
+
+当前真实 Agent 结论生成仍使用 Groq。其他 provider 暂未接入真实请求。
+
+---
+
+## RAG Source / Citation UI
+
+项目已具备 RAG Source / Citation 的前端展示结构。
+
+右侧“检索来源”卡片展示：
+
+- 引用标识，例如 `[S1]`
+- 文档标题
+- 片段标题
+- 内容摘要
+- 相关性分数
+- 是否用于回答
+- 来源类型
+
+当前状态：
+
+```txt
+Mock 模式展示模拟来源
+Agent 模式没有真实 sources 时显示空态
+暂未接入真实向量库或 RAG 后端
+```
+
+---
+
+## 报告生成流程
+
+数据分析类 Run 成功后，聊天区会展示：
+
+```txt
+是否基于本次分析生成简版报告？
+```
+
+用户可选择：
+
+- 生成报告
+- 暂不生成
+
+生成报告时，前端基于当前 `currentRun` 生成 Markdown 报告，包括：
+
+- 分析问题
+- 使用数据源
+- 调用工具
+- 分析结论
+- 后续建议
+
+当前报告生成不调用后端，不使用假数据。
 
 ---
 
 ## 技术栈
 
-### 前端
-
-- React
+- React 19
 - TypeScript
 - Vite
 - Zustand
+- Tailwind CSS
+- shadcn/ui
+- Radix UI
 - ECharts
-- lucide-react
-- react-markdown
-- remark-gfm
-
-### 后端 / Serverless
-
-- Vercel Serverless Function
-- Node.js / TypeScript
-- pg
-- dotenv
+- React Markdown
+- Vercel Serverless Functions
+- PostgreSQL / Supabase
 - Groq OpenAI-compatible API
-
-### 数据源
-
-- Supabase PostgreSQL
-- PostgreSQL
 
 ---
 
@@ -337,55 +456,35 @@ POST /api/agent/run
 
 ```txt
 api/
-  agent/
-    run.ts
-  datasources/
-    test.ts
-    schema.ts
-  chat.ts
+  chat.ts                       # 旧 Groq 聊天接口，保留兼容
+  health.ts                     # 环境健康检查
+  agent/run.ts                  # 一次性 Agent Run JSON 接口
+  agent/run/stream.ts           # Agent Run SSE 流式接口
+  datasources/test.ts           # 数据源连接测试
+  datasources/schema.ts         # Schema 读取
 
-src/
-  components/
-    chat/
-    datasource/
-    layout/
-    model/
-    tools/
-    workflow/
-    analytics/
-    common/
+src/components/
+  chat/                         # 聊天区、输入框、工具摘要、报告确认
+  layout/                       # Sidebar、Workspace、Header、Inspector
+  layout/right-panel/           # Run Trace 卡片
+  model/                        # 模型配置中心
+  datasource/                   # 数据源配置弹窗
+  tools/                        # 工具库配置弹窗
+  workflow/                     # 工作流弹窗与 Prompt 配置中心
+  analytics/                    # 图表组件
+  ui/                           # shadcn/ui 基础组件
 
-  server/
-    agent/
-      runAgent.ts
-      planner.ts
-      prompt.ts
-      capabilityReply.ts
-      intent.ts
-      types.ts
-    datasources/
-      connection.ts
-    tools/
-      registry.ts
-      schemaInspectTool.ts
-      queryTableTool.ts
-      aggregateTableTool.ts
-      chartRenderTool.ts
-      types.ts
+src/server/
+  agent/                        # Planner、Agent Run、Prompt 构造、SSE 执行
+  datasources/                  # 服务端数据源连接工具
+  models/                       # Model Gateway 与 provider adapters
+  tools/                        # Tool Registry 与受控工具
 
-  services/
-    agentRunApi.ts
-    datasourceApi.ts
-    chatApi.ts
-
-  stores/
-    workbenchStore.ts
-    slices/
-
-  styles/
-  types/
-  utils/
-  mocks/
+src/services/                   # 前端 API service
+src/stores/                     # Zustand store 与 slices
+src/types/                      # Run、Prompt、RAG、工具、Workbench 类型
+src/utils/                      # Run reducer、formatter、mapping、report 等工具函数
+src/styles/                     # 拆分后的样式文件
 ```
 
 ---
@@ -398,184 +497,180 @@ src/
 pnpm install
 ```
 
-如果只查看前端 Mock 演示：
+仅查看前端和 Mock：
 
 ```bash
 pnpm dev
 ```
 
-如果需要测试 Serverless API、数据源连接、Schema 读取和 Agent Run，请使用：
+测试 Vercel API、数据源、Agent Run、环境健康检查：
 
 ```bash
 pnpm exec vercel dev
 ```
 
-然后访问：
+构建：
+
+```bash
+pnpm build
+```
+
+说明：
 
 ```txt
-http://localhost:3000
+当前构建可能出现 Vite chunk size warning，主要来自 ECharts、Markdown 和业务代码体积。
+这对当前 Demo 功能不构成影响。
 ```
 
 ---
 
 ## 环境变量
 
-本地开发可在项目根目录创建：
-
-```txt
-.env.local
-```
-
-示例：
+本地可在 `.env.local` 中配置：
 
 ```env
 GROQ_API_KEY=
-
 SUPABASE_DB_CONNECTION_STRING=
 POSTGRES_CONNECTION_STRING=
 ```
 
 说明：
 
-- `GROQ_API_KEY`：服务端 Groq Key，可选
-- `SUPABASE_DB_CONNECTION_STRING`：Supabase PostgreSQL 连接串
-- `POSTGRES_CONNECTION_STRING`：通用 PostgreSQL 连接串
-
-如果用户在页面模型配置中心输入 Groq Key，则优先使用用户输入的 Key。
-
-如果没有配置 Groq Key，Agent Run 不会失败，会使用本地工具结果生成兜底摘要，并明确提示该结论不是模型生成。
+- `.env.local` 不应提交到仓库
+- 线上部署需要在 Vercel Project Settings → Environment Variables 中配置
+- `GROQ_API_KEY` 未配置时，Agent Run 会使用 fallback 本地摘要
+- 数据库连接串未配置时，真实数据源能力不可用
+- 前端页面 BYOK Key 只保存到 `sessionStorage`
 
 ---
 
-## Groq 使用方式
+## Vercel 部署说明
 
-1. 打开模型配置中心
-2. 展开 “Groq 免费 API”
-3. 输入自己的 Groq API Key
-4. 点击保存
-5. 点击测试连接
-6. 启用 Groq
-7. 在输入框发送问题
+推荐部署到 Vercel。
 
-Groq 模式下，发送会进入 Agent Run 主流程：
+线上至少需要配置：
+
+```env
+SUPABASE_DB_CONNECTION_STRING=
+```
+
+如需服务端 Groq 默认可用，配置：
+
+```env
+GROQ_API_KEY=
+```
+
+如需通用 PostgreSQL 数据源能力，配置：
+
+```env
+POSTGRES_CONNECTION_STRING=
+```
+
+部署后可通过页面 Header 的环境状态查看：
+
+- 当前运行环境
+- Groq 是否配置
+- Supabase 是否配置 / 可连接
+- PostgreSQL 是否配置 / 可连接
+
+也可以直接访问：
 
 ```txt
-用户问题
-  ↓
-/api/agent/run
-  ↓
-Planner
-  ↓
-工具链 / 说明分支
-  ↓
-Groq 生成结论或 fallback 摘要
+GET /api/health
 ```
 
 ---
 
-## 数据源使用方式
+## 安全边界
 
-1. 打开数据源配置
-2. 选择 Supabase 或 PostgreSQL
-3. 点击测试连接
-4. 点击读取 Schema
-5. 发送数据分析类问题
-
-示例：
-
-```txt
-分析本月教学质量数据，找出异常指标
-```
-
-Agent 会根据当前问题进入数据分析流程，并在右侧展示执行过程。
-
----
-
-## 安全说明
+当前项目明确遵守以下边界：
 
 - 前端不保存数据库连接串
 - 前端不直接连接数据库
-- 数据库连接串只在服务端环境变量中使用
-- 不在代码仓库中写死模型 API Key
-- 不通过 URL 传递 API Key
-- BYOK 输入的模型 Key 仅保存在 `sessionStorage`
-- Markdown 渲染不启用原始 HTML
+- API Key 不进 URL
+- API Key 不写仓库
+- BYOK 只保存到 `sessionStorage`
+- 数据库连接串只在服务端环境变量使用
 - 模型不能直接执行 SQL
-- 模型不能自由调用任意工具
-- 数据查询必须经过服务端 Tool Registry
-- 工具内部限制表、字段、指标和 limit
-- Agent Planner 只负责判断任务类型，最终执行由后端受控流程完成
-
----
-
-## 构建
-
-```bash
-pnpm build
-```
-
-当前构建可能出现 chunk size warning，主要来自 ECharts、Markdown 渲染和业务代码打包体积，对当前 Demo 不影响。
+- 工具调用由服务端控制
+- 表、字段、指标、limit 受白名单限制
+- 数据分析工具只执行受控查询或聚合
+- Markdown 渲染不启用原始 HTML
+- 不返回数据库连接串
+- 不返回 Groq API Key
 
 ---
 
 ## 当前能力边界
 
-当前项目已完成第一版真实闭环，但仍然保持小而可控。
-
-已完成：
-
-- AI Agent 工作台 UI
-- Mock 演示模式
-- Groq 模型接入
-- 数据源连接测试
-- Schema 读取
-- 服务端 Tool Registry
-- Agent Planner
-- Agent Run
-- 聊天区工具摘要
-- 右侧完整 Run 展示
-- 报告确认与 Markdown 报告生成
-
-暂未实现：
+当前项目仍然没有实现：
 
 - 用户系统
-- 权限系统
-- 多租户
+- 登录 / Workspace
+- Run History 后端持久化
+- 完整 RAG 后端
+- 向量库
 - 任意 SQL 编辑器
-- 多数据库联合查询
-- 复杂报表中心
-- 完整 RAG 平台
-- 长期后端持久化
-- 生产级审计日志
-- 真正可取消的后端 Agent Run
+- 多租户
+- RBAC
+- 复杂报表平台
+- Three.js 3D Agent Flow
+- Prompt 配置后端执行接入
+- 真实 OpenAI / Gemini / OpenRouter / Ollama 请求
 
 ---
 
-## 后续扩展方向
+## 后续规划
 
-- 补齐时间范围识别与受控过滤能力
-- 优化 Planner 对指标、维度和时间条件的结构化提取
-- 接入更多数据源类型
-- 增加真正的报告生成 API
-- 增加 Run 历史持久化
-- 增加更完整的错误追踪和执行日志
-- 对 ECharts 和 Markdown 依赖做按需拆包
-- 增加 AbortController，支持中断真实 Agent Run
+优先级较高：
+
+- 登录 / Workspace
+- Run History 持久化
+- API Key / 数据源密钥加密保存
+- Prompt 配置接入后端
+- 完整 RAG 检索后端
+- 工具详情展开
+- 更完整的 Debug / Trace 面板
+
+后续增强：
+
+- Three.js 3D Agent Flow
+- 更完整的模型网关
+- 多数据源管理
+- Run 事件回放
+- 可配置工具启用策略
 
 ---
 
-## 项目价值
+## 演示路径
 
-这个项目展示的重点不是“做一个 AI 聊天框”，而是一个更接近真实业务场景的 AI 应用前端：
+建议演示顺序：
 
-```txt
-复杂工作台布局
-真实数据源
-服务端受控工具
-Agent 执行过程
-模型生成与兜底
-Run 可视化
-报告确认闭环
-```
+1. 打开在线预览。
+2. 查看 Header 中的环境状态。
+3. 打开模型配置，选择 Mock 或 Groq。
+4. 输入：
 
-它适合用于展示 AI 应用前端、B 端数据分析工作台、Agentic UI、Serverless API 与真实数据源接入等方向的综合能力。
+   ```txt
+   你能做什么
+   ```
+
+5. 展示 `capability_intro` 分支：不访问数据源、不调用工具、右侧显示说明类 Run。
+6. 输入：
+
+   ```txt
+   分析 2026 年 5 月教学质量数据，找出异常指标
+   ```
+
+7. 展示 Agent Run SSE 流式过程。
+8. 查看右侧 Run Trace：执行时间线、数据源、工具调用、检索来源、图表、结论。
+9. 点击“生成报告”，展示 Markdown 简版报告。
+10. 切换 Mock 模式，说明 Mock 和 Agent 共享同一套 Run 展示结构。
+11. 打开工作流弹窗，展示 Prompt 配置中心。
+12. 打开工具库弹窗，展示 Tool Registry 对齐后的工具定义视图。
+
+---
+
+## 备注
+
+这是一个用于作品集和面试展示的 AI Workbench Demo。项目更强调 AI 应用前端、Agentic UI、Run Trace、工具调用可视化、模型流式输出和轻量后端整合能力，而不是生产级 BI、权限系统或完整 RAG 平台。
