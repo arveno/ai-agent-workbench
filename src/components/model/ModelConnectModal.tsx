@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
@@ -85,8 +92,40 @@ const providerFallbackTextMap: Record<ModelProviderId, string> = {
   'codex-oauth': 'OpenAI',
   ollama: 'Ollama',
 };
+
 const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
 const DEFAULT_OLLAMA_MODEL_NAME = 'llama3.1';
+
+type ModelTabId = 'all' | 'configured' | 'usable' | 'reserved';
+
+interface ModelTabDefinition {
+  id: ModelTabId;
+  label: string;
+  description: string;
+}
+
+const MODEL_TABS: ModelTabDefinition[] = [
+  {
+    id: 'all',
+    label: '全部模型',
+    description: '查看当前工作台展示的全部模型服务入口。',
+  },
+  {
+    id: 'configured',
+    label: '已配置',
+    description: 'Mock、已保存 Key 的模型或已填写本地配置的 provider。',
+  },
+  {
+    id: 'usable',
+    label: '可启用',
+    description: '当前主流程可切换的 Mock 和 Groq 模型服务。',
+  },
+  {
+    id: 'reserved',
+    label: '预留',
+    description: '已在 UI 中预留入口，后续再接入 Model Gateway 的模型服务。',
+  },
+];
 
 interface ModelProviderLogoProps {
   providerId: ModelProviderId;
@@ -116,6 +155,86 @@ function ModelProviderLogo({ providerId, alt }: ModelProviderLogoProps) {
       }}
     />
   );
+}
+
+function isReservedProvider(providerId: ModelProviderId): boolean {
+  return providerId !== 'mock' && providerId !== 'groq';
+}
+
+function getCapabilityLabels(option: ProviderOption): string[] {
+  if (option.id === 'mock') {
+    return ['本地模拟', '支持流式', '稳定演示'];
+  }
+
+  if (option.id === 'groq') {
+    return ['BYOK', '服务端转发', '支持流式', 'Model Gateway'];
+  }
+
+  if (option.id === 'codex-oauth') {
+    return ['OAuth 预留', '待接入 Model Gateway'];
+  }
+
+  if (option.id === 'ollama') {
+    return ['本地模型预留', '待接入 Model Gateway'];
+  }
+
+  return ['API Key 预留', '待接入 Model Gateway'];
+}
+
+function getCapabilityClassName(label: string): string {
+  if (label === 'Model Gateway') {
+    return 'model-badge model-badge-gateway';
+  }
+
+  if (label.includes('预留') || label.includes('待接入')) {
+    return 'model-badge model-badge-muted';
+  }
+
+  if (label === 'BYOK' || label === '支持流式') {
+    return 'model-badge model-badge-blue';
+  }
+
+  return 'model-badge model-badge-green';
+}
+
+function getKeySourceLabel(option: ProviderOption, configured: boolean): string {
+  if (option.id === 'mock') {
+    return '不需要 Key';
+  }
+
+  if (option.id === 'groq') {
+    return configured ? 'sessionStorage BYOK' : '服务端 GROQ_API_KEY / BYOK';
+  }
+
+  if (option.id === 'ollama') {
+    return configured ? '本地会话配置' : '本地模型预留';
+  }
+
+  if (option.type === 'oauth') {
+    return 'OAuth 预留';
+  }
+
+  return configured ? 'sessionStorage 配置' : 'API Key 预留';
+}
+
+function getStreamingLabel(option: ProviderOption): string {
+  if (option.id === 'mock' || option.id === 'groq') {
+    return '支持 streaming';
+  }
+
+  return '待接入 streaming';
+}
+
+function getGatewayLabel(option: ProviderOption): string {
+  if (option.id === 'groq') {
+    return '已接入 Model Gateway';
+  }
+
+  if (option.id === 'mock') {
+    return '本地模拟，不走 Gateway';
+  }
+
+  return '待接入 Model Gateway';
 }
 
 export function ModelConnectModal() {
@@ -169,6 +288,22 @@ export function ModelConnectModal() {
     }
 
     return Boolean(config?.apiKey?.trim());
+  };
+
+  const getProvidersByTab = (tabId: ModelTabId): ProviderOption[] => {
+    if (tabId === 'all') {
+      return PROVIDER_OPTIONS;
+    }
+
+    if (tabId === 'configured') {
+      return PROVIDER_OPTIONS.filter((option) => isProviderConfigured(option.id));
+    }
+
+    if (tabId === 'usable') {
+      return PROVIDER_OPTIONS.filter((option) => option.id === 'mock' || option.id === 'groq');
+    }
+
+    return PROVIDER_OPTIONS.filter((option) => isReservedProvider(option.id));
   };
 
   const handleSaveConfig = (providerId: ModelProviderId) => {
@@ -293,39 +428,39 @@ export function ModelConnectModal() {
       return true;
     }
 
-    if (option.type === 'oauth') {
-      return false;
+    if (option.id === 'groq') {
+      return isProviderConfigured(option.id);
     }
 
-    return isProviderConfigured(option.id);
+    return false;
   };
 
-  const getProviderBadgeText = (option: ProviderOption): string => {
-    if (currentModelProvider === option.id) {
-      return '当前启用';
-    }
-
-    if (option.type === 'mock') {
-      return '可启用';
-    }
-
-    if (option.type === 'oauth') {
+  const getProviderStatusText = (option: ProviderOption): string => {
+    if (isReservedProvider(option.id)) {
       return '预留';
+    }
+
+    if (option.id === 'mock') {
+      return '可启用';
     }
 
     return isProviderConfigured(option.id) ? '已配置' : '未配置';
   };
 
-  const getProviderBadgeClassName = (option: ProviderOption): string => {
-    if (currentModelProvider === option.id) {
-      return 'model-provider-badge model-provider-badge-active';
+  const getProviderStatusClassName = (option: ProviderOption): string => {
+    if (isReservedProvider(option.id)) {
+      return 'model-badge model-badge-muted';
     }
 
-    if (option.type !== 'oauth' && isProviderConfigured(option.id)) {
-      return 'model-provider-badge model-provider-badge-ready';
+    if (option.id === 'groq' && isProviderConfigured(option.id)) {
+      return 'model-badge model-badge-green';
     }
 
-    return 'model-provider-badge';
+    if (option.id === 'mock') {
+      return 'model-badge model-badge-blue';
+    }
+
+    return 'model-badge model-badge-muted';
   };
 
   const getProviderActionText = (option: ProviderOption): string => {
@@ -333,8 +468,8 @@ export function ModelConnectModal() {
       return '使用中';
     }
 
-    if (option.type === 'oauth') {
-      return '预留';
+    if (isReservedProvider(option.id)) {
+      return '先配置';
     }
 
     return canActivateProvider(option) ? '启用' : '先配置';
@@ -358,208 +493,281 @@ export function ModelConnectModal() {
           <div className="model-modal-title-wrap">
             <h3 className="model-modal-title">连接模型服务</h3>
             <p className="model-modal-subtitle">
-              当前线上 Demo 默认使用 Mock 模式，避免公开演示产生 API 成本。后续可通过免费 API、API
-              Key、服务端环境变量或 OAuth 接入真实模型。
+              选择当前会话使用的模型服务，支持 Mock 稳定演示和 BYOK 真实模型。
             </p>
           </div>
-          <button type="button" className="model-modal-close" onClick={closeModelModal} aria-label="关闭">
+          <Button type="button" variant="outline" size="icon" className="model-modal-close" onClick={closeModelModal} aria-label="关闭">
             ×
-          </button>
+          </Button>
         </div>
 
         <div className="model-modal-body">
-          <div className="model-provider-list">
-            {PROVIDER_OPTIONS.map((option) => {
-              const isActiveProvider = option.id === currentModelProvider;
-              const isExpanded = expandedProviderIds.includes(option.id);
-              const testStatus: ModelTestStatus = modelTestStatusMap[option.id] ?? 'idle';
-              const isTesting = testStatus === 'testing';
-              const canActivate = canActivateProvider(option);
+          <Card className="model-modal-info-card" size="sm">
+            <CardContent className="model-modal-info-content">
+              <p>当前线上 Demo 默认使用 Mock 模式，避免公开演示产生 API 成本。</p>
+              <p>Groq 支持 BYOK，用户输入的 Key 仅保存在当前浏览器会话中，不会写入 URL 或代码仓库。</p>
+              <p>服务端可通过 GROQ_API_KEY 配置默认模型 Key；真实调用仍由服务端转发。</p>
+            </CardContent>
+          </Card>
+
+          <Tabs defaultValue="all" className="model-tabs">
+            <TabsList className="model-tabs-list">
+              {MODEL_TABS.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="model-tab-trigger">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {MODEL_TABS.map((tab) => {
+              const providers = getProvidersByTab(tab.id);
 
               return (
-                <div
-                  key={option.id}
-                  className={`model-provider-card${isActiveProvider ? ' model-provider-card-active' : ''}`}
-                >
-                  <div className="model-provider-main">
-                    <div className="model-provider-icon">
-                      <ModelProviderLogo providerId={option.id} alt={option.name} />
+                <TabsContent key={tab.id} value={tab.id} className="model-tab-content">
+                  <div className="model-tab-heading">
+                    <div>
+                      <h4 className="model-tab-title">{tab.label}</h4>
+                      <p className="model-tab-description">{tab.description}</p>
                     </div>
-
-                    <div className="model-provider-content">
-                      <div className="model-provider-title-row">
-                        <h4 className="model-provider-title">{option.name}</h4>
-                      </div>
-                      <p className="model-provider-description">{option.description}</p>
-                    </div>
-
-                    <div className="model-provider-actions">
-                      <span className={getProviderBadgeClassName(option)}>{getProviderBadgeText(option)}</span>
-                      <button
-                        className={
-                          isActiveProvider ? 'model-provider-primary-button' : 'model-provider-secondary-button'
-                        }
-                        type="button"
-                        disabled={isActiveProvider || !canActivate}
-                        onClick={() => setCurrentModelProvider(option.id)}
-                      >
-                        {getProviderActionText(option)}
-                      </button>
-                      {option.type !== 'mock' ? (
-                        <button
-                          className="model-provider-expand-button"
-                          type="button"
-                          aria-label={isExpanded ? '收起配置' : '展开配置'}
-                          onClick={() => toggleProviderExpanded(option.id)}
-                        >
-                          <AppIcon
-                            icon={icons.chevronRight}
-                            size={16}
-                            className={isExpanded ? 'model-provider-chevron-open' : ''}
-                          />
-                        </button>
-                      ) : null}
-                    </div>
+                    <span className="model-tab-count">{providers.length} 个模型</span>
                   </div>
 
-                  {isExpanded && option.type === 'api-key' ? (
-                    <div className="model-config-panel">
-                      <div className="model-config-row">
-                        <label className="model-config-label" htmlFor={`${option.id}-api-key`}>
-                          API Key
-                        </label>
+                  <ScrollArea className="model-scroll">
+                    {providers.length > 0 ? (
+                      <div className="model-provider-list">
+                        {providers.map((option) => {
+                          const isActiveProvider = option.id === currentModelProvider;
+                          const isExpanded = expandedProviderIds.includes(option.id);
+                          const testStatus: ModelTestStatus = modelTestStatusMap[option.id] ?? 'idle';
+                          const isTesting = testStatus === 'testing';
+                          const canActivate = canActivateProvider(option);
+                          const isConfigured = isProviderConfigured(option.id);
+                          const capabilities = getCapabilityLabels(option);
 
-                        <div className="model-config-input-wrap">
-                          <input
-                            id={`${option.id}-api-key`}
-                            className="model-config-input"
-                            type="password"
-                            value={draftConfigs[option.id]?.apiKey ?? ''}
-                            placeholder={option.placeholder}
-                            onChange={(event) =>
-                              updateDraftConfig(option.id, {
-                                apiKey: event.target.value,
-                              })
-                            }
-                          />
-                        </div>
+                          return (
+                            <Card
+                              key={option.id}
+                              size="sm"
+                              className={`model-provider-card${isActiveProvider ? ' model-provider-card-active' : ''}`}
+                            >
+                              <CardHeader className="model-provider-card-header">
+                                <div className="model-provider-main">
+                                  <div className="model-provider-icon">
+                                    <ModelProviderLogo providerId={option.id} alt={option.name} />
+                                  </div>
 
-                        <div className="model-config-actions">
-                          <button
-                            className="model-config-primary-button"
-                            type="button"
-                            onClick={() => handleSaveConfig(option.id)}
-                          >
-                            保存
-                          </button>
+                                  <div className="model-provider-content">
+                                    <div className="model-provider-title-row">
+                                      <CardTitle className="model-provider-title">{option.name}</CardTitle>
+                                      {isActiveProvider ? (
+                                        <Badge variant="outline" className="model-badge model-badge-active">
+                                          当前启用
+                                        </Badge>
+                                      ) : null}
+                                      <Badge variant="outline" className={getProviderStatusClassName(option)}>
+                                        {getProviderStatusText(option)}
+                                      </Badge>
+                                    </div>
+                                    <CardDescription className="model-provider-description">
+                                      {option.description}
+                                    </CardDescription>
+                                  </div>
 
-                          <button
-                            className="model-config-secondary-button"
-                            type="button"
-                            onClick={() => handleClearConfig(option.id)}
-                          >
-                            清除
-                          </button>
+                                  <div className="model-provider-actions">
+                                    <Button
+                                      variant={isActiveProvider ? 'default' : 'outline'}
+                                      size="sm"
+                                      type="button"
+                                      disabled={isActiveProvider || !canActivate}
+                                      onClick={() => setCurrentModelProvider(option.id)}
+                                    >
+                                      {getProviderActionText(option)}
+                                    </Button>
+                                    {option.type !== 'mock' ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        type="button"
+                                        aria-label={isExpanded ? '收起配置' : '展开配置'}
+                                        onClick={() => toggleProviderExpanded(option.id)}
+                                      >
+                                        <AppIcon
+                                          icon={icons.chevronRight}
+                                          size={16}
+                                          className={isExpanded ? 'model-provider-chevron-open' : ''}
+                                        />
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </CardHeader>
 
-                          <button
-                            className="model-config-secondary-button"
-                            type="button"
-                            onClick={() => {
-                              void handleTestConfig(option.id);
-                            }}
-                            disabled={isTesting}
-                          >
-                            {isTesting ? '测试中...' : '测试连接'}
-                          </button>
-                        </div>
+                              <CardContent className="model-provider-card-content">
+                                <div className="model-capabilities" aria-label="模型能力标签">
+                                  {capabilities.map((capability) => (
+                                    <Badge key={capability} variant="outline" className={getCapabilityClassName(capability)}>
+                                      {capability}
+                                    </Badge>
+                                  ))}
+                                </div>
+
+                                <div className="model-provider-meta">
+                                  <div className="model-provider-meta-item">
+                                    <span>Key 来源</span>
+                                    <strong>{getKeySourceLabel(option, isConfigured)}</strong>
+                                  </div>
+                                  <div className="model-provider-meta-item">
+                                    <span>Streaming</span>
+                                    <strong>{getStreamingLabel(option)}</strong>
+                                  </div>
+                                  <div className="model-provider-meta-item">
+                                    <span>Gateway</span>
+                                    <strong>{getGatewayLabel(option)}</strong>
+                                  </div>
+                                </div>
+
+                                {isExpanded && option.type === 'api-key' ? (
+                                  <div className="model-config-panel">
+                                    <div className="model-config-row">
+                                      <label className="model-config-label" htmlFor={`${option.id}-api-key`}>
+                                        API Key
+                                      </label>
+
+                                      <div className="model-config-input-wrap">
+                                        <Input
+                                          id={`${option.id}-api-key`}
+                                          className="model-config-input"
+                                          type="password"
+                                          value={draftConfigs[option.id]?.apiKey ?? ''}
+                                          placeholder={option.placeholder}
+                                          onChange={(event) =>
+                                            updateDraftConfig(option.id, {
+                                              apiKey: event.target.value,
+                                            })
+                                          }
+                                        />
+                                      </div>
+
+                                      <div className="model-config-actions">
+                                        <Button size="sm" type="button" onClick={() => handleSaveConfig(option.id)}>
+                                          保存
+                                        </Button>
+
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          type="button"
+                                          onClick={() => handleClearConfig(option.id)}
+                                        >
+                                          清除
+                                        </Button>
+
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          type="button"
+                                          onClick={() => {
+                                            void handleTestConfig(option.id);
+                                          }}
+                                          disabled={isTesting}
+                                        >
+                                          {isTesting ? '测试中...' : '测试连接'}
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    <p className="model-config-help">Key 仅保存在当前浏览器会话中，不会写入 URL 或代码仓库。</p>
+                                    {renderTestStatus(option.id, testStatus)}
+                                  </div>
+                                ) : null}
+
+                                {isExpanded && option.type === 'oauth' ? (
+                                  <div className="model-config-info">当前版本仅保留入口，不实现登录授权。</div>
+                                ) : null}
+
+                                {isExpanded && option.type === 'ollama' ? (
+                                  <div className="model-config-panel">
+                                    <div className="model-config-row model-config-row-two">
+                                      <label className="model-config-label" htmlFor="ollama-base-url">
+                                        Base URL
+                                      </label>
+                                      <Input
+                                        id="ollama-base-url"
+                                        className="model-config-input"
+                                        value={draftConfigs.ollama?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL}
+                                        placeholder={DEFAULT_OLLAMA_BASE_URL}
+                                        onChange={(event) =>
+                                          updateDraftConfig('ollama', {
+                                            baseUrl: event.target.value,
+                                          })
+                                        }
+                                      />
+
+                                      <label className="model-config-label" htmlFor="ollama-model-name">
+                                        Model Name
+                                      </label>
+                                      <Input
+                                        id="ollama-model-name"
+                                        className="model-config-input"
+                                        value={draftConfigs.ollama?.modelName ?? DEFAULT_OLLAMA_MODEL_NAME}
+                                        placeholder={DEFAULT_OLLAMA_MODEL_NAME}
+                                        onChange={(event) =>
+                                          updateDraftConfig('ollama', {
+                                            modelName: event.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
+
+                                    <Separator className="model-config-separator" />
+
+                                    <div className="model-config-actions model-config-actions-inline">
+                                      <Button size="sm" type="button" onClick={() => handleSaveConfig('ollama')}>
+                                        保存
+                                      </Button>
+
+                                      <Button size="sm" variant="outline" type="button" onClick={() => handleClearConfig('ollama')}>
+                                        清除
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        type="button"
+                                        onClick={() => {
+                                          void handleTestConfig('ollama');
+                                        }}
+                                        disabled={(modelTestStatusMap.ollama ?? 'idle') === 'testing'}
+                                      >
+                                        {(modelTestStatusMap.ollama ?? 'idle') === 'testing' ? '测试中...' : '测试连接'}
+                                      </Button>
+                                    </div>
+
+                                    <p className="model-config-help model-config-help-standalone">
+                                      本地 Ollama 需要浏览器所在环境可访问该服务地址。当前仅作为本地模型预留入口展示。
+                                    </p>
+                                    {renderTestStatus('ollama', modelTestStatusMap.ollama ?? 'idle')}
+                                  </div>
+                                ) : null}
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
                       </div>
-
-                      <p className="model-config-help">Key 仅保存在当前浏览器会话中。</p>
-                      {renderTestStatus(option.id, testStatus)}
-                    </div>
-                  ) : null}
-
-                  {isExpanded && option.type === 'oauth' ? (
-                    <div className="model-config-info">当前版本仅保留入口，不实现登录授权。</div>
-                  ) : null}
-
-                  {isExpanded && option.type === 'ollama' ? (
-                    <div className="model-config-panel">
-                      <div className="model-config-row model-config-row-two">
-                        <label className="model-config-label" htmlFor="ollama-base-url">
-                          Base URL
-                        </label>
-                        <input
-                          id="ollama-base-url"
-                          className="model-config-input"
-                          value={draftConfigs.ollama?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL}
-                          placeholder={DEFAULT_OLLAMA_BASE_URL}
-                          onChange={(event) =>
-                            updateDraftConfig('ollama', {
-                              baseUrl: event.target.value,
-                            })
-                          }
-                        />
-
-                        <label className="model-config-label" htmlFor="ollama-model-name">
-                          Model Name
-                        </label>
-                        <input
-                          id="ollama-model-name"
-                          className="model-config-input"
-                          value={draftConfigs.ollama?.modelName ?? DEFAULT_OLLAMA_MODEL_NAME}
-                          placeholder={DEFAULT_OLLAMA_MODEL_NAME}
-                          onChange={(event) =>
-                            updateDraftConfig('ollama', {
-                              modelName: event.target.value,
-                            })
-                          }
-                        />
-                      </div>
-
-                      <div className="model-config-actions">
-                        <button
-                          className="model-config-primary-button"
-                          type="button"
-                          onClick={() => handleSaveConfig('ollama')}
-                        >
-                          保存
-                        </button>
-
-                        <button
-                          className="model-config-secondary-button"
-                          type="button"
-                          onClick={() => handleClearConfig('ollama')}
-                        >
-                          清除
-                        </button>
-
-                        <button
-                          className="model-config-secondary-button"
-                          type="button"
-                          onClick={() => {
-                            void handleTestConfig('ollama');
-                          }}
-                          disabled={(modelTestStatusMap.ollama ?? 'idle') === 'testing'}
-                        >
-                          {(modelTestStatusMap.ollama ?? 'idle') === 'testing' ? '测试中...' : '测试连接'}
-                        </button>
-                      </div>
-
-                      <p className="model-config-help">本地 Ollama 需要浏览器所在环境可访问该服务地址。</p>
-                      {renderTestStatus('ollama', modelTestStatusMap.ollama ?? 'idle')}
-                    </div>
-                  ) : null}
-                </div>
+                    ) : (
+                      <div className="model-empty-state">暂无该类型模型</div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
               );
             })}
-          </div>
+          </Tabs>
         </div>
 
         <div className="model-modal-foot">
-          <button type="button" className="model-close-btn" onClick={closeModelModal}>
+          <Button type="button" variant="outline" onClick={closeModelModal}>
             关闭
-          </button>
+          </Button>
         </div>
       </div>
     </div>
