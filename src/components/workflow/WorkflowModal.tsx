@@ -1,17 +1,19 @@
 import { useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { WorkflowStepDefinition } from '../../types/workbench';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { PromptTemplatePanel } from './PromptTemplatePanel';
-import { WorkflowStepCard } from './WorkflowStepCard';
 
 const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
   {
     id: 'workflow-input',
     kind: 'input',
     title: '用户输入',
-    description:
-      '用户提出分析问题，例如“分析 2026 年 5 月教学质量数据，找出异常指标”。',
+    description: '用户提出分析问题，例如“分析 2026 年 5 月教学质量数据，找出异常指标”。',
     status: 'ready',
     outputSummary: 'prompt',
   },
@@ -76,6 +78,120 @@ const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
   },
 ];
 
+function getStatusText(status: WorkflowStepDefinition['status']): string {
+  if (status === 'ready') {
+    return '已就绪';
+  }
+
+  if (status === 'running') {
+    return '进行中';
+  }
+
+  if (status === 'done') {
+    return '已完成';
+  }
+
+  if (status === 'waiting') {
+    return '等待中';
+  }
+
+  return '未启用';
+}
+
+function getStatusClassName(status: WorkflowStepDefinition['status']): string {
+  if (status === 'ready') {
+    return 'workflow-badge workflow-badge-ready';
+  }
+
+  if (status === 'running') {
+    return 'workflow-badge workflow-badge-running';
+  }
+
+  if (status === 'done') {
+    return 'workflow-badge workflow-badge-done';
+  }
+
+  if (status === 'waiting') {
+    return 'workflow-badge workflow-badge-waiting';
+  }
+
+  return 'workflow-badge workflow-badge-muted';
+}
+
+function getWorkflowInputSummary(step: WorkflowStepDefinition): string {
+  if (step.kind === 'input') {
+    return '用户问题';
+  }
+
+  if (step.kind === 'intent') {
+    return 'prompt';
+  }
+
+  if (step.kind === 'schema') {
+    return 'provider, allowedSchemas';
+  }
+
+  if (step.kind === 'toolSelect') {
+    return 'intent, schema, prompt';
+  }
+
+  if (step.kind === 'toolExecute') {
+    return 'selectedTool, constraints';
+  }
+
+  if (step.kind === 'chart') {
+    return 'toolResult, chartType';
+  }
+
+  if (step.kind === 'answer') {
+    return 'toolContext, chartSummary';
+  }
+
+  return 'runSnapshot';
+}
+
+function renderWorkflowStep(step: WorkflowStepDefinition, index: number, isLast: boolean) {
+  return (
+    <div key={step.id} className="workflow-step-item">
+      <div className="workflow-step-index-column" aria-hidden="true">
+        <span className="workflow-step-index">{index + 1}</span>
+        {!isLast ? <span className="workflow-step-connector" /> : null}
+      </div>
+
+      <Card size="sm" className="workflow-step-card">
+        <CardHeader className="workflow-step-card-header">
+          <div className="workflow-step-title-row">
+            <div>
+              <CardTitle className="workflow-step-title">{step.title}</CardTitle>
+              <CardDescription className="workflow-step-description">{step.description}</CardDescription>
+            </div>
+            <Badge variant="outline" className={getStatusClassName(step.status)}>
+              {getStatusText(step.status)}
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="workflow-step-card-content">
+          <div className="workflow-step-meta">
+            <div className="workflow-step-meta-item">
+              <span>输入</span>
+              <strong>{getWorkflowInputSummary(step)}</strong>
+            </div>
+            <div className="workflow-step-meta-item">
+              <span>输出</span>
+              <strong>{step.outputSummary ?? '-'}</strong>
+            </div>
+            <div className="workflow-step-meta-item">
+              <span>关联工具</span>
+              <strong>{step.toolName ?? '-'}</strong>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function WorkflowModal() {
   const isWorkflowModalOpen = useWorkbenchStore((state) => state.isWorkflowModalOpen);
   const closeWorkflowModal = useWorkbenchStore((state) => state.closeWorkflowModal);
@@ -120,12 +236,19 @@ export function WorkflowModal() {
           <div>
             <h3 className="workflow-modal-title">工作流配置</h3>
             <p className="workflow-modal-description">
-              查看 Agent 第一版固定执行链路。当前阶段不做自由编排，所有步骤由服务端受控执行。
+              查看 Agent 固定执行流程，并配置当前浏览器会话中的 Prompt 模板。
             </p>
           </div>
-          <button type="button" className="workflow-modal-close" onClick={closeWorkflowModal} aria-label="关闭">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="workflow-modal-close"
+            onClick={closeWorkflowModal}
+            aria-label="关闭"
+          >
             ×
-          </button>
+          </Button>
         </header>
 
         <div className="workflow-modal-body">
@@ -140,15 +263,26 @@ export function WorkflowModal() {
             </TabsList>
 
             <TabsContent value="flow" className="workflow-tabs-content">
-              <div className="workflow-step-list">
-                {WORKFLOW_STEPS.map((step, index) => (
-                  <WorkflowStepCard
-                    key={step.id}
-                    step={step}
-                    index={index}
-                    isLast={index === WORKFLOW_STEPS.length - 1}
-                  />
-                ))}
+              <div className="workflow-flow-panel">
+                <div className="workflow-panel-heading">
+                  <div>
+                    <h4 className="workflow-panel-title">Agent Workflow Template</h4>
+                    <p className="workflow-panel-description">
+                      当前版本使用固定编排，模型负责判断任务类型，实际工具执行仍由服务端受控流程完成。
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="workflow-badge workflow-badge-ready">
+                    8 个步骤
+                  </Badge>
+                </div>
+
+                <ScrollArea className="workflow-flow-scroll">
+                  <div className="workflow-step-list">
+                    {WORKFLOW_STEPS.map((step, index) =>
+                      renderWorkflowStep(step, index, index === WORKFLOW_STEPS.length - 1)
+                    )}
+                  </div>
+                </ScrollArea>
               </div>
             </TabsContent>
 
@@ -159,9 +293,9 @@ export function WorkflowModal() {
         </div>
 
         <footer className="workflow-modal-footer">
-          <button type="button" className="workflow-modal-close-button" onClick={closeWorkflowModal}>
+          <Button type="button" variant="outline" onClick={closeWorkflowModal}>
             关闭
-          </button>
+          </Button>
         </footer>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import type { PromptTemplate } from '@/types/prompt';
 
@@ -28,54 +30,67 @@ export function PromptTemplateEditor({ template, onSave, onReset }: PromptTempla
   }, [template.currentContent, template.id]);
 
   return (
-    <section className="prompt-template-editor">
-      <div className="prompt-template-editor-header">
+    <Card size="sm" className="prompt-template-editor">
+      <CardHeader className="prompt-template-editor-header">
         <div>
-          <h4 className="prompt-template-editor-title">{template.name}</h4>
-          <p className="prompt-template-editor-description">{template.description}</p>
+          <CardTitle className="prompt-template-editor-title">{template.name}</CardTitle>
+          <CardDescription className="prompt-template-editor-description">{template.description}</CardDescription>
         </div>
-        <Badge variant={template.updatedAt ? 'secondary' : 'outline'}>{template.updatedAt ? '已自定义' : '默认启用'}</Badge>
-      </div>
+        <Badge
+          variant="outline"
+          className={
+            template.updatedAt
+              ? 'prompt-template-status-badge prompt-template-status-badge-custom'
+              : 'prompt-template-status-badge prompt-template-status-badge-default'
+          }
+        >
+          {template.updatedAt ? '已修改' : '默认模板'}
+        </Badge>
+      </CardHeader>
 
-      <div className="prompt-template-variable-row" aria-label="可用变量">
-        {template.variables.map((variable) => (
-          <Badge key={variable} variant="outline" className="prompt-template-variable-badge">
-            {variable}
-          </Badge>
-        ))}
-      </div>
-
-      <Textarea
-        className="prompt-template-textarea"
-        value={draftContent}
-        onChange={(event) => {
-          setDraftContent(event.target.value);
-        }}
-        spellCheck={false}
-      />
-
-      <div className="prompt-template-editor-footer">
-        <div className="prompt-template-editor-meta">
-          <span>{formatUpdatedAt(template.updatedAt)}</span>
-          <span>{characterCountText}</span>
-          {isDirty ? <span>有未保存修改</span> : null}
+      <CardContent className="prompt-template-editor-content">
+        <div className="prompt-template-variable-row" aria-label="可用变量">
+          {template.variables.map((variable) => (
+            <Badge key={variable} variant="outline" className="prompt-template-variable-badge">
+              {variable}
+            </Badge>
+          ))}
         </div>
-        <div className="prompt-template-editor-actions">
-          <Button type="button" variant="outline" size="sm" onClick={onReset}>
-            恢复默认
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              onSave(draftContent);
-            }}
-            disabled={!draftContent.trim() || !isDirty}
-          >
-            保存模板
-          </Button>
+
+        <Separator className="prompt-template-separator" />
+
+        <Textarea
+          className="prompt-template-textarea"
+          value={draftContent}
+          onChange={(event) => {
+            setDraftContent(event.target.value);
+          }}
+          spellCheck={false}
+        />
+
+        <div className="prompt-template-editor-footer">
+          <div className="prompt-template-editor-meta">
+            <span>{formatUpdatedAt(template.updatedAt)}</span>
+            <span>{characterCountText}</span>
+            {isDirty ? <span>有未保存修改</span> : null}
+          </div>
+          <div className="prompt-template-editor-actions">
+            <Button type="button" variant="outline" size="sm" onClick={onReset}>
+              恢复默认
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                onSave(draftContent);
+              }}
+              disabled={!draftContent.trim() || !isDirty}
+            >
+              保存模板
+            </Button>
+          </div>
         </div>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

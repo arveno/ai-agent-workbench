@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import type { PromptTemplateId } from '@/types/prompt';
 import {
   readPromptTemplates,
@@ -31,57 +35,90 @@ export function PromptTemplatePanel() {
   const [lastAction, setLastAction] = useState<'save' | 'reset' | 'resetAll' | null>(null);
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) ?? templates[0],
-    [selectedTemplateId, templates],
+    [selectedTemplateId, templates]
   );
 
   const customTemplateCount = templates.filter((template) => Boolean(template.updatedAt)).length;
 
   return (
     <div className="prompt-template-panel">
-      <div className="prompt-template-panel-head">
-        <div>
-          <h4 className="prompt-template-panel-title">Prompt 模板</h4>
-          <p className="prompt-template-panel-description">
-            管理 Planner、分析、报告和 fallback 摘要模板。当前配置只保存在浏览器会话中，不影响后端真实执行逻辑。
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setTemplates(resetAllPromptTemplates());
-            setLastAction('resetAll');
-          }}
-          disabled={customTemplateCount === 0}
-        >
-          恢复全部默认
-        </Button>
-      </div>
+      <Card size="sm" className="prompt-template-panel-head">
+        <CardHeader className="prompt-template-panel-header">
+          <div>
+            <CardTitle className="prompt-template-panel-title">Prompt Configuration Panel</CardTitle>
+            <CardDescription className="prompt-template-panel-description">
+              管理 Planner、分析、报告和 fallback 摘要模板。当前配置只保存在浏览器会话中，不影响后端真实执行逻辑。
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className="prompt-template-local-badge">
+            仅本地会话保存
+          </Badge>
+        </CardHeader>
+        <CardContent className="prompt-template-panel-actions">
+          <span>{customTemplateCount} 个模板已修改</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTemplates(resetAllPromptTemplates());
+              setLastAction('resetAll');
+            }}
+            disabled={customTemplateCount === 0}
+          >
+            恢复全部默认
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="prompt-template-layout">
-        <aside className="prompt-template-list" aria-label="Prompt 模板列表">
-          {templates.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              className={[
-                'prompt-template-list-item',
-                template.id === selectedTemplateId ? 'prompt-template-list-item-active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => {
-                setSelectedTemplateId(template.id);
-                setLastAction(null);
-              }}
-            >
-              <span className="prompt-template-list-name">{template.name}</span>
-              <span className="prompt-template-list-description">{template.description}</span>
-              <span className="prompt-template-list-state">{template.updatedAt ? '已自定义' : '默认模板'}</span>
-            </button>
-          ))}
-        </aside>
+        <Card size="sm" className="prompt-template-list-card">
+          <CardHeader className="prompt-template-list-header">
+            <CardTitle className="prompt-template-list-title">模板列表</CardTitle>
+            <CardDescription className="prompt-template-list-subtitle">选择一个模板进行查看或编辑。</CardDescription>
+          </CardHeader>
+          <Separator className="prompt-template-separator" />
+          <CardContent className="prompt-template-list-content">
+            <ScrollArea className="prompt-template-list-scroll">
+              <div className="prompt-template-list" aria-label="Prompt 模板列表">
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className={[
+                      'prompt-template-list-item',
+                      template.id === selectedTemplateId ? 'prompt-template-list-item-active' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => {
+                      setSelectedTemplateId(template.id);
+                      setLastAction(null);
+                    }}
+                  >
+                    <span className="prompt-template-list-name">{template.name}</span>
+                    <span className="prompt-template-list-description">{template.description}</span>
+                    <span className="prompt-template-list-meta">
+                      <Badge
+                        variant="outline"
+                        className={
+                          template.updatedAt
+                            ? 'prompt-template-status-badge prompt-template-status-badge-custom'
+                            : 'prompt-template-status-badge prompt-template-status-badge-default'
+                        }
+                      >
+                        {template.updatedAt ? '已修改' : '默认模板'}
+                      </Badge>
+                      <Badge variant="outline" className="prompt-template-status-badge prompt-template-status-badge-variable">
+                        {template.variables.length} 个变量
+                      </Badge>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
         <div className="prompt-template-editor-wrap">
           {selectedTemplate ? (
