@@ -3,6 +3,7 @@ import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { GenerationStatus, ModelProvider } from '../../types/workbench';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
+import { EnvironmentStatus } from './EnvironmentStatus';
 
 const DEFAULT_HEADER_TITLE = '本月教学数据分析';
 const TASK_STATUS_SUFFIX = '已检索 3 条知识库资料 · 已生成 1 个图表';
@@ -103,6 +104,8 @@ export function WorkbenchHeader() {
       </div>
 
       <div className="workspace-actions">
+        <EnvironmentStatus />
+
         <button className="model-status-pill" onClick={openModelModal} type="button">
           <span className="model-dot" aria-hidden="true"></span>
           <span>模型：{modelLabel}</span>
