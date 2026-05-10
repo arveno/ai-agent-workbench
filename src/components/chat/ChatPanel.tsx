@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef } from 'react';
 import type { AgentToolInvocationResult } from '../../types/workbench';
+import type { RunToolInvocation } from '../../types/run';
 import { mockToolCalls } from '../../mocks/toolCalls';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import { formatToolInvocationForChat } from '../../utils/toolInvocationFormat';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { ChatInput } from './ChatInput';
@@ -27,128 +29,16 @@ const SUMMARY_MESSAGE_CONTENT = `根据查询结果，以下是本月教学质�
 - 八年级出勤率低于基线 3.2%
 - 整体教学质量波动主要集中在周测成绩与缺勤率变化`;
 
-function getToolStatusText(status: AgentToolInvocationResult['status']): string {
-  if (status === 'error') {
-    return '失败';
-  }
-
-  return '已完成';
-}
-
-function getRuntimeToolTitle(toolName: string): string {
-  if (toolName === 'schema_inspect') {
-    return '数据源结构读取';
-  }
-
-  if (toolName === 'aggregate_table') {
-    return '数据聚合分析';
-  }
-
-  if (toolName === 'query_table') {
-    return '数据明细查询';
-  }
-
-  if (toolName === 'chart_render') {
-    return '图表数据生成';
-  }
-
-  return toolName;
-}
-
-function extractFirstNumber(text: string): number | null {
-  const match = text.match(/\d+/);
-
-  if (!match) {
-    return null;
-  }
-
-  const parsed = Number.parseInt(match[0], 10);
-
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function parseSummaryObject(text: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(text) as unknown;
-
-    if (parsed && typeof parsed === 'object') {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // ignore parsing errors and fallback to generic description
-  }
-
-  return null;
-}
-
-function formatToolInvocationForChat(invocation: AgentToolInvocationResult): {
-  id: string;
-  title: string;
-  description: string;
-  statusText: string;
-  elapsedMs: number;
-  isError: boolean;
-} {
-  const title = getRuntimeToolTitle(invocation.toolName);
-
-  if (invocation.toolId === 'schema_inspect') {
-    const tableCount = extractFirstNumber(invocation.outputSummary);
-
-    return {
-      id: invocation.id,
-      title,
-      description:
-        tableCount !== null ? `已读取 public schema，共 ${tableCount} 张表。` : '已读取可访问的数据表结构。',
-      statusText: getToolStatusText(invocation.status),
-      elapsedMs: invocation.elapsedMs,
-      isError: invocation.status === 'error',
-    };
-  }
-
-  if (invocation.toolId === 'aggregate_table') {
-    const summaryObject = parseSummaryObject(invocation.inputSummary);
-    const metric = typeof summaryObject?.metric === 'string' ? summaryObject.metric : '';
-    const groupBy = typeof summaryObject?.groupBy === 'string' ? summaryObject.groupBy : '';
-    const rowCount = extractFirstNumber(invocation.outputSummary);
-
-    const description =
-      metric && groupBy && rowCount !== null
-        ? `按 ${groupBy} 聚合 ${metric}，共返回 ${rowCount} 条结果。`
-        : metric && groupBy
-          ? `按 ${groupBy} 聚合 ${metric}，已完成指标聚合分析。`
-          : '已完成指标聚合分析。';
-
-    return {
-      id: invocation.id,
-      title,
-      description,
-      statusText: getToolStatusText(invocation.status),
-      elapsedMs: invocation.elapsedMs,
-      isError: invocation.status === 'error',
-    };
-  }
-
-  if (invocation.toolId === 'chart_render') {
-    const summaryObject = parseSummaryObject(invocation.inputSummary);
-    const chartType = typeof summaryObject?.chartType === 'string' ? summaryObject.chartType : '';
-
-    return {
-      id: invocation.id,
-      title,
-      description: chartType ? `已生成 ${chartType} 图表数据。` : '已生成图表展示所需的数据结构。',
-      statusText: getToolStatusText(invocation.status),
-      elapsedMs: invocation.elapsedMs,
-      isError: invocation.status === 'error',
-    };
-  }
-
+function mapAgentToolInvocation(invocation: AgentToolInvocationResult): RunToolInvocation {
   return {
     id: invocation.id,
-    title: invocation.toolName,
-    description: invocation.status === 'error' ? '工具执行失败。' : '工具已执行完成。',
-    statusText: getToolStatusText(invocation.status),
+    toolId: invocation.toolId,
+    toolName: invocation.toolId,
+    displayName: invocation.toolName,
+    status: invocation.status,
+    inputSummary: invocation.inputSummary,
+    outputSummary: invocation.outputSummary,
     elapsedMs: invocation.elapsedMs,
-    isError: invocation.status === 'error',
   };
 }
 
@@ -174,11 +64,18 @@ export function ChatPanel() {
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const sessionMessages = currentSession?.messages ?? [];
   const isMockMode = currentModelProvider === 'mock';
+  const shouldUseAgentRunTools = currentRun?.mode === 'agent';
   const isDataAnalysisRun =
-    currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations.length);
+    shouldUseAgentRunTools
+      ? currentRun.intent === 'data_analysis'
+      : currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations.length);
+  const runtimeToolInvocations =
+    shouldUseAgentRunTools
+      ? currentRun.toolInvocations
+      : currentAgentRun?.toolInvocations.map((invocation) => mapAgentToolInvocation(invocation)) ?? [];
   const runtimeToolSummaries =
-    currentAgentRun && isDataAnalysisRun
-      ? currentAgentRun.toolInvocations.map((invocation) => formatToolInvocationForChat(invocation))
+    !isMockMode && isDataAnalysisRun
+      ? runtimeToolInvocations.map((invocation) => formatToolInvocationForChat(invocation))
       : [];
   const hasConversation = sessionMessages.length > 0;
   const shouldRenderRuntimeToolSummary = !isMockMode && runtimeToolSummaries.length > 0;
@@ -302,16 +199,19 @@ export function ChatPanel() {
                     {runtimeToolSummaries.map((item) => (
                       <div key={item.id} className="agent-tool-summary-item">
                         <div className="agent-tool-summary-main">
-                          <div className="agent-tool-summary-title">{item.title}</div>
-                          <div className="agent-tool-summary-description">{item.description}</div>
+                          <div className="agent-tool-summary-title">{item.displayName}</div>
+                          <div className="agent-tool-summary-category">{item.categoryLabel}</div>
+                          <div className="agent-tool-summary-description">{item.outputText}</div>
                         </div>
                         <div className="agent-tool-summary-meta">
                           <span
-                            className={`agent-tool-summary-status${item.isError ? ' agent-tool-summary-status-error' : ''}`}
+                            className={`agent-tool-summary-status${item.statusLabel === '异常' ? ' agent-tool-summary-status-error' : ''}`}
                           >
-                            {item.statusText}
+                            {item.statusLabel}
                           </span>
-                          <span className="agent-tool-summary-elapsed">{item.elapsedMs}ms</span>
+                          {item.elapsedText !== '-' ? (
+                            <span className="agent-tool-summary-elapsed">{item.elapsedText}</span>
+                          ) : null}
                         </div>
                       </div>
                     ))}

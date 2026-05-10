@@ -369,11 +369,12 @@
 
 .tool-invocation-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
+  min-width: 0;
 }
 
 .tool-invocation-row:last-child {
@@ -389,16 +390,31 @@
   font-size: 12px;
   font-weight: 700;
   color: #0f172a;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
-.tool-invocation-desc {
+.tool-invocation-desc,
+.tool-invocation-description {
   margin-top: 2px;
   font-size: 11px;
   color: #64748b;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.tool-invocation-summary {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #334155;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .tool-invocation-meta {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   font-size: 11px;

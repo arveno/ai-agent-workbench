@@ -1,35 +1,10 @@
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import type { AgentToolInvocationResult } from '../../../types/workbench';
+import type { RunToolInvocation } from '../../../types/run';
 import { shouldUseUnifiedRun } from '../../../utils/run';
-
-function truncateText(text: string, maxLength = 120): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return `${text.slice(0, maxLength)}...`;
-}
-
-function getToolStatusLabel(status: string): string {
-  if (status === 'success') {
-    return '已完成';
-  }
-
-  if (status === 'running') {
-    return '进行中';
-  }
-
-  if (status === 'pending') {
-    return '待执行';
-  }
-
-  if (status === 'skipped') {
-    return '已跳过';
-  }
-
-  return '失败';
-}
+import { formatToolInvocationForInspector } from '../../../utils/toolInvocationFormat';
 
 function getToolStatusClass(status: string): string {
   if (status === 'success') {
@@ -45,6 +20,19 @@ function getToolStatusClass(status: string): string {
   }
 
   return 'status-badge-muted';
+}
+
+function mapAgentToolInvocation(invocation: AgentToolInvocationResult): RunToolInvocation {
+  return {
+    id: invocation.id,
+    toolId: invocation.toolId,
+    toolName: invocation.toolId,
+    displayName: invocation.toolName,
+    status: invocation.status,
+    inputSummary: invocation.inputSummary,
+    outputSummary: invocation.outputSummary,
+    elapsedMs: invocation.elapsedMs,
+  };
 }
 
 export function ToolInvocationsCard() {
@@ -75,20 +63,8 @@ export function ToolInvocationsCard() {
     ? unifiedRun.intent === 'data_analysis'
     : agentRun?.plan?.intent === 'data_analysis' || Boolean(agentRun?.toolInvocations?.length);
   const runtimeTools = unifiedRun
-    ? unifiedRun.toolInvocations.map((tool) => ({
-        id: tool.id,
-        name: tool.displayName || tool.toolName,
-        desc: truncateText(`${tool.inputSummary}${tool.outputSummary ? ` -> ${tool.outputSummary}` : ''}`),
-        duration: typeof tool.elapsedMs === 'number' ? `${tool.elapsedMs}ms` : '-',
-        status: tool.status,
-      }))
-    : (agentRun?.toolInvocations ?? []).map((tool) => ({
-        id: tool.id,
-        name: tool.toolName,
-        desc: truncateText(`${tool.inputSummary} -> ${tool.outputSummary}`),
-        duration: `${tool.elapsedMs}ms`,
-        status: tool.status,
-      }));
+    ? unifiedRun.toolInvocations
+    : (agentRun?.toolInvocations ?? []).map((tool) => mapAgentToolInvocation(tool));
   const showEmptyState = runtimeTools.length === 0;
 
   return (
@@ -114,20 +90,28 @@ export function ToolInvocationsCard() {
         </div>
       ) : (
         <div className="tool-invocation-list">
-          {runtimeTools.map((tool) => (
-            <div key={tool.id} className="tool-invocation-row">
-              <div className="tool-invocation-main">
-                <div className="tool-invocation-name">{tool.name}</div>
-                <div className="tool-invocation-desc">{tool.desc}</div>
+          {runtimeTools.map((tool) => {
+            const formattedTool = formatToolInvocationForInspector(tool);
+
+            return (
+              <div key={tool.id} className="tool-invocation-row">
+                <div className="tool-invocation-main">
+                  <div className="tool-invocation-name">{formattedTool.displayName}</div>
+                  <div className="tool-invocation-description">
+                    {formattedTool.categoryLabel} · {formattedTool.toolName}
+                  </div>
+                  <div className="tool-invocation-summary">{formattedTool.inputText}</div>
+                  <div className="tool-invocation-summary">{formattedTool.outputText}</div>
+                </div>
+                <div className="tool-invocation-meta">
+                  <span className={`status-badge ${getToolStatusClass(tool.status)}`}>
+                    {formattedTool.statusLabel}
+                  </span>
+                  <span>{formattedTool.elapsedText}</span>
+                </div>
               </div>
-              <div className="tool-invocation-meta">
-                <span className={`status-badge ${getToolStatusClass(tool.status)}`}>
-                  {getToolStatusLabel(tool.status)}
-                </span>
-                <span>{tool.duration}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
