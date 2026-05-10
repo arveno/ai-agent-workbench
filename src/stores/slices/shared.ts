@@ -7,6 +7,7 @@ import type {
   ModelProviderConfigMap,
   ModelProviderId,
   WorkbenchMessage,
+  WorkbenchMessageKind,
   WorkbenchSession,
 } from '../../types/workbench';
 import { createSessionTitle } from '../../utils/sessionTitle';
@@ -20,6 +21,18 @@ export const FINAL_REPORT_SUMMARY =
 export const MODEL_CONFIG_SESSION_KEY = 'ai-agent-workbench-model-configs';
 export const MODEL_PROVIDER_SESSION_KEY = 'ai-agent-workbench-current-model-provider';
 export const WORKBENCH_SESSIONS_SESSION_KEY = 'ai-agent-workbench-sessions';
+export const WORKBENCH_SESSION_STORAGE_VERSION = 2;
+
+interface PersistedWorkbenchState {
+  version: number;
+  sessions: WorkbenchSession[];
+  activeSessionId: string;
+}
+
+interface WorkbenchSessionStorageState {
+  sessions: WorkbenchSession[];
+  activeSessionId: string;
+}
 
 export const modelProviderIds: ModelProviderId[] = [
   'mock',
@@ -35,12 +48,55 @@ export function createSessionId(): string {
   return `s_${Date.now()}`;
 }
 
+export function createWorkbenchMessage(params: {
+  role: WorkbenchMessage['role'];
+  content: string;
+  kind?: WorkbenchMessageKind;
+  runId?: string;
+  createdAt?: number;
+}): WorkbenchMessage {
+  const message: WorkbenchMessage = {
+    id: `m_${params.role}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    role: params.role,
+    kind: params.kind ?? 'normal',
+    content: params.content,
+    createdAt: params.createdAt ?? Date.now(),
+  };
+
+  if (params.runId?.trim()) {
+    message.runId = params.runId;
+  }
+
+  return message;
+}
+
+export function createEmptySession(params?: {
+  title?: string;
+  taskId?: string;
+}): WorkbenchSession {
+  return {
+    id: createSessionId(),
+    title: params?.title ?? '新会话',
+    updatedAt: Date.now(),
+    taskId: params?.taskId,
+    messages: [],
+    runsById: {},
+    latestRunId: undefined,
+  };
+}
+
 export function sortSessionsByUpdatedAt(sessions: WorkbenchSession[]): WorkbenchSession[] {
   return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 function createDefaultSessions(): WorkbenchSession[] {
-  return sortSessionsByUpdatedAt(mockSessions.map((session) => ({ ...session })));
+  return sortSessionsByUpdatedAt(
+    mockSessions.map((session) => ({
+      ...session,
+      messages: session.messages.map((message) => ({ ...message })),
+      runsById: { ...session.runsById },
+    })),
+  );
 }
 
 function normalizeWorkbenchMessage(rawValue: unknown): WorkbenchMessage | null {
@@ -53,8 +109,13 @@ function normalizeWorkbenchMessage(rawValue: unknown): WorkbenchMessage | null {
   if (
     typeof message.id !== 'string' ||
     (message.role !== 'user' && message.role !== 'assistant') ||
+    (message.kind !== 'normal' &&
+      message.kind !== 'report' &&
+      message.kind !== 'partial' &&
+      message.kind !== 'error') ||
     typeof message.content !== 'string' ||
-    typeof message.createdAt !== 'number'
+    typeof message.createdAt !== 'number' ||
+    (message.runId !== undefined && typeof message.runId !== 'string')
   ) {
     return null;
   }
@@ -62,8 +123,10 @@ function normalizeWorkbenchMessage(rawValue: unknown): WorkbenchMessage | null {
   return {
     id: message.id,
     role: message.role,
+    kind: message.kind,
     content: message.content,
     createdAt: message.createdAt,
+    runId: message.runId,
   };
 }
 
@@ -74,52 +137,104 @@ function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
 
   const session = rawValue as Partial<WorkbenchSession>;
 
-  if (typeof session.id !== 'string' || typeof session.title !== 'string') {
+  if (
+    typeof session.id !== 'string' ||
+    typeof session.title !== 'string' ||
+    !session.runsById ||
+    typeof session.runsById !== 'object' ||
+    Array.isArray(session.runsById) ||
+    (session.latestRunId !== undefined && typeof session.latestRunId !== 'string')
+  ) {
     return null;
   }
 
-  const messages =
-    Array.isArray(session.messages)
-      ? session.messages
-          .map((message) => normalizeWorkbenchMessage(message))
-          .filter((message): message is WorkbenchMessage => message !== null)
-      : [];
+  if (!Array.isArray(session.messages)) {
+    return null;
+  }
+
+  const messages = session.messages.map((message) => normalizeWorkbenchMessage(message));
+
+  if (messages.some((message) => message === null)) {
+    return null;
+  }
 
   return {
     id: session.id,
     title: session.title,
     updatedAt: typeof session.updatedAt === 'number' ? session.updatedAt : Date.now(),
     taskId: typeof session.taskId === 'string' ? session.taskId : undefined,
-    messages,
+    messages: messages.filter((message): message is WorkbenchMessage => message !== null),
+    runsById: session.runsById,
+    latestRunId: session.latestRunId,
   };
 }
 
-export function persistWorkbenchSessions(sessions: WorkbenchSession[]): void {
-  writeSessionStorageJson(WORKBENCH_SESSIONS_SESSION_KEY, sessions);
+function clearPersistedWorkbenchState(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.sessionStorage.removeItem(WORKBENCH_SESSIONS_SESSION_KEY);
 }
 
-export function getInitialSessions(): WorkbenchSession[] {
+export function persistWorkbenchSessions(sessions: WorkbenchSession[], activeSessionId: string): void {
+  writeSessionStorageJson<PersistedWorkbenchState>(WORKBENCH_SESSIONS_SESSION_KEY, {
+    version: WORKBENCH_SESSION_STORAGE_VERSION,
+    sessions,
+    activeSessionId,
+  });
+}
+
+export function getInitialWorkbenchSessionState(): WorkbenchSessionStorageState {
   const defaultSessions = createDefaultSessions();
+  const defaultState: WorkbenchSessionStorageState = {
+    sessions: defaultSessions,
+    activeSessionId: defaultSessions[0]?.id ?? 's_001',
+  };
 
   if (typeof window === 'undefined') {
-    return defaultSessions;
+    return defaultState;
   }
 
   const parsedValue = readSessionStorageJson<unknown>(WORKBENCH_SESSIONS_SESSION_KEY, null);
 
-  if (!Array.isArray(parsedValue) || parsedValue.length === 0) {
-    return defaultSessions;
+  if (!parsedValue || typeof parsedValue !== 'object' || Array.isArray(parsedValue)) {
+    clearPersistedWorkbenchState();
+    return defaultState;
   }
 
-  const normalizedSessions = parsedValue
-    .map((session) => normalizeWorkbenchSession(session))
-    .filter((session): session is WorkbenchSession => session !== null);
+  const persistedState = parsedValue as Partial<PersistedWorkbenchState>;
 
-  if (normalizedSessions.length === 0) {
-    return defaultSessions;
+  if (
+    persistedState.version !== WORKBENCH_SESSION_STORAGE_VERSION ||
+    !Array.isArray(persistedState.sessions) ||
+    typeof persistedState.activeSessionId !== 'string'
+  ) {
+    clearPersistedWorkbenchState();
+    return defaultState;
   }
 
-  return sortSessionsByUpdatedAt(normalizedSessions);
+  const normalizedSessions = persistedState.sessions.map((session) => normalizeWorkbenchSession(session));
+
+  if (normalizedSessions.length === 0 || normalizedSessions.some((session) => session === null)) {
+    clearPersistedWorkbenchState();
+    return defaultState;
+  }
+
+  const sessions = sortSessionsByUpdatedAt(
+    normalizedSessions.filter((session): session is WorkbenchSession => session !== null),
+  );
+  const hasActiveSession = sessions.some((session) => session.id === persistedState.activeSessionId);
+
+  if (!hasActiveSession) {
+    clearPersistedWorkbenchState();
+    return defaultState;
+  }
+
+  return {
+    sessions,
+    activeSessionId: persistedState.activeSessionId,
+  };
 }
 
 export function getSessionLatestPrompt(session: WorkbenchSession): string {
@@ -221,8 +336,10 @@ export function getInitialModelProvider(modelConfigs: ModelProviderConfigMap): M
 
 const initialModelConfigs = getInitialModelConfigs();
 const initialModelProvider = getInitialModelProvider(initialModelConfigs);
-const initialSessions = getInitialSessions();
-const initialCurrentSession = initialSessions[0];
+const initialSessionState = getInitialWorkbenchSessionState();
+const initialSessions = initialSessionState.sessions;
+const initialCurrentSession =
+  initialSessions.find((session) => session.id === initialSessionState.activeSessionId) ?? initialSessions[0];
 const initialCurrentTaskId = initialCurrentSession?.taskId ?? DEFAULT_TASK_ID;
 const initialPromptFromSession = initialCurrentSession ? getSessionLatestPrompt(initialCurrentSession) : '';
 const initialAssistantReplyFromSession = initialCurrentSession

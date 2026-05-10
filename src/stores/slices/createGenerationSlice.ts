@@ -1,7 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { streamGroqChat } from '../../services/chatApi';
 import type { GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
-import { createMessageId } from '../../utils/message';
 import {
   MOCK_RUN_STEP_IDS,
   MOCK_RUN_TOOL_IDS,
@@ -21,6 +20,7 @@ import { createRunReportMarkdown } from '../../utils/report';
 import { shouldShowReportConfirm } from '../../utils/run';
 import { streamText } from '../../utils/streamText';
 import {
+  createWorkbenchMessage,
   createInitialAgentSteps,
   createSessionTitle,
   DEFAULT_ASSISTANT_REPLY,
@@ -114,18 +114,18 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     const runId = snapshot.streamRunId + 1;
     const now = Date.now();
     const nextMessages: WorkbenchMessage[] = [
-      {
-        id: createMessageId('user'),
+      createWorkbenchMessage({
         role: 'user',
+        kind: 'normal',
         content: trimmedPrompt,
         createdAt: now,
-      },
-      {
-        id: createMessageId('assistant'),
+      }),
+      createWorkbenchMessage({
         role: 'assistant',
+        kind: 'normal',
         content: '',
         createdAt: now + 1,
-      },
+      }),
     ];
     const assistantMessageId = nextMessages[1].id;
 
@@ -158,10 +158,11 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
               updatedAt: now,
               taskId: state.currentTaskId,
               messages: nextMessages,
+              runsById: {},
             },
           ]);
 
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
       return {
         sessions: nextSessions,
@@ -211,7 +212,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
               content
             );
 
-            persistWorkbenchSessions(updatedSessions);
+            persistWorkbenchSessions(updatedSessions, state.currentSessionId);
 
             return {
               sessions: updatedSessions,
@@ -255,7 +256,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           current.assistantStream.content
         );
 
-        persistWorkbenchSessions(updatedSessions);
+        persistWorkbenchSessions(updatedSessions, state.currentSessionId);
 
         return {
           sessions: updatedSessions,
@@ -301,7 +302,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
               nextContent
             );
 
-            persistWorkbenchSessions(nextSessions);
+            persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
             return {
               sessions: nextSessions,
@@ -327,7 +328,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           current.assistantStream.content
         );
 
-        persistWorkbenchSessions(updatedSessions);
+        persistWorkbenchSessions(updatedSessions, state.currentSessionId);
 
         return {
           sessions: updatedSessions,
@@ -518,7 +519,10 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
-    get().appendAssistantMessageToCurrentSession(createRunReportMarkdown(currentRun));
+    get().appendAssistantMessageToCurrentSession(createRunReportMarkdown(currentRun), {
+      kind: 'report',
+      runId: currentRun.id,
+    });
     get().applyRunEvent({
       type: 'report_generated',
       runId: currentRun.id,
@@ -578,8 +582,11 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       });
     }
 
-    if (partialAgentConclusion) {
-      get().appendAssistantMessageToCurrentSession(partialAgentConclusion);
+    if (partialAgentConclusion && currentRun) {
+      get().appendAssistantMessageToCurrentSession(partialAgentConclusion, {
+        kind: 'partial',
+        runId: currentRun.id,
+      });
     }
 
     set((state) => ({

@@ -36,12 +36,15 @@ export type ToolCallId = string;
 export type KnowledgeSourceId = string;
 
 export type AgentStepStatus = 'pending' | 'running' | 'success' | 'error';
+export type WorkbenchMessageKind = 'normal' | 'report' | 'partial' | 'error';
 
 export interface WorkbenchMessage {
   id: string;
   role: 'user' | 'assistant';
+  kind: WorkbenchMessageKind;
   content: string;
   createdAt: number;
+  runId?: string;
 }
 
 export interface WorkbenchSession {
@@ -50,6 +53,8 @@ export interface WorkbenchSession {
   updatedAt: number;
   messages: WorkbenchMessage[];
   taskId?: string;
+  runsById: Record<string, RunSnapshot>;
+  latestRunId?: string;
 }
 
 export type Session = WorkbenchSession;
@@ -327,7 +332,7 @@ export interface SessionSlice {
   currentTaskId: string;
   currentPrompt: string;
   activeAssistantMessageId: string;
-  persistSessions: (sessions: WorkbenchSession[]) => void;
+  persistSessions: (sessions: WorkbenchSession[], activeSessionId?: string) => void;
   createSession: () => string;
   switchSession: (sessionId: string) => void;
   setCurrentSessionId: (sessionId: string) => void;
@@ -335,8 +340,20 @@ export interface SessionSlice {
   setCurrentPrompt: (prompt: string) => void;
   upsertCurrentSessionMessages: (messages: WorkbenchMessage[]) => void;
   updateCurrentSessionAssistantMessage: (messageId: string, content: string) => void;
-  appendUserMessageToCurrentSession: (content: string) => void;
-  appendAssistantMessageToCurrentSession: (content: string) => void;
+  appendUserMessageToCurrentSession: (
+    content: string,
+    options?: {
+      runId?: string;
+      kind?: WorkbenchMessageKind;
+    },
+  ) => void;
+  appendAssistantMessageToCurrentSession: (
+    content: string,
+    options?: {
+      runId?: string;
+      kind?: WorkbenchMessageKind;
+    },
+  ) => void;
   startTask: (taskId: string, prompt: string) => void;
   hydrateFromUrl: (state: { sessionId?: string; taskId?: string }) => void;
 }

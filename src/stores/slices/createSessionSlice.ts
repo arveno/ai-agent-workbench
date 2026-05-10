@@ -2,11 +2,11 @@ import type { StateCreator } from 'zustand';
 import { mockAgentSteps } from '../../mocks/agentSteps';
 import { mockTasks } from '../../mocks/tasks';
 import type { SessionSlice, WorkbenchStore } from '../../types/workbench';
-import { createMessageId } from '../../utils/message';
 import {
+  createEmptySession,
   createInitialAgentSteps,
+  createWorkbenchMessage,
   createSessionTitle,
-  createSessionId,
   initialWorkbenchState,
   persistWorkbenchSessions,
   sortSessionsByUpdatedAt,
@@ -20,29 +20,23 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   currentTaskId: initialWorkbenchState.currentTaskId,
   currentPrompt: initialWorkbenchState.currentPrompt,
   activeAssistantMessageId: initialWorkbenchState.activeAssistantMessageId,
-  persistSessions: (sessions) => {
-    persistWorkbenchSessions(sortSessionsByUpdatedAt(sessions));
+  persistSessions: (sessions, activeSessionId) => {
+    persistWorkbenchSessions(sortSessionsByUpdatedAt(sessions), activeSessionId ?? get().currentSessionId);
   },
   createSession: () => {
     get().activeAgentRunAbortController?.abort();
 
-    const sessionId = createSessionId();
-    const now = Date.now();
-    const newSession = {
-      id: sessionId,
-      title: '新会话',
-      updatedAt: now,
+    const newSession = createEmptySession({
       taskId: get().currentTaskId,
-      messages: [],
-    };
+    });
 
     set((state) => {
       const nextSessions = sortSessionsByUpdatedAt([newSession, ...state.sessions]);
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, newSession.id);
 
       return {
         sessions: nextSessions,
-        currentSessionId: sessionId,
+        currentSessionId: newSession.id,
         currentPrompt: '',
         chatDraft: '',
         assistantStream: {
@@ -74,7 +68,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       };
     });
 
-    return sessionId;
+    return newSession.id;
   },
   switchSession: (sessionId) => {
     get().activeAgentRunAbortController?.abort();
@@ -85,6 +79,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       if (!nextSession) {
         return state;
       }
+
+      persistWorkbenchSessions(state.sessions, nextSession.id);
 
       const userMessage = [...nextSession.messages].reverse().find((message) => message.role === 'user');
       const assistantMessage = [...nextSession.messages].reverse().find((message) => message.role === 'assistant');
@@ -125,6 +121,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     });
   },
   setCurrentSessionId: (sessionId) => {
+    persistWorkbenchSessions(get().sessions, sessionId);
     set({ currentSessionId: sessionId });
   },
   setCurrentTaskId: (taskId) => {
@@ -149,7 +146,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         )
       );
 
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
       return {
         sessions: nextSessions,
@@ -165,14 +162,14 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         content
       );
 
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
       return {
         sessions: nextSessions,
       };
     });
   },
-  appendUserMessageToCurrentSession: (content) => {
+  appendUserMessageToCurrentSession: (content, options) => {
     const normalizedContent = content.trim();
 
     if (!normalizedContent) {
@@ -181,12 +178,13 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     set((state) => {
       const now = Date.now();
-      const userMessage = {
-        id: createMessageId('user'),
+      const userMessage = createWorkbenchMessage({
         role: 'user' as const,
+        kind: options?.kind ?? 'normal',
         content: normalizedContent,
         createdAt: now,
-      };
+        runId: options?.runId,
+      });
 
       const nextSessions = sortSessionsByUpdatedAt(
         state.sessions.map((session) => {
@@ -206,7 +204,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         })
       );
 
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
       return {
         sessions: nextSessions,
@@ -214,7 +212,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       };
     });
   },
-  appendAssistantMessageToCurrentSession: (content) => {
+  appendAssistantMessageToCurrentSession: (content, options) => {
     const normalizedContent = content.trim();
 
     if (!normalizedContent) {
@@ -223,12 +221,13 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     set((state) => {
       const now = Date.now();
-      const assistantMessage = {
-        id: createMessageId('assistant'),
+      const assistantMessage = createWorkbenchMessage({
         role: 'assistant' as const,
+        kind: options?.kind ?? 'normal',
         content: normalizedContent,
         createdAt: now,
-      };
+        runId: options?.runId,
+      });
 
       const nextSessions = sortSessionsByUpdatedAt(
         state.sessions.map((session) =>
@@ -243,7 +242,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         )
       );
 
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
       return {
         sessions: nextSessions,
@@ -267,7 +266,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
           : session
       );
 
-      persistWorkbenchSessions(nextSessions);
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
 
       return {
         sessions: nextSessions,
@@ -290,6 +289,10 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         .reverse()
         .find((message) => message.role === 'assistant');
       const hasAssistantReply = Boolean(assistantMessage?.content?.trim());
+
+      if (nextSession) {
+        persistWorkbenchSessions(currentState.sessions, nextSession.id);
+      }
 
       return {
         currentSessionId: nextSession?.id ?? currentState.currentSessionId,

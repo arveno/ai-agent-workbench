@@ -12,17 +12,20 @@ export const mockSessions: WorkbenchSession[] = [
       {
         id: 'm_user_default',
         role: 'user',
+        kind: 'normal',
         content: '请分析 2026 年 5 月教学质量相关数据，找出异常指标，并给出简短结论。',
         createdAt: now - 5 * 60 * 1000,
       },
       {
         id: 'm_assistant_default',
         role: 'assistant',
+        kind: 'normal',
         content:
           '我将先检索相关指标口径与教学质量分析规则，再查询本月各年级成绩与出勤数据，随后给出异常项和简短分析结论。',
         createdAt: now - 5 * 60 * 1000 + 1,
       },
     ],
+    runsById: {},
   },
   {
     id: 's_002',
@@ -30,6 +33,7 @@ export const mockSessions: WorkbenchSession[] = [
     updatedAt: now - 24 * 60 * 60 * 1000,
     taskId: 't_abnormal_reason',
     messages: [],
+    runsById: {},
   },
   {
     id: 's_003',
@@ -37,29 +41,34 @@ export const mockSessions: WorkbenchSession[] = [
     updatedAt: now - 2 * 24 * 60 * 60 * 1000,
     taskId: 't_report',
     messages: [],
+    runsById: {},
   },
   {
     id: 's_004',
     title: '班级出勤情况分析',
     updatedAt: now - 3 * 24 * 60 * 60 * 1000,
     messages: [],
+    runsById: {},
   },
   {
     id: 's_005',
     title: '期中考试成绩分析',
     updatedAt: now - 4 * 24 * 60 * 60 * 1000,
     messages: [],
+    runsById: {},
   },
   {
     id: 's_006',
     title: '学科均衡性评估',
     updatedAt: now - 5 * 24 * 60 * 60 * 1000,
     messages: [],
+    runsById: {},
   },
   {
     id: 's_007',
     title: '教师教学效果分析',
     updatedAt: now - 6 * 24 * 60 * 60 * 1000,
     messages: [],
+    runsById: {},
   },
 ];
