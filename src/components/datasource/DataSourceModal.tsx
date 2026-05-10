@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type {
   DataSourceProvider,
@@ -64,8 +68,73 @@ type ProviderSchemaState = Partial<
   Record<DataSourceTestableProviderId, DataSourceProviderSchemaRuntimeState>
 >;
 
+type DataSourceTabId = 'all' | 'connected' | 'testable' | 'planned';
+
+interface DataSourceTabDefinition {
+  id: DataSourceTabId;
+  label: string;
+  description: string;
+}
+
+const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
+  {
+    id: 'all',
+    label: '全部数据源',
+    description: '查看当前工作台展示的全部数据源能力。',
+  },
+  {
+    id: 'connected',
+    label: '已连接',
+    description: '最近测试成功或已成功读取 Schema 的数据源。',
+  },
+  {
+    id: 'testable',
+    label: '可测试',
+    description: '当前可以通过服务端环境变量测试连接的数据源。',
+  },
+  {
+    id: 'planned',
+    label: '规划中',
+    description: '后续预留接入的数据源类型。',
+  },
+];
+
 function isTestableProvider(providerId: DataSourceProvider['id']): providerId is DataSourceTestableProviderId {
   return providerId === 'postgresql' || providerId === 'supabase';
+}
+
+function isConnectedProvider(
+  provider: DataSourceProvider,
+  providerTestState: ProviderTestState,
+  providerSchemaState: ProviderSchemaState
+): boolean {
+  if (!isTestableProvider(provider.id)) {
+    return false;
+  }
+
+  return providerTestState[provider.id]?.status === 'success' || providerSchemaState[provider.id]?.status === 'success';
+}
+
+function getProvidersByTab(
+  tabId: DataSourceTabId,
+  providerTestState: ProviderTestState,
+  providerSchemaState: ProviderSchemaState
+): DataSourceProvider[] {
+  if (tabId === 'all') {
+    return DATA_SOURCE_PROVIDERS;
+  }
+
+  if (tabId === 'connected') {
+    return DATA_SOURCE_PROVIDERS.filter((provider) =>
+      isConnectedProvider(provider, providerTestState, providerSchemaState)
+    );
+  }
+
+  if (tabId === 'testable') {
+    return DATA_SOURCE_PROVIDERS.filter((provider) => isTestableProvider(provider.id));
+  }
+
+  return DATA_SOURCE_PROVIDERS.filter((provider) => provider.comingSoon);
 }
 
 function buildTestSuccessMessage(response: DataSourceTestResponse): string {
@@ -237,51 +306,96 @@ export function DataSourceModal() {
               PostgreSQL 接入能力展示。
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon"
             className="datasource-modal-close"
             onClick={closeDataSourceModal}
             aria-label="关闭"
           >
             ×
-          </button>
+          </Button>
         </header>
 
         <div className="datasource-modal-body">
-          <div className="datasource-provider-grid">
-            {DATA_SOURCE_PROVIDERS.map((provider) => {
-              if (isTestableProvider(provider.id)) {
-                const testableProviderId = provider.id;
-                const testState = providerTestState[testableProviderId];
-                const schemaState = providerSchemaState[testableProviderId];
-                const canReadSchema = testState?.status === 'success';
+          <Card className="datasource-modal-info-card" size="sm">
+            <CardContent className="datasource-modal-info-content">
+              <p>
+                当前 Demo 使用 Supabase 托管 PostgreSQL 作为真实数据源，同时保留通用 PostgreSQL
+                接入能力展示。
+              </p>
+              <p>前端不保存数据库连接串，连接信息仅通过服务端环境变量读取。</p>
+              <p>线上部署时请在 Vercel Environment Variables 中配置数据库连接串。</p>
+            </CardContent>
+          </Card>
 
-                return (
-                  <DataSourceProviderCard
-                    key={provider.id}
-                    provider={provider}
-                    runtimeState={testState}
-                    schemaState={schemaState}
-                    canReadSchema={canReadSchema}
-                    onTestConnection={() => {
-                      void handleTestConnection(testableProviderId);
-                    }}
-                    onReadSchema={() => {
-                      void handleReadSchema(testableProviderId);
-                    }}
-                  />
-                );
-              }
+          <Tabs defaultValue="all" className="datasource-tabs">
+            <TabsList className="datasource-tabs-list">
+              {DATA_SOURCE_TABS.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="datasource-tab-trigger">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
 
-              return <DataSourceProviderCard key={provider.id} provider={provider} />;
+            {DATA_SOURCE_TABS.map((tab) => {
+              const providers = getProvidersByTab(tab.id, providerTestState, providerSchemaState);
+
+              return (
+                <TabsContent key={tab.id} value={tab.id} className="datasource-tab-content">
+                  <div className="datasource-tab-heading">
+                    <div>
+                      <h4 className="datasource-tab-title">{tab.label}</h4>
+                      <p className="datasource-tab-description">{tab.description}</p>
+                    </div>
+                    <span className="datasource-tab-count">{providers.length} 个数据源</span>
+                  </div>
+
+                  <ScrollArea className="datasource-scroll">
+                    {providers.length > 0 ? (
+                      <div className="datasource-provider-grid">
+                        {providers.map((provider) => {
+                          if (isTestableProvider(provider.id)) {
+                            const testableProviderId = provider.id;
+                            const testState = providerTestState[testableProviderId];
+                            const schemaState = providerSchemaState[testableProviderId];
+                            const canReadSchema = testState?.status === 'success';
+
+                            return (
+                              <DataSourceProviderCard
+                                key={provider.id}
+                                provider={provider}
+                                runtimeState={testState}
+                                schemaState={schemaState}
+                                canReadSchema={canReadSchema}
+                                onTestConnection={() => {
+                                  void handleTestConnection(testableProviderId);
+                                }}
+                                onReadSchema={() => {
+                                  void handleReadSchema(testableProviderId);
+                                }}
+                              />
+                            );
+                          }
+
+                          return <DataSourceProviderCard key={provider.id} provider={provider} />;
+                        })}
+                      </div>
+                    ) : (
+                      <div className="datasource-empty-state">暂无该类型数据源</div>
+                    )}
+                  </ScrollArea>
+                </TabsContent>
+              );
             })}
-          </div>
+          </Tabs>
         </div>
 
         <footer className="datasource-modal-footer">
-          <button type="button" className="datasource-modal-close-button" onClick={closeDataSourceModal}>
+          <Button type="button" variant="outline" onClick={closeDataSourceModal}>
             关闭
-          </button>
+          </Button>
         </footer>
       </div>
     </div>

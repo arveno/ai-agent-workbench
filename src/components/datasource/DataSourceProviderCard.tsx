@@ -1,3 +1,7 @@
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import type {
@@ -57,22 +61,22 @@ function getStatusLabel(provider: DataSourceProvider, displayStatus: DataSourceC
 
 function getStatusClassName(provider: DataSourceProvider, displayStatus: DataSourceConnectionStatus): string {
   if (provider.comingSoon) {
-    return 'datasource-status-badge datasource-status-badge-muted';
+    return 'datasource-badge datasource-badge-muted';
   }
 
   if (displayStatus === 'connected') {
-    return 'datasource-status-badge datasource-status-badge-success';
+    return 'datasource-badge datasource-badge-success';
   }
 
   if (displayStatus === 'testing') {
-    return 'datasource-status-badge datasource-status-badge-active';
+    return 'datasource-badge datasource-badge-active';
   }
 
   if (displayStatus === 'error') {
-    return 'datasource-status-badge datasource-status-badge-error';
+    return 'datasource-badge datasource-badge-error';
   }
 
-  return 'datasource-status-badge datasource-status-badge-muted';
+  return 'datasource-badge datasource-badge-muted';
 }
 
 function getDisplayStatus(
@@ -154,12 +158,56 @@ function getReadSchemaButtonLabel(schemaState?: DataSourceProviderSchemaRuntimeS
   return '重新读取';
 }
 
+function getSchemaStatusLabel(schemaState?: DataSourceProviderSchemaRuntimeState): string {
+  if (!schemaState || schemaState.status === 'idle') {
+    return 'Schema 未读取';
+  }
+
+  if (schemaState.status === 'loading') {
+    return 'Schema 读取中';
+  }
+
+  if (schemaState.status === 'success') {
+    return 'Schema 读取成功';
+  }
+
+  return 'Schema 读取失败';
+}
+
+function getSchemaStatusClassName(schemaState?: DataSourceProviderSchemaRuntimeState): string {
+  if (schemaState?.status === 'loading') {
+    return 'datasource-badge datasource-badge-active';
+  }
+
+  if (schemaState?.status === 'success') {
+    return 'datasource-badge datasource-badge-success';
+  }
+
+  if (schemaState?.status === 'error') {
+    return 'datasource-badge datasource-badge-error';
+  }
+
+  return 'datasource-badge datasource-badge-muted';
+}
+
 function getPreviewTableNames(schemaState?: DataSourceProviderSchemaRuntimeState): string[] {
   if (schemaState?.status !== 'success' || !schemaState.tables || schemaState.tables.length === 0) {
     return [];
   }
 
-  return schemaState.tables.slice(0, 3).map((table) => table.tableName);
+  return schemaState.tables.slice(0, 5).map((table) => table.tableName);
+}
+
+function getHiddenTableCount(schemaState?: DataSourceProviderSchemaRuntimeState): number {
+  if (schemaState?.status !== 'success' || !schemaState.tables || schemaState.tables.length <= 5) {
+    return 0;
+  }
+
+  return schemaState.tables.length - 5;
+}
+
+function getEnvironmentModeLabel(connectionMode: string): string {
+  return connectionMode === 'Server Env' ? '服务端环境变量' : connectionMode;
 }
 
 export function DataSourceProviderCard({
@@ -187,17 +235,18 @@ export function DataSourceProviderCard({
       : '测试连接';
   const readSchemaButtonLabel = getReadSchemaButtonLabel(schemaState);
   const previewTableNames = getPreviewTableNames(schemaState);
+  const hiddenTableCount = getHiddenTableCount(schemaState);
 
   return (
-    <article className="datasource-provider-card">
-      <div className="datasource-provider-card-header">
+    <Card size="sm" className="datasource-provider-card">
+      <CardHeader className="datasource-provider-card-header">
         <div className="datasource-provider-title-group">
           <div className="datasource-provider-icon">
             <AppIcon icon={icons.database} size={18} />
           </div>
           <div className="datasource-provider-title-wrap">
-            <h4 className="datasource-provider-name">{provider.name}</h4>
-            <p className="datasource-provider-description">{provider.description}</p>
+            <CardTitle className="datasource-provider-name">{provider.name}</CardTitle>
+            <CardDescription className="datasource-provider-description">{provider.description}</CardDescription>
             {provider.relationHint ? (
               <p className="datasource-provider-relation-hint">{provider.relationHint}</p>
             ) : null}
@@ -206,98 +255,127 @@ export function DataSourceProviderCard({
 
         <div className="datasource-provider-badge-group">
           {provider.demoBadgeText ? (
-            <span className="datasource-demo-badge">{provider.demoBadgeText}</span>
+            <Badge variant="outline" className="datasource-badge datasource-demo-badge">
+              {provider.demoBadgeText}
+            </Badge>
           ) : null}
-          <span className={getStatusClassName(provider, displayStatus)}>
+          <Badge variant="outline" className={getStatusClassName(provider, displayStatus)}>
             {getStatusLabel(provider, displayStatus)}
-          </span>
+          </Badge>
+          <Badge variant="outline" className={getSchemaStatusClassName(schemaState)}>
+            {getSchemaStatusLabel(schemaState)}
+          </Badge>
         </div>
-      </div>
+      </CardHeader>
 
-      <div className="datasource-provider-meta">
-        <div className="datasource-provider-meta-item">
-          <span className="datasource-provider-meta-label">连接方式</span>
-          <span className="datasource-provider-meta-value">{provider.meta.connectionMode}</span>
+      <CardContent className="datasource-provider-card-content">
+        <div className="datasource-provider-meta">
+          <div className="datasource-provider-meta-item">
+            <span className="datasource-provider-meta-label">连接方式</span>
+            <span className="datasource-provider-meta-value">{getEnvironmentModeLabel(provider.meta.connectionMode)}</span>
+          </div>
+          <div className="datasource-provider-meta-item">
+            <span className="datasource-provider-meta-label">数据库</span>
+            <span className="datasource-provider-meta-value">{provider.meta.database ?? '-'}</span>
+          </div>
+          <div className="datasource-provider-meta-item">
+            <span className="datasource-provider-meta-label">Schema</span>
+            <span className="datasource-provider-meta-value">{schemaText}</span>
+          </div>
+          <div className="datasource-provider-meta-item">
+            <span className="datasource-provider-meta-label">表数量</span>
+            <span className="datasource-provider-meta-value">{tableCountText}</span>
+          </div>
+          <div className="datasource-provider-meta-item">
+            <span className="datasource-provider-meta-label">数据量</span>
+            <span className="datasource-provider-meta-value">{rowCountText}</span>
+          </div>
+          <div className="datasource-provider-meta-item">
+            <span className="datasource-provider-meta-label">更新时间</span>
+            <span className="datasource-provider-meta-value">{updatedAtText}</span>
+          </div>
         </div>
-        <div className="datasource-provider-meta-item">
-          <span className="datasource-provider-meta-label">数据库</span>
-          <span className="datasource-provider-meta-value">{provider.meta.database ?? '-'}</span>
-        </div>
-        <div className="datasource-provider-meta-item">
-          <span className="datasource-provider-meta-label">Schema</span>
-          <span className="datasource-provider-meta-value">{schemaText}</span>
-        </div>
-        <div className="datasource-provider-meta-item">
-          <span className="datasource-provider-meta-label">表数量</span>
-          <span className="datasource-provider-meta-value">{tableCountText}</span>
-        </div>
-        <div className="datasource-provider-meta-item">
-          <span className="datasource-provider-meta-label">数据量</span>
-          <span className="datasource-provider-meta-value">{rowCountText}</span>
-        </div>
-        <div className="datasource-provider-meta-item">
-          <span className="datasource-provider-meta-label">更新时间</span>
-          <span className="datasource-provider-meta-value">{updatedAtText}</span>
-        </div>
-      </div>
 
-      <div className="datasource-provider-actions">
-        <button
-          type="button"
-          className="datasource-provider-action-button"
-          onClick={onTestConnection}
-          disabled={!canTestConnection || isTesting}
-        >
-          {testButtonLabel}
-        </button>
-        <button
-          type="button"
-          className="datasource-provider-action-button"
-          onClick={onReadSchema}
-          disabled={!canReadSchemaAction || isReadingSchema}
-        >
-          {readSchemaButtonLabel}
-        </button>
-      </div>
+        <Separator className="datasource-provider-separator" />
 
-      {runtimeState?.message ? (
-        <p
-          className={`datasource-provider-hint ${
-            runtimeState.status === 'success'
-              ? 'datasource-provider-hint-success'
-              : runtimeState.status === 'error'
-                ? 'datasource-provider-hint-error'
-                : ''
-          }`}
-        >
-          {runtimeState.message}
-        </p>
-      ) : null}
-      {schemaState?.message ? (
-        <p
-          className={`datasource-provider-hint ${
-            schemaState.status === 'success'
-              ? 'datasource-provider-hint-success'
-              : schemaState.status === 'error'
-                ? 'datasource-provider-hint-error'
-                : ''
-          }`}
-        >
-          {schemaState.message}
-        </p>
-      ) : null}
-      {previewTableNames.length > 0 ? (
-        <div className="datasource-provider-table-summary">
-          <div className="datasource-provider-table-summary-title">已读取表</div>
-          <ul className="datasource-provider-table-list">
-            {previewTableNames.map((tableName) => (
-              <li key={tableName} className="datasource-provider-table-item">
-                {tableName}
-              </li>
-            ))}
-          </ul>
+        <div className="datasource-provider-status-panel">
+          <div className="datasource-provider-status-row">
+            <span>连接状态</span>
+            <strong>{getStatusLabel(provider, displayStatus)}</strong>
+            {typeof runtimeState?.elapsedMs === 'number' ? <em>{runtimeState.elapsedMs}ms</em> : null}
+          </div>
+          <div className="datasource-provider-status-row">
+            <span>Schema 状态</span>
+            <strong>{getSchemaStatusLabel(schemaState)}</strong>
+            {typeof schemaState?.elapsedMs === 'number' ? <em>{schemaState.elapsedMs}ms</em> : null}
+          </div>
         </div>
-      ) : null}
-    </article>
+
+        <div className="datasource-provider-actions">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onTestConnection}
+            disabled={!canTestConnection || isTesting}
+          >
+            {testButtonLabel}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onReadSchema}
+            disabled={!canReadSchemaAction || isReadingSchema}
+          >
+            {readSchemaButtonLabel}
+          </Button>
+        </div>
+
+        {runtimeState?.message ? (
+          <p
+            className={`datasource-provider-hint ${
+              runtimeState.status === 'success'
+                ? 'datasource-provider-hint-success'
+                : runtimeState.status === 'error'
+                  ? 'datasource-provider-hint-error'
+                  : ''
+            }`}
+          >
+            {runtimeState.message}
+          </p>
+        ) : null}
+        {schemaState?.message ? (
+          <p
+            className={`datasource-provider-hint ${
+              schemaState.status === 'success'
+                ? 'datasource-provider-hint-success'
+                : schemaState.status === 'error'
+                  ? 'datasource-provider-hint-error'
+                  : ''
+            }`}
+          >
+            {schemaState.message}
+          </p>
+        ) : null}
+        {previewTableNames.length > 0 ? (
+          <div className="datasource-provider-table-summary">
+            <div className="datasource-provider-table-summary-title">已读取表</div>
+            <ul className="datasource-provider-table-list">
+              {previewTableNames.map((tableName) => (
+                <li key={tableName} className="datasource-provider-table-item">
+                  {tableName}
+                </li>
+              ))}
+              {hiddenTableCount > 0 ? (
+                <li className="datasource-provider-table-item datasource-provider-table-more">
+                  等 {hiddenTableCount} 张表
+                </li>
+              ) : null}
+            </ul>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
