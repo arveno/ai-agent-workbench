@@ -1,4 +1,5 @@
 import type { ChatBlock } from '../../types/chatBlocks';
+import type { ReactNode } from 'react';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { Badge } from '../ui/badge';
@@ -29,6 +30,16 @@ async function copyMessage(content: string): Promise<void> {
 
 function assertNever(value: never): never {
   throw new Error(`Unsupported chat block: ${String(value)}`);
+}
+
+function getChatBlockClassName(block: ChatBlock): string {
+  const classNames = ['chat-block', `chat-block-${block.type}`];
+
+  if (block.type === 'message') {
+    classNames.push(`chat-block-message-${block.message.role}`, `chat-block-message-${block.message.kind}`);
+  }
+
+  return classNames.join(' ');
 }
 
 function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatus }: ChatBlockRendererProps) {
@@ -96,20 +107,30 @@ function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatu
 }
 
 export function ChatBlockRenderer(props: ChatBlockRendererProps) {
+  let content: ReactNode;
+
   switch (props.block.type) {
     case 'message':
-      return <MessageBlockRenderer {...props} />;
+      content = <MessageBlockRenderer {...props} />;
+      break;
     case 'tool_summary':
-      return <ToolSummaryBlock run={props.block.run} />;
+      content = <ToolSummaryBlock run={props.block.run} />;
+      break;
     case 'streaming_assistant':
-      return <StreamingAssistantBlock run={props.block.run} />;
+      content = <StreamingAssistantBlock run={props.block.run} />;
+      break;
     case 'report_confirm':
-      return <ConfirmActionCard run={props.block.run} />;
+      content = <ConfirmActionCard run={props.block.run} />;
+      break;
     case 'run_error':
-      return <RunErrorBlock run={props.block.run} />;
+      content = <RunErrorBlock run={props.block.run} />;
+      break;
     case 'run_stopped':
-      return <RunStoppedBlock run={props.block.run} />;
+      content = <RunStoppedBlock run={props.block.run} />;
+      break;
     default:
-      return assertNever(props.block);
+      content = assertNever(props.block);
   }
+
+  return <div className={getChatBlockClassName(props.block)}>{content}</div>;
 }
