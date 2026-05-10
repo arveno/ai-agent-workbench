@@ -395,6 +395,8 @@ export interface GenerationSlice {
   runAgentStepsPreview: (runId: number) => Promise<void>;
   triggerMockError: () => void;
   retryCurrentTask: () => Promise<void>;
+  generateReportForRun: (runId: string) => void;
+  skipReportForRun: (runId: string) => void;
   confirmGenerateReport: () => Promise<void>;
   cancelGenerateReport: () => void;
   stopGenerating: () => void;

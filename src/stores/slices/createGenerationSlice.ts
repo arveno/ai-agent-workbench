@@ -1,6 +1,13 @@
 import type { StateCreator } from 'zustand';
 import { streamGroqChat } from '../../services/chatApi';
-import type { GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
+import type {
+  GenerationSlice,
+  RunReportState,
+  RunSnapshot,
+  WorkbenchMessage,
+  WorkbenchSession,
+  WorkbenchStore,
+} from '../../types/workbench';
 import {
   MOCK_RUN_STEP_IDS,
   MOCK_RUN_TOOL_IDS,
@@ -30,6 +37,81 @@ import {
   updateCurrentSessionAssistantInSessions,
   delay,
 } from './shared';
+
+function findLastMessageIndex(
+  messages: WorkbenchMessage[],
+  predicate: (message: WorkbenchMessage) => boolean,
+): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (predicate(messages[index])) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function hasReportMessageForRun(messages: WorkbenchMessage[], runId: string): boolean {
+  return messages.some(
+    (message) => message.role === 'assistant' && message.kind === 'report' && message.runId === runId,
+  );
+}
+
+function insertReportMessageAfterRunAssistant(
+  messages: WorkbenchMessage[],
+  reportMessage: WorkbenchMessage,
+  runId: string,
+): WorkbenchMessage[] {
+  const assistantFinalIndex = findLastMessageIndex(
+    messages,
+    (message) => message.role === 'assistant' && message.kind === 'normal' && message.runId === runId,
+  );
+
+  if (assistantFinalIndex >= 0) {
+    return [
+      ...messages.slice(0, assistantFinalIndex + 1),
+      reportMessage,
+      ...messages.slice(assistantFinalIndex + 1),
+    ];
+  }
+
+  const lastRunMessageIndex = findLastMessageIndex(messages, (message) => message.runId === runId);
+
+  if (lastRunMessageIndex >= 0) {
+    return [
+      ...messages.slice(0, lastRunMessageIndex + 1),
+      reportMessage,
+      ...messages.slice(lastRunMessageIndex + 1),
+    ];
+  }
+
+  return [...messages, reportMessage];
+}
+
+function updateRunReportState(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
+  return {
+    ...run,
+    reportState,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function updateSessionRunReportState(params: {
+  session: WorkbenchSession;
+  runId: string;
+  nextRun: RunSnapshot;
+  nextMessages?: WorkbenchMessage[];
+}): WorkbenchSession {
+  return {
+    ...params.session,
+    updatedAt: Date.now(),
+    messages: params.nextMessages ?? params.session.messages,
+    runsById: {
+      ...params.session.runsById,
+      [params.runId]: params.nextRun,
+    },
+  };
+}
 
 export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], GenerationSlice> = (set, get) => ({
   generationStatus: initialWorkbenchState.generationStatus,
@@ -519,6 +601,108 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
 
     await get().runPromptWithCurrentModel(get().currentPrompt);
   },
+  generateReportForRun: (runId) => {
+    const normalizedRunId = runId.trim();
+
+    if (!normalizedRunId) {
+      return;
+    }
+
+    set((state) => {
+      const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
+      const run = activeSession?.runsById[normalizedRunId];
+
+      if (!activeSession || !run || run.reportState !== 'pending') {
+        return state;
+      }
+
+      const nextRun = updateRunReportState(run, 'generated');
+      const hasExistingReport = hasReportMessageForRun(activeSession.messages, normalizedRunId);
+      const reportMessage = hasExistingReport
+        ? null
+        : createWorkbenchMessage({
+            role: 'assistant',
+            kind: 'report',
+            content: createRunReportMarkdown(run),
+            runId: normalizedRunId,
+          });
+      const nextMessages = reportMessage
+        ? insertReportMessageAfterRunAssistant(activeSession.messages, reportMessage, normalizedRunId)
+        : activeSession.messages;
+
+      const nextSessions = sortSessionsByUpdatedAt(
+        state.sessions.map((session) =>
+          session.id === state.currentSessionId
+            ? updateSessionRunReportState({
+                session,
+                runId: normalizedRunId,
+                nextRun,
+                nextMessages,
+              })
+            : session,
+        ),
+      );
+
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+
+      return {
+        sessions: nextSessions,
+        currentRun: state.currentRun?.id === normalizedRunId ? nextRun : state.currentRun,
+        confirmStatus: 'confirmed',
+        generationStatus: 'done',
+        currentReportRunId: normalizedRunId,
+        reportActionState: 'generated',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+      };
+    });
+  },
+  skipReportForRun: (runId) => {
+    const normalizedRunId = runId.trim();
+
+    if (!normalizedRunId) {
+      return;
+    }
+
+    set((state) => {
+      const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
+      const run = activeSession?.runsById[normalizedRunId];
+
+      if (!activeSession || !run || run.reportState !== 'pending') {
+        return state;
+      }
+
+      const nextRun = updateRunReportState(run, 'skipped');
+      const nextSessions = sortSessionsByUpdatedAt(
+        state.sessions.map((session) =>
+          session.id === state.currentSessionId
+            ? updateSessionRunReportState({
+                session,
+                runId: normalizedRunId,
+                nextRun,
+              })
+            : session,
+        ),
+      );
+
+      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+
+      return {
+        sessions: nextSessions,
+        currentRun: state.currentRun?.id === normalizedRunId ? nextRun : state.currentRun,
+        confirmStatus: 'cancelled',
+        generationStatus: 'done',
+        currentReportRunId: normalizedRunId,
+        reportActionState: 'skipped',
+        finalMessage: {
+          content: '',
+          status: 'hidden',
+        },
+      };
+    });
+  },
   confirmGenerateReport: async () => {
     const currentRun = get().currentRun;
 
@@ -526,25 +710,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
-    get().appendAssistantMessageToCurrentSession(createRunReportMarkdown(currentRun), {
-      kind: 'report',
-      runId: currentRun.id,
-    });
-    get().applyRunEvent({
-      type: 'report_generated',
-      runId: currentRun.id,
-    });
-
-    set({
-      confirmStatus: 'confirmed',
-      generationStatus: 'done',
-      currentReportRunId: currentRun.id,
-      reportActionState: 'generated',
-      finalMessage: {
-        content: '',
-        status: 'hidden',
-      },
-    });
+    get().generateReportForRun(currentRun.id);
   },
   cancelGenerateReport: () => {
     const currentRun = get().currentRun;
@@ -553,21 +719,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
-    get().applyRunEvent({
-      type: 'report_skipped',
-      runId: currentRun.id,
-    });
-
-    set({
-      confirmStatus: 'cancelled',
-      generationStatus: 'done',
-      currentReportRunId: currentRun.id,
-      reportActionState: 'skipped',
-      finalMessage: {
-        content: '',
-        status: 'hidden',
-      },
-    });
+    get().skipReportForRun(currentRun.id);
   },
   stopGenerating: () => {
     const currentRun = get().currentRun;

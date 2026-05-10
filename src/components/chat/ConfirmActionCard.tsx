@@ -1,60 +1,30 @@
 import type { RunSnapshot } from '../../types/run';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import { createRunReportMarkdown } from '../../utils/report';
 import { shouldShowReportConfirm } from '../../utils/run';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 
 interface ConfirmActionCardProps {
-  run?: RunSnapshot;
+  run: RunSnapshot;
 }
 
 export function ConfirmActionCard({ run }: ConfirmActionCardProps) {
-  const currentRun = useWorkbenchStore((state) => state.currentRun);
-  const setCurrentRun = useWorkbenchStore((state) => state.setCurrentRun);
-  const applyRunEvent = useWorkbenchStore((state) => state.applyRunEvent);
-  const appendAssistantMessageToCurrentSession = useWorkbenchStore(
-    (state) => state.appendAssistantMessageToCurrentSession,
-  );
-  const confirmGenerateReport = useWorkbenchStore((state) => state.confirmGenerateReport);
-  const cancelGenerateReport = useWorkbenchStore((state) => state.cancelGenerateReport);
-  const targetRun = run ?? currentRun;
+  const generateReportForRun = useWorkbenchStore((state) => state.generateReportForRun);
+  const skipReportForRun = useWorkbenchStore((state) => state.skipReportForRun);
 
-  if (!targetRun || !shouldShowReportConfirm(targetRun)) {
+  if (!shouldShowReportConfirm(run)) {
     return null;
   }
 
-  const isCurrentRun = currentRun?.id === targetRun.id;
+  const runId = run.id;
 
   const handleGenerateReport = () => {
-    if (isCurrentRun) {
-      void confirmGenerateReport();
-      return;
-    }
-
-    setCurrentRun(targetRun);
-    appendAssistantMessageToCurrentSession(createRunReportMarkdown(targetRun), {
-      kind: 'report',
-      runId: targetRun.id,
-    });
-    applyRunEvent({
-      type: 'report_generated',
-      runId: targetRun.id,
-    });
+    generateReportForRun(runId);
   };
 
   const handleSkipReport = () => {
-    if (isCurrentRun) {
-      cancelGenerateReport();
-      return;
-    }
-
-    setCurrentRun(targetRun);
-    applyRunEvent({
-      type: 'report_skipped',
-      runId: targetRun.id,
-    });
+    skipReportForRun(runId);
   };
 
   return (
