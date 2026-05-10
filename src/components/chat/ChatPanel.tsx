@@ -98,6 +98,32 @@ function AgentToolSummary({ items }: { items: FormattedToolInvocation[] }) {
   );
 }
 
+
+function findRunPromptMessageIndex(
+  messages: Array<{ role: string; content: string }>,
+  prompt: string | undefined,
+): number {
+  const normalizedPrompt = prompt?.trim();
+
+  if (!normalizedPrompt) {
+    return -1;
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+
+    if (message.role === 'user' && message.content.trim() === normalizedPrompt) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isRenderableRunToolSummaryStatus(status: string): boolean {
+  return status === 'running' || status === 'success' || status === 'stopped' || status === 'error';
+}
+
 function mapAgentToolInvocation(invocation: AgentToolInvocationResult): RunToolInvocation {
   return {
     id: invocation.id,
@@ -128,21 +154,20 @@ export function ChatPanel() {
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const sessionMessages = currentSession?.messages ?? [];
   const isMockMode = currentModelProvider === 'mock';
-  const shouldUseAgentRunTools = currentRun?.mode === 'agent';
-  const isDataAnalysisRun =
-    shouldUseAgentRunTools
-      ? currentRun.intent === 'data_analysis'
-      : currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations.length);
-  const runtimeToolInvocations =
-    shouldUseAgentRunTools
-      ? currentRun.toolInvocations
-      : currentAgentRun?.toolInvocations.map((invocation) => mapAgentToolInvocation(invocation)) ?? [];
-  const runtimeToolSummaries =
-    !isMockMode && isDataAnalysisRun
-      ? runtimeToolInvocations.map((invocation) => formatToolInvocationForChat(invocation))
+  const fallbackAgentRunIsDataAnalysis =
+    currentAgentRun?.plan?.intent === 'data_analysis' || Boolean(currentAgentRun?.toolInvocations.length);
+  const runtimeToolInvocations = currentRun
+    ? currentRun.toolInvocations
+    : fallbackAgentRunIsDataAnalysis
+      ? currentAgentRun?.toolInvocations.map((invocation) => mapAgentToolInvocation(invocation)) ?? []
       : [];
+  const runtimeToolSummaries = runtimeToolInvocations.map((invocation) => formatToolInvocationForChat(invocation));
   const hasConversation = sessionMessages.length > 0;
-  const shouldRenderRuntimeToolSummary = !isMockMode && runtimeToolSummaries.length > 0;
+  const shouldRenderRuntimeToolSummary = currentRun
+    ? runtimeToolSummaries.length > 0 && isRenderableRunToolSummaryStatus(currentRun.status)
+    : !isMockMode && fallbackAgentRunIsDataAnalysis && runtimeToolSummaries.length > 0;
+  const currentRunPromptMessageIndex = findRunPromptMessageIndex(sessionMessages, currentRun?.prompt);
+  const shouldRenderToolSummaryAfterMessages = shouldRenderRuntimeToolSummary && currentRunPromptMessageIndex < 0;
   const shouldShowConfirm = shouldShowReportConfirm(currentRun);
   const shouldShowAgentStreamingBubble = currentRun?.mode === 'agent' && currentRun.status === 'running';
   const agentStreamingContent =
@@ -213,7 +238,7 @@ export function ChatPanel() {
           shouldAutoScrollRef.current = isNearBottom();
         }}
       >
-        {sessionMessages.map((message) => {
+        {sessionMessages.map((message, messageIndex) => {
           const shouldShowCopy = message.content.trim().length > 0;
           const copyAction = shouldShowCopy ? (
             <button
@@ -231,27 +256,25 @@ export function ChatPanel() {
 
           if (message.role === 'user') {
             return (
-              <div key={message.id} className="message-row message-row-user">
-                <MessageBubble role="user" content={message.content} actions={copyAction} />
-                <div className="message-avatar message-avatar-user" aria-hidden="true">
-                  <AppIcon icon={icons.user} size={16} />
+              <Fragment key={message.id}>
+                <div className="message-row message-row-user">
+                  <MessageBubble role="user" content={message.content} actions={copyAction} />
+                  <div className="message-avatar message-avatar-user" aria-hidden="true">
+                    <AppIcon icon={icons.user} size={16} />
+                  </div>
                 </div>
-              </div>
+                {shouldRenderRuntimeToolSummary && messageIndex === currentRunPromptMessageIndex ? (
+                  <AgentToolSummary items={runtimeToolSummaries} />
+                ) : null}
+              </Fragment>
             );
           }
 
           const isActiveAssistant = message.id === activeAssistantMessageId;
           const isStreamingAssistant = isMockMode && isActiveAssistant && generationStatus === 'streaming';
           const isStoppedAssistant = isMockMode && isActiveAssistant && generationStatus === 'stopped';
-          const shouldRenderToolSummaryBeforeMessage =
-            shouldRenderRuntimeToolSummary &&
-            !shouldShowAgentStreamingBubble &&
-            message.id === activeAssistantMessageId;
-
           return (
             <Fragment key={message.id}>
-              {shouldRenderToolSummaryBeforeMessage ? <AgentToolSummary items={runtimeToolSummaries} /> : null}
-
               <div className="message-row message-row-assistant">
                 <div className="message-avatar message-avatar-assistant" aria-hidden="true">
                   <AppIcon icon={icons.brand} size={16} />
@@ -272,7 +295,7 @@ export function ChatPanel() {
           );
         })}
 
-        {isMockMode && hasConversation ? (
+        {isMockMode && hasConversation && !currentRun ? (
           <div className="tool-card-grid">
             {visibleToolCalls.map((toolCall) => (
               <ToolCallCard
@@ -311,12 +334,12 @@ export function ChatPanel() {
           </div>
         ) : null}
 
+        {shouldRenderToolSummaryAfterMessages ? <AgentToolSummary items={runtimeToolSummaries} /> : null}
+
         {shouldShowConfirm ? <ConfirmActionCard /> : null}
 
         {shouldShowAgentStreamingBubble ? (
           <>
-            {shouldRenderRuntimeToolSummary ? <AgentToolSummary items={runtimeToolSummaries} /> : null}
-
             <div className="message-row message-row-assistant">
               <div className="message-avatar message-avatar-assistant" aria-hidden="true">
                 <AppIcon icon={icons.brand} size={16} />
