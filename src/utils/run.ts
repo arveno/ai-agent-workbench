@@ -17,7 +17,7 @@ export function shouldShowReportConfirm(run: RunSnapshot | null): boolean {
     run &&
       run.intent === 'data_analysis' &&
       run.status === 'success' &&
-      run.conclusion &&
+      run.conclusion.trim() &&
       run.reportState === 'pending',
   );
 }

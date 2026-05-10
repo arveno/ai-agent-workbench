@@ -4,6 +4,7 @@ import type { RunToolInvocation } from '../../types/run';
 import { mockToolCalls } from '../../mocks/toolCalls';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { formatToolInvocationForChat } from '../../utils/toolInvocationFormat';
+import { shouldShowReportConfirm } from '../../utils/run';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { ChatInput } from './ChatInput';
@@ -53,13 +54,8 @@ export function ChatPanel() {
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
   const realModelNotice = useWorkbenchStore((state) => state.realModelNotice);
   const visibleToolCallIds = useWorkbenchStore((state) => state.visibleToolCallIds);
-  const confirmStatus = useWorkbenchStore((state) => state.confirmStatus);
-  const currentReportRunId = useWorkbenchStore((state) => state.currentReportRunId);
-  const reportActionState = useWorkbenchStore((state) => state.reportActionState);
   const finalMessage = useWorkbenchStore((state) => state.finalMessage);
   const retryCurrentTask = useWorkbenchStore((state) => state.retryCurrentTask);
-  const confirmGenerateReport = useWorkbenchStore((state) => state.confirmGenerateReport);
-  const cancelGenerateReport = useWorkbenchStore((state) => state.cancelGenerateReport);
   const visibleToolCalls = mockToolCalls.filter((toolCall) => visibleToolCallIds.includes(toolCall.id));
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const sessionMessages = currentSession?.messages ?? [];
@@ -79,14 +75,7 @@ export function ChatPanel() {
       : [];
   const hasConversation = sessionMessages.length > 0;
   const shouldRenderRuntimeToolSummary = !isMockMode && runtimeToolSummaries.length > 0;
-  const shouldShowAgentReportConfirm =
-    !isMockMode &&
-    Boolean(currentAgentRun) &&
-    isDataAnalysisRun &&
-    currentAgentRun?.status === 'success' &&
-    Boolean(currentAgentRun?.conclusion.trim()) &&
-    currentReportRunId === currentAgentRun?.id &&
-    reportActionState === 'pending';
+  const shouldShowConfirm = shouldShowReportConfirm(currentRun);
   const shouldShowAgentLoading =
     currentRun?.mode === 'agent' && currentRun.status === 'running' && !currentRun.conclusion.trim();
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -136,8 +125,7 @@ export function ChatPanel() {
     activeAssistantMessageId,
     visibleToolCalls.length,
     runtimeToolSummaries.length,
-    confirmStatus,
-    reportActionState,
+    currentRun?.reportState,
     finalMessage.status,
     realModelNotice,
     errorMessage,
@@ -278,25 +266,7 @@ export function ChatPanel() {
           </div>
         ) : null}
 
-        {isMockMode && hasConversation ? (
-          <ConfirmActionCard
-            status={confirmStatus}
-            onConfirm={confirmGenerateReport}
-            onCancel={cancelGenerateReport}
-          />
-        ) : null}
-
-        {shouldShowAgentReportConfirm ? (
-          <ConfirmActionCard
-            status="waiting"
-            onConfirm={confirmGenerateReport}
-            onCancel={cancelGenerateReport}
-            title="后续操作"
-            waitingText="是否基于本次分析生成简版报告？"
-            confirmButtonText="生成报告"
-            cancelButtonText="暂不生成"
-          />
-        ) : null}
+        {shouldShowConfirm ? <ConfirmActionCard /> : null}
 
         {shouldShowAgentLoading ? (
           <div className="message-row message-row-assistant">

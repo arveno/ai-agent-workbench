@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { streamGroqChat } from '../../services/chatApi';
-import type { AgentRunResult, GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
+import type { GenerationSlice, WorkbenchMessage, WorkbenchStore } from '../../types/workbench';
 import { createMessageId } from '../../utils/message';
 import {
   MOCK_RUN_STEP_IDS,
@@ -17,44 +17,19 @@ import {
   createMockToolInvocation,
   createMockToolStartedEvent,
 } from '../../utils/mockRun';
+import { createRunReportMarkdown } from '../../utils/report';
+import { shouldShowReportConfirm } from '../../utils/run';
 import { streamText } from '../../utils/streamText';
 import {
   createInitialAgentSteps,
   createSessionTitle,
   DEFAULT_ASSISTANT_REPLY,
-  FINAL_REPORT_SUMMARY,
   initialWorkbenchState,
   persistWorkbenchSessions,
   sortSessionsByUpdatedAt,
   updateCurrentSessionAssistantInSessions,
   delay,
 } from './shared';
-
-function createAgentRunReportMarkdown(run: AgentRunResult): string {
-  const providerLabel = run.provider === 'postgresql' ? 'PostgreSQL' : 'Supabase';
-  const toolNames = Array.from(new Set(run.toolInvocations.map((tool) => tool.toolName)));
-  const toolLines =
-    toolNames.length > 0 ? toolNames.map((toolName) => `- ${toolName}`).join('\n') : '- 本次未调用工具';
-
-  return [
-    '# 教学质量分析简版报告',
-    '',
-    '## 分析问题',
-    run.prompt,
-    '',
-    '## 使用数据源',
-    providerLabel,
-    '',
-    '## 调用工具',
-    toolLines,
-    '',
-    '## 分析结论',
-    run.conclusion,
-    '',
-    '## 后续建议',
-    '建议优先关注异常指标较高的学科或班级，并结合平均分、出勤率和作业完成率做进一步排查。',
-  ].join('\n');
-}
 
 export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], GenerationSlice> = (set, get) => ({
   generationStatus: initialWorkbenchState.generationStatus,
@@ -537,113 +512,51 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     await get().runPromptWithCurrentModel(get().currentPrompt);
   },
   confirmGenerateReport: async () => {
-    const currentState = get();
-    const currentRun = currentState.currentAgentRun;
-    const isDataAnalysisRun =
-      currentRun?.plan?.intent === 'data_analysis' || Boolean(currentRun?.toolInvocations.length);
+    const currentRun = get().currentRun;
 
-    if (currentState.currentModelProvider === 'groq') {
-      if (
-        !currentRun ||
-        currentState.currentReportRunId !== currentRun.id ||
-        currentState.reportActionState !== 'pending' ||
-        currentRun.status !== 'success' ||
-        !isDataAnalysisRun ||
-        !currentRun.conclusion.trim()
-      ) {
-        return;
-      }
-
-      const runConclusionMessageId = currentState.activeAssistantMessageId;
-      get().appendAssistantMessageToCurrentSession(createAgentRunReportMarkdown(currentRun));
-      set({
-        activeAssistantMessageId: runConclusionMessageId,
-        confirmStatus: 'confirmed',
-        reportActionState: 'generated',
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
-        generationStatus: 'done',
-      });
+    if (!currentRun || !shouldShowReportConfirm(currentRun)) {
       return;
     }
 
-    const currentBeforeConfirm = get();
-    const confirmStep = currentBeforeConfirm.agentSteps.find((step) => step.id === 'confirm');
-
-    if (currentBeforeConfirm.confirmStatus !== 'waiting' || confirmStep?.status !== 'running') {
-      return;
-    }
-
-    const runId = get().streamRunId;
+    get().appendAssistantMessageToCurrentSession(createRunReportMarkdown(currentRun));
+    get().applyRunEvent({
+      type: 'report_generated',
+      runId: currentRun.id,
+    });
 
     set({
       confirmStatus: 'confirmed',
-      generationStatus: 'streaming',
-    });
-
-    get().setAgentStepStatus('confirm', 'success');
-    get().setAgentStepStatus('final', 'running');
-    const mockRun = get().currentRun;
-
-    if (mockRun?.mode === 'mock') {
-      get().applyRunEvent(createMockStepCompletedEvent(mockRun.id, MOCK_RUN_STEP_IDS.waitConfirmation));
-      get().applyRunEvent(createMockStepStartedEvent(mockRun.id, MOCK_RUN_STEP_IDS.generateConclusion, '生成最终结论'));
-      get().applyRunEvent({
-        type: 'report_generated',
-        runId: mockRun.id,
-      });
-    }
-
-    await delay(600);
-
-    const current = get();
-
-    if (current.streamRunId !== runId || current.generationStatus !== 'streaming') {
-      return;
-    }
-
-    get().setAgentStepStatus('final', 'success');
-
-    const currentMockRun = get().currentRun;
-
-    if (currentMockRun?.mode === 'mock') {
-      get().applyRunEvent(createMockStepCompletedEvent(currentMockRun.id, MOCK_RUN_STEP_IDS.generateConclusion, 600));
-    }
-
-    set({
       generationStatus: 'done',
+      currentReportRunId: currentRun.id,
+      reportActionState: 'generated',
       finalMessage: {
-        content: FINAL_REPORT_SUMMARY,
-        status: 'visible',
+        content: '',
+        status: 'hidden',
       },
     });
   },
   cancelGenerateReport: () => {
-    if (get().currentModelProvider === 'groq') {
-      const currentRun = get().currentAgentRun;
-      set({
-        confirmStatus: 'cancelled',
-        reportActionState: 'skipped',
-        currentReportRunId: currentRun?.id ?? null,
-        finalMessage: {
-          content: '',
-          status: 'hidden',
-        },
-      });
+    const currentRun = get().currentRun;
+
+    if (!currentRun || !shouldShowReportConfirm(currentRun)) {
       return;
     }
 
-    set((state) => ({
+    get().applyRunEvent({
+      type: 'report_skipped',
+      runId: currentRun.id,
+    });
+
+    set({
       confirmStatus: 'cancelled',
-      generationStatus: 'stopped',
+      generationStatus: 'done',
+      currentReportRunId: currentRun.id,
+      reportActionState: 'skipped',
       finalMessage: {
-        content: '已取消生成分析报告。',
-        status: 'visible',
+        content: '',
+        status: 'hidden',
       },
-      agentSteps: state.agentSteps.map((step) => (step.status === 'running' ? { ...step, status: 'error' } : step)),
-    }));
+    });
   },
   stopGenerating: () => {
     const currentRun = get().currentRun;
