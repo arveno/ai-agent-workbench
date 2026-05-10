@@ -1,83 +1,17 @@
 import { useEffect } from 'react';
-import type { AgentToolDefinition } from '../../types/workbench';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import type { WorkbenchToolCategory } from '../../types/workbench';
+import { WORKBENCH_TOOL_DEFINITIONS } from '../../utils/toolRegistryView';
 import { ToolCard } from './ToolCard';
 
-const TOOL_DEFINITIONS: AgentToolDefinition[] = [
-  {
-    id: 'schema_inspect',
-    name: 'schema_inspect',
-    description: '读取允许访问的数据源 Schema、表、字段和类型。',
-    status: 'enabled',
-    riskLevel: 'low',
-    category: 'schema',
-    inputSummary: 'dataSourceId, allowedSchemas',
-    outputSummary: 'tables, columns, columnTypes',
-  },
-  {
-    id: 'query_table',
-    name: 'query_table',
-    description: '按受控条件查询白名单表数据，不允许任意 SQL。',
-    status: 'enabled',
-    riskLevel: 'medium',
-    category: 'query',
-    inputSummary: 'table, columns, filters, limit',
-    outputSummary: 'rows, rowCount, elapsedMs',
-  },
-  {
-    id: 'aggregate_table',
-    name: 'aggregate_table',
-    description: '对指定表进行受控聚合，例如 count、avg、sum、group by。',
-    status: 'enabled',
-    riskLevel: 'medium',
-    category: 'query',
-    inputSummary: 'table, metrics, dimensions, filters, limit',
-    outputSummary: 'aggregates, chartData',
-  },
-  {
-    id: 'chart_render',
-    name: 'chart_render',
-    description: '将查询或聚合结果转换为前端图表数据。',
-    status: 'enabled',
-    riskLevel: 'low',
-    category: 'render',
-    inputSummary: 'rows 或 aggregates, chartType',
-    outputSummary: 'chartConfig, summary',
-  },
-  {
-    id: 'knowledge_search',
-    name: 'knowledge_search',
-    description: '从知识库中检索业务规则、指标口径和说明文档。',
-    status: 'comingSoon',
-    riskLevel: 'medium',
-    category: 'knowledge',
-    inputSummary: 'query, topK',
-    outputSummary: 'documents, citations',
-  },
-  {
-    id: 'report_generate',
-    name: 'report_generate',
-    description: '根据工具结果和模型回复生成结构化报告。',
-    status: 'comingSoon',
-    riskLevel: 'low',
-    category: 'report',
-    inputSummary: 'runId, messages, toolResults',
-    outputSummary: 'reportMarkdown',
-  },
-];
-
-const TOOL_GROUPS: Array<{ title: string; categories: AgentToolDefinition['category'][] }> = [
+const TOOL_GROUPS: Array<{ title: string; categories: WorkbenchToolCategory[] }> = [
   {
     title: 'Schema 工具',
     categories: ['schema'],
   },
   {
-    title: '查询工具',
-    categories: ['query'],
-  },
-  {
-    title: '分析与渲染工具',
-    categories: ['analysis', 'render'],
+    title: '查询与分析工具',
+    categories: ['query', 'analysis', 'render'],
   },
   {
     title: '知识与报告工具',
@@ -144,7 +78,7 @@ export function ToolLibraryModal() {
 
         <div className="tool-library-modal-body">
           {TOOL_GROUPS.map((group) => {
-            const tools = TOOL_DEFINITIONS.filter((tool) => group.categories.includes(tool.category));
+            const tools = WORKBENCH_TOOL_DEFINITIONS.filter((tool) => group.categories.includes(tool.category));
 
             return (
               <section key={group.title} className="tool-section">
@@ -168,4 +102,3 @@ export function ToolLibraryModal() {
     </div>
   );
 }
-

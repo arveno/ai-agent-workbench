@@ -109,8 +109,22 @@
   font-weight: 800;
 }
 
+.tool-library-id {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.tool-library-tag-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .tool-library-category-tag {
-  margin-top: 4px;
   display: inline-flex;
   align-items: center;
   height: 20px;
@@ -125,11 +139,15 @@
 .tool-library-badge-group {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
 .tool-status-badge,
-.tool-risk-badge {
+.tool-risk-badge,
+.tool-runtime-badge,
+.tool-trace-badge {
   display: inline-flex;
   align-items: center;
   height: 22px;
@@ -140,13 +158,32 @@
   white-space: nowrap;
 }
 
-.tool-status-badge-enabled {
+.tool-status-badge-connected {
   background: #dcfce7;
   color: #15803d;
 }
 
-.tool-status-badge-disabled,
-.tool-status-badge-coming-soon {
+.tool-status-badge-mock {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.tool-status-badge-planned {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.tool-runtime-badge-server {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.tool-runtime-badge-mock {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tool-runtime-badge-planned {
   background: #f1f5f9;
   color: #64748b;
 }
@@ -164,6 +201,16 @@
 .tool-risk-badge-high {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+.tool-trace-badge {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.tool-trace-badge-on {
+  background: #ecfdf5;
+  color: #047857;
 }
 
 .tool-library-description {
@@ -226,4 +273,3 @@
     grid-template-columns: 1fr;
   }
 }
-

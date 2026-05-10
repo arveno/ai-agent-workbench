@@ -1,46 +1,23 @@
-import type { AgentToolDefinition } from '../../types/workbench';
+import type { WorkbenchToolDefinition } from '../../types/workbench';
+import { getToolRiskLabel, getToolRuntimeLabel, getToolStatusLabel } from '../../utils/toolRegistryView';
 
 interface ToolCardProps {
-  tool: AgentToolDefinition;
+  tool: WorkbenchToolDefinition;
 }
 
-function getToolStatusLabel(status: AgentToolDefinition['status']): string {
-  if (status === 'enabled') {
-    return '已启用';
+function getToolStatusClassName(status: WorkbenchToolDefinition['status']): string {
+  if (status === 'connected') {
+    return 'tool-status-badge tool-status-badge-connected';
   }
 
-  if (status === 'disabled') {
-    return '已禁用';
+  if (status === 'mock') {
+    return 'tool-status-badge tool-status-badge-mock';
   }
 
-  return '即将支持';
+  return 'tool-status-badge tool-status-badge-planned';
 }
 
-function getToolStatusClassName(status: AgentToolDefinition['status']): string {
-  if (status === 'enabled') {
-    return 'tool-status-badge tool-status-badge-enabled';
-  }
-
-  if (status === 'disabled') {
-    return 'tool-status-badge tool-status-badge-disabled';
-  }
-
-  return 'tool-status-badge tool-status-badge-coming-soon';
-}
-
-function getRiskLabel(level: AgentToolDefinition['riskLevel']): string {
-  if (level === 'low') {
-    return '低风险';
-  }
-
-  if (level === 'medium') {
-    return '中风险';
-  }
-
-  return '高风险';
-}
-
-function getRiskClassName(level: AgentToolDefinition['riskLevel']): string {
+function getRiskClassName(level: WorkbenchToolDefinition['riskLevel']): string {
   if (level === 'low') {
     return 'tool-risk-badge tool-risk-badge-low';
   }
@@ -52,7 +29,19 @@ function getRiskClassName(level: AgentToolDefinition['riskLevel']): string {
   return 'tool-risk-badge tool-risk-badge-high';
 }
 
-function getCategoryLabel(category: AgentToolDefinition['category']): string {
+function getRuntimeClassName(runtime: WorkbenchToolDefinition['runtime']): string {
+  if (runtime === 'server') {
+    return 'tool-runtime-badge tool-runtime-badge-server';
+  }
+
+  if (runtime === 'mock') {
+    return 'tool-runtime-badge tool-runtime-badge-mock';
+  }
+
+  return 'tool-runtime-badge tool-runtime-badge-planned';
+}
+
+function getCategoryLabel(category: WorkbenchToolDefinition['category']): string {
   if (category === 'schema') {
     return 'Schema 工具';
   }
@@ -61,11 +50,19 @@ function getCategoryLabel(category: AgentToolDefinition['category']): string {
     return '查询工具';
   }
 
-  if (category === 'analysis' || category === 'render') {
-    return '分析与渲染工具';
+  if (category === 'analysis') {
+    return '分析工具';
   }
 
-  return '知识与报告工具';
+  if (category === 'render') {
+    return '可视化工具';
+  }
+
+  if (category === 'knowledge') {
+    return '知识工具';
+  }
+
+  return '报告工具';
 }
 
 export function ToolCard({ tool }: ToolCardProps) {
@@ -73,16 +70,24 @@ export function ToolCard({ tool }: ToolCardProps) {
     <article className="tool-library-card">
       <header className="tool-library-card-header">
         <div className="tool-library-name-wrap">
-          <h4 className="tool-library-name">{tool.name}</h4>
-          <span className="tool-library-category-tag">{getCategoryLabel(tool.category)}</span>
+          <h4 className="tool-library-name">{tool.displayName}</h4>
+          <div className="tool-library-id">{tool.name}</div>
         </div>
         <div className="tool-library-badge-group">
           <span className={getToolStatusClassName(tool.status)}>{getToolStatusLabel(tool.status)}</span>
-          <span className={getRiskClassName(tool.riskLevel)}>{getRiskLabel(tool.riskLevel)}</span>
         </div>
       </header>
 
       <p className="tool-library-description">{tool.description}</p>
+
+      <div className="tool-library-tag-row">
+        <span className="tool-library-category-tag">{getCategoryLabel(tool.category)}</span>
+        <span className={getRuntimeClassName(tool.runtime)}>{getToolRuntimeLabel(tool.runtime)}</span>
+        <span className={getRiskClassName(tool.riskLevel)}>{getToolRiskLabel(tool.riskLevel)}</span>
+        <span className={tool.usedInRunTrace ? 'tool-trace-badge tool-trace-badge-on' : 'tool-trace-badge'}>
+          {tool.usedInRunTrace ? 'Run Trace 中展示' : '不进入 Run Trace'}
+        </span>
+      </div>
 
       <dl className="tool-library-meta">
         <div className="tool-library-meta-item">

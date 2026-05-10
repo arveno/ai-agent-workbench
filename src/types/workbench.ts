@@ -22,6 +22,15 @@ export type {
 
 export type { RagSourceChunk } from './rag';
 
+export type {
+  WorkbenchToolCategory,
+  WorkbenchToolDefinition,
+  WorkbenchToolId,
+  WorkbenchToolRiskLevel,
+  WorkbenchToolRuntime,
+  WorkbenchToolStatus,
+} from './toolRegistry';
+
 export type TaskId = string;
 export type ToolCallId = string;
 export type KnowledgeSourceId = string;
