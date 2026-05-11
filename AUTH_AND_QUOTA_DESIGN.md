@@ -216,6 +216,31 @@ AgentAccessView: 描述当前用户是否能使用真实 Agent
 ModelConnectModal: 同时消费两个 ViewModel
 ```
 
+### 真实 Agent 与模型供应商解耦
+
+第一版真实 Agent 使用 Groq provider 作为默认模型服务，但 Auth / Quota 的设计不应与 Groq 强绑定。
+
+Auth / Quota 判断的是：
+
+```txt
+当前用户是否允许使用真实 Agent
+当前用户是否还有真实 Agent Run 额度
+当前请求是否可以访问演示数据源
+```
+
+而不是直接判断某个具体模型供应商。
+
+后续如果 Model Gateway 接入 OpenAI、OpenRouter、Gemini 或 Ollama，`AgentAccessView` 仍然只判断“是否允许真实 Agent”，模型供应商由 Model Gateway 和模型配置层决定。
+
+边界划分：
+
+```txt
+auth/quota 管真实 Agent 权限
+model gateway 管具体模型供应商
+```
+
+额度类型不要写成 `groq_quota`。真实 Agent 权限和额度应围绕 Agent Run 建模，避免后续更换模型供应商时重构权限体系。
+
 ## 5. 会话列表与示例任务
 
 左侧 Sidebar 建议分区：
@@ -403,6 +428,46 @@ interface AgentQuotaView {
 }
 ```
 
+### Quota 统计粒度
+
+Quota 统计的是一次真实 Agent Run，而不是一次普通聊天消息。
+
+以下行为不消耗真实 Agent quota：
+
+```txt
+Mock / 公开演示模式
+capability_intro 如果不进入真实 Agent 工具链
+本地报告生成
+查看历史会话
+切换会话
+复制消息
+打开配置弹窗
+```
+
+以下行为消耗真实 Agent quota：
+
+```txt
+登录用户发起一次真实 Agent data_analysis Run
+真实 Agent 请求通过服务端权限校验并开始执行
+用户中途停止，但服务端已经开始执行真实 Agent Run
+```
+
+Quota 类型建议命名为：
+
+```txt
+agent_run
+```
+
+不要命名为：
+
+```txt
+groq_call
+message_count
+chat_count
+```
+
+这样后续更换模型供应商时，额度体系不需要重构。
+
 扣减时机：
 
 ```txt
@@ -465,7 +530,7 @@ POST /api/agent/run/stream
 2. 用户角色是否允许真实 Agent
 3. 用户额度是否足够
 4. 是否只访问演示数据源
-5. 是否允许使用服务端 Groq Key
+5. 是否允许使用服务端模型凭据（第一版为 GROQ_API_KEY）
 ```
 
 通过后：
@@ -495,7 +560,7 @@ parse Authorization Bearer token
 → normalize role and quota
 → validate requested mode is real Agent
 → validate demo datasource only
-→ check server GROQ_API_KEY and datasource env
+→ check server model provider credential and datasource env
 → atomically deduct quota if needed
 → start Agent SSE
 ```
@@ -557,6 +622,29 @@ interface AgentAccessErrorResponse {
 ```txt
 演示数据源暂不可用，可继续使用公开演示模式。
 ```
+
+### 真实 Agent 失败后的兜底策略
+
+第一版不自动将失败的真实 Agent 请求重放为 Mock Run。
+
+原因：
+
+```txt
+自动重放会在会话中无感生成第二轮消息，用户不一定能理解
+自动重放可能导致同一个 user message 下面出现真实失败和 Mock 成功两套结果
+自动重放会让 Run Trace 和 Chat Timeline 归属变复杂
+当前系统已经提供公开演示模式，用户可以手动切回公开演示继续体验
+```
+
+因此第一版策略是：
+
+```txt
+权限类失败（auth_required / forbidden / quota_exceeded）：提示用户登录、切换账号或使用公开演示模式
+环境类失败（agent_unavailable / datasource_unavailable / model_unavailable）：提示真实 Agent 暂不可用，可继续使用公开演示模式
+执行类失败（tool_error / model_error）：在当前 Run 中显示 error block，不自动生成 Mock 成功结果
+```
+
+后续如果要做自动 fallback，需要显式展示为“已切换公开演示结果”，并确保不会产生第二个隐式 Run。
 
 刷新和 session switch：
 
@@ -669,6 +757,30 @@ SQL / Tool 边界：
 Demo 用户只看到真实 Agent 可用/不可用和剩余额度
 Admin 可以看到更完整环境状态
 ```
+
+### 环境变量边界
+
+前端公开变量：
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+这些变量用于浏览器端 Supabase Auth 初始化。它们可以进入前端构建产物，但必须配合 Supabase RLS 和服务端 API 鉴权使用，不能被当成权限边界。
+
+服务端私密变量：
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=
+GROQ_API_KEY=
+SUPABASE_DB_CONNECTION_STRING=
+POSTGRES_CONNECTION_STRING=
+```
+
+服务端私密变量只能配置在 Vercel Environment Variables 或本地 `.env.local`，不能进入前端代码、README、URL 或聊天记录。
+
+`service_role` / secret key 仅用于受信任的服务端接口，例如创建 profile、检查 quota、扣减额度等管理类操作。它会绕过 RLS，绝不能在浏览器使用。
 
 ## 13. 前端 UI 变化
 
