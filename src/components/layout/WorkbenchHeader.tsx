@@ -1,5 +1,7 @@
 import { Fragment } from 'react';
 import { mockTasks } from '../../mocks/tasks';
+import { buildRealAgentAvailabilityView } from '../../services/agentAccessViewModel';
+import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
 import { getModelProviderStatusView } from '../../utils/modelProviderStatus';
@@ -77,7 +79,22 @@ function getRunSummaryItems(currentRun: RunSnapshot | null): string[] {
   return summaryItems;
 }
 
+function getHeaderAgentAccessHint(params: {
+  isPublicDemoMode: boolean;
+  title: string;
+  description: string;
+}): string {
+  if (params.isPublicDemoMode) {
+    return `当前可直接使用公开演示模式体验完整流程；真实 Agent：${params.title}。${params.description}`;
+  }
+
+  return `${params.title}。${params.description}`;
+}
+
 export function WorkbenchHeader() {
+  const authView = useAuthSessionView();
+  const agentAccess = useAuthStore((state) => state.agentAccess);
+  const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
@@ -108,6 +125,18 @@ export function WorkbenchHeader() {
       : getRunModeLabel(currentRun.mode)
     : modelLabel;
   const shouldShowPublicDemoHint = currentModelStatus.providerId === 'mock';
+  const isRealAgentProvider = currentModelStatus.providerId === 'groq';
+  const realAgentAvailability = buildRealAgentAvailabilityView({
+    authView,
+    agentAccess,
+    isAgentAccessLoading,
+  });
+  const shouldShowAgentAccessHint = shouldShowPublicDemoHint || isRealAgentProvider;
+  const agentAccessHint = getHeaderAgentAccessHint({
+    isPublicDemoMode: shouldShowPublicDemoHint,
+    title: realAgentAvailability.title,
+    description: realAgentAvailability.description,
+  });
 
   return (
     <header className="workspace-header workbench-header">
@@ -136,15 +165,24 @@ export function WorkbenchHeader() {
             </Fragment>
           ))}
         </div>
-        {shouldShowPublicDemoHint ? (
-          <p className="workspace-demo-hint">当前可直接使用公开演示模式体验完整 Agent 工作台流程。</p>
+        {shouldShowAgentAccessHint ? (
+          <p className={`workspace-agent-access-hint workspace-agent-access-hint-${realAgentAvailability.status}`}>
+            {agentAccessHint}
+          </p>
         ) : null}
       </div>
 
       <div className="workspace-actions">
         <EnvironmentStatus />
 
-        <Button className="workspace-action-button model-status-pill" onClick={openModelModal} type="button" variant="outline" size="sm">
+        <Button
+          className="workspace-action-button model-status-pill"
+          onClick={openModelModal}
+          type="button"
+          variant="outline"
+          size="sm"
+          title={`真实 Agent：${realAgentAvailability.title}。${realAgentAvailability.description}`}
+        >
           <span className="model-dot" aria-hidden="true"></span>
           <span>模型：{modelLabel}</span>
           <span className="model-arrow">⌄</span>

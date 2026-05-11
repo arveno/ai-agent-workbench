@@ -35,14 +35,6 @@ interface GroqStreamEvent {
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
-function getHeaderValue(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return value;
-}
-
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
 }
@@ -184,8 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const apiKeyFromHeader = getHeaderValue(req.headers['x-groq-api-key'])?.trim();
-  const apiKey = apiKeyFromHeader || process.env.GROQ_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
     res.status(500).json({

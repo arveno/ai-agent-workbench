@@ -2,9 +2,7 @@ import type { ModelProviderId } from './workbench';
 
 export type ModelKeySource =
   | 'none'
-  | 'server_env'
-  | 'byok'
-  | 'server_env_and_byok';
+  | 'server_env';
 
 export type ModelProviderAvailability =
   | 'available'
@@ -37,7 +35,6 @@ export interface ModelProviderStatusView {
   badgeTone: ModelStatusTone;
 
   supportsStreaming: boolean;
-  supportsByok: boolean;
   isGatewayConnected: boolean;
 
   capabilityLabels: string[];

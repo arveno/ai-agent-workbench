@@ -46,7 +46,7 @@ function createGroqStatus(): HealthServiceStatus {
   return {
     configured: false,
     status: 'not_configured',
-    message: '未配置服务端 Groq Key，可使用页面 BYOK 或 fallback 摘要',
+    message: '未配置服务端 Groq Key，真实 Agent 暂不可用，可使用公开演示模式',
   };
 }
 

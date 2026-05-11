@@ -304,7 +304,6 @@ async function streamNonAnalysisRun(params: {
 export async function streamAgentRun(params: {
   prompt: string;
   provider: AgentProvider;
-  apiKey?: string;
   clientRunId?: string;
   emit: (event: RunEvent) => void;
 }): Promise<void> {
@@ -324,7 +323,7 @@ export async function streamAgentRun(params: {
 
   try {
     ensureServerEnvLoaded();
-    const apiKey = params.apiKey?.trim() || process.env.GROQ_API_KEY?.trim() || '';
+    const apiKey = process.env.GROQ_API_KEY?.trim() || '';
     const context: ServerToolContext = {
       provider: params.provider,
     };

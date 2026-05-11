@@ -151,6 +151,28 @@
   line-height: 1.5;
 }
 
+.workspace-agent-access-hint {
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.workspace-agent-access-hint-available {
+  color: #15803d;
+}
+
+.workspace-agent-access-hint-login_required,
+.workspace-agent-access-hint-checking {
+  color: #1e40af;
+}
+
+.workspace-agent-access-hint-quota_exceeded,
+.workspace-agent-access-hint-auth_unavailable,
+.workspace-agent-access-hint-forbidden {
+  color: #c2410c;
+}
+
 .workspace-actions {
   min-width: 0;
   display: flex;

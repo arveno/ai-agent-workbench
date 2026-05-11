@@ -26,17 +26,11 @@ async function parseErrorResponse(response: Response): Promise<string> {
 
 export async function requestGroqChat(params: {
   prompt: string;
-  apiKey?: string;
 }): Promise<ChatApiResponse> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(params.apiKey
-        ? {
-            'x-groq-api-key': params.apiKey,
-          }
-        : {}),
     },
     body: JSON.stringify({
       prompt: params.prompt,
@@ -62,18 +56,12 @@ export async function requestGroqChat(params: {
 
 export async function streamGroqChat(params: {
   prompt: string;
-  apiKey?: string;
   onChunk: (chunk: string) => void;
 }): Promise<void> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(params.apiKey
-        ? {
-            'x-groq-api-key': params.apiKey,
-          }
-        : {}),
     },
     body: JSON.stringify({
       prompt: params.prompt,

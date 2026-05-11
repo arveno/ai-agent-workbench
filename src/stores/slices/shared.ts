@@ -480,44 +480,29 @@ export function delay(ms: number): Promise<void> {
 }
 
 export function getInitialModelConfigs(): ModelProviderConfigMap {
-  return readSessionStorageJson<ModelProviderConfigMap>(MODEL_CONFIG_SESSION_KEY, {});
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.removeItem(MODEL_CONFIG_SESSION_KEY);
+  }
+
+  return {};
 }
 
 export function isModelProviderId(value: string): value is ModelProviderId {
   return modelProviderIds.includes(value as ModelProviderId);
 }
 
-export function getInitialModelProvider(modelConfigs: ModelProviderConfigMap): ModelProviderId {
+export function getInitialModelProvider(): ModelProviderId {
   if (typeof window === 'undefined') {
     return 'mock';
   }
 
-  const savedProvider = window.sessionStorage.getItem(MODEL_PROVIDER_SESSION_KEY);
+  window.sessionStorage.removeItem(MODEL_PROVIDER_SESSION_KEY);
 
-  if (!savedProvider || !isModelProviderId(savedProvider)) {
-    return 'mock';
-  }
-
-  if (savedProvider === 'mock') {
-    return 'mock';
-  }
-
-  if (savedProvider === 'codex-oauth') {
-    return 'mock';
-  }
-
-  if (savedProvider === 'ollama') {
-    const config = modelConfigs.ollama;
-    return config?.baseUrl?.trim() && config?.modelName?.trim() ? 'ollama' : 'mock';
-  }
-
-  const config = modelConfigs[savedProvider];
-
-  return config?.apiKey?.trim() ? savedProvider : 'mock';
+  return 'mock';
 }
 
 const initialModelConfigs = getInitialModelConfigs();
-const initialModelProvider = getInitialModelProvider(initialModelConfigs);
+const initialModelProvider = getInitialModelProvider();
 const initialSessionState = getInitialWorkbenchSessionState();
 const initialSessions = initialSessionState.sessions;
 const initialCurrentSession =

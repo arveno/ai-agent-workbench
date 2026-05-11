@@ -104,7 +104,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       return;
     }
 
-    const apiKey = state.modelConfigs.groq?.apiKey?.trim();
     const requestId = createAgentRunRequestId();
     const sessionId = state.currentSessionId;
     const runId = createRunId('agent_run');
@@ -155,7 +154,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       await streamAgentRunAnalysis({
         prompt,
         provider: 'supabase',
-        apiKey: apiKey || undefined,
         clientRunId: runId,
         signal: abortController.signal,
         onEvent: (event) => {

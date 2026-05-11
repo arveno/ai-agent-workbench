@@ -761,6 +761,17 @@
   outline: none;
 }
 
+.composer-agent-access-notice {
+  margin: -2px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .composer-footer {
   display: flex;
   align-items: center;

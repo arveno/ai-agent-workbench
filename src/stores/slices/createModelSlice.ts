@@ -28,7 +28,6 @@ export const createModelSlice: StateCreator<WorkbenchStore, [], [], ModelSlice> 
   },
   saveModelConfig: (providerId, config) => {
     const normalizedConfig: ModelProviderConfig = {
-      apiKey: config.apiKey?.trim(),
       baseUrl: config.baseUrl?.trim(),
       modelName: config.modelName?.trim(),
     };

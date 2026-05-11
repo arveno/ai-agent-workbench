@@ -295,7 +295,6 @@ export interface AgentRunErrorResponse {
 export type AgentRunResponse = AgentRunSuccessResponse | AgentRunErrorResponse;
 
 export interface ModelProviderConfig {
-  apiKey?: string;
   baseUrl?: string;
   modelName?: string;
 }
@@ -357,7 +356,7 @@ export interface GenerationSlice {
   streamRunId: number;
   sendPrompt: (prompt: string) => void;
   regenerateFromAssistantMessage: (assistantMessageId: string) => void;
-  runPromptWithCurrentModel: (prompt: string) => Promise<void>;
+  runMockPrompt: (prompt: string) => Promise<void>;
   setRealModelNotice: (notice: string) => void;
   setAssistantStream: (stream: AssistantStreamState) => void;
   runAgentStepsPreview: (runId: number) => Promise<void>;

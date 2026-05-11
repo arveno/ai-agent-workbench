@@ -383,6 +383,30 @@
   margin-left: 0;
 }
 
+.model-agent-access-note {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.model-agent-access-note-available {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.model-agent-access-note-login_required,
+.model-agent-access-note-checking {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.model-agent-access-note-quota_exceeded,
+.model-agent-access-note-auth_unavailable,
+.model-agent-access-note-forbidden {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .model-config-info {
   margin-top: 12px;
   padding: 10px 12px;

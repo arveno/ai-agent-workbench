@@ -2,63 +2,29 @@ import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { buildRealAgentAvailabilityView, type RealAgentAvailabilityView } from '@/services/agentAccessViewModel';
 import type { HealthCheckResponse } from '@/types/health';
 import type { ModelProviderStatusView } from '@/types/modelStatus';
 import { buildModelProviderStatusViews } from '@/utils/modelProviderStatus';
+import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
-import { requestGroqChat } from '../../services/chatApi';
 import { requestHealthCheck } from '../../services/healthApi';
-import type {
-  ModelProviderConfig,
-  ModelProviderConfigMap,
-  ModelProviderId,
-  ModelTestStatus,
-} from '../../types/workbench';
+import type { ModelProviderId } from '../../types/workbench';
 
 interface ProviderOption {
   id: ModelProviderId;
-  type: 'mock' | 'api-key' | 'oauth' | 'ollama';
-  placeholder?: string;
 }
 
 const PROVIDER_OPTIONS: ProviderOption[] = [
   {
     id: 'mock',
-    type: 'mock',
   },
   {
     id: 'groq',
-    type: 'api-key',
-    placeholder: '输入 gsk_ 开头的 Groq API Key',
-  },
-  {
-    id: 'gemini',
-    type: 'api-key',
-    placeholder: '输入 Gemini API Key',
-  },
-  {
-    id: 'openrouter',
-    type: 'api-key',
-    placeholder: '输入 OpenRouter API Key',
-  },
-  {
-    id: 'openai-api-key',
-    type: 'api-key',
-    placeholder: '输入 sk- 开头的 OpenAI API Key',
-  },
-  {
-    id: 'codex-oauth',
-    type: 'oauth',
-  },
-  {
-    id: 'ollama',
-    type: 'ollama',
   },
 ];
 
@@ -81,9 +47,6 @@ const providerFallbackTextMap: Record<ModelProviderId, string> = {
   ollama: 'Ollama',
 };
 
-const DEFAULT_OLLAMA_BASE_URL = 'http://localhost:11434';
-const DEFAULT_OLLAMA_MODEL_NAME = 'llama3.1';
-
 type ModelTabId = 'all' | 'configured' | 'usable' | 'reserved';
 
 interface ModelTabDefinition {
@@ -100,13 +63,13 @@ const MODEL_TABS: ModelTabDefinition[] = [
   },
   {
     id: 'configured',
-    label: '已配置',
-    description: 'Mock、已保存 Key 的模型或已填写本地配置的 provider。',
+    label: '已就绪',
+    description: '公开演示模式或服务端模型环境已配置的入口。',
   },
   {
     id: 'usable',
     label: '可启用',
-    description: '当前主流程可切换的 Mock 和 Groq 模型服务。',
+    description: '当前主流程可切换的公开演示和真实 Agent 模型服务。',
   },
   {
     id: 'reserved',
@@ -154,7 +117,7 @@ function getCapabilityClassName(label: string): string {
     return 'model-badge model-badge-muted';
   }
 
-  if (label === 'BYOK' || label === '支持流式') {
+  if (label === '服务端转发' || label === '支持流式' || label === 'Agent Run 额度') {
     return 'model-badge model-badge-blue';
   }
 
@@ -170,19 +133,11 @@ function getKeySourceLabel(status: ModelProviderStatusView): string {
     return '预留';
   }
 
-  if (status.keySource === 'server_env_and_byok') {
-    return '服务端 + 页面 BYOK';
-  }
-
   if (status.keySource === 'server_env') {
-    return '服务端环境变量';
+    return '服务端 GROQ_API_KEY';
   }
 
-  if (status.keySource === 'byok') {
-    return status.providerId === 'groq' ? 'sessionStorage BYOK' : 'sessionStorage 配置';
-  }
-
-  return status.providerId === 'groq' ? '服务端 GROQ_API_KEY / BYOK' : '未配置';
+  return status.providerId === 'groq' ? '服务端未配置' : '未配置';
 }
 
 function getStreamingLabel(status: ModelProviderStatusView): string {
@@ -205,18 +160,44 @@ function getGatewayLabel(status: ModelProviderStatusView): string {
   return '待接入 Model Gateway';
 }
 
+function isRealAgentEntryProvider(providerId: ModelProviderId): boolean {
+  return providerId === 'groq';
+}
+
+function getRealAgentActionText(availability: RealAgentAvailabilityView): string {
+  if (availability.status === 'login_required') {
+    return '登录后启用';
+  }
+
+  if (availability.status === 'checking') {
+    return '检查中';
+  }
+
+  if (availability.status === 'quota_exceeded') {
+    return '额度已用完';
+  }
+
+  if (availability.status === 'auth_unavailable') {
+    return '暂不可用';
+  }
+
+  if (availability.status === 'forbidden') {
+    return '无权限';
+  }
+
+  return '启用';
+}
+
 function ModelConnectModalContent() {
+  const authView = useAuthSessionView();
+  const agentAccess = useAuthStore((state) => state.agentAccess);
+  const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
+  const openLoginModal = useAuthStore((state) => state.openLoginModal);
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
-  const modelTestStatusMap = useWorkbenchStore((state) => state.modelTestStatusMap);
   const closeModelModal = useWorkbenchStore((state) => state.closeModelModal);
   const setCurrentModelProvider = useWorkbenchStore((state) => state.setCurrentModelProvider);
-  const saveModelConfig = useWorkbenchStore((state) => state.saveModelConfig);
-  const clearModelConfig = useWorkbenchStore((state) => state.clearModelConfig);
-  const setModelTestStatus = useWorkbenchStore((state) => state.setModelTestStatus);
 
-  const [draftConfigs, setDraftConfigs] = useState<ModelProviderConfigMap>(modelConfigs);
-  const [expandedProviderIds, setExpandedProviderIds] = useState<ModelProviderId[]>(['groq']);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [hasHealthFailed, setHasHealthFailed] = useState(false);
 
@@ -266,16 +247,11 @@ function ModelConnectModalContent() {
       ),
     [providerStatusViews],
   );
-
-  const updateDraftConfig = (providerId: ModelProviderId, partialConfig: ModelProviderConfig) => {
-    setDraftConfigs((prev) => ({
-      ...prev,
-      [providerId]: {
-        ...prev[providerId],
-        ...partialConfig,
-      },
-    }));
-  };
+  const realAgentAvailability = buildRealAgentAvailabilityView({
+    authView,
+    agentAccess,
+    isAgentAccessLoading,
+  });
 
   const getProviderStatusView = (providerId: ModelProviderId): ModelProviderStatusView =>
     providerStatusMap[providerId];
@@ -299,123 +275,6 @@ function ModelConnectModalContent() {
     return PROVIDER_OPTIONS.filter((option) => getProviderStatusView(option.id).isReserved);
   };
 
-  const handleSaveConfig = (providerId: ModelProviderId) => {
-    if (providerId === 'ollama') {
-      const currentDraft = draftConfigs.ollama;
-      saveModelConfig('ollama', {
-        baseUrl: currentDraft?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL,
-        modelName: currentDraft?.modelName ?? DEFAULT_OLLAMA_MODEL_NAME,
-      });
-      setModelTestStatus(providerId, 'idle');
-      return;
-    }
-
-    saveModelConfig(providerId, draftConfigs[providerId] ?? {});
-    setModelTestStatus(providerId, 'idle');
-  };
-
-  const handleClearConfig = (providerId: ModelProviderId) => {
-    clearModelConfig(providerId);
-    setDraftConfigs((prev) => {
-      const next = { ...prev };
-      delete next[providerId];
-      return next;
-    });
-  };
-
-  const handleTestConfig = async (providerId: ModelProviderId) => {
-    if (providerId === 'mock' || providerId === 'codex-oauth') {
-      return;
-    }
-
-    const config =
-      providerId === 'ollama'
-        ? {
-            baseUrl: draftConfigs.ollama?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL,
-            modelName: draftConfigs.ollama?.modelName ?? DEFAULT_OLLAMA_MODEL_NAME,
-          }
-        : draftConfigs[providerId];
-
-    const isValid =
-      providerId === 'ollama'
-        ? Boolean(config?.baseUrl?.trim() && config?.modelName?.trim())
-        : Boolean(config?.apiKey?.trim());
-
-    if (!isValid) {
-      setModelTestStatus(providerId, 'error');
-      return;
-    }
-
-    setModelTestStatus(providerId, 'testing');
-
-    if (providerId === 'groq') {
-      try {
-        await requestGroqChat({
-          prompt: '请用一句话回复：Groq 连接测试成功。',
-          apiKey: config?.apiKey?.trim(),
-        });
-
-        setModelTestStatus(providerId, 'success');
-      } catch {
-        setModelTestStatus(providerId, 'error');
-      }
-
-      return;
-    }
-
-    window.setTimeout(() => {
-      setModelTestStatus(providerId, 'success');
-    }, 600);
-  };
-
-  const getTestStatusText = (providerId: ModelProviderId, status: ModelTestStatus): string => {
-    if (status === 'testing') {
-      return '测试中...';
-    }
-
-    if (status === 'success') {
-      return providerId === 'groq'
-        ? 'Groq 连接测试通过，已成功收到模型响应。'
-        : '配置格式已通过，真实连通将在接入服务端接口后校验。';
-    }
-
-    if (status === 'error') {
-      return providerId === 'groq'
-        ? 'Groq 连接失败，请检查 API Key、额度或网络状态。'
-        : '请先填写必要配置。';
-    }
-
-    return '';
-  };
-
-  const renderTestStatus = (providerId: ModelProviderId, testStatus: ModelTestStatus) => {
-    const statusText = getTestStatusText(providerId, testStatus);
-
-    if (!statusText) {
-      return null;
-    }
-
-    if (testStatus === 'success') {
-      return <p className="model-config-status model-config-status-success">{statusText}</p>;
-    }
-
-    if (testStatus === 'error') {
-      return <p className="model-config-status model-config-status-error">{statusText}</p>;
-    }
-
-    return <p className="model-config-status">{statusText}</p>;
-  };
-
-  const toggleProviderExpanded = (providerId: ModelProviderId) => {
-    if (providerId === 'mock') {
-      return;
-    }
-
-    setExpandedProviderIds((prev) =>
-      prev.includes(providerId) ? prev.filter((id) => id !== providerId) : [...prev, providerId]
-    );
-  };
-
   const canActivateProvider = (status: ModelProviderStatusView): boolean => {
     if (status.providerId === 'mock') {
       return true;
@@ -426,6 +285,18 @@ function ModelConnectModalContent() {
     }
 
     return status.isAvailable;
+  };
+
+  const canClickProviderAction = (status: ModelProviderStatusView): boolean => {
+    if (!canActivateProvider(status)) {
+      return false;
+    }
+
+    if (!isRealAgentEntryProvider(status.providerId)) {
+      return true;
+    }
+
+    return realAgentAvailability.canEnterRealAgent || realAgentAvailability.status === 'login_required';
   };
 
   const getProviderStatusClassName = (status: ModelProviderStatusView): string => {
@@ -447,6 +318,14 @@ function ModelConnectModalContent() {
   const getProviderActionText = (status: ModelProviderStatusView): string => {
     if (status.isActive) {
       return '使用中';
+    }
+
+    if (isRealAgentEntryProvider(status.providerId) && !status.isAvailable) {
+      return '暂不可用';
+    }
+
+    if (isRealAgentEntryProvider(status.providerId) && !realAgentAvailability.canEnterRealAgent) {
+      return getRealAgentActionText(realAgentAvailability);
     }
 
     if (status.isReserved) {
@@ -474,7 +353,7 @@ function ModelConnectModalContent() {
           <div className="model-modal-title-wrap">
             <h3 className="model-modal-title">连接模型服务</h3>
             <p className="model-modal-subtitle">
-              选择当前会话使用的模型服务，支持 Mock 稳定演示和 BYOK 真实模型。
+              选择当前会话使用的模型服务：公开演示模式或服务端受控真实 Agent。
             </p>
           </div>
           <Button type="button" variant="outline" size="icon" className="model-modal-close" onClick={closeModelModal} aria-label="关闭">
@@ -486,9 +365,9 @@ function ModelConnectModalContent() {
           <Card className="model-modal-info-card" size="sm">
             <CardContent className="model-modal-info-content">
               <p>当前线上 Demo 默认使用 Mock 模式，避免公开演示产生 API 成本。</p>
-              <p>Groq 支持 BYOK，用户输入的 Key 仅保存在当前浏览器会话中，不会写入 URL 或代码仓库。</p>
-              <p>服务端可通过 GROQ_API_KEY 配置默认模型 Key；真实调用仍由服务端转发。</p>
-              {hasHealthFailed ? <p>服务端状态检查失败，当前仍可使用页面 BYOK 或公开演示模式。</p> : null}
+              <p>模型调用由服务端受控转发，前端不接收、不保存、不传递模型 API Key。</p>
+              <p>真实 Agent 使用服务端 GROQ_API_KEY，并按 Agent Run 额度使用。</p>
+              {hasHealthFailed ? <p>服务端状态检查失败，当前仍可使用公开演示模式。</p> : null}
             </CardContent>
           </Card>
 
@@ -520,10 +399,7 @@ function ModelConnectModalContent() {
                         {providers.map((option) => {
                           const providerStatus = getProviderStatusView(option.id);
                           const isActiveProvider = providerStatus.isActive;
-                          const isExpanded = expandedProviderIds.includes(option.id);
-                          const testStatus: ModelTestStatus = modelTestStatusMap[option.id] ?? 'idle';
-                          const isTesting = testStatus === 'testing';
-                          const canActivate = canActivateProvider(providerStatus);
+                          const canClickAction = canClickProviderAction(providerStatus);
                           const capabilities = providerStatus.capabilityLabels;
 
                           return (
@@ -560,26 +436,29 @@ function ModelConnectModalContent() {
                                       variant={isActiveProvider ? 'default' : 'outline'}
                                       size="sm"
                                       type="button"
-                                      disabled={isActiveProvider || !canActivate}
-                                      onClick={() => setCurrentModelProvider(option.id)}
+                                      disabled={isActiveProvider || !canClickAction}
+                                      title={
+                                        isRealAgentEntryProvider(option.id)
+                                          ? `${realAgentAvailability.title}。${realAgentAvailability.description}`
+                                          : undefined
+                                      }
+                                      onClick={() => {
+                                        if (
+                                          isRealAgentEntryProvider(option.id) &&
+                                          !realAgentAvailability.canEnterRealAgent
+                                        ) {
+                                          if (realAgentAvailability.status === 'login_required') {
+                                            openLoginModal();
+                                          }
+
+                                          return;
+                                        }
+
+                                        setCurrentModelProvider(option.id);
+                                      }}
                                     >
                                       {getProviderActionText(providerStatus)}
                                     </Button>
-                                    {option.type !== 'mock' ? (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        type="button"
-                                        aria-label={isExpanded ? '收起配置' : '展开配置'}
-                                        onClick={() => toggleProviderExpanded(option.id)}
-                                      >
-                                        <AppIcon
-                                          icon={icons.chevronRight}
-                                          size={16}
-                                          className={isExpanded ? 'model-provider-chevron-open' : ''}
-                                        />
-                                      </Button>
-                                    ) : null}
                                   </div>
                                 </div>
                               </CardHeader>
@@ -608,130 +487,14 @@ function ModelConnectModalContent() {
                                   </div>
                                 </div>
                                 <p className="model-config-help model-config-help-standalone">{providerStatus.statusDescription}</p>
-
-                                {isExpanded && option.type === 'api-key' ? (
-                                  <div className="model-config-panel">
-                                    <div className="model-config-row">
-                                      <label className="model-config-label" htmlFor={`${option.id}-api-key`}>
-                                        API Key
-                                      </label>
-
-                                      <div className="model-config-input-wrap">
-                                        <Input
-                                          id={`${option.id}-api-key`}
-                                          className="model-config-input"
-                                          type="password"
-                                          value={draftConfigs[option.id]?.apiKey ?? ''}
-                                          placeholder={option.placeholder}
-                                          onChange={(event) =>
-                                            updateDraftConfig(option.id, {
-                                              apiKey: event.target.value,
-                                            })
-                                          }
-                                        />
-                                      </div>
-
-                                      <div className="model-config-actions">
-                                        <Button size="sm" type="button" onClick={() => handleSaveConfig(option.id)}>
-                                          保存
-                                        </Button>
-
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          type="button"
-                                          onClick={() => handleClearConfig(option.id)}
-                                        >
-                                          清除
-                                        </Button>
-
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          type="button"
-                                          onClick={() => {
-                                            void handleTestConfig(option.id);
-                                          }}
-                                          disabled={isTesting}
-                                        >
-                                          {isTesting ? '测试中...' : '测试连接'}
-                                        </Button>
-                                      </div>
-                                    </div>
-
-                                    <p className="model-config-help">Key 仅保存在当前浏览器会话中，不会写入 URL 或代码仓库。</p>
-                                    {renderTestStatus(option.id, testStatus)}
-                                  </div>
+                                {isRealAgentEntryProvider(option.id) ? (
+                                  <p
+                                    className={`model-config-help model-config-help-standalone model-agent-access-note model-agent-access-note-${realAgentAvailability.status}`}
+                                  >
+                                    {realAgentAvailability.title}：{realAgentAvailability.description}
+                                  </p>
                                 ) : null}
 
-                                {isExpanded && option.type === 'oauth' ? (
-                                  <div className="model-config-info">当前版本仅保留入口，不实现登录授权。</div>
-                                ) : null}
-
-                                {isExpanded && option.type === 'ollama' ? (
-                                  <div className="model-config-panel">
-                                    <div className="model-config-row model-config-row-two">
-                                      <label className="model-config-label" htmlFor="ollama-base-url">
-                                        Base URL
-                                      </label>
-                                      <Input
-                                        id="ollama-base-url"
-                                        className="model-config-input"
-                                        value={draftConfigs.ollama?.baseUrl ?? DEFAULT_OLLAMA_BASE_URL}
-                                        placeholder={DEFAULT_OLLAMA_BASE_URL}
-                                        onChange={(event) =>
-                                          updateDraftConfig('ollama', {
-                                            baseUrl: event.target.value,
-                                          })
-                                        }
-                                      />
-
-                                      <label className="model-config-label" htmlFor="ollama-model-name">
-                                        Model Name
-                                      </label>
-                                      <Input
-                                        id="ollama-model-name"
-                                        className="model-config-input"
-                                        value={draftConfigs.ollama?.modelName ?? DEFAULT_OLLAMA_MODEL_NAME}
-                                        placeholder={DEFAULT_OLLAMA_MODEL_NAME}
-                                        onChange={(event) =>
-                                          updateDraftConfig('ollama', {
-                                            modelName: event.target.value,
-                                          })
-                                        }
-                                      />
-                                    </div>
-
-                                    <Separator className="model-config-separator" />
-
-                                    <div className="model-config-actions model-config-actions-inline">
-                                      <Button size="sm" type="button" onClick={() => handleSaveConfig('ollama')}>
-                                        保存
-                                      </Button>
-
-                                      <Button size="sm" variant="outline" type="button" onClick={() => handleClearConfig('ollama')}>
-                                        清除
-                                      </Button>
-
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        type="button"
-                                        onClick={() => {
-                                          void handleTestConfig('ollama');
-                                        }}
-                                        disabled={(modelTestStatusMap.ollama ?? 'idle') === 'testing'}
-                                      >
-                                        {(modelTestStatusMap.ollama ?? 'idle') === 'testing' ? '测试中...' : '测试连接'}
-                                      </Button>
-                                    </div>
-
-                                    <p className="model-config-help model-config-help-standalone">
-                                      本地 Ollama 需要浏览器所在环境可访问该服务地址。当前仅作为本地模型预留入口展示。
-                                    </p>
-                                    {renderTestStatus('ollama', modelTestStatusMap.ollama ?? 'idle')}
-                                  </div>
-                                ) : null}
                               </CardContent>
                             </Card>
                           );

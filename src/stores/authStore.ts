@@ -60,6 +60,13 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   agentAccess: createAnonymousAgentAccessView(),
   isAgentAccessLoading: false,
   agentAccessError: null,
+  isLoginModalOpen: false,
+  openLoginModal: () => {
+    set({ isLoginModalOpen: true });
+  },
+  closeLoginModal: () => {
+    set({ isLoginModalOpen: false });
+  },
 
   initializeAuth: async () => {
     if (!isSupabaseAuthConfigured || supabase === null) {
@@ -72,6 +79,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         agentAccess: createAnonymousAgentAccessView(),
         isAgentAccessLoading: false,
         agentAccessError: null,
+        isLoginModalOpen: false,
       });
       return;
     }
@@ -162,6 +170,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         agentAccess: createAnonymousAgentAccessView(),
         isAgentAccessLoading: false,
         agentAccessError: null,
+        isLoginModalOpen: false,
       });
       return false;
     }
@@ -194,6 +203,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         user: data.user,
         error: null,
         isInitialized: true,
+        isLoginModalOpen: false,
       });
       await get().refreshAgentAccess();
       return true;
@@ -207,6 +217,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         agentAccess: createAnonymousAgentAccessView(),
         isAgentAccessLoading: false,
         agentAccessError: null,
+        isLoginModalOpen: false,
       });
       return false;
     }
@@ -223,6 +234,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         agentAccess: createAnonymousAgentAccessView(),
         isAgentAccessLoading: false,
         agentAccessError: null,
+        isLoginModalOpen: false,
       });
       return true;
     }
@@ -247,6 +259,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         user: null,
         error: null,
         isInitialized: true,
+        isLoginModalOpen: false,
       });
       get().clearAgentAccess();
       return true;

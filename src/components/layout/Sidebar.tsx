@@ -1,5 +1,4 @@
-﻿import { useState } from 'react';
-import { LoginModal } from '../auth/LoginModal';
+﻿import { LoginModal } from '../auth/LoginModal';
 import { mockTasks } from '../../mocks/tasks';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
@@ -93,6 +92,9 @@ function getAuthStatusLines(params: {
 export function Sidebar() {
   const authView = useAuthSessionView();
   const signOut = useAuthStore((state) => state.signOut);
+  const isLoginModalOpen = useAuthStore((state) => state.isLoginModalOpen);
+  const openLoginModal = useAuthStore((state) => state.openLoginModal);
+  const closeLoginModal = useAuthStore((state) => state.closeLoginModal);
   const agentAccess = useAuthStore((state) => state.agentAccess);
   const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
   const agentAccessError = useAuthStore((state) => state.agentAccessError);
@@ -104,7 +106,6 @@ export function Sidebar() {
   const createSession = useWorkbenchStore((state) => state.createSession);
   const switchSession = useWorkbenchStore((state) => state.switchSession);
   const startTask = useWorkbenchStore((state) => state.startTask);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
   const isAuthenticated = authView.status === 'authenticated';
   const isAuthLoading = authView.status === 'loading';
@@ -251,19 +252,14 @@ export function Sidebar() {
             }
 
             if (canOpenLogin) {
-              setIsLoginModalOpen(true);
+              openLoginModal();
             }
           }}
         >
           {isAuthenticated ? '退出' : authView.isAuthConfigured ? '登录' : '登录不可用'}
         </button>
       </div>
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => {
-          setIsLoginModalOpen(false);
-        }}
-      />
+      <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
     </aside>
   );
 }

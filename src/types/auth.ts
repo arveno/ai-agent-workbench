@@ -46,6 +46,9 @@ export interface AuthStoreState {
   agentAccess: AgentAccessView;
   isAgentAccessLoading: boolean;
   agentAccessError: string | null;
+  isLoginModalOpen: boolean;
+  openLoginModal: () => void;
+  closeLoginModal: () => void;
   initializeAuth: () => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<boolean>;

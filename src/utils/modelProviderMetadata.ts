@@ -6,7 +6,6 @@ export interface ModelProviderMetadata {
   description: string;
   isReserved: boolean;
   supportsStreaming: boolean;
-  supportsByok: boolean;
   isGatewayConnected: boolean;
   capabilityLabels: string[];
 }
@@ -18,19 +17,17 @@ export const MODEL_PROVIDER_METADATA: Record<ModelProviderId, ModelProviderMetad
     description: '使用本地 mock 流式输出，不依赖外部模型，适合稳定演示。',
     isReserved: false,
     supportsStreaming: true,
-    supportsByok: false,
     isGatewayConnected: false,
     capabilityLabels: ['本地模拟', '支持流式', '稳定演示'],
   },
   groq: {
     id: 'groq',
-    displayName: 'Groq 免费 API',
-    description: '可用于真实模型流式输出，速度快，但免费额度有限。',
+    displayName: '真实 Agent（服务端模型）',
+    description: '登录后通过服务端模型服务运行真实 Agent，按 Agent Run 额度使用。',
     isReserved: false,
     supportsStreaming: true,
-    supportsByok: true,
     isGatewayConnected: true,
-    capabilityLabels: ['BYOK', '服务端转发', '支持流式', 'Model Gateway'],
+    capabilityLabels: ['服务端转发', '支持流式', 'Agent Run 额度', 'Model Gateway'],
   },
   gemini: {
     id: 'gemini',
@@ -38,9 +35,8 @@ export const MODEL_PROVIDER_METADATA: Record<ModelProviderId, ModelProviderMetad
     description: '可使用 Google Gemini API 免费额度进行真实模型演示。',
     isReserved: true,
     supportsStreaming: false,
-    supportsByok: true,
     isGatewayConnected: false,
-    capabilityLabels: ['API Key 预留', '待接入 Model Gateway'],
+    capabilityLabels: ['模型预留', '待接入 Model Gateway'],
   },
   openrouter: {
     id: 'openrouter',
@@ -48,19 +44,17 @@ export const MODEL_PROVIDER_METADATA: Record<ModelProviderId, ModelProviderMetad
     description: '可通过 OpenRouter 免费模型接入多模型能力。',
     isReserved: true,
     supportsStreaming: false,
-    supportsByok: true,
     isGatewayConnected: false,
-    capabilityLabels: ['API Key 预留', '待接入 Model Gateway'],
+    capabilityLabels: ['模型预留', '待接入 Model Gateway'],
   },
   'openai-api-key': {
     id: 'openai-api-key',
-    displayName: 'OpenAI API Key',
-    description: '通过服务端 /api/chat 调用 OpenAI API，Key 不暴露在前端。',
+    displayName: 'OpenAI',
+    description: '预留 OpenAI 服务端模型入口，后续由平台统一配置。',
     isReserved: true,
     supportsStreaming: false,
-    supportsByok: true,
     isGatewayConnected: false,
-    capabilityLabels: ['API Key 预留', '待接入 Model Gateway'],
+    capabilityLabels: ['模型预留', '待接入 Model Gateway'],
   },
   'codex-oauth': {
     id: 'codex-oauth',
@@ -68,17 +62,15 @@ export const MODEL_PROVIDER_METADATA: Record<ModelProviderId, ModelProviderMetad
     description: '预留 ChatGPT / Codex 授权路线，适合类似 OpenClaw 的订阅侧模型连接方式。',
     isReserved: true,
     supportsStreaming: false,
-    supportsByok: false,
     isGatewayConnected: false,
     capabilityLabels: ['OAuth 预留', '待接入 Model Gateway'],
   },
   ollama: {
     id: 'ollama',
     displayName: '本地 Ollama',
-    description: '面向本地模型演示，不依赖云端 API Key。',
+    description: '面向本地模型演示，暂未接入真实调用。',
     isReserved: true,
     supportsStreaming: false,
-    supportsByok: false,
     isGatewayConnected: false,
     capabilityLabels: ['本地模型预留', '待接入 Model Gateway'],
   },

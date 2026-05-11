@@ -205,7 +205,7 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
   const createdAt = new Date(runStart).toISOString();
 
   ensureServerEnvLoaded();
-  const apiKey = request.apiKey?.trim() || process.env.GROQ_API_KEY?.trim() || '';
+  const apiKey = process.env.GROQ_API_KEY?.trim() || '';
   const plan = await planAgentRun({
     prompt: request.prompt,
     apiKey: apiKey || undefined,

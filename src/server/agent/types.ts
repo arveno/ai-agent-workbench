@@ -88,7 +88,6 @@ export interface AgentRunRequest {
   prompt: string;
   provider: DataSourceTestableProviderId;
   modelProvider?: 'groq';
-  apiKey?: string;
 }
 
 export interface AgentRunSuccessResponse {

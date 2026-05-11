@@ -81,7 +81,6 @@ export default async function handler(
       prompt,
       provider: body.provider,
       modelProvider: 'groq',
-      apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
     });
 
     res.status(200).json({

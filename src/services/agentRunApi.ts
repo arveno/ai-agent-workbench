@@ -3,7 +3,6 @@ import type { AgentRunResponse, DataSourceTestableProviderId } from '../types/wo
 export async function runAgentAnalysis(params: {
   prompt: string;
   provider: DataSourceTestableProviderId;
-  apiKey?: string;
 }): Promise<AgentRunResponse> {
   const response = await fetch('/api/agent/run', {
     method: 'POST',
@@ -14,7 +13,6 @@ export async function runAgentAnalysis(params: {
       prompt: params.prompt,
       provider: params.provider,
       modelProvider: 'groq',
-      apiKey: params.apiKey,
     }),
   });
 

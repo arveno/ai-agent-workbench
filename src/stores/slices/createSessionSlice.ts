@@ -263,7 +263,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       };
     });
 
-    void get().runPromptWithCurrentModel(prompt);
+    void get().runMockPrompt(prompt);
   },
   hydrateFromUrl: (state) => {
     get().activeAgentRunAbortController?.abort();

@@ -76,7 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await streamAgentRun({
       prompt,
       provider: body.provider,
-      apiKey: typeof body.apiKey === 'string' ? body.apiKey : undefined,
       clientRunId,
       emit: (event) => writeRunEvent(res, event),
     });

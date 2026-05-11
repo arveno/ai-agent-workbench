@@ -30,11 +30,10 @@ function hasLocalProviderConfig(providerId: ModelProviderId, config: ModelProvid
     return Boolean(config?.baseUrl?.trim() && config?.modelName?.trim());
   }
 
-  return Boolean(config?.apiKey?.trim());
+  return false;
 }
 
 function getGroqStatus(params: {
-  modelConfigs: ModelConfigs;
   health: HealthCheckResponse | null;
 }): {
   keySource: ModelKeySource;
@@ -46,20 +45,6 @@ function getGroqStatus(params: {
   badgeTone: ModelStatusTone;
 } {
   const serverConfigured = params.health?.services.groq.configured === true;
-  const byokConfigured = Boolean(params.modelConfigs.groq?.apiKey?.trim());
-
-  if (serverConfigured && byokConfigured) {
-    return {
-      keySource: 'server_env_and_byok',
-      isConfigured: true,
-      isAvailable: true,
-      availability: 'available',
-      statusLabel: '已配置',
-      statusDescription: '服务端 Key 和页面 BYOK 均已配置，当前请求优先使用页面 BYOK。',
-      badgeTone: 'success',
-    };
-  }
-
   if (serverConfigured) {
     return {
       keySource: 'server_env',
@@ -67,19 +52,7 @@ function getGroqStatus(params: {
       isAvailable: true,
       availability: 'available',
       statusLabel: '服务端已配置',
-      statusDescription: '服务端 GROQ_API_KEY 已配置，可使用真实 Agent。',
-      badgeTone: 'success',
-    };
-  }
-
-  if (byokConfigured) {
-    return {
-      keySource: 'byok',
-      isConfigured: true,
-      isAvailable: true,
-      availability: 'available',
-      statusLabel: '页面 Key 已配置',
-      statusDescription: '当前浏览器会话已保存 Groq BYOK，可使用真实模型。',
+      statusDescription: '服务端 GROQ_API_KEY 已配置，登录且有额度后可使用真实 Agent。',
       badgeTone: 'success',
     };
   }
@@ -91,7 +64,7 @@ function getGroqStatus(params: {
       isAvailable: false,
       availability: 'error',
       statusLabel: '连接异常',
-      statusDescription: 'Groq 状态检查异常，可改用页面 BYOK 或公开演示模式。',
+      statusDescription: '服务端模型状态检查异常，可继续使用公开演示模式。',
       badgeTone: 'danger',
     };
   }
@@ -102,7 +75,7 @@ function getGroqStatus(params: {
     isAvailable: false,
     availability: 'not_configured',
     statusLabel: '未配置',
-    statusDescription: '未配置服务端 Groq Key，可使用页面 BYOK，或继续使用公开演示模式。',
+    statusDescription: '未配置服务端 GROQ_API_KEY，真实 Agent 暂不可用，可继续使用公开演示模式。',
     badgeTone: 'warning',
   };
 }
@@ -131,7 +104,6 @@ function createStatusView(params: {
       statusDescription: '不依赖外部模型和数据库，可完整体验 Agent Workbench 流程。',
       badgeTone: 'success',
       supportsStreaming: metadata.supportsStreaming,
-      supportsByok: metadata.supportsByok,
       isGatewayConnected: metadata.isGatewayConnected,
       capabilityLabels: metadata.capabilityLabels,
     };
@@ -139,7 +111,6 @@ function createStatusView(params: {
 
   if (params.providerId === 'groq') {
     const groqStatus = getGroqStatus({
-      modelConfigs: params.modelConfigs,
       health: params.health,
     });
 
@@ -157,7 +128,6 @@ function createStatusView(params: {
       statusDescription: groqStatus.statusDescription,
       badgeTone: groqStatus.badgeTone,
       supportsStreaming: metadata.supportsStreaming,
-      supportsByok: metadata.supportsByok,
       isGatewayConnected: metadata.isGatewayConnected,
       capabilityLabels: metadata.capabilityLabels,
     };
@@ -178,7 +148,6 @@ function createStatusView(params: {
       statusDescription: '该模型入口已预留，暂未接入真实调用。',
       badgeTone: 'muted',
       supportsStreaming: metadata.supportsStreaming,
-      supportsByok: metadata.supportsByok,
       isGatewayConnected: metadata.isGatewayConnected,
       capabilityLabels: metadata.capabilityLabels,
     };
@@ -197,13 +166,12 @@ function createStatusView(params: {
     isConfigured: hasConfig,
     isAvailable: hasConfig,
     isReserved: false,
-    keySource: hasConfig ? 'byok' : 'none',
+    keySource: 'none',
     availability: hasConfig ? 'available' : 'not_configured',
     statusLabel: hasConfig ? '已配置' : '未配置',
-    statusDescription: hasConfig ? '当前浏览器会话已保存模型配置。' : '未检测到当前模型配置。',
+    statusDescription: hasConfig ? '当前模型配置已就绪。' : '未检测到当前模型配置。',
     badgeTone: hasConfig ? 'success' : 'warning',
     supportsStreaming: metadata.supportsStreaming,
-    supportsByok: metadata.supportsByok,
     isGatewayConnected: metadata.isGatewayConnected,
     capabilityLabels: metadata.capabilityLabels,
   };

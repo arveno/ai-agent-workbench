@@ -1,5 +1,4 @@
 import type { StateCreator } from 'zustand';
-import { streamGroqChat } from '../../services/chatApi';
 import type {
   GenerationSlice,
   RunReportState,
@@ -143,7 +142,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       reportActionState: 'skipped',
     });
     get().clearChatDraft();
-    void get().runPromptWithCurrentModel(trimmedPrompt);
+    void get().runMockPrompt(trimmedPrompt);
   },
   regenerateFromAssistantMessage: (assistantMessageId) => {
     const state = get();
@@ -174,7 +173,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         return;
       }
 
-      void get().runPromptWithCurrentModel(prompt);
+      void get().runMockPrompt(prompt);
       return;
     }
   },
@@ -183,7 +182,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       realModelNotice: notice,
     });
   },
-  runPromptWithCurrentModel: async (prompt) => {
+  runMockPrompt: async (prompt) => {
     const trimmedPrompt = prompt.trim();
 
     if (!trimmedPrompt) {
@@ -191,11 +190,8 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     }
 
     const snapshot = get();
-    const groqApiKey = snapshot.modelConfigs.groq?.apiKey?.trim();
-    const shouldUseGroq = snapshot.currentModelProvider === 'groq' && Boolean(groqApiKey);
-    const shouldUseMockRun = snapshot.currentModelProvider === 'mock' || (snapshot.currentModelProvider === 'groq' && !groqApiKey);
     const streamRunId = snapshot.streamRunId + 1;
-    const runId = shouldUseMockRun ? createRunId('mock_run') : undefined;
+    const runId = createRunId('mock_run');
     const now = Date.now();
     const nextMessages: WorkbenchMessage[] = [
       createWorkbenchMessage({
@@ -265,7 +261,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         confirmStatus: 'waiting',
       };
     });
-    if (shouldUseMockRun && runId) {
+    if (runId) {
       const runStartedEvent = createMockRunStartedEvent({
         runId,
         prompt: trimmedPrompt,
@@ -359,81 +355,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       }
     };
 
-    if (!shouldUseGroq) {
-      await streamMockReplyForRun();
-      return;
-    }
-
-    try {
-      await streamGroqChat({
-        prompt: trimmedPrompt,
-        apiKey: groqApiKey,
-        onChunk: (chunk) => {
-          const current = get();
-
-          if (current.streamRunId !== streamRunId || current.generationStatus !== 'streaming') {
-            return;
-          }
-
-          set((state) => {
-            const nextContent = state.assistantStream.content + chunk;
-            const nextSessions = updateCurrentSessionAssistantInSessions(
-              state.sessions,
-              state.currentSessionId,
-              assistantMessageId,
-              nextContent
-            );
-
-            persistWorkbenchSessions(nextSessions, state.currentSessionId);
-
-            return {
-              sessions: nextSessions,
-              assistantStream: {
-                content: nextContent,
-                status: 'streaming',
-              },
-            };
-          });
-        },
-      });
-      const current = get();
-
-      if (current.streamRunId !== streamRunId || current.generationStatus !== 'streaming') {
-        return;
-      }
-
-      set((state) => {
-        const updatedSessions = updateCurrentSessionAssistantInSessions(
-          state.sessions,
-          state.currentSessionId,
-          assistantMessageId,
-          current.assistantStream.content
-        );
-
-        persistWorkbenchSessions(updatedSessions, state.currentSessionId);
-
-        return {
-          sessions: updatedSessions,
-          assistantStream: {
-            content: current.assistantStream.content,
-            status: 'done',
-          },
-          generationStatus: 'done',
-        };
-      });
-    } catch {
-      const current = get();
-
-      if (current.streamRunId !== streamRunId || current.generationStatus !== 'streaming') {
-        return;
-      }
-
-      set({
-        realModelNotice: 'Groq 当前不可用，已自动切回公开演示模式（Mock）。',
-      });
-
-      await streamMockReplyForRun();
-    }
+    await streamMockReplyForRun();
   },
   setAssistantStream: (assistantStream) => {
     set({ assistantStream });
@@ -543,7 +465,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       realModelNotice: '',
     });
 
-    await get().runPromptWithCurrentModel(get().currentPrompt);
+    await get().runMockPrompt(get().currentPrompt);
   },
   generateReportForRun: (runId) => {
     const normalizedRunId = runId.trim();
@@ -685,9 +607,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     }
   },
   regenerate: async () => {
-    await get().runPromptWithCurrentModel(get().currentPrompt);
+    await get().runMockPrompt(get().currentPrompt);
   },
   startAssistantStream: async () => {
-    await get().runPromptWithCurrentModel(get().currentPrompt);
+    await get().runMockPrompt(get().currentPrompt);
   },
 });

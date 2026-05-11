@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { buildRealAgentAvailabilityView, getRealAgentBlockedMessage } from '@/services/agentAccessViewModel';
+import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
@@ -10,7 +12,12 @@ const MAX_PROMPT_LENGTH = 2000;
 
 export function ChatInput() {
   const [isComposing, setIsComposing] = useState(false);
+  const [realAgentNotice, setRealAgentNotice] = useState('');
   const isComposingRef = useRef(false);
+  const authView = useAuthSessionView();
+  const agentAccess = useAuthStore((state) => state.agentAccess);
+  const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
+  const openLoginModal = useAuthStore((state) => state.openLoginModal);
   const chatDraft = useWorkbenchStore((state) => state.chatDraft);
   const setChatDraft = useWorkbenchStore((state) => state.setChatDraft);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
@@ -28,12 +35,30 @@ export function ChatInput() {
   const trimmedValue = chatDraft.trim();
   const isEmpty = trimmedValue.length === 0;
   const sendDisabled = isEmpty;
+  const realAgentAvailability = buildRealAgentAvailabilityView({
+    authView,
+    agentAccess,
+    isAgentAccessLoading,
+  });
+  const shouldShowRealAgentNotice =
+    currentModelProvider === 'groq' && !realAgentAvailability.canEnterRealAgent && realAgentNotice;
 
   const handleSend = () => {
     if (isGenerating || sendDisabled) {
       return;
     }
 
+    if (currentModelProvider === 'groq' && !realAgentAvailability.canEnterRealAgent) {
+      setRealAgentNotice(getRealAgentBlockedMessage(realAgentAvailability));
+
+      if (realAgentAvailability.status === 'login_required' && authView.isAuthConfigured) {
+        openLoginModal();
+      }
+
+      return;
+    }
+
+    setRealAgentNotice('');
     sendPrompt(trimmedValue);
   };
 
@@ -87,6 +112,7 @@ export function ChatInput() {
         onKeyDown={handleKeyDown}
         maxLength={MAX_PROMPT_LENGTH}
       />
+      {shouldShowRealAgentNotice ? <p className="composer-agent-access-notice">{realAgentNotice}</p> : null}
       <div className="composer-footer">
         <div className="composer-tools">
           <Button type="button" className="composer-tool-btn input-tool-button" variant="outline" size="sm">

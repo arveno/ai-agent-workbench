@@ -74,7 +74,7 @@ function getSummaryText(params: {
       return params.groqStatus.statusDescription;
     }
 
-    return 'Groq 未配置，可使用页面 BYOK 或切换公开演示模式。';
+    return '服务端 Groq Key 未配置，真实 Agent 暂不可用，可继续使用公开演示模式。';
   }
 
   if (!params.health) {
