@@ -63,18 +63,70 @@ function consumeSseBlocks(buffer: string, onEvent: (event: RunEvent) => void): s
   return remainingBuffer;
 }
 
+async function readAgentRunStreamError(response: Response): Promise<string> {
+  try {
+    const contentType = response.headers.get('content-type') ?? '';
+
+    if (contentType.includes('application/json')) {
+      const parsed = (await response.json()) as unknown;
+
+      if (
+        isRecord(parsed) &&
+        typeof parsed.errorMessage === 'string' &&
+        parsed.errorMessage.trim()
+      ) {
+        return parsed.errorMessage.trim();
+      }
+    }
+
+    const text = await response.text();
+
+    if (text.trim()) {
+      return text.trim();
+    }
+  } catch {
+    // Keep the caller on a safe product message when the error body is unreadable.
+  }
+
+  if (response.status === 401) {
+    return '请先登录后使用真实 Agent。';
+  }
+
+  if (response.status === 429) {
+    return '本月真实 Agent Run 额度已用完，可继续使用公开演示模式。';
+  }
+
+  if (response.status === 403) {
+    return '当前账号暂无真实 Agent 使用权限。';
+  }
+
+  if (response.status === 503) {
+    return '真实 Agent 权限检查暂不可用，可继续使用公开演示模式。';
+  }
+
+  return 'Agent Run 流式请求失败';
+}
+
 export async function streamAgentRunAnalysis(params: {
   prompt: string;
   provider: DataSourceTestableProviderId;
   clientRunId?: string;
+  accessToken?: string | null;
   signal?: AbortSignal;
   onEvent: (event: RunEvent) => void;
 }): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const accessToken = params.accessToken?.trim();
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
   const response = await fetch('/api/agent/run/stream', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       prompt: params.prompt,
       provider: params.provider,
@@ -85,8 +137,7 @@ export async function streamAgentRunAnalysis(params: {
   });
 
   if (!response.ok) {
-    await response.text().catch(() => '');
-    throw new Error('Agent Run 流式请求失败');
+    throw new Error(await readAgentRunStreamError(response));
   }
 
   if (!response.body) {

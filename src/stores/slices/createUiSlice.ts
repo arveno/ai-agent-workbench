@@ -3,6 +3,7 @@ import { streamAgentRunAnalysis } from '../../services/agentRunStreamApi';
 import type { RunConclusionSource, UiSlice, WorkbenchStore } from '../../types/workbench';
 import { createAgentPendingRunStartedEvent } from '../../utils/agentRunMapping';
 import { createRunId } from '../../utils/run';
+import { useAuthStore } from '../authStore';
 
 function buildAgentConclusionMessage(conclusion: string, notice?: string): string {
   const normalizedConclusion = conclusion.trim();
@@ -55,6 +56,14 @@ function withDemoFallbackHint(message: string): string {
   }
 
   return `${normalizedMessage}\n\n${AGENT_UNAVAILABLE_HINT}`;
+}
+
+function getAgentRunErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return 'Agent Run 流式请求失败，请检查数据源连接或服务端状态。';
 }
 
 export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set, get) => ({
@@ -151,10 +160,13 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     });
 
     try {
+      const accessToken = useAuthStore.getState().session?.access_token;
+
       await streamAgentRunAnalysis({
         prompt,
         provider: 'supabase',
         clientRunId: runId,
+        accessToken,
         signal: abortController.signal,
         onEvent: (event) => {
           const current = get();
@@ -264,7 +276,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       }
 
       const activeRunId = get().currentRun?.id ?? pendingRunEvent.run.id;
-      const errorMessage = withDemoFallbackHint('Agent Run 流式请求失败，请检查数据源连接或服务端状态。');
+      const errorMessage = withDemoFallbackHint(getAgentRunErrorMessage(error));
 
       get().applyRunEvent({
         type: 'run_failed',
@@ -284,6 +296,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         activeAgentRunAbortController: null,
       });
     } finally {
+      void useAuthStore.getState().refreshAgentAccess();
+
       if (
         get().activeAgentRunRequestId === requestId &&
         get().currentSessionId === sessionId &&

@@ -4,6 +4,15 @@ export type UserRole = 'anonymous' | 'demo_user' | 'admin';
 
 export type QuotaType = 'agent_run';
 
+export type AgentRunUsageFinalStatus = 'completed' | 'failed' | 'stopped';
+
+export type AgentRunQuotaConsumeStatus =
+  | 'allowed'
+  | 'quota_exceeded'
+  | 'forbidden'
+  | 'auth_unavailable'
+  | 'quota_unavailable';
+
 export type AgentAccessStatus =
   | 'anonymous'
   | 'allowed'
@@ -25,7 +34,7 @@ export interface AgentAccessView {
   reason: string;
 }
 
-export interface ProfileRow {
+export interface ProfileRow extends Record<string, unknown> {
   id: string;
   email: string | null;
   display_name: string | null;
@@ -34,7 +43,7 @@ export interface ProfileRow {
   updated_at: string;
 }
 
-export interface AgentRunQuotaRow {
+export interface AgentRunQuotaRow extends Record<string, unknown> {
   id: string;
   user_id: string;
   quota_type: QuotaType;
@@ -46,7 +55,7 @@ export interface AgentRunQuotaRow {
   updated_at: string;
 }
 
-export interface AgentRunUsageRow {
+export interface AgentRunUsageRow extends Record<string, unknown> {
   id: string;
   user_id: string;
   run_id: string | null;
@@ -81,7 +90,37 @@ export interface ServerAuthDatabase {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      consume_agent_run_quota: {
+        Args: {
+          p_user_id: string;
+          p_run_id: string;
+          p_metadata?: Record<string, unknown>;
+        };
+        Returns: Array<{
+          ok: boolean;
+          status: string;
+          quota_limit: number | null;
+          quota_used: number | null;
+          quota_remaining: number | null;
+          usage_id: string | null;
+          reason: string;
+        }>;
+      };
+      finish_agent_run_usage: {
+        Args: {
+          p_usage_id: string;
+          p_status: AgentRunUsageFinalStatus;
+          p_error_code?: string | null;
+          p_metadata?: Record<string, unknown>;
+        };
+        Returns: Array<{
+          ok: boolean;
+          status: string;
+          reason: string;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
