@@ -3,7 +3,7 @@ import { LoginModal } from '../auth/LoginModal';
 import { mockTasks } from '../../mocks/tasks';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { AuthSessionView } from '../../types/auth';
+import type { AgentAccessView, AuthSessionView } from '../../types/auth';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { AppIcon } from '../common/AppIcon';
 import { icons, type IconKey } from '../common/iconMap';
@@ -39,25 +39,63 @@ function getAuthDisplayName(authView: AuthSessionView): string {
   return '访客用户';
 }
 
-function getAuthStatusText(authView: AuthSessionView): string {
+function getAgentRunQuotaLabel(agentAccess: AgentAccessView): string {
+  if (agentAccess.role === 'admin') {
+    return 'Agent Run：不限';
+  }
+
+  if (agentAccess.quotaUsed !== null && agentAccess.quotaLimit !== null) {
+    return `Agent Run：${agentAccess.quotaUsed} / ${agentAccess.quotaLimit}`;
+  }
+
+  return '额度暂不可用';
+}
+
+function getAuthStatusLines(params: {
+  authView: AuthSessionView;
+  agentAccess: AgentAccessView;
+  isAgentAccessLoading: boolean;
+  agentAccessError: string | null;
+}): string[] {
+  const { authView, agentAccess, isAgentAccessLoading, agentAccessError } = params;
+
   if (authView.status === 'loading') {
-    return '请稍候';
+    return ['请稍候'];
   }
 
   if (authView.status === 'authenticated') {
-    return '已登录';
+    if (isAgentAccessLoading) {
+      return ['正在读取额度...'];
+    }
+
+    if (agentAccessError || agentAccess.status === 'auth_unavailable') {
+      return ['额度暂不可用'];
+    }
+
+    if (agentAccess.status === 'quota_exceeded') {
+      return [getAgentRunQuotaLabel(agentAccess), '额度已用完'];
+    }
+
+    if (agentAccess.status === 'allowed') {
+      return [agentAccess.role, getAgentRunQuotaLabel(agentAccess)];
+    }
+
+    return ['额度暂不可用'];
   }
 
   if (authView.status === 'error') {
-    return '登录状态异常';
+    return ['登录状态异常'];
   }
 
-  return '公开演示模式';
+  return ['公开演示模式'];
 }
 
 export function Sidebar() {
   const authView = useAuthSessionView();
   const signOut = useAuthStore((state) => state.signOut);
+  const agentAccess = useAuthStore((state) => state.agentAccess);
+  const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
+  const agentAccessError = useAuthStore((state) => state.agentAccessError);
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
@@ -71,6 +109,12 @@ export function Sidebar() {
   const isAuthenticated = authView.status === 'authenticated';
   const isAuthLoading = authView.status === 'loading';
   const canOpenLogin = authView.isAuthConfigured && !isAuthLoading;
+  const authStatusLines = getAuthStatusLines({
+    authView,
+    agentAccess,
+    isAgentAccessLoading,
+    agentAccessError,
+  });
 
   const handleSessionClick = (sessionId: string) => {
     const session = sortedSessions.find((item) => item.id === sessionId);
@@ -182,7 +226,13 @@ export function Sidebar() {
             <p className="user-name" title={authView.email ?? getAuthDisplayName(authView)}>
               {getAuthDisplayName(authView)}
             </p>
-            <p className="user-status">{getAuthStatusText(authView)}</p>
+            <div className="user-status-list" aria-label="登录状态">
+              {authStatusLines.map((line, index) => (
+                <p key={`${line}-${index}`} className="user-status">
+                  {line}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
         <button

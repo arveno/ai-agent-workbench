@@ -255,10 +255,24 @@
   font-weight: 600;
 }
 
+.user-status-list {
+  margin-top: 4px;
+  display: grid;
+  gap: 2px;
+}
+
 .user-status {
   margin: 4px 0 0;
   font-size: 12px;
   color: #6b7280;
+}
+
+.user-status-list .user-status {
+  margin: 0;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-dot {

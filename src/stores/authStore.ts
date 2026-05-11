@@ -1,10 +1,16 @@
 import { create } from 'zustand';
 import { useMemo } from 'react';
 import { isSupabaseAuthConfigured, supabase } from '@/lib/supabaseClient';
+import {
+  createAgentAccessUnavailableView,
+  createAnonymousAgentAccessView,
+  fetchAgentAccessView,
+} from '@/services/agentAccessApi';
 import type { AuthSessionView, AuthStoreState, AuthStatus } from '@/types/auth';
 
 let authSubscription: { unsubscribe: () => void } | null = null;
 let initializeAuthPromise: Promise<void> | null = null;
+let agentAccessRequestId = 0;
 
 function toAuthErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
@@ -51,6 +57,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   user: null,
   error: null,
   isInitialized: false,
+  agentAccess: createAnonymousAgentAccessView(),
+  isAgentAccessLoading: false,
+  agentAccessError: null,
 
   initializeAuth: async () => {
     if (!isSupabaseAuthConfigured || supabase === null) {
@@ -60,6 +69,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         user: null,
         error: null,
         isInitialized: true,
+        agentAccess: createAnonymousAgentAccessView(),
+        isAgentAccessLoading: false,
+        agentAccessError: null,
       });
       return;
     }
@@ -97,6 +109,12 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
           isInitialized: true,
         });
 
+        if (data.session) {
+          void get().refreshAgentAccess();
+        } else {
+          get().clearAgentAccess();
+        }
+
         if (authSubscription === null) {
           const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
             set({
@@ -106,6 +124,12 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
               error: null,
               isInitialized: true,
             });
+
+            if (session) {
+              void get().refreshAgentAccess();
+            } else {
+              get().clearAgentAccess();
+            }
           });
 
           authSubscription = authListener.subscription;
@@ -117,6 +141,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
           user: null,
           error: toAuthErrorMessage(error),
           isInitialized: true,
+          agentAccess: createAgentAccessUnavailableView('登录状态检查失败，暂不能读取真实 Agent 额度。'),
+          isAgentAccessLoading: false,
+          agentAccessError: '登录状态检查失败，暂不能读取真实 Agent 额度。',
         });
       } finally {
         initializeAuthPromise = null;
@@ -132,6 +159,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         status: 'anonymous',
         error: 'Supabase Auth 未配置，当前只能使用公开演示模式。',
         isInitialized: true,
+        agentAccess: createAnonymousAgentAccessView(),
+        isAgentAccessLoading: false,
+        agentAccessError: null,
       });
       return false;
     }
@@ -151,6 +181,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
           user: null,
           error: error.message,
           isInitialized: true,
+          agentAccess: createAnonymousAgentAccessView(),
+          isAgentAccessLoading: false,
+          agentAccessError: null,
         });
         return false;
       }
@@ -162,6 +195,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         error: null,
         isInitialized: true,
       });
+      await get().refreshAgentAccess();
       return true;
     } catch (error) {
       set({
@@ -170,6 +204,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         user: null,
         error: toAuthErrorMessage(error),
         isInitialized: true,
+        agentAccess: createAnonymousAgentAccessView(),
+        isAgentAccessLoading: false,
+        agentAccessError: null,
       });
       return false;
     }
@@ -183,6 +220,9 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         user: null,
         error: null,
         isInitialized: true,
+        agentAccess: createAnonymousAgentAccessView(),
+        isAgentAccessLoading: false,
+        agentAccessError: null,
       });
       return true;
     }
@@ -208,6 +248,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
         error: null,
         isInitialized: true,
       });
+      get().clearAgentAccess();
       return true;
     } catch (error) {
       set({
@@ -217,6 +258,45 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
       });
       return false;
     }
+  },
+
+  refreshAgentAccess: async () => {
+    const session = get().session;
+    const accessToken = session?.access_token?.trim();
+    const userId = session?.user.id ?? null;
+
+    if (!accessToken || !userId) {
+      get().clearAgentAccess();
+      return;
+    }
+
+    const requestId = agentAccessRequestId + 1;
+    agentAccessRequestId = requestId;
+    set({
+      isAgentAccessLoading: true,
+      agentAccessError: null,
+    });
+
+    const access = await fetchAgentAccessView(accessToken);
+
+    if (requestId !== agentAccessRequestId || get().session?.user.id !== userId) {
+      return;
+    }
+
+    set({
+      agentAccess: access,
+      isAgentAccessLoading: false,
+      agentAccessError: access.status === 'auth_unavailable' ? access.reason : null,
+    });
+  },
+
+  clearAgentAccess: () => {
+    agentAccessRequestId += 1;
+    set({
+      agentAccess: createAnonymousAgentAccessView(),
+      isAgentAccessLoading: false,
+      agentAccessError: null,
+    });
   },
 
   getAuthSessionView: () => createAuthSessionView(get()),
