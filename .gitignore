@@ -168,3 +168,5 @@ cypress/videos/
 *.tmp
 *.temp
 .vercel
+.env*.local
+!.env.local.example

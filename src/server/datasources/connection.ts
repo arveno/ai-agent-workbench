@@ -1,6 +1,7 @@
 /// <reference types="node" />
 
 import dotenv from 'dotenv';
+import path from 'node:path';
 import { Pool } from 'pg';
 import type { DataSourceTestableProviderId } from '../../types/workbench';
 
@@ -15,7 +16,10 @@ export function ensureServerEnvLoaded(): void {
   }
 
   if (process.env.NODE_ENV !== 'production') {
-    dotenv.config({ path: `${process.cwd()}/.env.local` });
+    dotenv.config({
+      path: [path.resolve(process.cwd(), '.env.local'), path.resolve(process.cwd(), '.env')],
+      quiet: true,
+    });
   }
 
   hasLoadedLocalEnv = true;
