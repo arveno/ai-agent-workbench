@@ -27,6 +27,8 @@ export function Sidebar() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const setCurrentModelProvider = useWorkbenchStore((state) => state.setCurrentModelProvider);
   const createSession = useWorkbenchStore((state) => state.createSession);
   const switchSession = useWorkbenchStore((state) => state.switchSession);
   const startTask = useWorkbenchStore((state) => state.startTask);
@@ -42,6 +44,10 @@ export function Sidebar() {
   };
 
   const handleTaskClick = (taskId: string, prompt: string) => {
+    if (currentModelProvider !== 'mock') {
+      setCurrentModelProvider('mock');
+    }
+
     startTask(taskId, prompt);
     replaceWorkbenchUrl({
       sessionId: currentSessionId,
@@ -97,7 +103,8 @@ export function Sidebar() {
         </section>
 
         <section className="sidebar-section">
-          <h2 className="section-title">示例任务</h2>
+          <h2 className="section-title">示例任务（公开演示）</h2>
+          <p className="sidebar-demo-tip">点击一键运行，默认使用公开演示模式，无需配置 Key 或数据源。</p>
           <div className="task-list">
             {mockTasks.map((task) => (
               <button

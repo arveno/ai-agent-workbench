@@ -13,7 +13,7 @@ export const mockSessions: WorkbenchSession[] = [
         id: 'm_user_default',
         role: 'user',
         kind: 'normal',
-        content: '请分析 2026 年 5 月教学质量相关数据，找出异常指标，并给出简短结论。',
+        content: '分析 2026 年 5 月教学质量数据，找出异常指标。',
         createdAt: now - 5 * 60 * 1000,
       },
       {

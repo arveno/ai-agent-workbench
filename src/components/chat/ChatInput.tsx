@@ -19,6 +19,7 @@ export function ChatInput() {
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
+  const isPublicDemoMode = currentModelProvider === 'mock';
   const isMockGenerating = currentModelProvider === 'mock' && generationStatus === 'streaming';
   const isAgentRunning =
     currentModelProvider === 'groq' &&
@@ -66,7 +67,11 @@ export function ChatInput() {
     <div className="composer">
       <Textarea
         className="composer-input chat-input-textarea"
-        placeholder="继续输入问题，或让 AI 生成报告..."
+        placeholder={
+          isPublicDemoMode
+            ? '公开演示模式已就绪：可直接输入问题，或点击左侧示例任务一键体验完整流程。'
+            : '继续输入问题，或让 AI 生成报告...'
+        }
         value={chatDraft}
         onChange={(event) => setChatDraft(event.target.value)}
         onCompositionStart={() => {

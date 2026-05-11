@@ -58,7 +58,7 @@ export function createMockRunStartedEvent(params: {
       plan: {
         intent: 'data_analysis',
         shouldUseDataAnalysis: true,
-        reason: 'Mock 演示模式使用本地模拟数据生成分析流程',
+        reason: '公开演示模式（Mock）使用本地模拟数据生成分析流程',
         metric: 'avg_score',
         groupBy: 'grade',
       },

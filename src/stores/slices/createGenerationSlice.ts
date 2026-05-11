@@ -193,7 +193,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     const snapshot = get();
     const groqApiKey = snapshot.modelConfigs.groq?.apiKey?.trim();
     const shouldUseGroq = snapshot.currentModelProvider === 'groq' && Boolean(groqApiKey);
-    const shouldUseMockRun = snapshot.currentModelProvider === 'mock';
+    const shouldUseMockRun = snapshot.currentModelProvider === 'mock' || (snapshot.currentModelProvider === 'groq' && !groqApiKey);
     const streamRunId = snapshot.streamRunId + 1;
     const runId = shouldUseMockRun ? createRunId('mock_run') : undefined;
     const now = Date.now();
@@ -429,7 +429,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       }
 
       set({
-        realModelNotice: 'Groq 当前不可用，已自动切回 Mock 演示结果。',
+        realModelNotice: 'Groq 当前不可用，已自动切回公开演示模式（Mock）。',
       });
 
       await streamMockReplyForRun();

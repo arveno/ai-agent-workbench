@@ -576,6 +576,8 @@ POSTGRES_CONNECTION_STRING=
 说明：
 
 - `.env.local` 不应提交
+- 公开预览默认使用公开演示模式（Mock），无需 API Key 或数据库配置即可体验完整流程
+- 真实 Agent 模式需要服务端环境变量或页面 BYOK（例如 Groq Key）
 - 线上需要在 Vercel Project Settings → Environment Variables 中配置
 - 修改 Vercel 环境变量后需要重新部署
 - 不要把 API Key 或数据库连接串写入 README、代码或 URL

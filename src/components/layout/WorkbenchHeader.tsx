@@ -60,7 +60,7 @@ function getGenerationStatusTone(status: GenerationStatus): RunStatusTone {
 
 function getModelProviderLabel(provider: ModelProvider): string {
   if (provider === 'mock') {
-    return 'Mock 演示模式';
+    return '公开演示模式（Mock）';
   }
 
   if (provider === 'groq') {
@@ -122,7 +122,12 @@ export function WorkbenchHeader() {
   const statusLabel = currentRun ? getRunStatusLabel(currentRun.status) : getGenerationLabel(generationStatus);
   const statusTone = currentRun ? getRunStatusTone(currentRun.status) : getGenerationStatusTone(generationStatus);
   const runSummaryItems = getRunSummaryItems(currentRun);
-  const modeBadgeLabel = currentRun ? getRunModeLabel(currentRun.mode) : modelLabel;
+  const modeBadgeLabel = currentRun
+    ? currentRun.mode === 'mock'
+      ? '公开演示模式（Mock）'
+      : getRunModeLabel(currentRun.mode)
+    : modelLabel;
+  const shouldShowPublicDemoHint = currentModelProvider === 'mock';
 
   return (
     <header className="workspace-header workbench-header">
@@ -151,6 +156,9 @@ export function WorkbenchHeader() {
             </Fragment>
           ))}
         </div>
+        {shouldShowPublicDemoHint ? (
+          <p className="workspace-demo-hint">当前可直接使用公开演示模式体验完整 Agent 工作台流程。</p>
+        ) : null}
       </div>
 
       <div className="workspace-actions">

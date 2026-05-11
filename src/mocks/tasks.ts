@@ -3,9 +3,9 @@
 export const mockTasks: ExampleTask[] = [
   {
     id: 't_month_analytics',
-    title: '分析本月教学数据',
-    description: '分析教学质量、出勤率和异常指标',
-    prompt: '请分析 2026 年 5 月教学质量相关数据，找出异常指标，并给出简短结论。',
+    title: '分析 2026 年 5 月教学质量数据，找出异常指标',
+    description: '公开演示推荐任务，完整体验 Agent Workbench 流程',
+    prompt: '分析 2026 年 5 月教学质量数据，找出异常指标。',
   },
   {
     id: 't_abnormal_reason',

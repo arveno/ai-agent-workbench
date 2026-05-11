@@ -11,7 +11,7 @@ import type {
 export type RunStatusTone = 'muted' | 'active' | 'success' | 'warning' | 'danger';
 
 export function getRunModeLabel(mode: RunMode): string {
-  return mode === 'mock' ? 'Mock 演示' : '真实 Agent';
+  return mode === 'mock' ? '公开演示模式（Mock）' : '真实 Agent';
 }
 
 export function getRunIntentLabel(intent: RunIntent): string {

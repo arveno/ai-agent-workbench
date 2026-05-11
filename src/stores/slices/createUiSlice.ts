@@ -41,6 +41,22 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+const AGENT_UNAVAILABLE_HINT = '真实 Agent 暂不可用，可切换公开演示模式继续体验完整流程。';
+
+function withDemoFallbackHint(message: string): string {
+  const normalizedMessage = message.trim();
+
+  if (!normalizedMessage) {
+    return AGENT_UNAVAILABLE_HINT;
+  }
+
+  if (normalizedMessage.includes(AGENT_UNAVAILABLE_HINT)) {
+    return normalizedMessage;
+  }
+
+  return `${normalizedMessage}\n\n${AGENT_UNAVAILABLE_HINT}`;
+}
+
 export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set, get) => ({
   isDataSourceModalOpen: false,
   isToolLibraryModalOpen: false,
@@ -149,29 +165,38 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
             return;
           }
 
-          get().applyRunEvent(event);
+          const normalizedEvent =
+            event.type === 'run_failed'
+              ? {
+                  ...event,
+                  errorMessage: withDemoFallbackHint(event.errorMessage),
+                }
+              : event;
 
-          if (event.type === 'conclusion_completed') {
-            finalConclusion = event.conclusion;
-            finalConclusionSource = event.conclusionSource;
-            finalConclusionNotice = event.conclusionNotice;
+          get().applyRunEvent(normalizedEvent);
+
+          if (normalizedEvent.type === 'conclusion_completed') {
+            finalConclusion = normalizedEvent.conclusion;
+            finalConclusionSource = normalizedEvent.conclusionSource;
+            finalConclusionNotice = normalizedEvent.conclusionNotice;
             return;
           }
 
-          if (event.type === 'report_pending') {
+          if (normalizedEvent.type === 'report_pending') {
             set({
-              currentReportRunId: event.runId,
+              currentReportRunId: normalizedEvent.runId,
               reportActionState: 'pending',
             });
             return;
           }
 
-          if (event.type === 'run_failed') {
+          if (normalizedEvent.type === 'run_failed') {
             hasFailed = true;
             set({
               agentRunStatus: 'error',
-              agentRunErrorMessage: event.errorMessage,
+              agentRunErrorMessage: normalizedEvent.errorMessage,
               generationStatus: 'error',
+              realModelNotice: AGENT_UNAVAILABLE_HINT,
               confirmStatus: 'cancelled',
               currentReportRunId: null,
               reportActionState: 'skipped',
@@ -241,7 +266,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       }
 
       const activeRunId = get().currentRun?.id ?? pendingRunEvent.run.id;
-      const errorMessage = 'Agent Run 流式请求失败，请检查数据源连接或服务端状态。';
+      const errorMessage = withDemoFallbackHint('Agent Run 流式请求失败，请检查数据源连接或服务端状态。');
 
       get().applyRunEvent({
         type: 'run_failed',
@@ -253,6 +278,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         agentRunStatus: 'error',
         agentRunErrorMessage: errorMessage,
         generationStatus: 'error',
+        realModelNotice: AGENT_UNAVAILABLE_HINT,
         confirmStatus: 'cancelled',
         currentReportRunId: null,
         reportActionState: 'skipped',
