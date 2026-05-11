@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,14 +20,10 @@ function formatUpdatedAt(updatedAt: string | undefined): string {
   return `上次保存：${new Date(updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
 }
 
-export function PromptTemplateEditor({ template, onSave, onReset }: PromptTemplateEditorProps) {
+function PromptTemplateEditorForm({ template, onSave, onReset }: PromptTemplateEditorProps) {
   const [draftContent, setDraftContent] = useState(template.currentContent);
   const isDirty = draftContent !== template.currentContent;
   const characterCountText = useMemo(() => `${draftContent.length} 字符`, [draftContent.length]);
-
-  useEffect(() => {
-    setDraftContent(template.currentContent);
-  }, [template.currentContent, template.id]);
 
   return (
     <Card size="sm" className="prompt-template-editor">
@@ -93,4 +89,8 @@ export function PromptTemplateEditor({ template, onSave, onReset }: PromptTempla
       </CardContent>
     </Card>
   );
+}
+
+export function PromptTemplateEditor(props: PromptTemplateEditorProps) {
+  return <PromptTemplateEditorForm key={`${props.template.id}:${props.template.currentContent}`} {...props} />;
 }

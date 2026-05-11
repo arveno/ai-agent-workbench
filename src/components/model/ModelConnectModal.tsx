@@ -205,8 +205,7 @@ function getGatewayLabel(status: ModelProviderStatusView): string {
   return '待接入 Model Gateway';
 }
 
-export function ModelConnectModal() {
-  const isModelModalOpen = useWorkbenchStore((state) => state.isModelModalOpen);
+function ModelConnectModalContent() {
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
   const modelTestStatusMap = useWorkbenchStore((state) => state.modelTestStatusMap);
@@ -222,19 +221,7 @@ export function ModelConnectModal() {
   const [hasHealthFailed, setHasHealthFailed] = useState(false);
 
   useEffect(() => {
-    if (isModelModalOpen) {
-      setDraftConfigs(modelConfigs);
-      setExpandedProviderIds(['groq']);
-    }
-  }, [isModelModalOpen, modelConfigs]);
-
-  useEffect(() => {
-    if (!isModelModalOpen) {
-      return;
-    }
-
     let isMounted = true;
-    setHasHealthFailed(false);
 
     void requestHealthCheck()
       .then((response) => {
@@ -256,7 +243,7 @@ export function ModelConnectModal() {
     return () => {
       isMounted = false;
     };
-  }, [isModelModalOpen]);
+  }, []);
 
   const providerStatusViews = useMemo(
     () =>
@@ -279,10 +266,6 @@ export function ModelConnectModal() {
       ),
     [providerStatusViews],
   );
-
-  if (!isModelModalOpen) {
-    return null;
-  }
 
   const updateDraftConfig = (providerId: ModelProviderId, partialConfig: ModelProviderConfig) => {
     setDraftConfigs((prev) => ({
@@ -772,4 +755,14 @@ export function ModelConnectModal() {
       </div>
     </div>
   );
+}
+
+export function ModelConnectModal() {
+  const isModelModalOpen = useWorkbenchStore((state) => state.isModelModalOpen);
+
+  if (!isModelModalOpen) {
+    return null;
+  }
+
+  return <ModelConnectModalContent />;
 }

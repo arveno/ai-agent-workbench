@@ -541,6 +541,6 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       runningStep.elapsedMs = Date.now() - runStart;
     }
 
-    throw new Error(errorMessage);
+    throw new Error(errorMessage, { cause: error });
   }
 }
