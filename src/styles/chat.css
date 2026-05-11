@@ -274,8 +274,9 @@
 }
 
 .message-copy-button {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   display: grid;
   place-items: center;
   border: 1px solid transparent;
@@ -283,12 +284,28 @@
   background: transparent;
   color: #94a3b8;
   cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease,
+    transform 0.14s ease;
 }
 
 .message-copy-button:hover {
   border-color: #dbeafe;
   background: #eff6ff;
   color: #2563eb;
+}
+
+.message-copy-button:active {
+  transform: translateY(1px);
+}
+
+.message-copy-button-copied,
+.message-copy-button-copied:hover {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #16a34a;
 }
 
 .tool-card-grid {

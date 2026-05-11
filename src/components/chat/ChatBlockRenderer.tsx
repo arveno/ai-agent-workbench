@@ -1,5 +1,7 @@
 import type { ChatBlock } from '../../types/chatBlocks';
 import type { ReactNode } from 'react';
+import { Check } from 'lucide-react';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { Badge } from '../ui/badge';
@@ -16,16 +18,12 @@ interface ChatBlockRendererProps {
   generationStatus: string;
 }
 
-async function copyMessage(content: string): Promise<void> {
-  if (!content.trim()) {
-    return;
-  }
+type MessageChatBlock = Extract<ChatBlock, { type: 'message' }>;
 
-  try {
-    await navigator.clipboard.writeText(content);
-  } catch {
-    // Ignore clipboard permission errors in unsupported contexts.
-  }
+interface MessageBlockRendererProps {
+  block: MessageChatBlock;
+  activeAssistantMessageId: string;
+  generationStatus: string;
 }
 
 function assertNever(value: never): never {
@@ -42,24 +40,23 @@ function getChatBlockClassName(block: ChatBlock): string {
   return classNames.join(' ');
 }
 
-function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatus }: ChatBlockRendererProps) {
-  if (block.type !== 'message') {
-    return null;
-  }
-
+function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatus }: MessageBlockRendererProps) {
+  const { copied, copy } = useCopyFeedback();
   const { message } = block;
   const shouldShowCopy = message.content.trim().length > 0;
+  const copyLabel = copied ? '已复制' : '复制';
+  const copyIcon = copied ? Check : icons.copy;
   const copyAction = shouldShowCopy ? (
     <button
       type="button"
-      className="message-copy-button"
-      aria-label="复制"
-      title="复制"
+      className={`message-copy-button${copied ? ' message-copy-button-copied' : ''}`}
+      aria-label={copyLabel}
+      title={copyLabel}
       onClick={() => {
-        void copyMessage(message.content);
+        void copy(message.content);
       }}
     >
-      <AppIcon icon={icons.copy} size={14} />
+      <AppIcon icon={copyIcon} size={14} />
     </button>
   ) : null;
 
@@ -111,7 +108,13 @@ export function ChatBlockRenderer(props: ChatBlockRendererProps) {
 
   switch (props.block.type) {
     case 'message':
-      content = <MessageBlockRenderer {...props} />;
+      content = (
+        <MessageBlockRenderer
+          block={props.block}
+          activeAssistantMessageId={props.activeAssistantMessageId}
+          generationStatus={props.generationStatus}
+        />
+      );
       break;
     case 'tool_summary':
       content = <ToolSummaryBlock run={props.block.run} />;
