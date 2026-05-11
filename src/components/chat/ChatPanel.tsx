@@ -13,7 +13,8 @@ export function ChatPanel() {
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
   const realModelNotice = useWorkbenchStore((state) => state.realModelNotice);
-  const retryCurrentTask = useWorkbenchStore((state) => state.retryCurrentTask);
+  const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
+  const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === currentSessionId) ?? null,
     [sessions, currentSessionId],
@@ -106,8 +107,9 @@ export function ChatPanel() {
               className="error-retry-btn"
               variant="outline"
               size="sm"
+              disabled={!currentPrompt.trim()}
               onClick={() => {
-                void retryCurrentTask();
+                sendPrompt(currentPrompt);
               }}
             >
               重试
