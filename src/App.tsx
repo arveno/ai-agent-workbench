@@ -10,11 +10,17 @@ import { WorkspaceMain } from './components/layout/WorkspaceMain';
 import { ModelConnectModal } from './components/model/ModelConnectModal';
 import { ToolLibraryModal } from './components/tools/ToolLibraryModal';
 import { WorkflowModal } from './components/workflow/WorkflowModal';
+import { useAuthStore } from './stores/authStore';
 import { useWorkbenchStore } from './stores/workbenchStore';
 import { parseWorkbenchUrl, replaceWorkbenchUrl } from './utils/urlState';
 
 function App() {
+  const initializeAuth = useAuthStore((state) => state.initializeAuth);
   const hydrateFromUrl = useWorkbenchStore((state) => state.hydrateFromUrl);
+
+  useEffect(() => {
+    void initializeAuth();
+  }, [initializeAuth]);
 
   useEffect(() => {
     const urlState = parseWorkbenchUrl(window.location.search);

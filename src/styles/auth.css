@@ -1,0 +1,86 @@
+.auth-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+.auth-modal {
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+}
+
+.auth-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.auth-modal-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 750;
+}
+
+.auth-modal-subtitle {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-modal-body {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 7px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-modal-notice,
+.auth-modal-error {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.auth-modal-notice {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.auth-modal-error {
+  background: #fef2f2;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.auth-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}

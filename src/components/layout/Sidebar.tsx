@@ -1,5 +1,9 @@
-﻿import { mockTasks } from '../../mocks/tasks';
+﻿import { useState } from 'react';
+import { LoginModal } from '../auth/LoginModal';
+import { mockTasks } from '../../mocks/tasks';
+import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import type { AuthSessionView } from '../../types/auth';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { AppIcon } from '../common/AppIcon';
 import { icons, type IconKey } from '../common/iconMap';
@@ -23,7 +27,37 @@ function formatSessionTime(updatedAt: number): string {
   return `${hour}:${minute}`;
 }
 
+function getAuthDisplayName(authView: AuthSessionView): string {
+  if (authView.status === 'loading') {
+    return '正在检查登录状态';
+  }
+
+  if (authView.status === 'authenticated') {
+    return authView.email ?? authView.displayName;
+  }
+
+  return '访客用户';
+}
+
+function getAuthStatusText(authView: AuthSessionView): string {
+  if (authView.status === 'loading') {
+    return '请稍候';
+  }
+
+  if (authView.status === 'authenticated') {
+    return '已登录';
+  }
+
+  if (authView.status === 'error') {
+    return '登录状态异常';
+  }
+
+  return '公开演示模式';
+}
+
 export function Sidebar() {
+  const authView = useAuthSessionView();
+  const signOut = useAuthStore((state) => state.signOut);
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
@@ -32,7 +66,11 @@ export function Sidebar() {
   const createSession = useWorkbenchStore((state) => state.createSession);
   const switchSession = useWorkbenchStore((state) => state.switchSession);
   const startTask = useWorkbenchStore((state) => state.startTask);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+  const isAuthenticated = authView.status === 'authenticated';
+  const isAuthLoading = authView.status === 'loading';
+  const canOpenLogin = authView.isAuthConfigured && !isAuthLoading;
 
   const handleSessionClick = (sessionId: string) => {
     const session = sortedSessions.find((item) => item.id === sessionId);
@@ -141,17 +179,41 @@ export function Sidebar() {
             <AppIcon icon={icons.user} size={16} />
           </div>
           <div className="user-copy">
-            <p className="user-name">张老师</p>
-            <p className="user-status">
-              <span className="status-dot" aria-hidden="true"></span>
-              在线
+            <p className="user-name" title={authView.email ?? getAuthDisplayName(authView)}>
+              {getAuthDisplayName(authView)}
             </p>
+            <p className="user-status">{getAuthStatusText(authView)}</p>
           </div>
         </div>
-        <button type="button" className="settings-btn icon-button" aria-label="设置">
-          <AppIcon icon={icons.settings} size={16} />
+        <button
+          type="button"
+          className="user-auth-action"
+          disabled={isAuthLoading || (!isAuthenticated && !authView.isAuthConfigured)}
+          title={
+            !authView.isAuthConfigured
+              ? '请配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_PUBLISHABLE_KEY'
+              : undefined
+          }
+          onClick={() => {
+            if (isAuthenticated) {
+              void signOut();
+              return;
+            }
+
+            if (canOpenLogin) {
+              setIsLoginModalOpen(true);
+            }
+          }}
+        >
+          {isAuthenticated ? '退出' : authView.isAuthConfigured ? '登录' : '登录不可用'}
         </button>
       </div>
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => {
+          setIsLoginModalOpen(false);
+        }}
+      />
     </aside>
   );
 }
