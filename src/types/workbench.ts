@@ -301,6 +301,7 @@ export interface ModelProviderConfig {
 }
 
 export type ModelProviderConfigMap = Partial<Record<ModelProviderId, ModelProviderConfig>>;
+export type ModelConfigs = ModelProviderConfigMap;
 export type ModelProviderTestStatusMap = Partial<Record<ModelProviderId, ModelTestStatus>>;
 
 export interface ModelProviderOption {

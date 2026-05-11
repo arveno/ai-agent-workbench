@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,10 +6,14 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { HealthCheckResponse } from '@/types/health';
+import type { ModelProviderStatusView } from '@/types/modelStatus';
+import { buildModelProviderStatusViews } from '@/utils/modelProviderStatus';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { requestGroqChat } from '../../services/chatApi';
+import { requestHealthCheck } from '../../services/healthApi';
 import type {
   ModelProviderConfig,
   ModelProviderConfigMap,
@@ -19,8 +23,6 @@ import type {
 
 interface ProviderOption {
   id: ModelProviderId;
-  name: string;
-  description: string;
   type: 'mock' | 'api-key' | 'oauth' | 'ollama';
   placeholder?: string;
 }
@@ -28,48 +30,34 @@ interface ProviderOption {
 const PROVIDER_OPTIONS: ProviderOption[] = [
   {
     id: 'mock',
-    name: 'Mock 演示模式',
-    description: '使用本地 mock 流式输出，不依赖外部模型，适合稳定演示。',
     type: 'mock',
   },
   {
     id: 'groq',
-    name: 'Groq 免费 API',
-    description: '可用于真实模型流式输出，速度快，但免费额度有限。',
     type: 'api-key',
     placeholder: '输入 gsk_ 开头的 Groq API Key',
   },
   {
     id: 'gemini',
-    name: 'Gemini API',
-    description: '可使用 Google Gemini API 免费额度进行真实模型演示。',
     type: 'api-key',
     placeholder: '输入 Gemini API Key',
   },
   {
     id: 'openrouter',
-    name: 'OpenRouter Free',
-    description: '可通过 OpenRouter 免费模型接入多模型能力。',
     type: 'api-key',
     placeholder: '输入 OpenRouter API Key',
   },
   {
     id: 'openai-api-key',
-    name: 'OpenAI API Key',
-    description: '通过服务端 /api/chat 调用 OpenAI API，Key 不暴露在前端。',
     type: 'api-key',
     placeholder: '输入 sk- 开头的 OpenAI API Key',
   },
   {
     id: 'codex-oauth',
-    name: 'OpenAI / Codex OAuth',
-    description: '预留 ChatGPT / Codex 授权路线，适合类似 OpenClaw 的订阅侧模型连接方式。',
     type: 'oauth',
   },
   {
     id: 'ollama',
-    name: '本地 Ollama',
-    description: '面向本地模型演示，不依赖云端 API Key。',
     type: 'ollama',
   },
 ];
@@ -157,30 +145,6 @@ function ModelProviderLogo({ providerId, alt }: ModelProviderLogoProps) {
   );
 }
 
-function isReservedProvider(providerId: ModelProviderId): boolean {
-  return providerId !== 'mock' && providerId !== 'groq';
-}
-
-function getCapabilityLabels(option: ProviderOption): string[] {
-  if (option.id === 'mock') {
-    return ['本地模拟', '支持流式', '稳定演示'];
-  }
-
-  if (option.id === 'groq') {
-    return ['BYOK', '服务端转发', '支持流式', 'Model Gateway'];
-  }
-
-  if (option.id === 'codex-oauth') {
-    return ['OAuth 预留', '待接入 Model Gateway'];
-  }
-
-  if (option.id === 'ollama') {
-    return ['本地模型预留', '待接入 Model Gateway'];
-  }
-
-  return ['API Key 预留', '待接入 Model Gateway'];
-}
-
 function getCapabilityClassName(label: string): string {
   if (label === 'Model Gateway') {
     return 'model-badge model-badge-gateway';
@@ -197,40 +161,44 @@ function getCapabilityClassName(label: string): string {
   return 'model-badge model-badge-green';
 }
 
-function getKeySourceLabel(option: ProviderOption, configured: boolean): string {
-  if (option.id === 'mock') {
+function getKeySourceLabel(status: ModelProviderStatusView): string {
+  if (status.providerId === 'mock') {
     return '不需要 Key';
   }
 
-  if (option.id === 'groq') {
-    return configured ? 'sessionStorage BYOK' : '服务端 GROQ_API_KEY / BYOK';
+  if (status.isReserved) {
+    return '预留';
   }
 
-  if (option.id === 'ollama') {
-    return configured ? '本地会话配置' : '本地模型预留';
+  if (status.keySource === 'server_env_and_byok') {
+    return '服务端 + 页面 BYOK';
   }
 
-  if (option.type === 'oauth') {
-    return 'OAuth 预留';
+  if (status.keySource === 'server_env') {
+    return '服务端环境变量';
   }
 
-  return configured ? 'sessionStorage 配置' : 'API Key 预留';
+  if (status.keySource === 'byok') {
+    return status.providerId === 'groq' ? 'sessionStorage BYOK' : 'sessionStorage 配置';
+  }
+
+  return status.providerId === 'groq' ? '服务端 GROQ_API_KEY / BYOK' : '未配置';
 }
 
-function getStreamingLabel(option: ProviderOption): string {
-  if (option.id === 'mock' || option.id === 'groq') {
+function getStreamingLabel(status: ModelProviderStatusView): string {
+  if (status.supportsStreaming) {
     return '支持 streaming';
   }
 
   return '待接入 streaming';
 }
 
-function getGatewayLabel(option: ProviderOption): string {
-  if (option.id === 'groq') {
+function getGatewayLabel(status: ModelProviderStatusView): string {
+  if (status.isGatewayConnected) {
     return '已接入 Model Gateway';
   }
 
-  if (option.id === 'mock') {
+  if (status.providerId === 'mock') {
     return '本地模拟，不走 Gateway';
   }
 
@@ -250,6 +218,8 @@ export function ModelConnectModal() {
 
   const [draftConfigs, setDraftConfigs] = useState<ModelProviderConfigMap>(modelConfigs);
   const [expandedProviderIds, setExpandedProviderIds] = useState<ModelProviderId[]>(['groq']);
+  const [health, setHealth] = useState<HealthCheckResponse | null>(null);
+  const [hasHealthFailed, setHasHealthFailed] = useState(false);
 
   useEffect(() => {
     if (isModelModalOpen) {
@@ -257,6 +227,58 @@ export function ModelConnectModal() {
       setExpandedProviderIds(['groq']);
     }
   }, [isModelModalOpen, modelConfigs]);
+
+  useEffect(() => {
+    if (!isModelModalOpen) {
+      return;
+    }
+
+    let isMounted = true;
+    setHasHealthFailed(false);
+
+    void requestHealthCheck()
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setHealth(response);
+        setHasHealthFailed(false);
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+
+        setHasHealthFailed(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isModelModalOpen]);
+
+  const providerStatusViews = useMemo(
+    () =>
+      buildModelProviderStatusViews({
+        currentModelProvider,
+        modelConfigs,
+        health,
+      }),
+    [currentModelProvider, health, modelConfigs],
+  );
+
+  const providerStatusMap = useMemo(
+    () =>
+      providerStatusViews.reduce<Record<ModelProviderId, ModelProviderStatusView>>(
+        (map, status) => ({
+          ...map,
+          [status.providerId]: status,
+        }),
+        {} as Record<ModelProviderId, ModelProviderStatusView>,
+      ),
+    [providerStatusViews],
+  );
 
   if (!isModelModalOpen) {
     return null;
@@ -272,23 +294,8 @@ export function ModelConnectModal() {
     }));
   };
 
-  const isProviderConfigured = (providerId: ModelProviderId) => {
-    const config = modelConfigs[providerId];
-
-    if (providerId === 'mock') {
-      return true;
-    }
-
-    if (providerId === 'codex-oauth') {
-      return false;
-    }
-
-    if (providerId === 'ollama') {
-      return Boolean(config?.baseUrl?.trim() && config?.modelName?.trim());
-    }
-
-    return Boolean(config?.apiKey?.trim());
-  };
+  const getProviderStatusView = (providerId: ModelProviderId): ModelProviderStatusView =>
+    providerStatusMap[providerId];
 
   const getProvidersByTab = (tabId: ModelTabId): ProviderOption[] => {
     if (tabId === 'all') {
@@ -296,14 +303,17 @@ export function ModelConnectModal() {
     }
 
     if (tabId === 'configured') {
-      return PROVIDER_OPTIONS.filter((option) => isProviderConfigured(option.id));
+      return PROVIDER_OPTIONS.filter((option) => getProviderStatusView(option.id).isConfigured);
     }
 
     if (tabId === 'usable') {
-      return PROVIDER_OPTIONS.filter((option) => option.id === 'mock' || option.id === 'groq');
+      return PROVIDER_OPTIONS.filter((option) => {
+        const status = getProviderStatusView(option.id);
+        return !status.isReserved;
+      });
     }
 
-    return PROVIDER_OPTIONS.filter((option) => isReservedProvider(option.id));
+    return PROVIDER_OPTIONS.filter((option) => getProviderStatusView(option.id).isReserved);
   };
 
   const handleSaveConfig = (providerId: ModelProviderId) => {
@@ -423,56 +433,44 @@ export function ModelConnectModal() {
     );
   };
 
-  const canActivateProvider = (option: ProviderOption): boolean => {
-    if (option.id === 'mock') {
+  const canActivateProvider = (status: ModelProviderStatusView): boolean => {
+    if (status.providerId === 'mock') {
       return true;
     }
 
-    if (option.id === 'groq') {
-      return isProviderConfigured(option.id);
+    if (status.isReserved) {
+      return false;
     }
 
-    return false;
+    return status.isAvailable;
   };
 
-  const getProviderStatusText = (option: ProviderOption): string => {
-    if (isReservedProvider(option.id)) {
-      return '预留';
-    }
-
-    if (option.id === 'mock') {
-      return '可启用';
-    }
-
-    return isProviderConfigured(option.id) ? '已配置' : '未配置';
-  };
-
-  const getProviderStatusClassName = (option: ProviderOption): string => {
-    if (isReservedProvider(option.id)) {
+  const getProviderStatusClassName = (status: ModelProviderStatusView): string => {
+    if (status.badgeTone === 'muted' || status.availability === 'reserved') {
       return 'model-badge model-badge-muted';
     }
 
-    if (option.id === 'groq' && isProviderConfigured(option.id)) {
+    if (status.badgeTone === 'success') {
       return 'model-badge model-badge-green';
     }
 
-    if (option.id === 'mock') {
+    if (status.providerId === 'mock') {
       return 'model-badge model-badge-blue';
     }
 
     return 'model-badge model-badge-muted';
   };
 
-  const getProviderActionText = (option: ProviderOption): string => {
-    if (currentModelProvider === option.id) {
+  const getProviderActionText = (status: ModelProviderStatusView): string => {
+    if (status.isActive) {
       return '使用中';
     }
 
-    if (isReservedProvider(option.id)) {
+    if (status.isReserved) {
       return '先配置';
     }
 
-    return canActivateProvider(option) ? '启用' : '先配置';
+    return canActivateProvider(status) ? '启用' : '先配置';
   };
 
   return (
@@ -507,6 +505,7 @@ export function ModelConnectModal() {
               <p>当前线上 Demo 默认使用 Mock 模式，避免公开演示产生 API 成本。</p>
               <p>Groq 支持 BYOK，用户输入的 Key 仅保存在当前浏览器会话中，不会写入 URL 或代码仓库。</p>
               <p>服务端可通过 GROQ_API_KEY 配置默认模型 Key；真实调用仍由服务端转发。</p>
+              {hasHealthFailed ? <p>服务端状态检查失败，当前仍可使用页面 BYOK 或公开演示模式。</p> : null}
             </CardContent>
           </Card>
 
@@ -536,13 +535,13 @@ export function ModelConnectModal() {
                     {providers.length > 0 ? (
                       <div className="model-provider-list">
                         {providers.map((option) => {
-                          const isActiveProvider = option.id === currentModelProvider;
+                          const providerStatus = getProviderStatusView(option.id);
+                          const isActiveProvider = providerStatus.isActive;
                           const isExpanded = expandedProviderIds.includes(option.id);
                           const testStatus: ModelTestStatus = modelTestStatusMap[option.id] ?? 'idle';
                           const isTesting = testStatus === 'testing';
-                          const canActivate = canActivateProvider(option);
-                          const isConfigured = isProviderConfigured(option.id);
-                          const capabilities = getCapabilityLabels(option);
+                          const canActivate = canActivateProvider(providerStatus);
+                          const capabilities = providerStatus.capabilityLabels;
 
                           return (
                             <Card
@@ -553,23 +552,23 @@ export function ModelConnectModal() {
                               <CardHeader className="model-provider-card-header">
                                 <div className="model-provider-main">
                                   <div className="model-provider-icon">
-                                    <ModelProviderLogo providerId={option.id} alt={option.name} />
+                                    <ModelProviderLogo providerId={option.id} alt={providerStatus.displayName} />
                                   </div>
 
                                   <div className="model-provider-content">
                                     <div className="model-provider-title-row">
-                                      <CardTitle className="model-provider-title">{option.name}</CardTitle>
+                                      <CardTitle className="model-provider-title">{providerStatus.displayName}</CardTitle>
                                       {isActiveProvider ? (
                                         <Badge variant="outline" className="model-badge model-badge-active">
                                           当前启用
                                         </Badge>
                                       ) : null}
-                                      <Badge variant="outline" className={getProviderStatusClassName(option)}>
-                                        {getProviderStatusText(option)}
+                                      <Badge variant="outline" className={getProviderStatusClassName(providerStatus)}>
+                                        {providerStatus.statusLabel}
                                       </Badge>
                                     </div>
                                     <CardDescription className="model-provider-description">
-                                      {option.description}
+                                      {providerStatus.description}
                                     </CardDescription>
                                   </div>
 
@@ -581,7 +580,7 @@ export function ModelConnectModal() {
                                       disabled={isActiveProvider || !canActivate}
                                       onClick={() => setCurrentModelProvider(option.id)}
                                     >
-                                      {getProviderActionText(option)}
+                                      {getProviderActionText(providerStatus)}
                                     </Button>
                                     {option.type !== 'mock' ? (
                                       <Button
@@ -614,17 +613,18 @@ export function ModelConnectModal() {
                                 <div className="model-provider-meta">
                                   <div className="model-provider-meta-item">
                                     <span>Key 来源</span>
-                                    <strong>{getKeySourceLabel(option, isConfigured)}</strong>
+                                    <strong>{getKeySourceLabel(providerStatus)}</strong>
                                   </div>
                                   <div className="model-provider-meta-item">
                                     <span>Streaming</span>
-                                    <strong>{getStreamingLabel(option)}</strong>
+                                    <strong>{getStreamingLabel(providerStatus)}</strong>
                                   </div>
                                   <div className="model-provider-meta-item">
                                     <span>Gateway</span>
-                                    <strong>{getGatewayLabel(option)}</strong>
+                                    <strong>{getGatewayLabel(providerStatus)}</strong>
                                   </div>
                                 </div>
+                                <p className="model-config-help model-config-help-standalone">{providerStatus.statusDescription}</p>
 
                                 {isExpanded && option.type === 'api-key' ? (
                                   <div className="model-config-panel">

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useWorkbenchStore } from '@/stores/workbenchStore';
 import { requestHealthCheck } from '../../services/healthApi';
 import type { HealthCheckResponse, HealthServiceStatus } from '../../types/health';
+import type { ModelProviderStatusView } from '@/types/modelStatus';
+import { getModelProviderStatusView } from '@/utils/modelProviderStatus';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
@@ -24,62 +27,101 @@ function getServiceText(service: HealthServiceStatus): string {
   return '未配置';
 }
 
-function isRealAgentReady(health: HealthCheckResponse): boolean {
-  return (
-    health.services.groq.configured &&
-    health.services.supabase.status === 'connected' &&
-    health.services.postgres.status === 'connected'
-  );
-}
-
-function getHealthUiState(health: HealthCheckResponse | null): HealthUiState {
-  if (!health) {
+function getHealthUiState(params: {
+  hasFailed: boolean;
+  activeStatus: ModelProviderStatusView;
+}): HealthUiState {
+  if (params.hasFailed) {
     return 'demo';
   }
 
-  return isRealAgentReady(health) ? 'ready' : 'demo';
+  if (params.activeStatus.providerId === 'mock') {
+    return 'demo';
+  }
+
+  if (params.activeStatus.providerId === 'groq' && params.activeStatus.isAvailable) {
+    return 'ready';
+  }
+
+  return 'demo';
 }
 
 function getBadgeText(state: HealthUiState): string {
   return state === 'ready' ? '真实 Agent 已就绪' : '公开演示可用';
 }
 
-function getSummaryText(health: HealthCheckResponse | null, failed: boolean, state: HealthUiState): string {
-  if (state === 'ready') {
-    return '模型服务和数据源连接正常，可体验真实 Agent Run。';
-  }
-
-  if (failed) {
+function getSummaryText(params: {
+  hasFailed: boolean;
+  uiState: HealthUiState;
+  activeStatus: ModelProviderStatusView;
+  groqStatus: ModelProviderStatusView;
+  health: HealthCheckResponse | null;
+}): string {
+  if (params.hasFailed) {
     return '环境状态检查失败，但公开演示模式不受影响。';
   }
 
-  if (!health) {
-    return '当前可使用公开演示模式完整体验 Agent 工作台流程。正在检查真实 Agent 环境。';
+  if (params.uiState === 'ready') {
+    return '当前模型可用，可体验真实 Agent Run。';
   }
 
-  const hasServiceError = health.services.supabase.status === 'error' || health.services.postgres.status === 'error';
-  const hasAllMissingConfig =
-    !health.services.groq.configured &&
-    health.services.supabase.status === 'not_configured' &&
-    health.services.postgres.status === 'not_configured';
-
-  if (hasAllMissingConfig) {
-    return '当前可使用公开演示模式完整体验 Agent 工作台流程。真实 Agent 需要服务端配置模型和数据源环境变量。';
+  if (params.activeStatus.providerId === 'mock') {
+    return '当前处于公开演示模式，可完整体验 Agent 工作台流程。';
   }
 
-  if (hasServiceError) {
-    return '部分真实服务未配置或连接异常，当前仍可使用公开演示模式。';
+  if (params.activeStatus.providerId === 'groq') {
+    if (params.groqStatus.isAvailable) {
+      return params.groqStatus.statusDescription;
+    }
+
+    return 'Groq 未配置，可使用页面 BYOK 或切换公开演示模式。';
   }
 
-  return '部分真实服务未配置，当前仍可使用公开演示模式。';
+  if (!params.health) {
+    return '正在检查真实 Agent 环境，当前可使用公开演示模式。';
+  }
+
+  return '当前模型入口为预留状态，建议切换到公开演示模式或已配置的模型。';
 }
 
 export function EnvironmentStatus() {
+  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [hasFailed, setHasFailed] = useState(false);
-  const uiState = useMemo(() => getHealthUiState(health), [health]);
   const isLoadingHealth = !health && !hasFailed;
-  const groqMessageFallback = hasFailed ? '环境检查失败，暂未获取模型配置状态。' : '正在读取服务端模型配置状态。';
+
+  const groqStatus = useMemo(
+    () =>
+      getModelProviderStatusView({
+        providerId: 'groq',
+        currentModelProvider,
+        modelConfigs,
+        health,
+      }),
+    [currentModelProvider, health, modelConfigs],
+  );
+
+  const activeProviderStatus = useMemo(
+    () =>
+      getModelProviderStatusView({
+        providerId: currentModelProvider,
+        currentModelProvider,
+        modelConfigs,
+        health,
+      }),
+    [currentModelProvider, health, modelConfigs],
+  );
+
+  const uiState = useMemo(
+    () =>
+      getHealthUiState({
+        hasFailed,
+        activeStatus: activeProviderStatus,
+      }),
+    [activeProviderStatus, hasFailed],
+  );
+
   const supabaseMessageFallback = hasFailed ? '环境检查失败，暂未获取 Supabase 状态。' : '正在检查 Supabase 数据源。';
   const postgresMessageFallback = hasFailed ? '环境检查失败，暂未获取 PostgreSQL 状态。' : '正在检查 PostgreSQL 数据源。';
 
@@ -124,7 +166,17 @@ export function EnvironmentStatus() {
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end" sideOffset={8} className="environment-status-detail">
-          <div className="environment-status-detail-title">{getSummaryText(health, hasFailed, uiState)}</div>
+          <div
+            className="environment-status-detail-title"
+          >
+            {getSummaryText({
+              hasFailed,
+              uiState,
+              activeStatus: activeProviderStatus,
+              groqStatus,
+              health,
+            })}
+          </div>
           {isLoadingHealth ? (
             <div className="environment-status-skeleton-list">
               <Skeleton className="environment-status-skeleton" />
@@ -146,14 +198,19 @@ export function EnvironmentStatus() {
                 </Badge>
               </div>
               <div className="environment-status-row">
-                <span>Groq</span>
+                <span>当前模型</span>
                 <Badge variant="outline" className="environment-status-value">
-                  {health ? getServiceText(health.services.groq) : '-'}
+                  {activeProviderStatus.displayName}
                 </Badge>
               </div>
-              <div className="environment-status-message">
-                {health?.services.groq.message ?? groqMessageFallback}
+              <div className="environment-status-message">{activeProviderStatus.statusDescription}</div>
+              <div className="environment-status-row">
+                <span>Groq</span>
+                <Badge variant="outline" className="environment-status-value">
+                  {groqStatus.statusLabel}
+                </Badge>
               </div>
+              <div className="environment-status-message">{groqStatus.statusDescription}</div>
               <div className="environment-status-row">
                 <span>Supabase</span>
                 <Badge variant="outline" className="environment-status-value">

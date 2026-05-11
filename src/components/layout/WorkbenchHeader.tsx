@@ -1,7 +1,8 @@
 import { Fragment } from 'react';
 import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { GenerationStatus, ModelProvider, RunSnapshot } from '../../types/workbench';
+import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
+import { getModelProviderStatusView } from '../../utils/modelProviderStatus';
 import {
   formatRunElapsed,
   getRunModeLabel,
@@ -58,34 +59,6 @@ function getGenerationStatusTone(status: GenerationStatus): RunStatusTone {
   return 'muted';
 }
 
-function getModelProviderLabel(provider: ModelProvider): string {
-  if (provider === 'mock') {
-    return '公开演示模式（Mock）';
-  }
-
-  if (provider === 'groq') {
-    return 'Groq 免费 API';
-  }
-
-  if (provider === 'gemini') {
-    return 'Gemini API';
-  }
-
-  if (provider === 'openrouter') {
-    return 'OpenRouter Free';
-  }
-
-  if (provider === 'openai-api-key') {
-    return 'OpenAI API Key';
-  }
-
-  if (provider === 'codex-oauth') {
-    return 'OpenAI / Codex OAuth';
-  }
-
-  return '本地 Ollama';
-}
-
 function getRunSummaryItems(currentRun: RunSnapshot | null): string[] {
   if (!currentRun) {
     return ['尚未开始 Run'];
@@ -110,6 +83,7 @@ export function WorkbenchHeader() {
   const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
+  const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const openModelModal = useWorkbenchStore((state) => state.openModelModal);
   const openDataSourceModal = useWorkbenchStore((state) => state.openDataSourceModal);
@@ -118,7 +92,13 @@ export function WorkbenchHeader() {
   const currentTask = mockTasks.find((task) => task.id === currentTaskId);
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const headerTitle = currentSession?.title || currentTask?.title || DEFAULT_HEADER_TITLE;
-  const modelLabel = getModelProviderLabel(currentModelProvider);
+  const currentModelStatus = getModelProviderStatusView({
+    providerId: currentModelProvider,
+    currentModelProvider,
+    modelConfigs,
+    health: null,
+  });
+  const modelLabel = currentModelStatus.displayName;
   const statusLabel = currentRun ? getRunStatusLabel(currentRun.status) : getGenerationLabel(generationStatus);
   const statusTone = currentRun ? getRunStatusTone(currentRun.status) : getGenerationStatusTone(generationStatus);
   const runSummaryItems = getRunSummaryItems(currentRun);
@@ -127,7 +107,7 @@ export function WorkbenchHeader() {
       ? '公开演示模式（Mock）'
       : getRunModeLabel(currentRun.mode)
     : modelLabel;
-  const shouldShowPublicDemoHint = currentModelProvider === 'mock';
+  const shouldShowPublicDemoHint = currentModelStatus.providerId === 'mock';
 
   return (
     <header className="workspace-header workbench-header">
