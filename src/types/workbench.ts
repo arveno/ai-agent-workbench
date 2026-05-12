@@ -431,9 +431,25 @@ export interface UiSlice {
 export interface RunSlice {
   currentRun: RunSnapshot | null;
   runEventLog: RunEvent[];
+  isLatestRunLoading: boolean;
+  latestRunError: string | null;
+  isRunEventsLoading: boolean;
+  runEventsError: string | null;
+  isReportArtifactsLoading: boolean;
+  reportArtifactsError: string | null;
   setCurrentRun: (run: RunSnapshot | null) => void;
   clearCurrentRun: () => void;
   applyRunEvent: (event: RunEvent) => void;
+  loadLatestRunForConversation: (conversationId: string) => Promise<void>;
+  loadRunEvents: (runId: string) => Promise<void>;
+  loadToolInvocations: (runId: string) => Promise<void>;
+  loadReportArtifacts: (conversationId: string) => Promise<void>;
+  saveReportArtifact: (params: {
+    conversationId: string;
+    runId: string;
+    title: string;
+    contentMarkdown: string;
+  }) => Promise<void>;
 }
 
 export interface DemoTemplateSlice {

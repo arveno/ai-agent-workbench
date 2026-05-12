@@ -1,9 +1,13 @@
 import type { User } from '@supabase/supabase-js';
 import type {
+  AgentRunRecord,
   ConversationRecord,
   DemoConversationTemplateRecord,
   DemoTaskTemplateRecord,
   MessageRecord,
+  ReportArtifactRecord,
+  RunEventRecord,
+  ToolInvocationRecord,
 } from '../../types/persistence';
 
 export type UserRole = 'anonymous' | 'demo_user' | 'admin';
@@ -81,6 +85,14 @@ export interface DemoTaskTemplateRow extends DemoTaskTemplateRecord, Record<stri
 
 export interface DemoConversationTemplateRow extends DemoConversationTemplateRecord, Record<string, unknown> {}
 
+export interface AgentRunRow extends AgentRunRecord, Record<string, unknown> {}
+
+export interface RunEventRow extends RunEventRecord, Record<string, unknown> {}
+
+export interface ToolInvocationRow extends ToolInvocationRecord, Record<string, unknown> {}
+
+export interface ReportArtifactRow extends ReportArtifactRecord, Record<string, unknown> {}
+
 export interface ServerAuthDatabase {
   public: {
     Tables: {
@@ -124,6 +136,30 @@ export interface ServerAuthDatabase {
         Row: DemoConversationTemplateRow;
         Insert: Partial<DemoConversationTemplateRow> & Pick<DemoConversationTemplateRow, 'title' | 'category'>;
         Update: Partial<DemoConversationTemplateRow>;
+        Relationships: [];
+      };
+      agent_runs: {
+        Row: AgentRunRow;
+        Insert: Partial<AgentRunRow> & Pick<AgentRunRow, 'conversation_id' | 'user_id'>;
+        Update: Partial<AgentRunRow>;
+        Relationships: [];
+      };
+      run_events: {
+        Row: RunEventRow;
+        Insert: Partial<RunEventRow> & Pick<RunEventRow, 'run_id' | 'conversation_id' | 'user_id' | 'seq' | 'event_type'>;
+        Update: Partial<RunEventRow>;
+        Relationships: [];
+      };
+      tool_invocations: {
+        Row: ToolInvocationRow;
+        Insert: Partial<ToolInvocationRow> & Pick<ToolInvocationRow, 'run_id' | 'conversation_id' | 'user_id' | 'tool_name' | 'display_name'>;
+        Update: Partial<ToolInvocationRow>;
+        Relationships: [];
+      };
+      report_artifacts: {
+        Row: ReportArtifactRow;
+        Insert: Partial<ReportArtifactRow> & Pick<ReportArtifactRow, 'conversation_id' | 'user_id' | 'title' | 'content_markdown'>;
+        Update: Partial<ReportArtifactRow>;
         Relationships: [];
       };
     };

@@ -129,6 +129,108 @@ export interface DemoConversationCopyResult {
   messages: MessageRecord[];
 }
 
+export type AgentRunRecordMode = 'mock' | 'agent';
+export type AgentRunRecordStatus = 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+
+export interface AgentRunRecord {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  usage_id: string | null;
+  runtime_run_id: string | null;
+  mode: AgentRunRecordMode;
+  status: AgentRunRecordStatus;
+  intent: string | null;
+  prompt: string | null;
+  plan: JsonObject;
+  data_source_snapshot: JsonObject;
+  chart_data: JsonObject;
+  conclusion: string | null;
+  conclusion_source: string | null;
+  report_state: string | null;
+  started_at: string;
+  completed_at: string | null;
+  elapsed_ms: number | null;
+  error_message: string | null;
+  metadata: JsonObject;
+}
+
+export interface RunEventRecord {
+  id: string;
+  run_id: string;
+  conversation_id: string;
+  user_id: string;
+  seq: number;
+  event_type: string;
+  payload: JsonObject;
+  created_at: string;
+}
+
+export type ToolInvocationRecordStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+
+export interface ToolInvocationRecord {
+  id: string;
+  run_id: string;
+  conversation_id: string;
+  user_id: string;
+  tool_name: string;
+  display_name: string;
+  status: ToolInvocationRecordStatus;
+  input: JsonObject;
+  input_summary: string | null;
+  output: JsonObject;
+  output_summary: string | null;
+  started_at: string;
+  finished_at: string | null;
+  elapsed_ms: number | null;
+  error: string | null;
+  metadata: JsonObject;
+}
+
+export type ReportArtifactStatus = 'draft' | 'generated' | 'archived';
+
+export interface ReportArtifactRecord {
+  id: string;
+  conversation_id: string;
+  run_id: string | null;
+  user_id: string;
+  title: string;
+  content_markdown: string;
+  status: ReportArtifactStatus;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  metadata: JsonObject;
+}
+
+export interface LatestRunResult {
+  run: AgentRunRecord | null;
+}
+
+export interface RunEventListResult {
+  events: RunEventRecord[];
+}
+
+export interface ToolInvocationListResult {
+  tools: ToolInvocationRecord[];
+}
+
+export interface ReportArtifactListResult {
+  reports: ReportArtifactRecord[];
+}
+
+export interface ReportArtifactCreateInput {
+  conversationId: string;
+  title: string;
+  contentMarkdown: string;
+  runtimeRunId?: string | null;
+  metadata?: JsonObject;
+}
+
+export interface ReportArtifactCreateResult {
+  report: ReportArtifactRecord;
+}
+
 export type WorkbenchPersistenceErrorCode =
   | 'auth_required'
   | 'auth_unavailable'

@@ -503,6 +503,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       lastRestoredConversationId: activeSession?.id ?? null,
       ...createSessionUiState(activeSession, state.currentTaskId),
     }));
+
+    if (activeSession?.id) {
+      void get().loadLatestRunForConversation(activeSession.id);
+      void get().loadReportArtifacts(activeSession.id);
+    }
   },
   resetPersistentWorkbench: () => {
     if (!get().isPersistentMode && !get().persistentUserId) {
@@ -585,6 +590,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         ...(shouldRestoreUi ? createSessionUiState(activeSession, state.currentTaskId) : {}),
       };
     });
+
+    if (get().currentSessionId === sessionId) {
+      void get().loadLatestRunForConversation(sessionId);
+      void get().loadReportArtifacts(sessionId);
+    }
   },
   ensureCurrentPersistentConversation: async () => {
     const authContext = getPersistenceAuthContext();

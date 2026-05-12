@@ -9,10 +9,21 @@ import type { AgentAccessStatus, AgentAccessView, AgentRunUsageFinalStatus } fro
 import { verifySupabaseAccessToken } from '../../../src/server/auth/verifySupabaseToken';
 import { streamAgentRun } from '../../../src/server/agent/streamAgentRun';
 import type { AgentRunRequest } from '../../../src/server/agent/types';
+import {
+  appendRunEventRecord,
+  completeAgentRunRecord,
+  conversationBelongsToUser,
+  createAgentRunRecord,
+  failAgentRunRecord,
+  persistRunEventSideEffects,
+  stopAgentRunRecord,
+  type PersistedAgentRunContext,
+} from '../../../src/server/workbench/runPersistence';
 import type { RunEvent } from '../../../src/types/run';
 
 type AgentRunStreamRequest = Partial<AgentRunRequest> & {
   clientRunId?: unknown;
+  conversationId?: unknown;
 };
 
 type AgentRunStreamErrorCode =
@@ -176,6 +187,32 @@ function getSafeAccessReason(access: AgentAccessView): string {
   return '请先登录后使用真实 Agent。';
 }
 
+function getSafePersistenceErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim().slice(0, 160);
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim().slice(0, 160);
+  }
+
+  return 'unknown persistence error';
+}
+
+function logSafePersistenceWarning(params: {
+  operation: string;
+  runtimeRunId: string;
+  eventType?: string;
+  error: unknown;
+}): void {
+  console.warn('[agent-run-persistence]', {
+    operation: params.operation,
+    runtimeRunId: params.runtimeRunId,
+    eventType: params.eventType,
+    errorMessage: getSafePersistenceErrorMessage(params.error),
+  });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     writeJsonError(res, 405, 'method_not_allowed', 'Method not allowed');
@@ -197,6 +234,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (body.modelProvider && body.modelProvider !== 'groq') {
     writeJsonError(res, 400, 'invalid_request', 'Invalid modelProvider. Expected groq.');
+    return;
+  }
+
+  const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
+
+  if (!conversationId) {
+    writeJsonError(res, 400, 'invalid_request', 'Missing conversationId');
     return;
   }
 
@@ -238,6 +282,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const hasConversationAccess = await conversationBelongsToUser({
+    conversationId,
+    userId: verified.user.userId,
+  });
+
+  if (!hasConversationAccess) {
+    writeJsonError(res, 400, 'invalid_request', '未找到当前用户的 Workbench 会话。');
+    return;
+  }
+
   const quota = await consumeAgentRunQuota({
     userId: verified.user.userId,
     runId,
@@ -258,10 +312,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const persistedRun: PersistedAgentRunContext | null = await createAgentRunRecord({
+    conversationId,
+    userId: verified.user.userId,
+    usageId: quota.usageId,
+    runtimeRunId: runId,
+    prompt,
+    provider: body.provider,
+  });
+
   let usageFinalStatus: AgentRunUsageFinalStatus = 'completed';
   let usageErrorCode: string | null = null;
   let streamFinished = false;
   let clientDisconnected = false;
+  let eventSeq = 0;
 
   res.on('close', () => {
     if (!streamFinished) {
@@ -280,6 +344,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       provider: body.provider,
       clientRunId: runId,
       emit: (event) => {
+        if (persistedRun) {
+          const seq = eventSeq;
+          eventSeq += 1;
+          void appendRunEventRecord({
+            run: persistedRun,
+            seq,
+            event,
+          }).catch((error) => {
+            logSafePersistenceWarning({
+              operation: 'appendRunEventRecord',
+              runtimeRunId: persistedRun.runtimeRunId,
+              eventType: event.type,
+              error,
+            });
+          });
+          void persistRunEventSideEffects({
+            run: persistedRun,
+            event,
+          }).catch((error) => {
+            logSafePersistenceWarning({
+              operation: 'persistRunEventSideEffects',
+              runtimeRunId: persistedRun.runtimeRunId,
+              eventType: event.type,
+              error,
+            });
+          });
+        }
+
         if (event.type === 'run_failed') {
           usageFinalStatus = 'failed';
           usageErrorCode = 'agent_run_failed';
@@ -295,23 +387,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch {
     usageFinalStatus = 'failed';
     usageErrorCode = 'agent_stream_failed';
-    writeRunEvent(res, {
+    const failedEvent: RunEvent = {
       type: 'run_failed',
       runId,
       errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
-    });
+    };
+
+    if (persistedRun) {
+      const seq = eventSeq;
+      eventSeq += 1;
+      void appendRunEventRecord({
+        run: persistedRun,
+        seq,
+        event: failedEvent,
+      }).catch((error) => {
+        logSafePersistenceWarning({
+          operation: 'appendRunEventRecord',
+          runtimeRunId: persistedRun.runtimeRunId,
+          eventType: failedEvent.type,
+          error,
+        });
+      });
+      void failAgentRunRecord({
+        run: persistedRun,
+        errorMessage: failedEvent.errorMessage,
+      }).catch((error) => {
+        logSafePersistenceWarning({
+          operation: 'failAgentRunRecord',
+          runtimeRunId: persistedRun.runtimeRunId,
+          eventType: failedEvent.type,
+          error,
+        });
+      });
+    }
+
+    writeRunEvent(res, failedEvent);
   } finally {
     streamFinished = true;
+    const finalStatus = clientDisconnected && usageFinalStatus === 'completed' ? 'stopped' : usageFinalStatus;
 
     await finishAgentRunUsage({
       usageId: quota.usageId,
-      status: clientDisconnected && usageFinalStatus === 'completed' ? 'stopped' : usageFinalStatus,
+      status: finalStatus,
       errorCode: clientDisconnected && usageFinalStatus === 'completed' ? null : usageErrorCode,
       metadata: {
         endpoint: '/api/agent/run/stream',
         provider: body.provider,
       },
     });
+
+    if (persistedRun) {
+      if (finalStatus === 'completed') {
+        await completeAgentRunRecord({
+          run: persistedRun,
+        });
+      } else if (finalStatus === 'failed') {
+        await failAgentRunRecord({
+          run: persistedRun,
+          errorMessage: usageErrorCode ?? 'agent_run_failed',
+        });
+      } else {
+        await stopAgentRunRecord({
+          run: persistedRun,
+        });
+      }
+    }
 
     res.end();
   }

@@ -4,6 +4,7 @@ import { getStepStatusLabel } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons, type IconKey } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
 function getStepClass(status: RunStepStatus): string {
@@ -44,6 +45,10 @@ function getStepIcon(status: RunStepStatus): IconKey {
 
 export function AgentStepsCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
+  const isRunEventsLoading = useWorkbenchStore((state) => state.isRunEventsLoading);
+  const runEventsError = useWorkbenchStore((state) => state.runEventsError);
+  const loadLatestRunForConversation = useWorkbenchStore((state) => state.loadLatestRunForConversation);
+  const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const displayedSteps = currentRun?.steps ?? [];
 
   return (
@@ -56,7 +61,29 @@ export function AgentStepsCard() {
         <CardDescription>本轮 Run 的步骤状态</CardDescription>
       </CardHeader>
       <CardContent className="right-card-content">
-        {!currentRun || displayedSteps.length === 0 ? (
+        {isRunEventsLoading ? (
+          <div className="right-panel-empty-state">
+            <strong>正在恢复执行时间线</strong>
+            正在读取 Run Events 和工具调用。
+          </div>
+        ) : runEventsError ? (
+          <div className="right-panel-empty-state">
+            <strong>执行时间线恢复失败</strong>
+            {runEventsError}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (currentSessionId) {
+                  void loadLatestRunForConversation(currentSessionId);
+                }
+              }}
+            >
+              重试
+            </Button>
+          </div>
+        ) : !currentRun || displayedSteps.length === 0 ? (
           <div className="right-panel-empty-state">
             <strong>暂无执行步骤</strong>
             发送问题后，这里会展示本轮 Run 的执行时间线。

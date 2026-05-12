@@ -502,6 +502,12 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
+    let reportMessageToPersist: WorkbenchMessage | null = null;
+    let reportContentToPersist = '';
+    let reportConversationId = '';
+    let shouldPersistReportArtifact = false;
+    const reportTitle = '教学质量分析简版报告';
+
     set((state) => {
       const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
       const run = activeSession?.runsById[normalizedRunId];
@@ -512,14 +518,18 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
 
       const nextRun = updateRunReportState(run, 'generated');
       const hasExistingReport = hasReportMessageForRun(activeSession.messages, normalizedRunId);
+      reportContentToPersist = createRunReportMarkdown(run);
+      reportConversationId = activeSession.id;
+      shouldPersistReportArtifact = run.mode === 'agent';
       const reportMessage = hasExistingReport
         ? null
         : createWorkbenchMessage({
             role: 'assistant',
             kind: 'report',
-            content: createRunReportMarkdown(run),
+            content: reportContentToPersist,
             runId: normalizedRunId,
           });
+      reportMessageToPersist = reportMessage;
       const nextMessages = reportMessage
         ? insertReportMessageAfterRunAssistant(activeSession.messages, reportMessage, normalizedRunId)
         : activeSession.messages;
@@ -550,6 +560,21 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         reportActionState: 'generated',
       };
     });
+
+    if (get().isPersistentMode && reportConversationId && reportContentToPersist) {
+      if (reportMessageToPersist) {
+        void get().persistMessageToConversation(reportConversationId, reportMessageToPersist);
+      }
+
+      if (shouldPersistReportArtifact) {
+        void get().saveReportArtifact({
+          conversationId: reportConversationId,
+          runId: normalizedRunId,
+          title: reportTitle,
+          contentMarkdown: reportContentToPersist,
+        });
+      }
+    }
   },
   skipReportForRun: (runId) => {
     const normalizedRunId = runId.trim();

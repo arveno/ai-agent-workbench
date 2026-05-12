@@ -17,9 +17,12 @@ export function ChatPanel() {
   const isMessagesLoading = useWorkbenchStore((state) => state.isMessagesLoading);
   const messagesError = useWorkbenchStore((state) => state.messagesError);
   const isPersistentMode = useWorkbenchStore((state) => state.isPersistentMode);
+  const isReportArtifactsLoading = useWorkbenchStore((state) => state.isReportArtifactsLoading);
+  const reportArtifactsError = useWorkbenchStore((state) => state.reportArtifactsError);
   const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const loadPersistentMessagesForSession = useWorkbenchStore((state) => state.loadPersistentMessagesForSession);
+  const loadReportArtifacts = useWorkbenchStore((state) => state.loadReportArtifacts);
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === currentSessionId) ?? null,
     [sessions, currentSessionId],
@@ -130,6 +133,8 @@ export function ChatPanel() {
 
         {timelineView.isLoading ? <div className="real-model-notice">{timelineView.loadingMessage}</div> : null}
 
+        {isReportArtifactsLoading ? <div className="real-model-notice">正在恢复报告 Artifact...</div> : null}
+
         {timelineView.isEmpty ? (
           <div className="chat-empty-state">
             <strong>{timelineView.emptyTitle}</strong>
@@ -154,6 +159,28 @@ export function ChatPanel() {
                 }}
               >
                 {timelineView.retryLabel}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {reportArtifactsError ? (
+          <div className="error-card">
+            <div className="error-card-copy">
+              <h3>报告恢复失败</h3>
+              <p>{reportArtifactsError}</p>
+            </div>
+            {currentSession ? (
+              <Button
+                type="button"
+                className="error-retry-btn"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void loadReportArtifacts(currentSession.id);
+                }}
+              >
+                重试
               </Button>
             ) : null}
           </div>

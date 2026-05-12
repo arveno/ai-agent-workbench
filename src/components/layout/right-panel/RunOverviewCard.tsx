@@ -11,6 +11,7 @@ import {
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
 function getRunStatusBadgeClass(tone: ReturnType<typeof getRunStatusTone>): string {
@@ -19,6 +20,10 @@ function getRunStatusBadgeClass(tone: ReturnType<typeof getRunStatusTone>): stri
 
 export function RunOverviewCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
+  const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
+  const isLatestRunLoading = useWorkbenchStore((state) => state.isLatestRunLoading);
+  const latestRunError = useWorkbenchStore((state) => state.latestRunError);
+  const loadLatestRunForConversation = useWorkbenchStore((state) => state.loadLatestRunForConversation);
 
   if (!currentRun) {
     return (
@@ -31,10 +36,34 @@ export function RunOverviewCard() {
           <CardDescription>本轮 Run 的基础信息</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
-          <div className="right-panel-empty-state">
-            <strong>暂无 Run</strong>
-            发送问题后，这里会展示本轮 Run 的基础信息。
-          </div>
+          {isLatestRunLoading ? (
+            <div className="right-panel-empty-state">
+              <strong>正在恢复 Run</strong>
+              正在读取最近一次 Agent Run。
+            </div>
+          ) : latestRunError ? (
+            <div className="right-panel-empty-state">
+              <strong>Run 恢复失败</strong>
+              {latestRunError}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (currentSessionId) {
+                    void loadLatestRunForConversation(currentSessionId);
+                  }
+                }}
+              >
+                重试
+              </Button>
+            </div>
+          ) : (
+            <div className="right-panel-empty-state">
+              <strong>暂无 Run</strong>
+              完成一次 Agent Run 后，这里会展示执行过程。
+            </div>
+          )}
         </CardContent>
       </Card>
     );

@@ -110,6 +110,7 @@ async function readAgentRunStreamError(response: Response): Promise<string> {
 export async function streamAgentRunAnalysis(params: {
   prompt: string;
   provider: DataSourceTestableProviderId;
+  conversationId: string;
   clientRunId?: string;
   accessToken?: string | null;
   signal?: AbortSignal;
@@ -130,6 +131,7 @@ export async function streamAgentRunAnalysis(params: {
     body: JSON.stringify({
       prompt: params.prompt,
       provider: params.provider,
+      conversationId: params.conversationId,
       modelProvider: 'groq',
       clientRunId: params.clientRunId,
     }),
