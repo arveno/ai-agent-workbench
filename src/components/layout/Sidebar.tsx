@@ -9,12 +9,14 @@ import {
   createDemoConversationTemplateListView,
   createDemoTaskListView,
 } from '../../utils/demoTemplateViewModel';
+import { createRecentToolsView } from '../../utils/recentToolsViewModel';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { ConversationList } from '../conversation/ConversationList';
 import { DemoTaskList } from '../demo/DemoTaskList';
 import { DemoTaskRunChoiceModal } from '../demo/DemoTaskRunChoiceModal';
+import { RecentToolsCard } from '../tools/RecentToolsCard';
 
 type LastDemoAction =
   | {
@@ -129,6 +131,10 @@ export function Sidebar() {
   const runDemoTaskAsMock = useWorkbenchStore((state) => state.runDemoTaskAsMock);
   const cancelDemoTaskChoice = useWorkbenchStore((state) => state.cancelDemoTaskChoice);
   const copyDemoConversationTemplate = useWorkbenchStore((state) => state.copyDemoConversationTemplate);
+  const recentTools = useWorkbenchStore((state) => state.recentTools);
+  const isRecentToolsLoading = useWorkbenchStore((state) => state.isRecentToolsLoading);
+  const recentToolsError = useWorkbenchStore((state) => state.recentToolsError);
+  const retryLoadRecentTools = useWorkbenchStore((state) => state.retryLoadRecentTools);
   const isAuthenticated = authView.status === 'authenticated';
   const isAuthLoading = authView.status === 'loading';
   const canOpenLogin = authView.isAuthConfigured && !isAuthLoading;
@@ -148,6 +154,13 @@ export function Sidebar() {
     templates: demoConversations,
     isLoading: isDemoConversationsLoading,
     errorMessage: demoConversationsError,
+  });
+  const recentToolsView = createRecentToolsView({
+    tools: recentTools,
+    isLoading: isRecentToolsLoading,
+    errorMessage: recentToolsError,
+    isAuthenticated,
+    isAuthLoading,
   });
   const pendingDemoTask = demoTaskListView.items.find((task) => task.id === pendingDemoTaskId) ?? null;
   const realAgentAvailability = buildRealAgentAvailabilityView({
@@ -352,12 +365,13 @@ export function Sidebar() {
         </section>
 
         <section className="sidebar-section">
-          <h2 className="section-title">最近使用工具</h2>
-          <div className="tool-tags">
-            <span className="tool-tag tool-kb">知识库检索</span>
-            <span className="tool-tag tool-data">数据分析</span>
-            <span className="tool-tag tool-report">报告生成</span>
-          </div>
+          <h2 className="section-title">{recentToolsView.title}</h2>
+          <RecentToolsCard
+            view={recentToolsView}
+            onRetry={() => {
+              void retryLoadRecentTools();
+            }}
+          />
         </section>
       </div>
 

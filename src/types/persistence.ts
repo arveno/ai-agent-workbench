@@ -215,6 +215,20 @@ export interface ToolInvocationListResult {
   tools: ToolInvocationRecord[];
 }
 
+export interface RecentToolRecord {
+  toolName: string;
+  displayName: string;
+  usageCount: number;
+  lastUsedAt: string;
+  lastStatus: ToolInvocationRecordStatus;
+  lastConversationId: string;
+  lastRunId: string;
+}
+
+export interface RecentToolListResult {
+  tools: RecentToolRecord[];
+}
+
 export interface ReportArtifactListResult {
   reports: ReportArtifactRecord[];
 }

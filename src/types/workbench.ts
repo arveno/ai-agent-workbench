@@ -4,6 +4,7 @@ import type {
   ConversationStatus,
   DemoConversationTemplateRecord,
   DemoTaskTemplateRecord,
+  RecentToolRecord,
 } from './persistence';
 import type { RunEvent, RunSnapshot } from './run';
 
@@ -475,4 +476,20 @@ export interface DemoTemplateSlice {
   copyDemoConversationTemplate: (templateId: string) => Promise<string | null>;
 }
 
-export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice & RunSlice & DemoTemplateSlice;
+export interface RecentToolsSlice {
+  recentTools: RecentToolRecord[];
+  isRecentToolsLoading: boolean;
+  recentToolsError: string | null;
+  loadRecentTools: () => Promise<void>;
+  retryLoadRecentTools: () => Promise<void>;
+  clearRecentTools: () => void;
+}
+
+export type WorkbenchStore =
+  SessionSlice &
+  GenerationSlice &
+  ModelSlice &
+  UiSlice &
+  RunSlice &
+  DemoTemplateSlice &
+  RecentToolsSlice;
