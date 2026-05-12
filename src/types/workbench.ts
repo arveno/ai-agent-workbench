@@ -1,5 +1,10 @@
 ﻿export type SessionId = string;
-import type { ConversationMode, ConversationStatus } from './persistence';
+import type {
+  ConversationMode,
+  ConversationStatus,
+  DemoConversationTemplateRecord,
+  DemoTaskTemplateRecord,
+} from './persistence';
 import type { RunEvent, RunSnapshot } from './run';
 
 export type {
@@ -431,4 +436,27 @@ export interface RunSlice {
   applyRunEvent: (event: RunEvent) => void;
 }
 
-export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice & RunSlice;
+export interface DemoTemplateSlice {
+  demoTasks: DemoTaskTemplateRecord[];
+  demoConversations: DemoConversationTemplateRecord[];
+  isDemoTasksLoading: boolean;
+  demoTasksError: string | null;
+  isDemoConversationsLoading: boolean;
+  demoConversationsError: string | null;
+  isCopyingDemoTemplate: boolean;
+  copyDemoTemplateError: string | null;
+  pendingDemoTaskId: string | null;
+  isDemoTaskChoiceOpen: boolean;
+  demoTaskChoiceError: string | null;
+  loadDemoTasks: () => Promise<void>;
+  loadDemoConversations: () => Promise<void>;
+  retryLoadDemoTasks: () => Promise<void>;
+  retryLoadDemoConversations: () => Promise<void>;
+  startDemoTask: (taskId: string) => Promise<string | null>;
+  confirmRunDemoTaskWithAgent: (taskId: string) => Promise<string | null>;
+  runDemoTaskAsMock: (taskId: string) => Promise<string | null>;
+  cancelDemoTaskChoice: () => void;
+  copyDemoConversationTemplate: (templateId: string) => Promise<string | null>;
+}
+
+export type WorkbenchStore = SessionSlice & GenerationSlice & ModelSlice & UiSlice & RunSlice & DemoTemplateSlice;

@@ -1,5 +1,10 @@
 import type { User } from '@supabase/supabase-js';
-import type { ConversationRecord, MessageRecord } from '../../types/persistence';
+import type {
+  ConversationRecord,
+  DemoConversationTemplateRecord,
+  DemoTaskTemplateRecord,
+  MessageRecord,
+} from '../../types/persistence';
 
 export type UserRole = 'anonymous' | 'demo_user' | 'admin';
 
@@ -72,6 +77,10 @@ export interface ConversationRow extends ConversationRecord, Record<string, unkn
 
 export interface MessageRow extends MessageRecord, Record<string, unknown> {}
 
+export interface DemoTaskTemplateRow extends DemoTaskTemplateRecord, Record<string, unknown> {}
+
+export interface DemoConversationTemplateRow extends DemoConversationTemplateRecord, Record<string, unknown> {}
+
 export interface ServerAuthDatabase {
   public: {
     Tables: {
@@ -103,6 +112,18 @@ export interface ServerAuthDatabase {
         Row: MessageRow;
         Insert: Partial<MessageRow> & Pick<MessageRow, 'conversation_id' | 'user_id' | 'role'>;
         Update: Partial<MessageRow>;
+        Relationships: [];
+      };
+      demo_task_templates: {
+        Row: DemoTaskTemplateRow;
+        Insert: Partial<DemoTaskTemplateRow> & Pick<DemoTaskTemplateRow, 'title' | 'prompt' | 'category'>;
+        Update: Partial<DemoTaskTemplateRow>;
+        Relationships: [];
+      };
+      demo_conversation_templates: {
+        Row: DemoConversationTemplateRow;
+        Insert: Partial<DemoConversationTemplateRow> & Pick<DemoConversationTemplateRow, 'title' | 'category'>;
+        Update: Partial<DemoConversationTemplateRow>;
         Relationships: [];
       };
     };

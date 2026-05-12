@@ -64,6 +64,48 @@ export interface MessageCreateInput {
   metadata?: JsonObject;
 }
 
+export type DemoTemplateCategory = 'intro' | 'analysis' | 'report' | 'rag' | 'long_context' | 'fallback';
+export type DemoRecommendedMode = 'mock' | 'agent';
+export type DemoTemplateVisibility = 'demo' | 'system';
+
+export interface DemoTaskTemplateRecord {
+  id: string;
+  title: string;
+  description: string;
+  prompt: string;
+  category: DemoTemplateCategory;
+  recommended_mode: DemoRecommendedMode;
+  sort_order: number;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  metadata: JsonObject;
+}
+
+export interface DemoSeedMessage {
+  role: MessageRole;
+  kind?: MessageKind;
+  content: string;
+  status?: MessageStatus;
+  metadata?: JsonObject;
+}
+
+export interface DemoConversationTemplateRecord {
+  id: string;
+  title: string;
+  description: string;
+  category: DemoTemplateCategory;
+  visibility: DemoTemplateVisibility;
+  seed_messages: DemoSeedMessage[];
+  seed_runs: JsonObject[];
+  seed_reports: JsonObject[];
+  sort_order: number;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  metadata: JsonObject;
+}
+
 export interface ConversationListResult {
   conversations: ConversationRecord[];
   nextCursor: string | null;
@@ -72,6 +114,19 @@ export interface ConversationListResult {
 export interface MessageListResult {
   messages: MessageRecord[];
   nextCursor: string | null;
+}
+
+export interface DemoTaskTemplateListResult {
+  tasks: DemoTaskTemplateRecord[];
+}
+
+export interface DemoConversationTemplateListResult {
+  conversations: DemoConversationTemplateRecord[];
+}
+
+export interface DemoConversationCopyResult {
+  conversation: ConversationRecord;
+  messages: MessageRecord[];
 }
 
 export type WorkbenchPersistenceErrorCode =
