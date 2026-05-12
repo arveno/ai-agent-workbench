@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { mockTasks } from '../../mocks/tasks';
-import { createConversation, fetchConversations } from '../../services/conversationApi';
+import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
 import { createConversationMessage, fetchConversationMessages } from '../../services/messageApi';
 import type { ConversationMode } from '../../types/persistence';
 import type { SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
@@ -24,6 +24,7 @@ import {
 } from './shared';
 
 let persistenceRequestId = 0;
+let messageLoadRequestId = 0;
 
 interface PersistenceAuthContext {
   accessToken: string;
@@ -115,6 +116,7 @@ function upsertSessionMessages(
         ? {
             ...session,
             messages,
+            messageCount: messages.length,
             updatedAt: Date.now(),
           }
         : session,
@@ -129,10 +131,14 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   currentPrompt: initialWorkbenchState.currentPrompt,
   activeAssistantMessageId: initialWorkbenchState.activeAssistantMessageId,
   isConversationListLoading: false,
+  isCreatingConversation: false,
+  conversationListError: null,
   isMessagesLoading: false,
+  messagesError: null,
   persistenceError: null,
   isPersistentMode: false,
   persistentUserId: null,
+  lastRestoredConversationId: null,
   persistSessions: (sessions, activeSessionId) => {
     if (get().isPersistentMode) {
       return;
@@ -147,7 +153,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     if (authContext) {
       set({
-        isConversationListLoading: true,
+        isCreatingConversation: true,
+        conversationListError: null,
         persistenceError: null,
       });
 
@@ -168,9 +175,10 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
           return {
             sessions: nextSessions,
             currentSessionId: newSession.id,
-            isConversationListLoading: false,
+            isCreatingConversation: false,
             isPersistentMode: true,
             persistentUserId: authContext.userId,
+            conversationListError: null,
             persistenceError: null,
             ...createEmptyUiState(),
           };
@@ -180,13 +188,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       }
 
       set({
-        isConversationListLoading: false,
+        isCreatingConversation: false,
+        conversationListError: result.message,
         persistenceError: result.message,
       });
 
-      if (get().isPersistentMode) {
-        return get().currentSessionId;
-      }
+      return get().currentSessionId;
     }
 
     const newSession = createEmptySession({
@@ -258,6 +265,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
             ? {
                 ...session,
                 messages,
+                messageCount: messages.length,
                 updatedAt: now,
                 taskId: state.currentTaskId,
               }
@@ -322,6 +330,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
             title: shouldRenameSession ? createSessionTitle(normalizedContent) : session.title,
             updatedAt: now,
             taskId: state.currentTaskId,
+            messageCount: (session.messageCount ?? session.messages.length) + 1,
             messages: [...session.messages, userMessage],
           };
         }),
@@ -363,6 +372,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
                 ...session,
                 updatedAt: now,
                 taskId: state.currentTaskId,
+                messageCount: (session.messageCount ?? session.messages.length) + 1,
                 messages: [...session.messages, assistantMessage],
               }
             : session,
@@ -395,10 +405,13 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     const requestId = persistenceRequestId + 1;
     persistenceRequestId = requestId;
+    messageLoadRequestId += 1;
 
     set({
       isConversationListLoading: true,
       isMessagesLoading: true,
+      conversationListError: null,
+      messagesError: null,
       persistenceError: null,
     });
 
@@ -418,39 +431,32 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       set({
         isConversationListLoading: false,
         isMessagesLoading: false,
+        conversationListError: conversationResult.message,
+        messagesError: null,
         persistenceError: conversationResult.message,
       });
       return;
     }
 
-    let conversations = conversationResult.data.conversations;
-    let targetConversation =
+    const conversations = conversationResult.data.conversations;
+    const targetConversation =
       conversations.find((conversation) => conversation.id === params?.preferredSessionId) ?? conversations[0] ?? null;
 
     if (!targetConversation) {
-      const createdConversation = await createConversation(
-        {
-          title: '新会话',
-          mode: 'mock',
-        },
-        authContext.accessToken,
-      );
-
-      if (requestId !== persistenceRequestId) {
-        return;
-      }
-
-      if (!createdConversation.ok) {
-        set({
-          isConversationListLoading: false,
-          isMessagesLoading: false,
-          persistenceError: createdConversation.message,
-        });
-        return;
-      }
-
-      targetConversation = createdConversation.data;
-      conversations = [createdConversation.data];
+      set({
+        sessions: [],
+        currentSessionId: '',
+        isConversationListLoading: false,
+        isMessagesLoading: false,
+        conversationListError: null,
+        messagesError: null,
+        persistenceError: null,
+        isPersistentMode: true,
+        persistentUserId: authContext.userId,
+        lastRestoredConversationId: null,
+        ...createEmptyUiState(),
+      });
+      return;
     }
 
     const messageResult = await fetchConversationMessages(
@@ -469,6 +475,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       set({
         isConversationListLoading: false,
         isMessagesLoading: false,
+        conversationListError: null,
+        messagesError: messageResult.message,
         persistenceError: messageResult.message,
       });
       return;
@@ -487,9 +495,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       currentSessionId: activeSession?.id ?? state.currentSessionId,
       isConversationListLoading: false,
       isMessagesLoading: false,
+      conversationListError: null,
+      messagesError: null,
       persistenceError: null,
       isPersistentMode: true,
       persistentUserId: authContext.userId,
+      lastRestoredConversationId: activeSession?.id ?? null,
       ...createSessionUiState(activeSession, state.currentTaskId),
     }));
   },
@@ -499,6 +510,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     }
 
     persistenceRequestId += 1;
+    messageLoadRequestId += 1;
     clearPersistedWorkbenchState();
 
     const anonymousState = getInitialWorkbenchSessionState();
@@ -510,10 +522,14 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       sessions: anonymousState.sessions,
       currentSessionId: currentSession?.id ?? anonymousState.activeSessionId,
       isConversationListLoading: false,
+      isCreatingConversation: false,
       isMessagesLoading: false,
+      conversationListError: null,
+      messagesError: null,
       persistenceError: null,
       isPersistentMode: false,
       persistentUserId: null,
+      lastRestoredConversationId: null,
       ...createSessionUiState(currentSession, state.currentTaskId),
     }));
   },
@@ -524,10 +540,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return;
     }
 
-    const requestId = persistenceRequestId;
+    const requestId = messageLoadRequestId + 1;
+    messageLoadRequestId = requestId;
 
     set({
       isMessagesLoading: true,
+      messagesError: null,
       persistenceError: null,
     });
 
@@ -539,13 +557,14 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       authContext.accessToken,
     );
 
-    if (requestId !== persistenceRequestId) {
+    if (requestId !== messageLoadRequestId || get().currentSessionId !== sessionId) {
       return;
     }
 
     if (!result.ok) {
       set({
         isMessagesLoading: false,
+        messagesError: result.message,
         persistenceError: result.message,
       });
       return;
@@ -561,6 +580,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return {
         sessions: nextSessions,
         isMessagesLoading: false,
+        messagesError: null,
         persistenceError: null,
         ...(shouldRestoreUi ? createSessionUiState(activeSession, state.currentTaskId) : {}),
       };
@@ -590,6 +610,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     if (!result.ok) {
       set({
+        conversationListError: result.message,
         persistenceError: result.message,
       });
       return null;
@@ -602,6 +623,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       currentSessionId: nextSession.id,
       isPersistentMode: true,
       persistentUserId: authContext.userId,
+      conversationListError: null,
       persistenceError: null,
     }));
 
@@ -622,12 +644,32 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     if (!result.ok) {
       set({
+        messagesError: result.message,
         persistenceError: result.message,
       });
       return;
     }
 
+    if (message.role === 'user') {
+      const currentSession = get().sessions.find((session) => session.id === conversationId);
+      const shouldUpdateTitle =
+        currentSession &&
+        currentSession.title.trim() !== '新会话' &&
+        currentSession.messages.filter((sessionMessage) => sessionMessage.role === 'user').length === 1;
+
+      if (shouldUpdateTitle) {
+        void updateConversation(
+          conversationId,
+          {
+            title: currentSession.title,
+          },
+          authContext.accessToken,
+        );
+      }
+    }
+
     set({
+      messagesError: null,
       persistenceError: null,
     });
   },

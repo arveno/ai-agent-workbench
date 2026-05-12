@@ -113,7 +113,15 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       return;
     }
 
-    await get().ensureCurrentPersistentConversation();
+    const ensuredConversationId = await get().ensureCurrentPersistentConversation();
+
+    if (ensuredConversationId === null) {
+      set({
+        agentRunStatus: 'error',
+        agentRunErrorMessage: '创建真实会话失败，请稍后重试。',
+      });
+      return;
+    }
 
     const state = get();
     const requestId = createAgentRunRequestId();

@@ -1,4 +1,5 @@
 ﻿export type SessionId = string;
+import type { ConversationMode, ConversationStatus } from './persistence';
 import type { RunEvent, RunSnapshot } from './run';
 
 export type {
@@ -64,6 +65,10 @@ export interface WorkbenchSession {
   taskId?: string;
   runsById: Record<string, RunSnapshot>;
   latestRunId?: string;
+  mode?: ConversationMode;
+  status?: ConversationStatus;
+  summary?: string | null;
+  messageCount?: number;
 }
 
 export type Session = WorkbenchSession;
@@ -322,10 +327,14 @@ export interface SessionSlice {
   currentPrompt: string;
   activeAssistantMessageId: string;
   isConversationListLoading: boolean;
+  isCreatingConversation: boolean;
+  conversationListError: string | null;
   isMessagesLoading: boolean;
+  messagesError: string | null;
   persistenceError: string | null;
   isPersistentMode: boolean;
   persistentUserId: string | null;
+  lastRestoredConversationId: string | null;
   persistSessions: (sessions: WorkbenchSession[], activeSessionId?: string) => void;
   createSession: () => Promise<string>;
   switchSession: (sessionId: string) => void;

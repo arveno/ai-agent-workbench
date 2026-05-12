@@ -3,9 +3,11 @@ import { mockTasks } from '../../mocks/tasks';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { AgentAccessView, AuthSessionView } from '../../types/auth';
+import { createConversationListView } from '../../utils/conversationListViewModel';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { AppIcon } from '../common/AppIcon';
 import { icons, type IconKey } from '../common/iconMap';
+import { ConversationList } from '../conversation/ConversationList';
 
 function getTaskIcon(taskId: string): IconKey {
   if (taskId === 't_month_analytics') {
@@ -17,13 +19,6 @@ function getTaskIcon(taskId: string): IconKey {
   }
 
   return 'document';
-}
-
-function formatSessionTime(updatedAt: number): string {
-  const date = new Date(updatedAt);
-  const hour = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
-  return `${hour}:${minute}`;
 }
 
 function getAuthDisplayName(authView: AuthSessionView): string {
@@ -106,10 +101,21 @@ export function Sidebar() {
   const createSession = useWorkbenchStore((state) => state.createSession);
   const switchSession = useWorkbenchStore((state) => state.switchSession);
   const startTask = useWorkbenchStore((state) => state.startTask);
-  const sortedSessions = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+  const hydratePersistentWorkbench = useWorkbenchStore((state) => state.hydratePersistentWorkbench);
+  const isPersistentMode = useWorkbenchStore((state) => state.isPersistentMode);
+  const isConversationListLoading = useWorkbenchStore((state) => state.isConversationListLoading);
+  const isCreatingConversation = useWorkbenchStore((state) => state.isCreatingConversation);
+  const conversationListError = useWorkbenchStore((state) => state.conversationListError);
   const isAuthenticated = authView.status === 'authenticated';
   const isAuthLoading = authView.status === 'loading';
   const canOpenLogin = authView.isAuthConfigured && !isAuthLoading;
+  const conversationListView = createConversationListView({
+    sessions,
+    currentSessionId,
+    isPersistentMode: isPersistentMode || isAuthenticated,
+    isLoading: isConversationListLoading || isAuthLoading,
+    errorMessage: conversationListError,
+  });
   const authStatusLines = getAuthStatusLines({
     authView,
     agentAccess,
@@ -118,7 +124,7 @@ export function Sidebar() {
   });
 
   const handleSessionClick = (sessionId: string) => {
-    const session = sortedSessions.find((item) => item.id === sessionId);
+    const session = sessions.find((item) => item.id === sessionId);
     switchSession(sessionId);
     replaceWorkbenchUrl({
       sessionId,
@@ -140,10 +146,19 @@ export function Sidebar() {
 
   const handleCreateSession = async () => {
     const sessionId = await createSession();
+
+    if (!sessionId) {
+      return;
+    }
+
     replaceWorkbenchUrl({
       sessionId,
       taskId: currentTaskId,
     });
+  };
+
+  const handleRetryConversations = () => {
+    void hydratePersistentWorkbench();
   };
 
   return (
@@ -159,30 +174,28 @@ export function Sidebar() {
           </div>
         </div>
 
-        <button type="button" className="new-chat-btn" onClick={handleCreateSession}>
+        <button
+          type="button"
+          className="new-chat-btn"
+          disabled={isCreatingConversation || isAuthLoading}
+          onClick={handleCreateSession}
+        >
           <span className="icon-text-inline">
             <AppIcon icon={icons.plus} size={16} />
-            <span>新建会话</span>
+            <span>{isCreatingConversation ? '正在新建...' : '新建会话'}</span>
           </span>
         </button>
 
         <section className="sidebar-section">
-          <h2 className="section-title">会话列表</h2>
-          <ul className="session-list">
-            {sortedSessions.map((session) => (
-              <li
-                key={session.id}
-                className={`session-item${session.id === currentSessionId ? ' active' : ''}`}
-                onClick={() => handleSessionClick(session.id)}
-              >
-                <span className="session-name-wrap">
-                  <AppIcon icon={icons.document} size={14} />
-                  <span className="session-name">{session.title}</span>
-                </span>
-                <span className="session-time">{formatSessionTime(session.updatedAt)}</span>
-              </li>
-            ))}
-          </ul>
+          <h2 className="section-title">{conversationListView.title}</h2>
+          <ConversationList
+            view={conversationListView}
+            onSelect={handleSessionClick}
+            onCreate={() => {
+              void handleCreateSession();
+            }}
+            onRetry={handleRetryConversations}
+          />
         </section>
 
         <section className="sidebar-section">

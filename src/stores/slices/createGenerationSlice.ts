@@ -104,6 +104,7 @@ function updateSessionRunReportState(params: {
     ...params.session,
     updatedAt: Date.now(),
     messages: params.nextMessages ?? params.session.messages,
+    messageCount: (params.nextMessages ?? params.session.messages).length,
     runsById: {
       ...params.session.runsById,
       [params.runId]: params.nextRun,
@@ -189,7 +190,11 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
-    await get().ensureCurrentPersistentConversation();
+    const ensuredConversationId = await get().ensureCurrentPersistentConversation();
+
+    if (ensuredConversationId === null) {
+      return;
+    }
 
     const snapshot = get();
     const persistentConversationId = snapshot.isPersistentMode ? snapshot.currentSessionId : null;
@@ -229,6 +234,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           title: shouldRenameSession ? createSessionTitle(trimmedPrompt) : session.title,
           updatedAt: now,
           taskId: state.currentTaskId,
+          messageCount: (session.messageCount ?? session.messages.length) + nextMessages.length,
           messages: [...session.messages, ...nextMessages],
         };
       });
@@ -243,6 +249,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
               updatedAt: now,
               taskId: state.currentTaskId,
               messages: nextMessages,
+              messageCount: nextMessages.length,
               runsById: {},
             },
           ]);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { buildChatBlocks } from '../../utils/chatBlocks';
+import { createMessageTimelineView } from '../../utils/messageTimelineViewModel';
 import { Button } from '../ui/button';
 import { ChatBlockRenderer } from './ChatBlockRenderer';
 import { ChatInput } from './ChatInput';
@@ -13,10 +14,12 @@ export function ChatPanel() {
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
   const realModelNotice = useWorkbenchStore((state) => state.realModelNotice);
-  const persistenceError = useWorkbenchStore((state) => state.persistenceError);
   const isMessagesLoading = useWorkbenchStore((state) => state.isMessagesLoading);
+  const messagesError = useWorkbenchStore((state) => state.messagesError);
+  const isPersistentMode = useWorkbenchStore((state) => state.isPersistentMode);
   const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
+  const loadPersistentMessagesForSession = useWorkbenchStore((state) => state.loadPersistentMessagesForSession);
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === currentSessionId) ?? null,
     [sessions, currentSessionId],
@@ -25,6 +28,12 @@ export function ChatPanel() {
     () => buildChatBlocks({ session: currentSession, currentRun }),
     [currentSession, currentRun],
   );
+  const timelineView = createMessageTimelineView({
+    session: currentSession,
+    isPersistentMode,
+    isMessagesLoading,
+    messagesError,
+  });
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
@@ -119,9 +128,36 @@ export function ChatPanel() {
           </div>
         ) : null}
 
-        {isMessagesLoading ? <div className="real-model-notice">正在恢复会话消息...</div> : null}
+        {timelineView.isLoading ? <div className="real-model-notice">{timelineView.loadingMessage}</div> : null}
 
-        {persistenceError ? <div className="real-model-notice">{persistenceError}</div> : null}
+        {timelineView.isEmpty ? (
+          <div className="chat-empty-state">
+            <strong>{timelineView.emptyTitle}</strong>
+            <span>{timelineView.emptyDescription}</span>
+          </div>
+        ) : null}
+
+        {timelineView.errorMessage ? (
+          <div className="error-card">
+            <div className="error-card-copy">
+              <h3>会话恢复失败</h3>
+              <p>{timelineView.errorMessage}</p>
+            </div>
+            {timelineView.canRetry && currentSession ? (
+              <Button
+                type="button"
+                className="error-retry-btn"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void loadPersistentMessagesForSession(currentSession.id);
+                }}
+              >
+                {timelineView.retryLabel}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
 
         {realModelNotice ? <div className="real-model-notice">{realModelNotice}</div> : null}
 

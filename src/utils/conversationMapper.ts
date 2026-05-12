@@ -21,6 +21,10 @@ export function conversationRecordToSession(
     messages,
     runsById: {},
     latestRunId: record.latest_run_id ?? undefined,
+    mode: record.mode,
+    status: record.status,
+    summary: record.summary,
+    messageCount: record.message_count,
   };
 }
 
