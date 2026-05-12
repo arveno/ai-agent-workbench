@@ -2,7 +2,7 @@ import type { RagSourceChunk } from './rag';
 
 export type RunMode = 'mock' | 'agent';
 
-export type RunIntent = 'capability_intro' | 'data_analysis' | 'unsupported' | 'unknown';
+export type RunIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
 
 export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
 
@@ -117,6 +117,15 @@ export interface RunStepCompletedEvent {
   elapsedMs?: number;
 }
 
+export interface RunStepFailedEvent {
+  type: 'step_failed';
+  runId: string;
+  stepId: string;
+  errorMessage: string;
+  completedAt: string;
+  elapsedMs?: number;
+}
+
 export interface RunToolStartedEvent {
   type: 'tool_started';
   runId: string;
@@ -128,6 +137,15 @@ export interface RunToolCompletedEvent {
   runId: string;
   toolId: string;
   outputSummary: string;
+  completedAt: string;
+  elapsedMs?: number;
+}
+
+export interface RunToolFailedEvent {
+  type: 'tool_failed';
+  runId: string;
+  toolId: string;
+  errorMessage: string;
   completedAt: string;
   elapsedMs?: number;
 }
@@ -150,6 +168,12 @@ export interface RunConclusionCompletedEvent {
   conclusion: string;
   conclusionSource: RunConclusionSource;
   conclusionNotice?: string;
+}
+
+export interface RunRagSourcesReadyEvent {
+  type: 'rag_sources_ready';
+  runId: string;
+  sources: RagSourceChunk[];
 }
 
 export interface RunReportPendingEvent {
@@ -179,11 +203,14 @@ export type RunEvent =
   | RunStartedEvent
   | RunStepStartedEvent
   | RunStepCompletedEvent
+  | RunStepFailedEvent
   | RunToolStartedEvent
   | RunToolCompletedEvent
+  | RunToolFailedEvent
   | RunChartReadyEvent
   | RunConclusionDeltaEvent
   | RunConclusionCompletedEvent
+  | RunRagSourcesReadyEvent
   | RunReportPendingEvent
   | RunCompletedEvent
   | RunFailedEvent

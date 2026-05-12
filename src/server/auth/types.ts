@@ -4,7 +4,11 @@ import type {
   ConversationRecord,
   DemoConversationTemplateRecord,
   DemoTaskTemplateRecord,
+  KnowledgeChunkRecord,
+  KnowledgeDocumentRecord,
+  KnowledgeSourceRecord,
   MessageRecord,
+  RagRetrievalLogRecord,
   ReportArtifactRecord,
   RunEventRecord,
   ToolInvocationRecord,
@@ -93,6 +97,14 @@ export interface ToolInvocationRow extends ToolInvocationRecord, Record<string, 
 
 export interface ReportArtifactRow extends ReportArtifactRecord, Record<string, unknown> {}
 
+export interface KnowledgeSourceRow extends KnowledgeSourceRecord, Record<string, unknown> {}
+
+export interface KnowledgeDocumentRow extends KnowledgeDocumentRecord, Record<string, unknown> {}
+
+export interface KnowledgeChunkRow extends KnowledgeChunkRecord, Record<string, unknown> {}
+
+export interface RagRetrievalLogRow extends RagRetrievalLogRecord, Record<string, unknown> {}
+
 export interface ServerAuthDatabase {
   public: {
     Tables: {
@@ -160,6 +172,30 @@ export interface ServerAuthDatabase {
         Row: ReportArtifactRow;
         Insert: Partial<ReportArtifactRow> & Pick<ReportArtifactRow, 'conversation_id' | 'user_id' | 'title' | 'content_markdown'>;
         Update: Partial<ReportArtifactRow>;
+        Relationships: [];
+      };
+      knowledge_sources: {
+        Row: KnowledgeSourceRow;
+        Insert: Partial<KnowledgeSourceRow> & Pick<KnowledgeSourceRow, 'name'>;
+        Update: Partial<KnowledgeSourceRow>;
+        Relationships: [];
+      };
+      knowledge_documents: {
+        Row: KnowledgeDocumentRow;
+        Insert: Partial<KnowledgeDocumentRow> & Pick<KnowledgeDocumentRow, 'source_id' | 'title'>;
+        Update: Partial<KnowledgeDocumentRow>;
+        Relationships: [];
+      };
+      knowledge_chunks: {
+        Row: KnowledgeChunkRow;
+        Insert: Partial<KnowledgeChunkRow> & Pick<KnowledgeChunkRow, 'document_id' | 'source_id' | 'chunk_index' | 'content'>;
+        Update: Partial<KnowledgeChunkRow>;
+        Relationships: [];
+      };
+      rag_retrieval_logs: {
+        Row: RagRetrievalLogRow;
+        Insert: Partial<RagRetrievalLogRow> & Pick<RagRetrievalLogRow, 'conversation_id' | 'user_id' | 'query'>;
+        Update: Partial<RagRetrievalLogRow>;
         Relationships: [];
       };
     };

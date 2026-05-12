@@ -5,7 +5,7 @@ import type { DataSourceTestableProviderId } from '../../types/workbench';
 export type AgentRunStatus = 'running' | 'success' | 'error';
 
 export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
-export type AgentPlanIntent = 'capability_intro' | 'data_analysis' | 'unsupported';
+export type AgentPlanIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported';
 export type AgentPlanMetric =
   | 'avg_score'
   | 'attendance_rate'

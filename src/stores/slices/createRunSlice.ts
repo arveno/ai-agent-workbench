@@ -1,7 +1,9 @@
 import type { StateCreator } from 'zustand';
+import { fetchRagRetrievals } from '../../services/ragRetrievalApi';
 import { createRunReportArtifact, fetchConversationReportArtifacts } from '../../services/reportArtifactApi';
 import { fetchLatestRunForConversation, fetchRunEvents, fetchToolInvocations } from '../../services/runPersistenceApi';
 import type { RunEvent, RunSlice, RunSnapshot, WorkbenchStore } from '../../types/workbench';
+import { ragRetrievalLogsToSources } from '../../utils/ragSourceMapper';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
 import { runEventsRecordToRunEvents, runPersistenceRecordsToSnapshot } from '../../utils/runPersistenceMapper';
 import { applyRunEventToSnapshot } from '../../utils/runReducer';
@@ -31,6 +33,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   runEventsError: null,
   isReportArtifactsLoading: false,
   reportArtifactsError: null,
+  isRagSourcesLoading: false,
+  ragSourcesError: null,
 
   setCurrentRun: (run: RunSnapshot | null) => {
     set((state) => {
@@ -104,8 +108,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     set({
       isLatestRunLoading: true,
       isRunEventsLoading: true,
+      isRagSourcesLoading: true,
       latestRunError: null,
       runEventsError: null,
+      ragSourcesError: null,
     });
 
     const latestRunResult = await fetchLatestRunForConversation(conversationId, accessToken);
@@ -118,8 +124,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       set({
         isLatestRunLoading: false,
         isRunEventsLoading: false,
+        isRagSourcesLoading: false,
         latestRunError: latestRunResult.message,
         runEventsError: latestRunResult.message,
+        ragSourcesError: null,
       });
       return;
     }
@@ -132,16 +140,19 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         runEventLog: [],
         isLatestRunLoading: false,
         isRunEventsLoading: false,
+        isRagSourcesLoading: false,
         latestRunError: null,
         runEventsError: null,
+        ragSourcesError: null,
       });
       return;
     }
 
     const runId = runRecord.runtime_run_id ?? runRecord.id;
-    const [eventsResult, toolsResult] = await Promise.all([
+    const [eventsResult, toolsResult, retrievalsResult] = await Promise.all([
       fetchRunEvents(runId, accessToken),
       fetchToolInvocations(runId, accessToken),
+      fetchRagRetrievals(runId, accessToken),
     ]);
 
     if (requestId !== latestRunRequestId || get().currentSessionId !== conversationId) {
@@ -152,8 +163,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       set({
         isLatestRunLoading: false,
         isRunEventsLoading: false,
+        isRagSourcesLoading: false,
         latestRunError: null,
         runEventsError: eventsResult.message,
+        ragSourcesError: null,
       });
       return;
     }
@@ -162,30 +175,45 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       set({
         isLatestRunLoading: false,
         isRunEventsLoading: false,
+        isRagSourcesLoading: false,
         latestRunError: null,
         runEventsError: toolsResult.message,
+        ragSourcesError: null,
       });
       return;
     }
 
+    const restoredSources = retrievalsResult.ok
+      ? ragRetrievalLogsToSources(retrievalsResult.data.retrievals)
+      : [];
     const runSnapshot = runPersistenceRecordsToSnapshot({
       run: runRecord,
       events: eventsResult.data.events,
       tools: toolsResult.data.tools,
     });
+    const runSnapshotWithSources: RunSnapshot = restoredSources.length > 0 && (runSnapshot.sources ?? []).length === 0
+      ? {
+          ...runSnapshot,
+          sources: restoredSources,
+        }
+      : runSnapshot;
     const runEvents = runEventsRecordToRunEvents(eventsResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((state) => {
-      const nextSessions = upsertRunIntoSessions(state.sessions, conversationId, runSnapshot);
+      const nextSessions = upsertRunIntoSessions(state.sessions, conversationId, runSnapshotWithSources);
 
       return {
         sessions: nextSessions,
-        currentRun: runSnapshot,
+        currentRun: runSnapshotWithSources,
         runEventLog: runEvents,
         isLatestRunLoading: false,
         isRunEventsLoading: false,
+        isRagSourcesLoading: false,
         latestRunError: null,
         runEventsError: null,
+        ragSourcesError: retrievalsResult.ok || (runSnapshotWithSources.sources ?? []).length > 0
+          ? null
+          : retrievalsResult.message,
       };
     });
   },
@@ -322,6 +350,54 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       isReportArtifactsLoading: false,
       reportArtifactsError: null,
     }));
+  },
+
+  loadRagRetrievals: async (runId) => {
+    const accessToken = getAccessToken();
+
+    if (!accessToken || !get().isPersistentMode) {
+      return;
+    }
+
+    set({
+      isRagSourcesLoading: true,
+      ragSourcesError: null,
+    });
+
+    const result = await fetchRagRetrievals(runId, accessToken);
+
+    if (!result.ok) {
+      set({
+        isRagSourcesLoading: false,
+        ragSourcesError: result.message,
+      });
+      return;
+    }
+
+    const sources = ragRetrievalLogsToSources(result.data.retrievals);
+
+    set((state) => {
+      if (!state.currentRun || state.currentRun.id !== runId) {
+        return {
+          isRagSourcesLoading: false,
+          ragSourcesError: null,
+        };
+      }
+
+      const nextRun: RunSnapshot = {
+        ...state.currentRun,
+        sources,
+        updatedAt: new Date().toISOString(),
+      };
+      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, nextRun);
+
+      return {
+        currentRun: nextRun,
+        sessions: nextSessions,
+        isRagSourcesLoading: false,
+        ragSourcesError: null,
+      };
+    });
   },
 
   saveReportArtifact: async (params) => {

@@ -141,6 +141,8 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       activeAgentRunAbortController: null,
       currentReportRunId: null,
       reportActionState: 'skipped',
+      isRagSourcesLoading: false,
+      ragSourcesError: null,
     });
     get().clearChatDraft();
     void get().runMockPrompt(trimmedPrompt);

@@ -230,7 +230,7 @@ export interface WorkflowStepDefinition {
 }
 
 export type AgentRunStatus = 'running' | 'success' | 'error';
-export type AgentRunPlanIntent = 'capability_intro' | 'data_analysis' | 'unsupported';
+export type AgentRunPlanIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported';
 export type ReportActionState = 'pending' | 'generated' | 'skipped';
 
 export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
@@ -438,6 +438,8 @@ export interface RunSlice {
   runEventsError: string | null;
   isReportArtifactsLoading: boolean;
   reportArtifactsError: string | null;
+  isRagSourcesLoading: boolean;
+  ragSourcesError: string | null;
   setCurrentRun: (run: RunSnapshot | null) => void;
   clearCurrentRun: () => void;
   applyRunEvent: (event: RunEvent) => void;
@@ -445,6 +447,7 @@ export interface RunSlice {
   loadRunEvents: (runId: string) => Promise<void>;
   loadToolInvocations: (runId: string) => Promise<void>;
   loadReportArtifacts: (conversationId: string) => Promise<void>;
+  loadRagRetrievals: (runId: string) => Promise<void>;
   saveReportArtifact: (params: {
     conversationId: string;
     runId: string;

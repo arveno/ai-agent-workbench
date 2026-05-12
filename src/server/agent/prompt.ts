@@ -3,6 +3,7 @@
 import type { SchemaInspectOutput } from '../tools/schemaInspectTool';
 import type { AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderOutput } from '../tools/chartRenderTool';
+import type { RagSearchOutput } from '../tools/ragSearchTool';
 import type { AgentPlanComparison, AgentPlanGroupBy, AgentPlanMetric, AgentPlanTimeRange } from './types';
 
 interface DataAnalysisPlanFields {
@@ -141,4 +142,73 @@ export function buildFallbackConclusion(params: {
       ? `当前结果主要覆盖：${topLabels}。建议下一步联动平均分、出勤率与作业完成率进行交叉对比，定位异常成因。`
       : '建议下一步联动平均分、出勤率与作业完成率进行交叉对比，定位异常成因。',
   ].join('\n\n');
+}
+
+export function buildRagAnswerMessages(params: {
+  prompt: string;
+  ragResult: RagSearchOutput;
+}): Array<{ role: 'system' | 'user'; content: string }> {
+  const systemMessage = [
+    '你是一个教育知识库问答助手。',
+    '只能基于给定检索片段回答，不要编造来源或制度条款。',
+    '回答中必须使用 [S1]、[S2] 这样的引用标记。',
+    '如果检索片段不足以回答，请明确说明未找到充分依据。',
+  ].join('\n');
+  const sourcesText = params.ragResult.results
+    .map((result) =>
+      [
+        `[${result.citationId}] ${result.title}`,
+        `来源：${result.sourceName}`,
+        `片段：${result.content}`,
+      ].join('\n'),
+    )
+    .join('\n\n');
+  const userMessage = [
+    '【用户问题】',
+    params.prompt,
+    '',
+    '【检索片段】',
+    sourcesText || '未找到相关片段。',
+    '',
+    '【回答要求】',
+    '1) 先直接回答问题；',
+    '2) 给出 2-4 条依据；',
+    '3) 每条依据后标注来源，例如 [S1]；',
+    '4) 不要引用未提供的来源。',
+  ].join('\n');
+
+  return [
+    {
+      role: 'system',
+      content: systemMessage,
+    },
+    {
+      role: 'user',
+      content: userMessage,
+    },
+  ];
+}
+
+export function buildFallbackRagConclusion(params: {
+  ragResult: RagSearchOutput;
+}): string {
+  if (params.ragResult.results.length === 0) {
+    return [
+      '未在当前示例知识库中找到足够相关的制度依据。',
+      '本次不会编造来源或使用未检索到的材料。',
+      '可以换用“教学评价制度、课堂参与度、作业完成率、学业预警、数据异常处理”等更贴近示例知识库的问题重新检索。',
+    ].join('\n\n');
+  }
+
+  const bullets = params.ragResult.results.slice(0, 3).map((result) => {
+    return `- ${result.content} [${result.citationId}]`;
+  });
+
+  return [
+    '根据当前示例知识库，可以这样理解：',
+    '',
+    ...bullets,
+    '',
+    '因此，这类问题不应只看单一指标，而应结合过程性表现、持续性风险和数据质量限制形成管理判断。',
+  ].join('\n');
 }

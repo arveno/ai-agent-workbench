@@ -203,6 +203,74 @@ export interface ReportArtifactRecord {
   metadata: JsonObject;
 }
 
+export type KnowledgeVisibility = 'private' | 'demo' | 'system';
+export type KnowledgeSourceType = 'policy' | 'faq' | 'guide' | 'dataset_doc';
+export type KnowledgeStatus = 'active' | 'disabled' | 'archived';
+
+export interface KnowledgeSourceRecord {
+  id: string;
+  user_id: string | null;
+  visibility: KnowledgeVisibility;
+  name: string;
+  type: KnowledgeSourceType;
+  status: KnowledgeStatus;
+  created_at: string;
+  updated_at: string;
+  metadata: JsonObject;
+}
+
+export interface KnowledgeDocumentRecord {
+  id: string;
+  source_id: string;
+  user_id: string | null;
+  visibility: KnowledgeVisibility;
+  title: string;
+  uri: string | null;
+  mime_type: string;
+  status: KnowledgeStatus;
+  content_text: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata: JsonObject;
+}
+
+export interface KnowledgeChunkRecord {
+  id: string;
+  document_id: string;
+  source_id: string;
+  user_id: string | null;
+  visibility: KnowledgeVisibility;
+  chunk_index: number;
+  content: string;
+  content_tsv: unknown | null;
+  metadata: JsonObject;
+  created_at: string;
+}
+
+export interface RagSourceCitationRecord {
+  citationId: string;
+  chunkId: string;
+  documentId: string;
+  sourceId: string;
+  title: string;
+  sourceName: string;
+  content: string;
+  score: number;
+}
+
+export interface RagRetrievalLogRecord {
+  id: string;
+  run_id: string | null;
+  conversation_id: string;
+  user_id: string;
+  query: string;
+  top_k: number;
+  results: RagSourceCitationRecord[];
+  latency_ms: number | null;
+  created_at: string;
+  metadata: JsonObject;
+}
+
 export interface LatestRunResult {
   run: AgentRunRecord | null;
 }
@@ -227,6 +295,10 @@ export interface RecentToolRecord {
 
 export interface RecentToolListResult {
   tools: RecentToolRecord[];
+}
+
+export interface RagRetrievalLogListResult {
+  retrievals: RagRetrievalLogRecord[];
 }
 
 export interface ReportArtifactListResult {

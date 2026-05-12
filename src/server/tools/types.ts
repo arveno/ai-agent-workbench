@@ -2,7 +2,7 @@
 
 import type { DataSourceTestableProviderId } from '../../types/workbench';
 
-export type ServerToolId = 'schema_inspect' | 'query_table' | 'aggregate_table' | 'chart_render';
+export type ServerToolId = 'schema_inspect' | 'query_table' | 'aggregate_table' | 'chart_render' | 'rag_search';
 
 export type ServerToolRiskLevel = 'low' | 'medium' | 'high';
 
@@ -12,6 +12,10 @@ export type ToolRow = Record<string, ToolCellValue>;
 
 export interface ServerToolContext {
   provider: DataSourceTestableProviderId;
+  userId?: string;
+  conversationId?: string;
+  persistedRunId?: string;
+  runtimeRunId?: string;
 }
 
 export interface ServerToolDefinition<TInput, TOutput> {

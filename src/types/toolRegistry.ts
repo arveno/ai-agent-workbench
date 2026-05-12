@@ -3,6 +3,7 @@ export type WorkbenchToolId =
   | 'query_table'
   | 'aggregate_table'
   | 'chart_render'
+  | 'rag_search'
   | 'knowledge_search'
   | 'report_generate';
 

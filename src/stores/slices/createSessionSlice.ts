@@ -71,6 +71,8 @@ function createEmptyUiState() {
     activeAgentRunAbortController: null,
     currentReportRunId: null,
     reportActionState: 'skipped' as const,
+    isRagSourcesLoading: false,
+    ragSourcesError: null,
   };
 }
 
@@ -102,6 +104,8 @@ function createSessionUiState(session: WorkbenchSession | undefined, fallbackTas
     activeAgentRunAbortController: null,
     currentReportRunId: null,
     reportActionState: 'skipped' as const,
+    isRagSourcesLoading: false,
+    ragSourcesError: null,
   };
 }
 

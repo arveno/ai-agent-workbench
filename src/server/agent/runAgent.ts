@@ -4,12 +4,18 @@ import { ensureServerEnvLoaded } from '../datasources/connection';
 import { generateTextWithModelGateway } from '../models/modelGateway';
 import type { AggregateTableInput, AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderInput, ChartRenderOutput } from '../tools/chartRenderTool';
+import type { RagSearchInput, RagSearchOutput } from '../tools/ragSearchTool';
 import { serverToolRegistry } from '../tools/registry';
 import type { SchemaInspectInput, SchemaInspectOutput } from '../tools/schemaInspectTool';
 import type { ServerToolContext } from '../tools/types';
 import { createCapabilityIntroConclusion, createUnsupportedConclusion } from './capabilityReply';
 import { planAgentRun } from './planner';
-import { buildConclusionMessages, buildFallbackConclusion } from './prompt';
+import {
+  buildConclusionMessages,
+  buildFallbackConclusion,
+  buildFallbackRagConclusion,
+  buildRagAnswerMessages,
+} from './prompt';
 import type {
   AgentConclusionSource,
   AgentPlanComparison,
@@ -237,6 +243,100 @@ export async function runAgent(request: AgentRunRequest): Promise<AgentRunResult
       routeDescription: '当前请求不属于教育数据分析工作台支持范围。',
       replyTitle: '生成说明',
     });
+  }
+
+  if (plan.intent === 'knowledge_qa') {
+    const steps: AgentRunStep[] = [
+      createStep('step_create_run', '创建 Run'),
+      createStep('step_intent', '理解用户问题'),
+      createStep('step_rag_search', '检索教学评价知识库'),
+      createStep('step_conclusion', '生成引用回答'),
+    ];
+    const toolInvocations: AgentToolInvocationResult[] = [];
+    const context: ServerToolContext = {
+      provider: request.provider,
+    };
+
+    setStep(steps, 'step_create_run', 'success', {
+      description: `Run ID: ${runId}`,
+      elapsedMs: 1,
+    });
+    setStep(steps, 'step_intent', 'success', {
+      description: `intent=${plan.intent}，reason=${plan.reason}`,
+      elapsedMs: 1,
+    });
+
+    const ragStart = Date.now();
+    setStep(steps, 'step_rag_search', 'running');
+    const ragInput: RagSearchInput = {
+      query: request.prompt,
+      topK: 5,
+    };
+    const ragResult: RagSearchOutput = await serverToolRegistry.rag_search.execute(ragInput, context);
+
+    toolInvocations.push({
+      id: createToolInvocationId(),
+      toolId: 'rag_search',
+      toolName: serverToolRegistry.rag_search.name,
+      status: 'success',
+      inputSummary: stringifySummary(ragInput),
+      outputSummary: ragResult.results.length > 0 ? `返回 ${ragResult.results.length} 条知识来源` : '未找到相关知识来源',
+      elapsedMs: Date.now() - ragStart,
+    });
+    setStep(steps, 'step_rag_search', 'success', {
+      description: toolInvocations[0]?.outputSummary,
+      elapsedMs: Date.now() - ragStart,
+    });
+
+    const conclusionStart = Date.now();
+    setStep(steps, 'step_conclusion', 'running');
+    let conclusion: string;
+    let conclusionSource: AgentConclusionSource = 'fallback';
+    let conclusionNotice: string | undefined;
+
+    if (ragResult.results.length > 0 && apiKey) {
+      try {
+        const modelResult = await generateTextWithModelGateway({
+          provider: 'groq',
+          apiKey,
+          messages: buildRagAnswerMessages({
+            prompt: request.prompt,
+            ragResult,
+          }),
+          temperature: 0.1,
+        });
+        conclusion = modelResult.text;
+        conclusionSource = 'model';
+      } catch {
+        conclusion = buildFallbackRagConclusion({ ragResult });
+        conclusionNotice = '模型生成失败，当前回答由本地 RAG 摘要生成。';
+      }
+    } else {
+      conclusion = buildFallbackRagConclusion({ ragResult });
+      conclusionNotice = ragResult.results.length === 0
+        ? '当前示例知识库未检索到相关依据。'
+        : '未配置 Groq API Key，当前回答由本地 RAG 摘要生成。';
+    }
+
+    setStep(steps, 'step_conclusion', 'success', {
+      description: '已生成带引用标记的回答。',
+      elapsedMs: Date.now() - conclusionStart,
+    });
+
+    return {
+      id: runId,
+      status: 'success',
+      prompt: request.prompt,
+      provider: request.provider,
+      plan,
+      steps,
+      toolInvocations,
+      conclusion,
+      conclusionSource,
+      conclusionNotice,
+      createdAt,
+      elapsedMs: Date.now() - runStart,
+    };
   }
 
   const steps: AgentRunStep[] = [

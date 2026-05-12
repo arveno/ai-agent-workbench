@@ -21,11 +21,14 @@ const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
   'run_started',
   'step_started',
   'step_completed',
+  'step_failed',
   'tool_started',
   'tool_completed',
+  'tool_failed',
   'chart_ready',
   'conclusion_delta',
   'conclusion_completed',
+  'rag_sources_ready',
   'report_pending',
   'run_completed',
   'run_failed',
@@ -49,7 +52,13 @@ function mapRunStatus(status: AgentRunRecord['status']): RunStatus {
 }
 
 function mapIntent(value: string | null): RunIntent {
-  if (value === 'capability_intro' || value === 'data_analysis' || value === 'unsupported' || value === 'unknown') {
+  if (
+    value === 'capability_intro' ||
+    value === 'data_analysis' ||
+    value === 'knowledge_qa' ||
+    value === 'unsupported' ||
+    value === 'unknown'
+  ) {
     return value;
   }
 

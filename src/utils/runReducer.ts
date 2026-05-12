@@ -84,6 +84,19 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
     });
   }
 
+  if (event.type === 'step_failed') {
+    return withUpdatedAt({
+      ...currentRun,
+      steps: updateStep(currentRun.steps, event.stepId, (step) => ({
+        ...step,
+        status: 'error',
+        description: event.errorMessage,
+        completedAt: event.completedAt,
+        elapsedMs: event.elapsedMs,
+      })),
+    });
+  }
+
   if (event.type === 'tool_started') {
     const existingTool = currentRun.toolInvocations.find((tool) => tool.id === event.tool.id);
     const nextTools = existingTool
@@ -110,6 +123,19 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
     });
   }
 
+  if (event.type === 'tool_failed') {
+    return withUpdatedAt({
+      ...currentRun,
+      toolInvocations: updateTool(currentRun.toolInvocations, event.toolId, (tool) => ({
+        ...tool,
+        status: 'error',
+        outputSummary: event.errorMessage,
+        completedAt: event.completedAt,
+        elapsedMs: event.elapsedMs,
+      })),
+    });
+  }
+
   if (event.type === 'chart_ready') {
     return withUpdatedAt({
       ...currentRun,
@@ -130,6 +156,13 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
       conclusion: event.conclusion,
       conclusionSource: event.conclusionSource,
       conclusionNotice: event.conclusionNotice,
+    });
+  }
+
+  if (event.type === 'rag_sources_ready') {
+    return withUpdatedAt({
+      ...currentRun,
+      sources: event.sources,
     });
   }
 

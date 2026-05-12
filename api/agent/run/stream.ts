@@ -343,6 +343,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prompt,
       provider: body.provider,
       clientRunId: runId,
+      persistence: {
+        userId: verified.user.userId,
+        conversationId,
+        persistedRunId: persistedRun?.id,
+        runtimeRunId: persistedRun?.runtimeRunId ?? runId,
+      },
       emit: (event) => {
         if (persistedRun) {
           const seq = eventSeq;

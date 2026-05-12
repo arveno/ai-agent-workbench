@@ -173,6 +173,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       confirmStatus: 'cancelled',
       currentReportRunId: null,
       reportActionState: 'skipped',
+      isRagSourcesLoading: false,
+      ragSourcesError: null,
     });
 
     try {

@@ -4,13 +4,20 @@ import { ensureServerEnvLoaded } from '../datasources/connection';
 import { streamTextWithModelGateway } from '../models/modelGateway';
 import type { AggregateTableInput, AggregateTableOutput } from '../tools/aggregateTableTool';
 import type { ChartRenderInput, ChartRenderOutput } from '../tools/chartRenderTool';
+import type { RagSearchInput, RagSearchOutput } from '../tools/ragSearchTool';
 import { serverToolRegistry } from '../tools/registry';
 import type { SchemaInspectInput, SchemaInspectOutput } from '../tools/schemaInspectTool';
 import type { ServerToolContext } from '../tools/types';
 import type { RunChartData, RunEvent, RunIntent, RunSnapshot, RunStep, RunToolInvocation } from '../../types/run';
+import type { RagSourceChunk } from '../../types/rag';
 import { createCapabilityIntroConclusion, createUnsupportedConclusion } from './capabilityReply';
 import { planAgentRun } from './planner';
-import { buildConclusionMessages, buildFallbackConclusion } from './prompt';
+import {
+  buildConclusionMessages,
+  buildFallbackConclusion,
+  buildFallbackRagConclusion,
+  buildRagAnswerMessages,
+} from './prompt';
 import type {
   AgentConclusionSource,
   AgentPlan,
@@ -21,6 +28,13 @@ import type {
 } from './types';
 
 type AgentProvider = 'postgresql' | 'supabase';
+
+interface StreamPersistenceContext {
+  userId: string;
+  conversationId: string;
+  persistedRunId?: string;
+  runtimeRunId: string;
+}
 
 function createRunId(): string {
   return `run_stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -186,6 +200,19 @@ function toRunChartData(chartResult: ChartRenderOutput): RunChartData {
   };
 }
 
+function toRunRagSources(ragResult: RagSearchOutput): RagSourceChunk[] {
+  return ragResult.sources.map((source) => ({
+    id: source.chunkId,
+    documentTitle: source.title,
+    contentPreview: source.content,
+    score: source.score,
+    citationLabel: `[${source.citationId}]`,
+    usedInAnswer: true,
+    sourceType: 'policy',
+    sourceName: source.sourceName,
+  }));
+}
+
 function splitTextIntoDeltas(text: string): string[] {
   const deltas: string[] = [];
   let buffer = '';
@@ -305,6 +332,7 @@ export async function streamAgentRun(params: {
   prompt: string;
   provider: AgentProvider;
   clientRunId?: string;
+  persistence?: StreamPersistenceContext;
   emit: (event: RunEvent) => void;
 }): Promise<void> {
   const runId = params.clientRunId?.trim() || createRunId();
@@ -326,6 +354,10 @@ export async function streamAgentRun(params: {
     const apiKey = process.env.GROQ_API_KEY?.trim() || '';
     const context: ServerToolContext = {
       provider: params.provider,
+      userId: params.persistence?.userId,
+      conversationId: params.persistence?.conversationId,
+      persistedRunId: params.persistence?.persistedRunId,
+      runtimeRunId: params.persistence?.runtimeRunId ?? runId,
     };
 
     const plannerStartedAt = nowIso();
@@ -392,6 +424,161 @@ export async function streamAgentRun(params: {
         routeStepDescription: '当前请求不属于教育数据分析工作台支持范围。',
         conclusionStepTitle: '生成说明',
         emit: params.emit,
+      });
+      params.emit({
+        type: 'run_completed',
+        runId,
+        completedAt: nowIso(),
+        elapsedMs: Date.now() - runStart,
+      });
+      return;
+    }
+
+    if (plan.intent === 'knowledge_qa') {
+      const ragStartedAt = Date.now();
+      params.emit({
+        type: 'step_started',
+        runId,
+        stepId: 'step_rag_search',
+        title: '检索教学评价知识库',
+        description: '通过 rag_search 检索制度、指标口径和依据来源。',
+        startedAt: new Date(ragStartedAt).toISOString(),
+      });
+      const ragInput: RagSearchInput = {
+        query: params.prompt,
+        topK: 5,
+      };
+      const ragTool = createTool({
+        id: 'rag_search',
+        displayName: '教学评价知识检索',
+        inputSummary: `检索：${params.prompt.slice(0, 80)}`,
+      });
+
+      params.emit({ type: 'tool_started', runId, tool: ragTool });
+
+      let ragResult: RagSearchOutput;
+
+      try {
+        ragResult = await serverToolRegistry.rag_search.execute(ragInput, context);
+      } catch {
+        const failedAt = nowIso();
+        params.emit({
+          type: 'tool_failed',
+          runId,
+          toolId: ragTool.id,
+          errorMessage: 'RAG 检索失败，请稍后重试。',
+          completedAt: failedAt,
+          elapsedMs: Date.now() - ragStartedAt,
+        });
+        params.emit({
+          type: 'step_failed',
+          runId,
+          stepId: 'step_rag_search',
+          errorMessage: 'RAG 检索失败，请稍后重试。',
+          completedAt: failedAt,
+          elapsedMs: Date.now() - ragStartedAt,
+        });
+        throw new Error('RAG retrieval failed');
+      }
+
+      const ragOutputSummary = ragResult.results.length > 0
+        ? `返回 ${ragResult.results.length} 条知识来源`
+        : '未找到相关知识来源';
+      params.emit({
+        type: 'tool_completed',
+        runId,
+        toolId: ragTool.id,
+        outputSummary: ragOutputSummary,
+        completedAt: nowIso(),
+        elapsedMs: Date.now() - ragStartedAt,
+      });
+      params.emit({
+        type: 'rag_sources_ready',
+        runId,
+        sources: toRunRagSources(ragResult),
+      });
+      params.emit({
+        type: 'step_completed',
+        runId,
+        stepId: 'step_rag_search',
+        completedAt: nowIso(),
+        elapsedMs: Date.now() - ragStartedAt,
+      });
+
+      const conclusionStartedAt = Date.now();
+      params.emit({
+        type: 'step_started',
+        runId,
+        stepId: 'step_rag_answer',
+        title: '生成引用回答',
+        description: '基于检索片段生成带来源标记的回答。',
+        startedAt: new Date(conclusionStartedAt).toISOString(),
+      });
+
+      let conclusionSource: AgentConclusionSource = 'fallback';
+      let conclusionNotice: string | undefined;
+      let conclusion = '';
+
+      if (ragResult.results.length === 0 || !apiKey) {
+        conclusion = buildFallbackRagConclusion({ ragResult });
+        conclusionNotice = ragResult.results.length === 0
+          ? '当前示例知识库未检索到相关依据。'
+          : '未配置 Groq API Key，当前回答由本地 RAG 摘要生成。';
+        await streamStaticConclusion({
+          runId,
+          conclusion,
+          conclusionSource,
+          conclusionNotice,
+          emit: params.emit,
+        });
+      } else {
+        try {
+          const messages = buildRagAnswerMessages({
+            prompt: params.prompt,
+            ragResult,
+          });
+          const modelResult = await streamTextWithModelGateway({
+            provider: 'groq',
+            apiKey,
+            messages,
+            temperature: 0.1,
+            onDelta: (delta) => {
+              params.emit({ type: 'conclusion_delta', runId, delta });
+            },
+          });
+          conclusion = modelResult.text;
+
+          if (!conclusion.trim()) {
+            throw new Error('Empty Groq RAG conclusion');
+          }
+
+          conclusionSource = 'model';
+          emitConclusionCompleted({
+            runId,
+            conclusion,
+            conclusionSource,
+            emit: params.emit,
+          });
+        } catch {
+          conclusion = buildFallbackRagConclusion({ ragResult });
+          conclusionSource = 'fallback';
+          conclusionNotice = '模型生成失败，当前回答由本地 RAG 摘要生成。';
+          await streamStaticConclusion({
+            runId,
+            conclusion,
+            conclusionSource,
+            conclusionNotice,
+            emit: params.emit,
+          });
+        }
+      }
+
+      params.emit({
+        type: 'step_completed',
+        runId,
+        stepId: 'step_rag_answer',
+        completedAt: nowIso(),
+        elapsedMs: Date.now() - conclusionStartedAt,
       });
       params.emit({
         type: 'run_completed',

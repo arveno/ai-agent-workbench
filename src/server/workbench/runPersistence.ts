@@ -344,6 +344,25 @@ export async function upsertToolInvocationFromEvent(params: {
         .eq('user_id', params.run.userId);
     }
   }
+
+  if (params.event.type === 'tool_failed') {
+    const toolInvocationId = await findToolInvocationId(params.run, params.event.toolId);
+    const updatePayload: ToolInvocationUpdate = {
+      status: 'failed',
+      output_summary: params.event.errorMessage,
+      finished_at: params.event.completedAt,
+      elapsed_ms: params.event.elapsedMs,
+      error: params.event.errorMessage,
+    };
+
+    if (toolInvocationId) {
+      await supabaseAdmin
+        .from('tool_invocations')
+        .update(updatePayload)
+        .eq('id', toolInvocationId)
+        .eq('user_id', params.run.userId);
+    }
+  }
 }
 
 export async function persistRunEventSideEffects(params: {

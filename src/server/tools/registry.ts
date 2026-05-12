@@ -3,6 +3,7 @@
 import { aggregateTableTool } from './aggregateTableTool';
 import { chartRenderTool } from './chartRenderTool';
 import { queryTableTool } from './queryTableTool';
+import { ragSearchTool } from './ragSearchTool';
 import { schemaInspectTool } from './schemaInspectTool';
 
 export const serverToolRegistry = {
@@ -10,6 +11,7 @@ export const serverToolRegistry = {
   query_table: queryTableTool,
   aggregate_table: aggregateTableTool,
   chart_render: chartRenderTool,
+  rag_search: ragSearchTool,
 } as const;
 
 export type RegisteredServerToolId = keyof typeof serverToolRegistry;

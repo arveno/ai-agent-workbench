@@ -1,40 +1,21 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RagSourceChunk } from '../../../types/rag';
-import { formatSourceScore, getRunRagSources } from '../../../utils/ragSources';
+import { createRagSourcesView } from '../../../utils/ragSourcesViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
+import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
-
-function getSourceTypeLabel(sourceType: RagSourceChunk['sourceType']): string {
-  if (sourceType === 'knowledge_base') {
-    return '知识库';
-  }
-
-  if (sourceType === 'database_note') {
-    return '数据说明';
-  }
-
-  if (sourceType === 'policy') {
-    return '规则口径';
-  }
-
-  return '文档';
-}
-
-function truncatePreview(content: string): string {
-  const normalizedContent = content.trim().replace(/\s+/g, ' ');
-
-  if (normalizedContent.length <= 120) {
-    return normalizedContent;
-  }
-
-  return `${normalizedContent.slice(0, 119)}…`;
-}
 
 export function RagSourcesCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
-  const sources = getRunRagSources(currentRun);
+  const isRagSourcesLoading = useWorkbenchStore((state) => state.isRagSourcesLoading);
+  const ragSourcesError = useWorkbenchStore((state) => state.ragSourcesError);
+  const loadRagRetrievals = useWorkbenchStore((state) => state.loadRagRetrievals);
+  const view = createRagSourcesView({
+    run: currentRun,
+    isLoading: isRagSourcesLoading,
+    errorMessage: ragSourcesError,
+  });
 
   if (!currentRun) {
     return (
@@ -42,14 +23,14 @@ export function RagSourcesCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.search} size={16} />
-            <span>检索来源</span>
+            <span>{view.title}</span>
           </CardTitle>
-          <CardDescription>来源片段和引用信息</CardDescription>
+          <CardDescription>{view.description}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
-            <strong>暂无检索来源</strong>
-            发送涉及知识检索的问题后，这里会展示来源片段和引用信息。
+            <strong>{view.emptyTitle}</strong>
+            {view.emptyDescription}
           </div>
         </CardContent>
       </Card>
@@ -62,62 +43,91 @@ export function RagSourcesCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.search} size={16} />
-            <span>检索来源</span>
+            <span>{view.title}</span>
           </CardTitle>
-          <CardDescription>RAG 来源、引用与证据链</CardDescription>
+          <CardDescription>{view.description}</CardDescription>
         </div>
-        {sources.length > 0 ? (
+        {view.items.length > 0 ? (
           <Badge variant="outline" className="right-card-count-badge">
-            {sources.length} 条来源
+            {view.items.length} 条来源
           </Badge>
         ) : null}
       </CardHeader>
 
       <CardContent className="right-card-content">
-        {sources.length === 0 ? (
+        {view.isLoading ? (
           <div className="right-panel-empty-state">
-            <strong>暂无检索来源</strong>
-            当前 Run 未返回来源片段。后续接入真实 RAG 工具后，这里会展示引用和证据链。
+            <strong>{view.loadingMessage}</strong>
+            正在恢复检索日志和来源片段。
           </div>
-        ) : (
+        ) : null}
+
+        {!view.isLoading && view.errorMessage ? (
+          <div className="right-panel-empty-state">
+            <strong>RAG 来源加载失败</strong>
+            {view.errorMessage}
+            {view.canRetry ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (currentRun) {
+                    void loadRagRetrievals(currentRun.id);
+                  }
+                }}
+              >
+                {view.retryLabel}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!view.isLoading && !view.errorMessage && view.isEmpty ? (
+          <div className="right-panel-empty-state">
+            <strong>{view.emptyTitle}</strong>
+            {view.emptyDescription}
+          </div>
+        ) : null}
+
+        {!view.isLoading && !view.errorMessage && !view.isEmpty ? (
           <div className="rag-source-list">
-            {sources.map((source) => (
+            {view.items.map((source) => (
               <article key={source.id} className="rag-source-item">
                 <div className="rag-source-header">
                   <Badge variant="outline" className="rag-source-citation">
-                    {source.citationLabel}
+                    {source.citationId}
                   </Badge>
-                  <span className="rag-source-score">相关度 {formatSourceScore(source.score)}</span>
+                  <span className="rag-source-score">{source.scoreText}</span>
                 </div>
 
                 <div className="rag-source-title-row">
-                  <h3 className="rag-source-title">{source.documentTitle}</h3>
+                  <h3 className="rag-source-title">{source.title}</h3>
                   <Badge variant="outline" className="rag-source-badge rag-source-badge-type">
-                    {getSourceTypeLabel(source.sourceType)}
+                    {source.isMock ? '公开演示' : '真实来源'}
                   </Badge>
                 </div>
 
-                {source.chunkTitle ? <div className="rag-source-chunk-title">{source.chunkTitle}</div> : null}
-                <p className="rag-source-preview">{truncatePreview(source.contentPreview)}</p>
+                <div className="rag-source-chunk-title">来源：{source.sourceName}</div>
+                <p className="rag-source-preview">{source.snippet}</p>
 
                 <div className="rag-source-meta">
                   <Badge
                     variant="outline"
                     className={[
                       'rag-source-badge',
-                      source.usedInAnswer ? 'rag-source-badge-used' : 'rag-source-badge-muted',
+                      source.isUsedInAnswer ? 'rag-source-badge-used' : 'rag-source-badge-muted',
                     ]
                       .filter(Boolean)
                       .join(' ')}
                   >
-                    {source.usedInAnswer ? '已用于回答' : '未引用'}
+                    {source.isUsedInAnswer ? '已用于回答' : '未引用'}
                   </Badge>
-                  {source.updatedAt ? <span className="rag-source-updated">更新：{source.updatedAt}</span> : null}
                 </div>
               </article>
             ))}
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

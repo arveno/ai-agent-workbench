@@ -14,6 +14,7 @@ export interface FormattedToolInvocation {
 const TOOL_DISPLAY_NAME_MAP = {
   schema_inspect: '数据源结构读取',
   knowledge_search: '知识检索',
+  rag_search: '教学评价知识检索',
   query_data: '数据查询',
   query_table: '受控数据查询',
   aggregate_table: '数据聚合分析',
@@ -24,6 +25,7 @@ const TOOL_DISPLAY_NAME_MAP = {
 const TOOL_CATEGORY_LABEL_MAP = {
   schema_inspect: 'Schema 工具',
   knowledge_search: '知识工具',
+  rag_search: '知识工具',
   query_data: '查询工具',
   query_table: '查询工具',
   aggregate_table: '分析工具',
@@ -165,7 +167,7 @@ function formatInputText(toolId: KnownToolId | null, invocation: RunToolInvocati
     return '读取可访问的数据源结构。';
   }
 
-  if (toolId === 'knowledge_search') {
+  if (toolId === 'knowledge_search' || toolId === 'rag_search') {
     return '检索与本轮问题相关的知识资料。';
   }
 
@@ -226,7 +228,7 @@ function formatOutputText(toolId: KnownToolId | null, invocation: RunToolInvocat
     return chartType ? `已生成${humanizeChartType(chartType)}数据。` : '已生成图表数据。';
   }
 
-  if (toolId === 'knowledge_search') {
+  if (toolId === 'knowledge_search' || toolId === 'rag_search') {
     const count = extractCount(outputText, '条');
     return count ? `已检索到 ${count} 条相关知识资料。` : '已检索到相关知识资料。';
   }

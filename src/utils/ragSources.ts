@@ -12,6 +12,8 @@ export function createMockRagSources(): RagSourceChunk[] {
       citationLabel: '[S1]',
       usedInAnswer: true,
       sourceType: 'policy',
+      sourceName: '公开演示规则库',
+      isMock: true,
       updatedAt: '2026-05-01',
     },
     {
@@ -23,6 +25,8 @@ export function createMockRagSources(): RagSourceChunk[] {
       citationLabel: '[S2]',
       usedInAnswer: true,
       sourceType: 'knowledge_base',
+      sourceName: '公开演示规则库',
+      isMock: true,
       updatedAt: '2026-04-28',
     },
     {
@@ -34,6 +38,8 @@ export function createMockRagSources(): RagSourceChunk[] {
       citationLabel: '[S3]',
       usedInAnswer: false,
       sourceType: 'document',
+      sourceName: '公开演示规则库',
+      isMock: true,
       updatedAt: '2026-04-20',
     },
   ];

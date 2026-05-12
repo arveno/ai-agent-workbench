@@ -7,5 +7,7 @@ export interface RagSourceChunk {
   citationLabel: string;
   usedInAnswer: boolean;
   sourceType: 'knowledge_base' | 'document' | 'database_note' | 'policy';
+  sourceName?: string;
+  isMock?: boolean;
   updatedAt?: string;
 }

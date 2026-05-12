@@ -16,7 +16,10 @@ const GROQ_MODEL = 'llama-3.1-8b-instant';
 const CAPABILITY_KEYWORDS = [
   '你能做什么',
   '你可以做什么',
+  '你可以帮我做哪些分析',
   '有什么功能',
+  '有什么能力',
+  '工作台有什么能力',
   '怎么用',
   '介绍一下',
   '帮助',
@@ -42,6 +45,60 @@ const DATA_ANALYSIS_KEYWORDS = [
   '教学质量',
 ] as const;
 
+const DATA_ANALYSIS_PRIORITY_KEYWORDS = [
+  '分析',
+  '教学质量数据',
+  '找出异常',
+  '异常指标',
+  '指标变化',
+  '数据异常',
+  '趋势',
+  '对比',
+  '本月',
+  '上月',
+  '环比',
+  '最近 6 个月',
+  '最近6个月',
+  '班级',
+  '平均分',
+  '成绩',
+] as const;
+
+const KNOWLEDGE_QA_KEYWORDS = [
+  '制度',
+  '政策',
+  '依据',
+  '规则',
+  '评价口径',
+  '定义',
+  '说明',
+  '来源',
+  '引用',
+  '为什么要关注',
+  '为什么需要',
+  '教学评价',
+  '学业预警',
+  '学业预警规则',
+  '数据异常处理',
+  '数据源暂不可用',
+] as const;
+
+const KNOWLEDGE_REFERENCE_KEYWORDS = [
+  '制度',
+  '政策',
+  '依据',
+  '规则',
+  '评价口径',
+  '定义',
+  '来源',
+  '引用',
+  '教学评价制度',
+  '现有政策',
+  '学业预警规则',
+  '数据异常处理',
+  '数据源暂不可用',
+] as const;
+
 const GROUP_BY_TREND_KEYWORDS = ['趋势', '月份', '对比', '上月', '环比'] as const;
 const LATEST_MONTH_KEYWORDS = ['本月', '这个月', '当前月份'] as const;
 const PREVIOUS_MONTH_KEYWORDS = ['上月', '环比', '对比上月', '较上月'] as const;
@@ -57,14 +114,17 @@ const PLANNER_SYSTEM_PROMPT = [
   '2. data_analysis',
   '用户要求分析教学质量、成绩、出勤率、作业完成率、异常指标、趋势或对比，需要进入数据分析流程。',
   '',
-  '3. unsupported',
+  '3. knowledge_qa',
+  '用户询问教学评价制度、指标口径、规则依据、学业预警、课堂参与度、作业完成率、数据异常处理等知识依据，需要进入 RAG 检索流程。',
+  '',
+  '4. unsupported',
   '用户问题与当前教育数据分析工作台无关，当前系统暂不支持。',
   '',
   '请只返回 JSON，不要输出 Markdown，不要解释。',
   '',
   'JSON 格式：',
   '{',
-  '  "intent": "capability_intro | data_analysis | unsupported",',
+  '  "intent": "capability_intro | data_analysis | knowledge_qa | unsupported",',
   '  "shouldUseDataAnalysis": true | false,',
   '  "reason": "简短原因",',
   '  "metric": "avg_score | attendance_rate | homework_completion_rate | abnormal_count",',
@@ -79,8 +139,12 @@ const PLANNER_SYSTEM_PROMPT = [
   '',
   '规则：',
   '- capability_intro 的 shouldUseDataAnalysis 必须是 false',
+  '- knowledge_qa 的 shouldUseDataAnalysis 必须是 false',
   '- unsupported 的 shouldUseDataAnalysis 必须是 false',
   '- data_analysis 的 shouldUseDataAnalysis 必须是 true',
+  '- 如果用户明确要求分析教学质量数据、异常指标、趋势或对比，优先输出 data_analysis',
+  '- 不要因为单独出现“为什么”就输出 knowledge_qa；只有询问制度、政策、依据、规则、评价口径、定义或引用来源时才输出 knowledge_qa',
+  '- 如果用户询问制度、政策、依据、规则、评价口径、学业预警、课堂参与度、作业完成率为什么重要，优先输出 knowledge_qa',
   '- 如果用户明确提到某年某月，例如“2026 年 5 月”或“2026-05”，必须输出 timeRange.type = "month"，month = "YYYY-MM"',
   '- 如果用户说“本月”，输出 timeRange.type = "latest_available_month"',
   '- 如果用户说“上月 / 环比 / 对比上月”，comparison = "previous_month"',
@@ -99,6 +163,7 @@ const PLANNER_SYSTEM_PROMPT = [
 const PLAN_INTENT_WHITELIST: readonly AgentPlanIntent[] = [
   'capability_intro',
   'data_analysis',
+  'knowledge_qa',
   'unsupported',
 ] as const;
 const PLAN_METRIC_WHITELIST: readonly AgentPlanMetric[] = [
@@ -227,6 +292,33 @@ function pickComparisonFromPrompt(prompt: string): AgentPlanComparison {
   return includesAnyKeyword(prompt, PREVIOUS_MONTH_KEYWORDS) ? 'previous_month' : 'none';
 }
 
+function hasRecentMonthWindow(prompt: string): boolean {
+  return /最近\s*\d+\s*个月/.test(prompt);
+}
+
+function hasDataAnalysisPriority(prompt: string, lowerPrompt: string): boolean {
+  return (
+    includesAnyKeyword(prompt, DATA_ANALYSIS_PRIORITY_KEYWORDS) ||
+    includesAnyKeyword(lowerPrompt, DATA_ANALYSIS_PRIORITY_KEYWORDS) ||
+    Boolean(extractExplicitMonth(prompt)) ||
+    hasRecentMonthWindow(prompt)
+  );
+}
+
+function hasKnowledgeReference(prompt: string, lowerPrompt: string): boolean {
+  return (
+    includesAnyKeyword(prompt, KNOWLEDGE_REFERENCE_KEYWORDS) ||
+    includesAnyKeyword(lowerPrompt, KNOWLEDGE_REFERENCE_KEYWORDS)
+  );
+}
+
+function hasKnowledgeQaSignal(prompt: string, lowerPrompt: string): boolean {
+  return (
+    includesAnyKeyword(prompt, KNOWLEDGE_QA_KEYWORDS) ||
+    includesAnyKeyword(lowerPrompt, KNOWLEDGE_QA_KEYWORDS)
+  );
+}
+
 export function fallbackPlanAgentRun(prompt: string): AgentPlan {
   const normalizedPrompt = prompt.trim();
   const lowerPrompt = normalizedPrompt.toLowerCase();
@@ -239,7 +331,32 @@ export function fallbackPlanAgentRun(prompt: string): AgentPlan {
     };
   }
 
+  const shouldUseDataAnalysis = hasDataAnalysisPriority(normalizedPrompt, lowerPrompt);
+  const shouldUseKnowledgeQa = hasKnowledgeQaSignal(normalizedPrompt, lowerPrompt);
+  const hasExplicitKnowledgeReference = hasKnowledgeReference(normalizedPrompt, lowerPrompt);
+
+  if (shouldUseDataAnalysis && !hasExplicitKnowledgeReference) {
+    return {
+      intent: 'data_analysis',
+      shouldUseDataAnalysis: true,
+      reason: '用户在请求教学质量相关的数据分析。',
+      metric: pickMetricFromPrompt(normalizedPrompt),
+      groupBy: pickGroupByFromPrompt(normalizedPrompt),
+      timeRange: pickTimeRangeFromPrompt(normalizedPrompt),
+      comparison: pickComparisonFromPrompt(normalizedPrompt),
+    };
+  }
+
+  if (shouldUseKnowledgeQa) {
+    return {
+      intent: 'knowledge_qa',
+      shouldUseDataAnalysis: false,
+      reason: '用户在询问教学评价制度、规则依据或指标口径，需要检索知识库。',
+    };
+  }
+
   if (
+    shouldUseDataAnalysis ||
     includesAnyKeyword(normalizedPrompt, DATA_ANALYSIS_KEYWORDS) ||
     includesAnyKeyword(lowerPrompt, DATA_ANALYSIS_KEYWORDS)
   ) {
