@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js';
+import type { ConversationRecord, MessageRecord } from '../../types/persistence';
 
 export type UserRole = 'anonymous' | 'demo_user' | 'admin';
 
@@ -67,6 +68,10 @@ export interface AgentRunUsageRow extends Record<string, unknown> {
   metadata: Record<string, unknown>;
 }
 
+export interface ConversationRow extends ConversationRecord, Record<string, unknown> {}
+
+export interface MessageRow extends MessageRecord, Record<string, unknown> {}
+
 export interface ServerAuthDatabase {
   public: {
     Tables: {
@@ -86,6 +91,18 @@ export interface ServerAuthDatabase {
         Row: AgentRunUsageRow;
         Insert: Partial<AgentRunUsageRow> & Pick<AgentRunUsageRow, 'user_id' | 'status'>;
         Update: Partial<AgentRunUsageRow>;
+        Relationships: [];
+      };
+      conversations: {
+        Row: ConversationRow;
+        Insert: Partial<ConversationRow> & Pick<ConversationRow, 'user_id'>;
+        Update: Partial<ConversationRow>;
+        Relationships: [];
+      };
+      messages: {
+        Row: MessageRow;
+        Insert: Partial<MessageRow> & Pick<MessageRow, 'conversation_id' | 'user_id' | 'role'>;
+        Update: Partial<MessageRow>;
         Relationships: [];
       };
     };

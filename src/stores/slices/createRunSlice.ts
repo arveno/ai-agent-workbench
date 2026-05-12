@@ -24,7 +24,9 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       };
       const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, runWithSession);
 
-      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      if (!state.isPersistentMode) {
+        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      }
 
       return {
         currentRun: runWithSession,
@@ -58,7 +60,9 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       };
       const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, runWithSession);
 
-      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      if (!state.isPersistentMode) {
+        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      }
 
       return {
         currentRun: runWithSession,

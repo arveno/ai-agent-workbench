@@ -16,7 +16,13 @@ import { parseWorkbenchUrl, replaceWorkbenchUrl } from './utils/urlState';
 
 function App() {
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
+  const authStatus = useAuthStore((state) => state.status);
+  const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const authAccessToken = useAuthStore((state) => state.session?.access_token ?? null);
+  const isAuthInitialized = useAuthStore((state) => state.isInitialized);
   const hydrateFromUrl = useWorkbenchStore((state) => state.hydrateFromUrl);
+  const hydratePersistentWorkbench = useWorkbenchStore((state) => state.hydratePersistentWorkbench);
+  const resetPersistentWorkbench = useWorkbenchStore((state) => state.resetPersistentWorkbench);
 
   useEffect(() => {
     void initializeAuth();
@@ -32,6 +38,31 @@ function App() {
     hydrateFromUrl(nextState);
     replaceWorkbenchUrl(nextState);
   }, [hydrateFromUrl]);
+
+  useEffect(() => {
+    if (!isAuthInitialized) {
+      return;
+    }
+
+    if (authStatus === 'authenticated' && authUserId && authAccessToken) {
+      const urlState = parseWorkbenchUrl(window.location.search);
+      void hydratePersistentWorkbench({
+        preferredSessionId: urlState.sessionId ?? undefined,
+      });
+      return;
+    }
+
+    if (authStatus === 'anonymous' || authStatus === 'error') {
+      resetPersistentWorkbench();
+    }
+  }, [
+    authAccessToken,
+    authStatus,
+    authUserId,
+    hydratePersistentWorkbench,
+    isAuthInitialized,
+    resetPersistentWorkbench,
+  ]);
 
   return (
     <div className="app-shell app-root">

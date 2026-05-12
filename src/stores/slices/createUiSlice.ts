@@ -102,8 +102,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     set({ chatDraft: '' });
   },
   runCurrentAgentAnalysis: async (promptOverride) => {
-    const state = get();
-    const prompt = (promptOverride ?? state.chatDraft).trim();
+    const initialState = get();
+    const prompt = (promptOverride ?? initialState.chatDraft).trim();
 
     if (!prompt) {
       set({
@@ -113,6 +113,9 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       return;
     }
 
+    await get().ensureCurrentPersistentConversation();
+
+    const state = get();
     const requestId = createAgentRunRequestId();
     const sessionId = state.currentSessionId;
     const runId = createRunId('agent_run');
@@ -139,10 +142,15 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
     previousAbortController?.abort();
 
-    get().appendUserMessageToCurrentSession(prompt, {
+    const userMessage = get().appendUserMessageToCurrentSession(prompt, {
       runId,
       kind: 'normal',
     });
+
+    if (userMessage && get().isPersistentMode) {
+      void get().persistMessageToConversation(sessionId, userMessage);
+    }
+
     get().applyRunEvent(pendingRunEvent);
     get().clearChatDraft();
 
@@ -236,10 +244,14 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
         if (assistantMessage) {
           hasAppendedFinalMessage = true;
-          get().appendAssistantMessageToCurrentSession(assistantMessage, {
+          const persistedAssistantMessage = get().appendAssistantMessageToCurrentSession(assistantMessage, {
             runId,
             kind: 'normal',
           });
+
+          if (persistedAssistantMessage && get().isPersistentMode) {
+            void get().persistMessageToConversation(sessionId, persistedAssistantMessage);
+          }
         }
 
         return;
@@ -311,10 +323,14 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         );
 
         if (assistantMessage) {
-          get().appendAssistantMessageToCurrentSession(assistantMessage, {
+          const persistedAssistantMessage = get().appendAssistantMessageToCurrentSession(assistantMessage, {
             runId,
             kind: 'normal',
           });
+
+          if (persistedAssistantMessage && get().isPersistentMode) {
+            void get().persistMessageToConversation(sessionId, persistedAssistantMessage);
+          }
         }
       }
     }

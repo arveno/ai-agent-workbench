@@ -360,7 +360,7 @@ function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
   };
 }
 
-function clearPersistedWorkbenchState(): void {
+export function clearPersistedWorkbenchState(): void {
   if (typeof window === 'undefined') {
     return;
   }

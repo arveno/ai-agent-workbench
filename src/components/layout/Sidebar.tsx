@@ -138,8 +138,8 @@ export function Sidebar() {
     });
   };
 
-  const handleCreateSession = () => {
-    const sessionId = createSession();
+  const handleCreateSession = async () => {
+    const sessionId = await createSession();
     replaceWorkbenchUrl({
       sessionId,
       taskId: currentTaskId,

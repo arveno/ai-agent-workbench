@@ -13,6 +13,8 @@ export function ChatPanel() {
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
   const realModelNotice = useWorkbenchStore((state) => state.realModelNotice);
+  const persistenceError = useWorkbenchStore((state) => state.persistenceError);
+  const isMessagesLoading = useWorkbenchStore((state) => state.isMessagesLoading);
   const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const currentSession = useMemo(
@@ -116,6 +118,10 @@ export function ChatPanel() {
             </Button>
           </div>
         ) : null}
+
+        {isMessagesLoading ? <div className="real-model-notice">正在恢复会话消息...</div> : null}
+
+        {persistenceError ? <div className="real-model-notice">{persistenceError}</div> : null}
 
         {realModelNotice ? <div className="real-model-notice">{realModelNotice}</div> : null}
 

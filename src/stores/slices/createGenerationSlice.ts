@@ -189,7 +189,10 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
+    await get().ensureCurrentPersistentConversation();
+
     const snapshot = get();
+    const persistentConversationId = snapshot.isPersistentMode ? snapshot.currentSessionId : null;
     const streamRunId = snapshot.streamRunId + 1;
     const runId = createRunId('mock_run');
     const now = Date.now();
@@ -244,7 +247,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
             },
           ]);
 
-      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      if (!state.isPersistentMode) {
+        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      }
 
       return {
         sessions: nextSessions,
@@ -261,6 +266,11 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         confirmStatus: 'waiting',
       };
     });
+
+    if (persistentConversationId) {
+      void get().persistMessageToConversation(persistentConversationId, nextMessages[0]);
+    }
+
     if (runId) {
       const runStartedEvent = createMockRunStartedEvent({
         runId,
@@ -290,7 +300,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
               content
             );
 
-            persistWorkbenchSessions(updatedSessions, state.currentSessionId);
+            if (!state.isPersistentMode) {
+              persistWorkbenchSessions(updatedSessions, state.currentSessionId);
+            }
 
             return {
               sessions: updatedSessions,
@@ -334,7 +346,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           current.assistantStream.content
         );
 
-        persistWorkbenchSessions(updatedSessions, state.currentSessionId);
+        if (!state.isPersistentMode) {
+          persistWorkbenchSessions(updatedSessions, state.currentSessionId);
+        }
 
         return {
           sessions: updatedSessions,
@@ -352,6 +366,13 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         get().applyRunEvent(createMockConclusionCompletedEvent(nextRun.id, current.assistantStream.content));
         get().applyRunEvent(createMockReportPendingEvent(nextRun.id));
         get().applyRunEvent(createMockRunCompletedEvent(nextRun.id, 1200));
+      }
+
+      if (persistentConversationId && get().currentSessionId === persistentConversationId && result !== 'stopped') {
+        void get().persistMessageToConversation(persistentConversationId, {
+          ...nextMessages[1],
+          content: current.assistantStream.content,
+        });
       }
     };
 
@@ -509,7 +530,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         ),
       );
 
-      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      if (!state.isPersistentMode) {
+        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      }
 
       return {
         sessions: nextSessions,
@@ -549,7 +572,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         ),
       );
 
-      persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      if (!state.isPersistentMode) {
+        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+      }
 
       return {
         sessions: nextSessions,

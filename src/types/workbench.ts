@@ -321,8 +321,13 @@ export interface SessionSlice {
   currentTaskId: string;
   currentPrompt: string;
   activeAssistantMessageId: string;
+  isConversationListLoading: boolean;
+  isMessagesLoading: boolean;
+  persistenceError: string | null;
+  isPersistentMode: boolean;
+  persistentUserId: string | null;
   persistSessions: (sessions: WorkbenchSession[], activeSessionId?: string) => void;
-  createSession: () => string;
+  createSession: () => Promise<string>;
   switchSession: (sessionId: string) => void;
   setCurrentSessionId: (sessionId: string) => void;
   setCurrentTaskId: (taskId: string) => void;
@@ -335,14 +340,19 @@ export interface SessionSlice {
       runId?: string;
       kind?: WorkbenchMessageKind;
     },
-  ) => void;
+  ) => WorkbenchMessage | null;
   appendAssistantMessageToCurrentSession: (
     content: string,
     options?: {
       runId?: string;
       kind?: WorkbenchMessageKind;
     },
-  ) => void;
+  ) => WorkbenchMessage | null;
+  hydratePersistentWorkbench: (params?: { preferredSessionId?: string }) => Promise<void>;
+  resetPersistentWorkbench: () => void;
+  loadPersistentMessagesForSession: (sessionId: string) => Promise<void>;
+  ensureCurrentPersistentConversation: () => Promise<string | null>;
+  persistMessageToConversation: (conversationId: string, message: WorkbenchMessage) => Promise<void>;
   startTask: (taskId: string, prompt: string) => void;
   hydrateFromUrl: (state: { sessionId?: string; taskId?: string }) => void;
 }
