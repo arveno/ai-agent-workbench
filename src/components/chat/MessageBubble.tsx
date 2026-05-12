@@ -1,49 +1,47 @@
-﻿import type { ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import type { ReactNode } from 'react';
+import type { MessageRenderMode } from '../../utils/messageTimelineViewModel';
+import { LongTextBlock } from './LongTextBlock';
+import { MarkdownMessage } from './MarkdownMessage';
 
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: ReactNode;
+  previewText?: string;
+  renderMode?: MessageRenderMode;
+  shouldCollapseByDefault?: boolean;
   afterContent?: ReactNode;
   actions?: ReactNode;
 }
 
-interface MarkdownMessageProps {
-  content: string;
+function renderTextContent(content: string, renderMode: MessageRenderMode): ReactNode {
+  if (renderMode === 'markdown' || renderMode === 'report') {
+    return <MarkdownMessage content={content} />;
+  }
+
+  return <div className="message-content-text">{content}</div>;
 }
 
-function MarkdownMessage({ content }: MarkdownMessageProps) {
-  return (
-    <div className="message-markdown">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ children: linkChildren, href }) =>
-            href ? (
-              <a href={href} target="_blank" rel="noreferrer">
-                {linkChildren}
-              </a>
-            ) : (
-              <span>{linkChildren}</span>
-            ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
-export function MessageBubble({ role, content, afterContent, actions }: MessageBubbleProps) {
+export function MessageBubble({
+  role,
+  content,
+  previewText,
+  renderMode,
+  shouldCollapseByDefault = false,
+  afterContent,
+  actions,
+}: MessageBubbleProps) {
   const roleClass = role === 'user' ? 'user-bubble' : 'ai-bubble';
-  const isAssistantText = role === 'assistant' && typeof content === 'string';
-  const isUserText = role === 'user' && typeof content === 'string';
+  const isText = typeof content === 'string';
+  const normalizedRenderMode: MessageRenderMode = renderMode ?? (role === 'assistant' ? 'markdown' : 'plain');
 
-  const renderedContent = isAssistantText ? (
-    <MarkdownMessage content={content} />
-  ) : isUserText ? (
-    <div className="message-content-text">{content}</div>
+  const renderedContent = isText ? (
+    <LongTextBlock
+      key={shouldCollapseByDefault ? 'collapsed' : 'open'}
+      content={content}
+      previewText={previewText ?? content}
+      shouldCollapseByDefault={shouldCollapseByDefault}
+      renderContent={(visibleContent) => renderTextContent(visibleContent, normalizedRenderMode)}
+    />
   ) : (
     <div className="message-content-text">{content}</div>
   );

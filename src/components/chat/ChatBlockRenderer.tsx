@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
+import { createMessageView } from '../../utils/messageTimelineViewModel';
 import { Badge } from '../ui/badge';
 import { ConfirmActionCard } from './ConfirmActionCard';
 import { MessageBubble } from './MessageBubble';
@@ -76,6 +77,7 @@ function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatu
   const isStoppedAssistant = message.kind === 'partial' || (isActiveAssistant && generationStatus === 'stopped');
   const isReportMessage = message.kind === 'report';
   const isErrorMessage = message.kind === 'error';
+  const messageView = createMessageView(message);
 
   return (
     <div className="message-row message-row-assistant">
@@ -85,6 +87,9 @@ function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatu
       <MessageBubble
         role="assistant"
         content={message.content}
+        previewText={messageView.previewText}
+        renderMode={messageView.renderMode}
+        shouldCollapseByDefault={!isStreamingAssistant && messageView.shouldCollapseByDefault}
         afterContent={
           <>
             {isStreamingAssistant ? <span className="typing-cursor">▍</span> : null}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
 import type { RunStepStatus } from '../../../types/workbench';
 import { getStepStatusLabel } from '../../../utils/runViewModel';
@@ -43,6 +44,16 @@ function getStepIcon(status: RunStepStatus): IconKey {
   return 'stepPending';
 }
 
+function truncateStepDescription(value: string): string {
+  const normalizedValue = value.trim();
+
+  if (normalizedValue.length <= 110) {
+    return normalizedValue;
+  }
+
+  return `${normalizedValue.slice(0, 109)}…`;
+}
+
 export function AgentStepsCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const isRunEventsLoading = useWorkbenchStore((state) => state.isRunEventsLoading);
@@ -50,6 +61,21 @@ export function AgentStepsCard() {
   const loadLatestRunForConversation = useWorkbenchStore((state) => state.loadLatestRunForConversation);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const displayedSteps = currentRun?.steps ?? [];
+  const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
+
+  const toggleStep = (stepId: string) => {
+    setExpandedStepIds((currentValue) => {
+      const nextValue = new Set(currentValue);
+
+      if (nextValue.has(stepId)) {
+        nextValue.delete(stepId);
+      } else {
+        nextValue.add(stepId);
+      }
+
+      return nextValue;
+    });
+  };
 
   return (
     <Card size="sm" className="right-card right-section">
@@ -95,6 +121,14 @@ export function AgentStepsCard() {
               const markerStatusClass = step.status === 'skipped' ? 'pending' : step.status;
               const isRunning = step.status === 'running';
               const stepElapsed = typeof step.elapsedMs === 'number' ? `${step.elapsedMs}ms` : '';
+              const shouldDefaultExpand = step.status === 'error';
+              const isExpanded = shouldDefaultExpand || expandedStepIds.has(step.id);
+              const isLongDescription = Boolean(step.description && step.description.length > 110);
+              const description = step.description
+                ? isExpanded
+                  ? step.description
+                  : truncateStepDescription(step.description)
+                : '';
 
               return (
                 <li key={step.id} className={`run-step-item ${statusClass}${isRunning ? ' active' : ''}`}>
@@ -108,8 +142,19 @@ export function AgentStepsCard() {
                         {getStepStatusLabel(step.status)}
                       </Badge>
                     </div>
-                    {step.description ? <div className="run-step-description">{step.description}</div> : null}
-                    {stepElapsed ? <div className="run-step-meta">耗时：{stepElapsed}</div> : null}
+	                    {description ? <div className="run-step-description">{description}</div> : null}
+	                    {isLongDescription && step.status !== 'error' ? (
+	                      <button
+	                        type="button"
+	                        className="run-step-detail-toggle"
+	                        onClick={() => {
+	                          toggleStep(step.id);
+	                        }}
+	                      >
+	                        {isExpanded ? '收起详情' : '查看详情'}
+	                      </button>
+	                    ) : null}
+	                    {stepElapsed ? <div className="run-step-meta">耗时：{stepElapsed}</div> : null}
                   </div>
                 </li>
               );

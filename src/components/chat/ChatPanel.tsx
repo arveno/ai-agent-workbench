@@ -16,12 +16,16 @@ export function ChatPanel() {
   const realModelNotice = useWorkbenchStore((state) => state.realModelNotice);
   const isMessagesLoading = useWorkbenchStore((state) => state.isMessagesLoading);
   const messagesError = useWorkbenchStore((state) => state.messagesError);
+  const isOlderMessagesLoading = useWorkbenchStore((state) => state.isOlderMessagesLoading);
+  const olderMessagesError = useWorkbenchStore((state) => state.olderMessagesError);
+  const hasMoreMessages = useWorkbenchStore((state) => state.hasMoreMessages);
   const isPersistentMode = useWorkbenchStore((state) => state.isPersistentMode);
   const isReportArtifactsLoading = useWorkbenchStore((state) => state.isReportArtifactsLoading);
   const reportArtifactsError = useWorkbenchStore((state) => state.reportArtifactsError);
   const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const loadPersistentMessagesForSession = useWorkbenchStore((state) => state.loadPersistentMessagesForSession);
+  const loadOlderMessagesForCurrentSession = useWorkbenchStore((state) => state.loadOlderMessagesForCurrentSession);
   const loadReportArtifacts = useWorkbenchStore((state) => state.loadReportArtifacts);
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === currentSessionId) ?? null,
@@ -36,6 +40,9 @@ export function ChatPanel() {
     isPersistentMode,
     isMessagesLoading,
     messagesError,
+    hasMoreMessages,
+    isOlderMessagesLoading,
+    olderMessagesError,
   });
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -44,6 +51,23 @@ export function ChatPanel() {
   const lastMessageContent =
     lastBlock?.type === 'message' ? lastBlock.message.content : currentRun?.conclusion ?? '';
   const hasRunErrorBlock = chatBlocks.some((block) => block.type === 'run_error');
+
+  const loadOlderMessages = async () => {
+    const element = chatScrollRef.current;
+    const previousScrollHeight = element?.scrollHeight ?? 0;
+
+    shouldAutoScrollRef.current = false;
+    await loadOlderMessagesForCurrentSession();
+
+    requestAnimationFrame(() => {
+      if (!element) {
+        return;
+      }
+
+      const nextScrollHeight = element.scrollHeight;
+      element.scrollTop += nextScrollHeight - previousScrollHeight;
+    });
+  };
 
   const isNearBottom = () => {
     const element = chatScrollRef.current;
@@ -101,6 +125,39 @@ export function ChatPanel() {
           shouldAutoScrollRef.current = isNearBottom();
         }}
       >
+        {timelineView.hasMore ? (
+          <div className="message-history-control">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={timelineView.isLoadingMore}
+              onClick={() => {
+                void loadOlderMessages();
+              }}
+            >
+              {timelineView.isLoadingMore ? timelineView.loadingMoreMessage : timelineView.loadMoreLabel}
+            </Button>
+          </div>
+        ) : null}
+
+        {timelineView.loadMoreError ? (
+          <div className="message-history-control message-history-control-error">
+            <span>{timelineView.loadMoreError}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={timelineView.isLoadingMore}
+              onClick={() => {
+                void loadOlderMessages();
+              }}
+            >
+              重试
+            </Button>
+          </div>
+        ) : null}
+
         {chatBlocks.map((block) => (
           <ChatBlockRenderer
             key={block.id}

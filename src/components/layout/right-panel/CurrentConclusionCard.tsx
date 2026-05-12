@@ -1,7 +1,13 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
 import { getConclusionSourceLabel } from '../../../utils/runViewModel';
+import {
+  LONG_MESSAGE_CHARACTER_THRESHOLD,
+  LONG_MESSAGE_LINE_THRESHOLD,
+  LONG_MESSAGE_PREVIEW_LENGTH,
+} from '../../../utils/messageTimelineViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
+import { LongTextBlock } from '../../chat/LongTextBlock';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
@@ -27,6 +33,18 @@ function getConclusionText(params: {
   }
 
   return '暂无结论';
+}
+
+function isLongText(value: string): boolean {
+  return value.length > LONG_MESSAGE_CHARACTER_THRESHOLD || value.split(/\r?\n/).length > LONG_MESSAGE_LINE_THRESHOLD;
+}
+
+function createConclusionPreview(value: string): string {
+  if (value.length <= LONG_MESSAGE_PREVIEW_LENGTH) {
+    return value;
+  }
+
+  return `${value.slice(0, LONG_MESSAGE_PREVIEW_LENGTH).trimEnd()}...`;
 }
 
 export function CurrentConclusionCard() {
@@ -59,6 +77,7 @@ export function CurrentConclusionCard() {
   });
   const updatedText = `更新时间：${new Date(currentRun.updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
   const shouldShowSourceBadge = currentRun.conclusionSource !== 'none';
+  const shouldCollapseConclusion = isLongText(conclusionText) && currentRun.status !== 'running';
 
   return (
     <Card size="sm" className="right-card right-section">
@@ -99,7 +118,15 @@ export function CurrentConclusionCard() {
         ) : null}
 
         <div className="conclusion-card">
-          {conclusionText}
+          <LongTextBlock
+            key={`${currentRun.id}:${currentRun.status}:${shouldCollapseConclusion ? 'collapsed' : 'open'}`}
+            content={conclusionText}
+            previewText={createConclusionPreview(conclusionText)}
+            shouldCollapseByDefault={shouldCollapseConclusion}
+            expandLabel="展开完整结论"
+            collapseLabel="收起结论"
+            renderContent={(visibleContent) => <div className="conclusion-card-text">{visibleContent}</div>}
+          />
           <div className="conclusion-updated-at">{updatedText}</div>
         </div>
       </CardContent>

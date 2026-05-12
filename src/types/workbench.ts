@@ -337,6 +337,10 @@ export interface SessionSlice {
   conversationListError: string | null;
   isMessagesLoading: boolean;
   messagesError: string | null;
+  isOlderMessagesLoading: boolean;
+  olderMessagesError: string | null;
+  hasMoreMessages: boolean;
+  oldestMessageCursor: string | null;
   persistenceError: string | null;
   isPersistentMode: boolean;
   persistentUserId: string | null;
@@ -366,6 +370,7 @@ export interface SessionSlice {
   hydratePersistentWorkbench: (params?: { preferredSessionId?: string }) => Promise<void>;
   resetPersistentWorkbench: () => void;
   loadPersistentMessagesForSession: (sessionId: string) => Promise<void>;
+  loadOlderMessagesForCurrentSession: () => Promise<void>;
   ensureCurrentPersistentConversation: () => Promise<string | null>;
   persistMessageToConversation: (conversationId: string, message: WorkbenchMessage) => Promise<void>;
   startTask: (taskId: string, prompt: string) => void;

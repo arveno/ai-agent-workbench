@@ -18,6 +18,24 @@
   scroll-padding-bottom: 120px;
 }
 
+.message-history-control {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.message-history-control-error {
+  padding: 8px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .message-row {
   width: 100%;
   min-width: 0;
@@ -219,6 +237,48 @@
 .message-markdown th {
   background: #f8fafc;
   font-weight: 700;
+}
+
+.long-text-block {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.long-text-preview {
+  position: relative;
+  max-height: 310px;
+  overflow: hidden;
+}
+
+.long-text-preview::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 56px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #ffffff);
+}
+
+.user-bubble .long-text-preview::after {
+  background: linear-gradient(to bottom, rgba(37, 99, 235, 0), #2563eb);
+}
+
+.long-text-toggle {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.long-text-toggle:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
 }
 
 .message-status-tag {

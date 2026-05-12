@@ -23,8 +23,11 @@ import {
   DEFAULT_TASK_ID,
 } from './shared';
 
+const DEFAULT_MESSAGE_PAGE_SIZE = 30;
+
 let persistenceRequestId = 0;
 let messageLoadRequestId = 0;
+let olderMessageLoadRequestId = 0;
 
 interface PersistenceAuthContext {
   accessToken: string;
@@ -120,12 +123,25 @@ function upsertSessionMessages(
         ? {
             ...session,
             messages,
-            messageCount: messages.length,
+            messageCount: Math.max(session.messageCount ?? messages.length, messages.length),
             updatedAt: Date.now(),
           }
         : session,
     ),
   );
+}
+
+function mergeSessionMessages(
+  currentMessages: WorkbenchMessage[],
+  incomingMessages: WorkbenchMessage[],
+): WorkbenchMessage[] {
+  const messageMap = new Map<string, WorkbenchMessage>();
+
+  for (const message of [...currentMessages, ...incomingMessages]) {
+    messageMap.set(message.id, message);
+  }
+
+  return [...messageMap.values()].sort((left, right) => left.createdAt - right.createdAt);
 }
 
 export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSlice> = (set, get) => ({
@@ -139,6 +155,10 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   conversationListError: null,
   isMessagesLoading: false,
   messagesError: null,
+  isOlderMessagesLoading: false,
+  olderMessagesError: null,
+  hasMoreMessages: false,
+  oldestMessageCursor: null,
   persistenceError: null,
   isPersistentMode: false,
   persistentUserId: null,
@@ -183,6 +203,10 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
             isPersistentMode: true,
             persistentUserId: authContext.userId,
             conversationListError: null,
+            isOlderMessagesLoading: false,
+            olderMessagesError: null,
+            hasMoreMessages: false,
+            oldestMessageCursor: null,
             persistenceError: null,
             ...createEmptyUiState(),
           };
@@ -233,6 +257,10 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
       return {
         currentSessionId: nextSession.id,
+        isOlderMessagesLoading: false,
+        olderMessagesError: null,
+        hasMoreMessages: false,
+        oldestMessageCursor: null,
         ...createSessionUiState(nextSession, state.currentTaskId),
       };
     });
@@ -252,6 +280,10 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       currentSessionId: sessionId,
       currentRun: getSessionLatestRun(nextSession),
       runEventLog: [],
+      isOlderMessagesLoading: false,
+      olderMessagesError: null,
+      hasMoreMessages: false,
+      oldestMessageCursor: null,
     });
   },
   setCurrentTaskId: (taskId) => {
@@ -410,12 +442,17 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const requestId = persistenceRequestId + 1;
     persistenceRequestId = requestId;
     messageLoadRequestId += 1;
+    olderMessageLoadRequestId += 1;
 
     set({
       isConversationListLoading: true,
       isMessagesLoading: true,
+      isOlderMessagesLoading: false,
       conversationListError: null,
       messagesError: null,
+      olderMessagesError: null,
+      hasMoreMessages: false,
+      oldestMessageCursor: null,
       persistenceError: null,
     });
 
@@ -435,8 +472,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       set({
         isConversationListLoading: false,
         isMessagesLoading: false,
+        isOlderMessagesLoading: false,
         conversationListError: conversationResult.message,
         messagesError: null,
+        olderMessagesError: null,
+        hasMoreMessages: false,
+        oldestMessageCursor: null,
         persistenceError: conversationResult.message,
       });
       return;
@@ -452,8 +493,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentSessionId: '',
         isConversationListLoading: false,
         isMessagesLoading: false,
+        isOlderMessagesLoading: false,
         conversationListError: null,
         messagesError: null,
+        olderMessagesError: null,
+        hasMoreMessages: false,
+        oldestMessageCursor: null,
         persistenceError: null,
         isPersistentMode: true,
         persistentUserId: authContext.userId,
@@ -466,7 +511,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const messageResult = await fetchConversationMessages(
       targetConversation.id,
       {
-        limit: 30,
+        limit: DEFAULT_MESSAGE_PAGE_SIZE,
       },
       authContext.accessToken,
     );
@@ -479,8 +524,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       set({
         isConversationListLoading: false,
         isMessagesLoading: false,
+        isOlderMessagesLoading: false,
         conversationListError: null,
         messagesError: messageResult.message,
+        olderMessagesError: null,
+        hasMoreMessages: false,
+        oldestMessageCursor: null,
         persistenceError: messageResult.message,
       });
       return;
@@ -499,8 +548,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       currentSessionId: activeSession?.id ?? state.currentSessionId,
       isConversationListLoading: false,
       isMessagesLoading: false,
+      isOlderMessagesLoading: false,
       conversationListError: null,
       messagesError: null,
+      olderMessagesError: null,
+      hasMoreMessages: Boolean(messageResult.data.nextCursor),
+      oldestMessageCursor: messageResult.data.nextCursor,
       persistenceError: null,
       isPersistentMode: true,
       persistentUserId: authContext.userId,
@@ -520,6 +573,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     persistenceRequestId += 1;
     messageLoadRequestId += 1;
+    olderMessageLoadRequestId += 1;
     clearPersistedWorkbenchState();
 
     const anonymousState = getInitialWorkbenchSessionState();
@@ -533,8 +587,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       isConversationListLoading: false,
       isCreatingConversation: false,
       isMessagesLoading: false,
+      isOlderMessagesLoading: false,
       conversationListError: null,
       messagesError: null,
+      olderMessagesError: null,
+      hasMoreMessages: false,
+      oldestMessageCursor: null,
       persistenceError: null,
       isPersistentMode: false,
       persistentUserId: null,
@@ -551,17 +609,22 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     const requestId = messageLoadRequestId + 1;
     messageLoadRequestId = requestId;
+    olderMessageLoadRequestId += 1;
 
     set({
       isMessagesLoading: true,
+      isOlderMessagesLoading: false,
       messagesError: null,
+      olderMessagesError: null,
+      hasMoreMessages: false,
+      oldestMessageCursor: null,
       persistenceError: null,
     });
 
     const result = await fetchConversationMessages(
       sessionId,
       {
-        limit: 30,
+        limit: DEFAULT_MESSAGE_PAGE_SIZE,
       },
       authContext.accessToken,
     );
@@ -573,7 +636,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     if (!result.ok) {
       set({
         isMessagesLoading: false,
+        isOlderMessagesLoading: false,
         messagesError: result.message,
+        olderMessagesError: null,
+        hasMoreMessages: false,
+        oldestMessageCursor: null,
         persistenceError: result.message,
       });
       return;
@@ -590,6 +657,9 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         sessions: nextSessions,
         isMessagesLoading: false,
         messagesError: null,
+        olderMessagesError: null,
+        hasMoreMessages: Boolean(result.data.nextCursor),
+        oldestMessageCursor: result.data.nextCursor,
         persistenceError: null,
         ...(shouldRestoreUi ? createSessionUiState(activeSession, state.currentTaskId) : {}),
       };
@@ -599,6 +669,69 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       void get().loadLatestRunForConversation(sessionId);
       void get().loadReportArtifacts(sessionId);
     }
+  },
+  loadOlderMessagesForCurrentSession: async () => {
+    const currentState = get();
+    const authContext = getPersistenceAuthContext();
+    const sessionId = currentState.currentSessionId;
+    const before = currentState.oldestMessageCursor;
+
+    if (!authContext || !currentState.isPersistentMode || !sessionId || !before || currentState.isOlderMessagesLoading) {
+      return;
+    }
+
+    const requestId = olderMessageLoadRequestId + 1;
+    olderMessageLoadRequestId = requestId;
+
+    set({
+      isOlderMessagesLoading: true,
+      olderMessagesError: null,
+      persistenceError: null,
+    });
+
+    const result = await fetchConversationMessages(
+      sessionId,
+      {
+        limit: DEFAULT_MESSAGE_PAGE_SIZE,
+        before,
+      },
+      authContext.accessToken,
+    );
+
+    if (requestId !== olderMessageLoadRequestId || get().currentSessionId !== sessionId) {
+      return;
+    }
+
+    if (!result.ok) {
+      set({
+        isOlderMessagesLoading: false,
+        olderMessagesError: result.message,
+        persistenceError: result.message,
+      });
+      return;
+    }
+
+    const olderMessages = result.data.messages.map((message) => messageRecordToWorkbenchMessage(message));
+
+    set((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              messages: mergeSessionMessages(session.messages, olderMessages),
+              messageCount: Math.max(
+                session.messageCount ?? 0,
+                session.messages.length + olderMessages.length,
+              ),
+            }
+          : session,
+      ),
+      isOlderMessagesLoading: false,
+      olderMessagesError: null,
+      hasMoreMessages: Boolean(result.data.nextCursor),
+      oldestMessageCursor: result.data.nextCursor,
+      persistenceError: null,
+    }));
   },
   ensureCurrentPersistentConversation: async () => {
     const authContext = getPersistenceAuthContext();
