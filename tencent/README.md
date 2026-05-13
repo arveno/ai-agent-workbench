@@ -9,11 +9,12 @@ EdgeOne Pages
 + CloudBase MySQL
 ```
 
-当前阶段只新增 CloudBase MySQL 第一版业务表结构，不迁移 API、不替换 Auth、不修改前端状态。
+当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；当前仓库仍不迁移 API、不替换 Auth、不修改前端状态。
 
 ## 文件
 
-- `migrations/001_cloudbase_mysql_schema.sql`：CloudBase MySQL schema 第一版草案。
+- `../docs/TENCENT_MIGRATION_STATUS.md`：腾讯云迁移当前状态、已验证 POC、schema 落库结果和 POC 清理计划。
+- `migrations/001_cloudbase_mysql_schema.sql`：CloudBase MySQL schema 第一版。
 - `migrations/README.md`：CloudBase MySQL migration 执行原则、RunSql 分段建议和验证 SQL。
 
 ## 表用途
