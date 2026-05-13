@@ -198,7 +198,6 @@ CREATE TABLE IF NOT EXISTS run_events (
   KEY idx_run_events_openid (_openid),
   KEY idx_run_events_user_id (user_id),
   KEY idx_run_events_conversation_id (conversation_id),
-  KEY idx_run_events_run_id (run_id),
   KEY idx_run_events_created_at (created_at),
   KEY idx_run_events_conversation_created (conversation_id, created_at),
   KEY idx_run_events_user_created (user_id, created_at),
