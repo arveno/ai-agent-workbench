@@ -9,7 +9,7 @@ EdgeOne Pages
 + CloudBase MySQL
 ```
 
-当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；当前仓库仍不迁移 API、不替换 Auth、不修改前端状态。
+当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；当前仓库仍不迁移主业务 API、不替换前端 Auth store、不修改前端状态。
 
 ## 文件
 
@@ -20,8 +20,10 @@ EdgeOne Pages
 - `seeds/001_demo_task_templates_seed.sql`：公开示例任务模板初始化数据。
 - `seeds/002_demo_conversation_templates_seed.sql`：公开示例会话模板初始化数据。
 - `functions/README.md`：CloudBase HTTP Function 打包、路由和验证说明。
+- `functions/_shared/`：CloudBase HTTP Function 共享 MySQL 与 Auth helper。
 - `functions/demo-tasks/`：公开示例任务只读 HTTP Function。
 - `functions/demo-conversations/`：公开示例会话只读 HTTP Function。
+- `functions/auth-me/`：CloudBase Auth helper 验证入口，建立 `_openid -> app_profiles.user_id` 映射。
 
 ## 表用途
 
