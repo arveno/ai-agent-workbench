@@ -5,10 +5,10 @@ const PORT = Number(process.env.PORT || 9000);
 const HOST = '0.0.0.0';
 
 const app = cloudbase.init({
-  env: cloudbase.SYMBOL_DEFAULT_ENV,
+  env: 'ai-agent-workbench-poc-d6731923d',
 });
 
-const models = app.models;
+const db = app.rdb();
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -142,6 +142,24 @@ function extractRows(result) {
   return [];
 }
 
+function assertNoQueryError(result) {
+  const error = result && result.error;
+
+  if (!error) {
+    return;
+  }
+
+  if (typeof error === 'string') {
+    throw new Error(error);
+  }
+
+  if (error && typeof error === 'object') {
+    throw new Error(error.message || error.errMsg || 'CloudBase MySQL query failed');
+  }
+
+  throw new Error('CloudBase MySQL query failed');
+}
+
 function hasPublicVisibility(row) {
   return row.visibility === 'demo' || row.visibility === 'system';
 }
@@ -165,17 +183,14 @@ function mapConversation(row) {
 }
 
 async function fetchDemoConversations() {
-  const result = await models.$runSQL(
-    [
-      'SELECT',
-      'id, title, description, category, visibility, seed_messages, seed_runs, seed_reports, sort_order, is_enabled, metadata, created_at, updated_at',
-      'FROM `demo_conversation_templates`',
-      'WHERE is_enabled = {{enabled}}',
-      "AND visibility IN ('demo', 'system')",
-      'ORDER BY sort_order ASC, created_at ASC',
-    ].join(' '),
-    { enabled: 1 },
-  );
+  const result = await db
+    .from('demo_conversation_templates')
+    .select(
+      'id,title,description,category,visibility,seed_messages,seed_runs,seed_reports,sort_order,is_enabled,metadata,created_at,updated_at',
+    )
+    .eq('is_enabled', 1);
+
+  assertNoQueryError(result);
 
   return extractRows(result)
     .filter((row) => normalizeBoolean(row.is_enabled) && hasPublicVisibility(row))
