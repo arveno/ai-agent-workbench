@@ -1,10 +1,10 @@
 # Tencent Cloud Migration Status
 
-生成日期：2026-05-13
+生成日期：2026-05-14
 
 ## 当前阶段
 
-当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、准备进入接口分批迁移的阶段。
+当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过的阶段。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -19,8 +19,9 @@
 5. CloudBase HTTP 路由身份认证通过。
 6. CloudBase MySQL RunSql 建表、插入、查询通过。
 7. CloudBase HTTP Function 读写 MySQL 通过。
+8. CloudBase Auth helper 与正式 `/api/auth/me` 验证通过。
 
-这些 POC 说明静态部署、普通 HTTP Function、SSE、匿名登录、后端鉴权、RunSql 和函数内 MySQL 访问已经具备迁移基础。它们不等同于主业务接口已迁移完成，后续仍需按业务风险分批替换。
+这些 POC 说明静态部署、普通 HTTP Function、SSE、匿名登录、后端鉴权、RunSql、函数内 MySQL 访问和 CloudBase 身份到业务用户的映射已经具备迁移基础。它们不等同于主业务接口已迁移完成，后续仍需按业务风险分批替换。
 
 ## CloudBase MySQL schema 状态
 
@@ -42,6 +43,33 @@ demo_conversation_templates
 
 当前 schema 以 `tencent/migrations/001_cloudbase_mysql_schema.sql` 为准。后续表结构调整应继续在 `tencent/migrations/` 下演进，不覆盖 Supabase migration。
 
+## CloudBase Auth helper 状态
+
+Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
+
+- `tencent/functions/_shared/mysql.js`：CloudBase MySQL 访问 helper，统一初始化 `@cloudbase/node-sdk` 并返回 `app.rdb()`。
+- `tencent/functions/_shared/auth.js`：CloudBase Auth helper，解析 Bearer token payload，提取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。
+- `tencent/functions/auth-me/`：正式 Auth helper 验证入口。
+
+正式路由为：
+
+```txt
+/api/auth/me -> auth-me
+身份认证：开启
+```
+
+验证结果：
+
+- 不带 token 请求 `/api/auth/me` 时，CloudBase 网关返回 `401 MISSING_CREDENTIALS`。
+- 带 `Authorization: Bearer ...` 请求 `/api/auth/me` 时，返回 `200 OK` 和 `currentUser`。
+- `app_profiles` 会自动创建或复用对应用户。
+- 当前验证用户的 `role = demo_user`，`status = active`。
+- 第一阶段 `_openid` 与 `user_id` 保持同值。
+
+`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me`。当前仍未迁移前端 `authStore`，也未迁移 conversations、messages、reports、quota 或 Agent Run SSE。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
+
+CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
+
 ## run_events 索引状态
 
 `run_events` 的冗余索引清理已经完成：
@@ -62,11 +90,11 @@ demo_conversation_templates
 | 测试数据 | `manual-test-user` | 确认不属于正式演示账号后删除。 |
 | CloudBase 临时函数 | `scfhelloworld` | 删除函数及对应部署配置。 |
 | CloudBase 临时函数 | `sse-test` | 正式 SSE 迁移完成后删除。 |
-| CloudBase 临时函数 | `auth-me` | Auth helper 正式化后删除。 |
+| CloudBase 临时函数 | 旧 `auth-me` POC 版本 | 已由正式 `/api/auth/me -> auth-me` 替代；只清理旧 POC 包或旧配置，不删除正式函数。 |
 | CloudBase 临时函数 | `mysql-poc` | MySQL repository 正式化后删除。 |
 | CloudBase 临时路由 | `/api/health` | 正式 health 接口迁移后替换或删除临时实现。 |
 | CloudBase 临时路由 | `/api/sse-test` | Agent Run SSE 迁移完成后删除。 |
-| CloudBase 临时路由 | `/api/auth-me` | 正式用户信息接口迁移后删除。 |
+| CloudBase 临时路由 | `/api/auth-me` | 旧 POC 路由。正式路由为 `/api/auth/me`，确认无依赖后删除旧路由。 |
 | CloudBase 临时路由 | `/api/mysql-poc` | 正式 MySQL 读写接口迁移后删除。 |
 | 本地临时文件 | `cloudbase-auth-test.html` | 归档验证结论后删除。 |
 | 本地临时目录 | `cloudbase-sse-test` | 归档验证结论后删除。 |
@@ -77,8 +105,8 @@ demo_conversation_templates
 
 建议按风险从低到高推进：
 
-1. 先迁低风险 `demo_task_templates`、`demo_conversation_templates` 和 `health` 类接口。
-2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。
+1. 先迁低风险 `demo_task_templates`、`demo_conversation_templates` 和 `health` 类接口。当前 demo templates 只读接口已完成验证。
+2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。当前 Auth helper 与 `/api/auth/me` 已完成验证，但前端 `authStore` 尚未迁移。
 3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。
 4. 再迁 quota transaction，使用 MySQL 事务和行锁验证并发扣减。
 5. 最后迁 Agent Run SSE，包括鉴权、conversation 归属校验、quota、事件流写入和断线处理。

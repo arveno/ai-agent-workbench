@@ -17,6 +17,8 @@
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 Bearer token payload，建立 `_openid -> app_profiles.user_id` 映射，并返回统一 `currentUser`。 |
 
+后续私有 CloudBase HTTP Function 应复用 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。当前不替换前端 `authStore`。
+
 不迁移：
 
 ```txt
@@ -108,5 +110,6 @@ curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/a
 - `demo-tasks` 和 `demo-conversations` 是公开只读接口，不读取 token，不做身份认证。
 - `auth-me` 必须开启 CloudBase HTTP 路由身份认证；它会读取 Bearer token payload，并可能创建 `app_profiles`。
 - `auth-me` 是正式 Auth helper 验证入口，不是旧 POC 函数，当前暂不改前端 Auth store。
+- 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。
