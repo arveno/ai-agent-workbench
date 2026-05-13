@@ -14,6 +14,7 @@ EdgeOne Pages
 ## 文件
 
 - `migrations/001_cloudbase_mysql_schema.sql`：CloudBase MySQL schema 第一版草案。
+- `migrations/README.md`：CloudBase MySQL migration 执行原则、RunSql 分段建议和验证 SQL。
 
 ## 表用途
 
@@ -90,6 +91,8 @@ WHERE id = ? AND user_id = ? AND _openid = ?;
 ## Migration 执行说明
 
 CloudBase RunSql 更适合单条或分段 SQL 执行。正式迁移时需要提供脚本化执行方式，避免在控制台手动逐条复制 SQL。
+
+详细执行顺序、验证 SQL、JSON 写入约定和安全说明见 `migrations/README.md`。
 
 ## 后续迁移顺序建议
 
