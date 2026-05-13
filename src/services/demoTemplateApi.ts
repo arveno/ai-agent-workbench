@@ -25,6 +25,15 @@ function createAuthRequiredResponse<TData>(): WorkbenchPersistenceResponse<TData
   };
 }
 
+function getPublicEnvValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function buildApiUrl(path: string): string {
+  const apiBaseUrl = getPublicEnvValue(import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, '');
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
+}
+
 async function readPersistenceResponse<TData>(
   response: Response,
   fallbackMessage: string,
@@ -68,7 +77,7 @@ function normalizeAccessToken(accessToken: string | null | undefined): string | 
 
 export async function fetchDemoTasks(): Promise<WorkbenchPersistenceResponse<DemoTaskTemplateListResult>> {
   try {
-    const response = await fetch('/api/workbench/demo-tasks', {
+    const response = await fetch(buildApiUrl('/api/workbench/demo-tasks'), {
       method: 'GET',
     });
 
@@ -82,7 +91,7 @@ export async function fetchDemoConversations(): Promise<
   WorkbenchPersistenceResponse<DemoConversationTemplateListResult>
 > {
   try {
-    const response = await fetch('/api/workbench/demo-conversations', {
+    const response = await fetch(buildApiUrl('/api/workbench/demo-conversations'), {
       method: 'GET',
     });
 
