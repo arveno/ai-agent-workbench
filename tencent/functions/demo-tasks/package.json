@@ -1,0 +1,13 @@
+{
+  "name": "ai-agent-workbench-demo-tasks",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CloudBase HTTP Function for public demo task templates.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.1"
+  }
+}

@@ -19,6 +19,9 @@ EdgeOne Pages
 - `seeds/README.md`：CloudBase MySQL seed 执行顺序和验证 SQL。
 - `seeds/001_demo_task_templates_seed.sql`：公开示例任务模板初始化数据。
 - `seeds/002_demo_conversation_templates_seed.sql`：公开示例会话模板初始化数据。
+- `functions/README.md`：CloudBase HTTP Function 打包、路由和验证说明。
+- `functions/demo-tasks/`：公开示例任务只读 HTTP Function。
+- `functions/demo-conversations/`：公开示例会话只读 HTTP Function。
 
 ## 表用途
 
