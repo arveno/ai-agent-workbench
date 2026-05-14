@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口，以及 Tencent-09A 的 CloudBase Auth helper 验证入口。现阶段不替换前端 Auth store，不迁移复制会话接口。
+本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口，以及 Tencent-09A 的正式 CloudBase Auth helper 验证入口。Tencent-09A 仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成；现阶段不替换前端 Auth store，不迁移复制会话接口。
 
 ## 函数
 
@@ -15,9 +15,9 @@
 | 目录 | 用途 |
 | --- | --- |
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
-| `_shared/auth.js` | 解析 Bearer token payload，建立 `_openid -> app_profiles.user_id` 映射，并返回统一 `currentUser`。 |
+| `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
 
-后续私有 CloudBase HTTP Function 应复用 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。当前不替换前端 `authStore`。
+后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。当前不替换前端 `authStore`。
 
 不迁移：
 
@@ -103,7 +103,7 @@ curl -i https://<your-domain>/api/auth/me
 curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/auth/me
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 时应返回 `ok: true` 和 `currentUser`，并在 `app_profiles` 中出现或复用对应用户。手动把 `status` 改为 `disabled` 后，应返回 `403`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 时应返回 `ok: true` 和 `currentUser`，并在 `app_profiles` 中出现或复用对应用户。当前验证用户为 `role = demo_user`、`status = active`，第一阶段 `_openid` 与 `user_id` 保持同值。手动把 `status` 改为 `disabled` 后，应返回 `403`。
 
 ## 安全说明
 

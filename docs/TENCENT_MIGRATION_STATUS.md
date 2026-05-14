@@ -19,7 +19,7 @@
 5. CloudBase HTTP 路由身份认证通过。
 6. CloudBase MySQL RunSql 建表、插入、查询通过。
 7. CloudBase HTTP Function 读写 MySQL 通过。
-8. CloudBase Auth helper 与正式 `/api/auth/me` 验证通过。
+8. Tencent-09A：CloudBase Auth helper 与正式 `/api/auth/me` 验证通过。
 
 这些 POC 说明静态部署、普通 HTTP Function、SSE、匿名登录、后端鉴权、RunSql、函数内 MySQL 访问和 CloudBase 身份到业务用户的映射已经具备迁移基础。它们不等同于主业务接口已迁移完成，后续仍需按业务风险分批替换。
 
@@ -48,7 +48,7 @@ demo_conversation_templates
 Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
 
 - `tencent/functions/_shared/mysql.js`：CloudBase MySQL 访问 helper，统一初始化 `@cloudbase/node-sdk` 并返回 `app.rdb()`。
-- `tencent/functions/_shared/auth.js`：CloudBase Auth helper，解析 Bearer token payload，提取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。
+- `tencent/functions/_shared/auth.js`：CloudBase Auth helper，解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。
 - `tencent/functions/auth-me/`：正式 Auth helper 验证入口。
 
 正式路由为：
@@ -66,9 +66,9 @@ Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
 - 当前验证用户的 `role = demo_user`，`status = active`。
 - 第一阶段 `_openid` 与 `user_id` 保持同值。
 
-`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me`。当前仍未迁移前端 `authStore`，也未迁移 conversations、messages、reports、quota 或 Agent Run SSE。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
+`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`，也未迁移 conversations、messages、reports、quota 或 Agent Run SSE。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
 
-CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
+CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，包括 `app_profiles.metadata`，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
 
 ## run_events 索引状态
 
@@ -106,7 +106,7 @@ CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 
 建议按风险从低到高推进：
 
 1. 先迁低风险 `demo_task_templates`、`demo_conversation_templates` 和 `health` 类接口。当前 demo templates 只读接口已完成验证。
-2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。当前 Auth helper 与 `/api/auth/me` 已完成验证，但前端 `authStore` 尚未迁移。
+2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。Tencent-09A 已完成 Auth helper 与 `/api/auth/me` 验证，但前端 `authStore` 尚未迁移。
 3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。
 4. 再迁 quota transaction，使用 MySQL 事务和行锁验证并发扣减。
 5. 最后迁 Agent Run SSE，包括鉴权、conversation 归属校验、quota、事件流写入和断线处理。
