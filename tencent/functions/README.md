@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口，以及 Tencent-09A 的正式 CloudBase Auth helper 验证入口。Tencent-09A 仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成；现阶段不替换前端 Auth store，不迁移复制会话接口。
+本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口，以及 Tencent-10A 的 conversations 只读验证函数。Tencent-10A 仅覆盖 `GET /api/workbench/conversations`，不代表 conversations/messages/reports 全量迁移完成；现阶段不替换前端 Auth store，不迁移复制会话接口。
 
 ## 函数
 
@@ -9,6 +9,7 @@
 | `demo-tasks` | `/api/workbench/demo-tasks` | 关闭 | 读取公开示例任务模板。 |
 | `demo-conversations` | `/api/workbench/demo-conversations` | 关闭 | 读取公开示例会话模板。 |
 | `auth-me` | `/api/auth/me` | 开启 | 校验 CloudBase 登录态，查询或创建 `app_profiles`，返回 `currentUser`。 |
+| `workbench-conversations` | `/api/workbench/conversations` | 开启 | 只读查询当前用户私有 Workbench 会话列表。 |
 
 ## 共享 helper
 
@@ -17,15 +18,19 @@
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
 
-后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。当前不替换前端 `authStore`。
+后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations` 已按该方式实现只读列表查询；当前不替换前端 `authStore`。
 
 不迁移：
 
 ```txt
 /api/workbench/demo-conversations/:id/copy
+/api/workbench/conversations POST
+/api/workbench/conversations/:id PATCH
+/api/workbench/conversations/:id/messages
+/api/workbench/conversations/:id/reports
 ```
 
-复制示例会话接口涉及 Auth、`conversations` 和 `messages` 写入，不属于 Tencent-08B 的低风险只读范围。
+复制示例会话接口涉及 Auth、`conversations` 和 `messages` 写入，不属于 Tencent-08B 的低风险只读范围。Tencent-10A 也只迁移 conversations 列表只读验证，POST/PATCH、messages 和 reports 后续再迁。
 
 ## 打包上传
 
@@ -56,6 +61,20 @@ cp _shared/mysql.js _shared/auth.js /tmp/ai-agent-workbench-auth-me/_shared/
 chmod +x /tmp/ai-agent-workbench-auth-me/scf_bootstrap
 cd /tmp/ai-agent-workbench-auth-me
 zip -r auth-me.zip index.js package.json scf_bootstrap README.md _shared
+```
+
+`workbench-conversations` 也依赖 `_shared`。打包时使用桌面临时目录，不使用 `/tmp`，zip 不提交 Git：
+
+```powershell
+cd tencent/functions
+$stage = Join-Path $env:USERPROFILE 'Desktop\ai-agent-workbench-workbench-conversations'
+if (Test-Path $stage) {
+  Remove-Item -LiteralPath $stage -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
+Copy-Item workbench-conversations/index.js,workbench-conversations/package.json,workbench-conversations/scf_bootstrap,workbench-conversations/README.md -Destination $stage
+Copy-Item _shared/mysql.js,_shared/auth.js -Destination (Join-Path $stage '_shared')
+Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-conversations.zip') -Force
 ```
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
@@ -105,11 +124,27 @@ curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/a
 
 未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 时应返回 `ok: true` 和 `currentUser`，并在 `app_profiles` 中出现或复用对应用户。当前验证用户为 `role = demo_user`、`status = active`，第一阶段 `_openid` 与 `user_id` 保持同值。手动把 `status` 改为 `disabled` 后，应返回 `403`。
 
+`workbench-conversations` 语法检查：
+
+```bash
+node --check tencent/functions/workbench-conversations/index.js
+```
+
+`workbench-conversations` 线上验证建议：
+
+```bash
+curl -i https://<your-domain>/api/workbench/conversations
+curl -i -H "Authorization: Bearer <cloudbase-token>" "https://<your-domain>/api/workbench/conversations?limit=20"
+```
+
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 时应返回 `ok: true`、`data.conversations` 和 `data.nextCursor`；当前用户没有私有会话时，`conversations` 应为 `[]`。该验证不应影响 `demo-tasks` 或 `demo-conversations`。
+
 ## 安全说明
 
 - `demo-tasks` 和 `demo-conversations` 是公开只读接口，不读取 token，不做身份认证。
 - `auth-me` 必须开启 CloudBase HTTP 路由身份认证；它会读取 Bearer token payload，并可能创建 `app_profiles`。
 - `auth-me` 是正式 Auth helper 验证入口，不是旧 POC 函数，当前暂不改前端 Auth store。
+- `workbench-conversations` 必须开启 CloudBase HTTP 路由身份认证；它只读取 `conversations`，不写入 messages 或 reports。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。

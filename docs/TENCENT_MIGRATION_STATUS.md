@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过的阶段。
+当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始准备 conversations 私有只读接口验证的阶段。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -70,6 +70,19 @@ Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
 
 CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，包括 `app_profiles.metadata`，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
 
+## conversations 只读函数状态
+
+Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表只读查询。正式路由规划为：
+
+```txt
+/api/workbench/conversations -> workbench-conversations
+身份认证：开启
+```
+
+该函数只实现 `GET /api/workbench/conversations`，复用 `_shared/auth.js` 获取 `currentUser`，复用 `_shared/mysql.js` 查询 CloudBase MySQL，并按 `_openid = currentUser.openid`、`user_id = currentUser.userId`、`visibility = 'private'` 过滤 `conversations`。参数兼容现有 `limit`、`cursor`、`status`，返回 `{ ok: true, data: { conversations, nextCursor } }`。
+
+当前状态只表示 conversations 只读函数已加入仓库并可进行部署验证，不代表 conversations/messages/reports 全量迁移完成。`POST`、`PATCH`、messages、reports、Agent Run、SSE、quota 和前端 `authStore` 均未迁移。
+
 ## run_events 索引状态
 
 `run_events` 的冗余索引清理已经完成：
@@ -107,7 +120,7 @@ CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 
 
 1. 先迁低风险 `demo_task_templates`、`demo_conversation_templates` 和 `health` 类接口。当前 demo templates 只读接口已完成验证。
 2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。Tencent-09A 已完成 Auth helper 与 `/api/auth/me` 验证，但前端 `authStore` 尚未迁移。
-3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。
+3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。当前 Tencent-10A 先新增 conversations 列表只读函数，后续再迁 POST/PATCH、messages 和 reports。
 4. 再迁 quota transaction，使用 MySQL 事务和行锁验证并发扣减。
 5. 最后迁 Agent Run SSE，包括鉴权、conversation 归属校验、quota、事件流写入和断线处理。
 
