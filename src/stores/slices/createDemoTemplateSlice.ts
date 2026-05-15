@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
 import { createConversation } from '../../services/conversationApi';
 import {
   copyDemoConversationTemplate as copyDemoConversationTemplateApi,
@@ -27,6 +28,9 @@ import {
 let demoTasksRequestId = 0;
 let demoConversationsRequestId = 0;
 
+const CLOUDBASE_PREVIEW_ACCESS_TOKEN = 'cloudbase-preview';
+const CLOUDBASE_PREVIEW_USER_ID = 'cloudbase-preview';
+
 function getAccessToken(): string | null {
   const session = useAuthStore.getState().session;
   const accessToken = session?.access_token?.trim();
@@ -36,6 +40,22 @@ function getAccessToken(): string | null {
 function getAuthenticatedUserId(): string | null {
   const authState = useAuthStore.getState();
   return authState.user?.id ?? authState.session?.user.id ?? null;
+}
+
+function getPersistenceAccessToken(): string | null {
+  if (isCloudBasePrivateApiEnabled()) {
+    return CLOUDBASE_PREVIEW_ACCESS_TOKEN;
+  }
+
+  return getAccessToken();
+}
+
+function getPersistenceUserId(): string | null {
+  if (isCloudBasePrivateApiEnabled()) {
+    return CLOUDBASE_PREVIEW_USER_ID;
+  }
+
+  return getAuthenticatedUserId();
 }
 
 function createSessionUiState(session: WorkbenchSession | undefined, fallbackTaskId: string) {
@@ -145,6 +165,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   demoTaskChoiceError: null,
 
   loadDemoTasks: async () => {
+    if (get().isDemoTasksLoading) {
+      return;
+    }
+
     const requestId = demoTasksRequestId + 1;
     demoTasksRequestId = requestId;
     set({
@@ -174,6 +198,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   },
 
   loadDemoConversations: async () => {
+    if (get().isDemoConversationsLoading) {
+      return;
+    }
+
     const requestId = demoConversationsRequestId + 1;
     demoConversationsRequestId = requestId;
     set({
@@ -251,6 +279,13 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       return null;
     }
 
+    if (isCloudBasePrivateApiEnabled()) {
+      set({
+        demoTaskChoiceError: 'CloudBase 私有 API 预览模式暂不切正式 Agent Run，请选择模拟演示。',
+      });
+      return null;
+    }
+
     const accessToken = getAccessToken();
 
     if (!accessToken) {
@@ -318,7 +353,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       return null;
     }
 
-    const accessToken = getAccessToken();
+    const accessToken = getPersistenceAccessToken();
 
     set({
       isCopyingDemoTemplate: true,
@@ -355,7 +390,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
         sessions: upsertSession(state.sessions, session),
         currentSessionId: session.id,
         isPersistentMode: true,
-        persistentUserId: getAuthenticatedUserId(),
+        persistentUserId: getPersistenceUserId(),
         isCopyingDemoTemplate: false,
         isDemoTaskChoiceOpen: false,
         pendingDemoTaskId: null,
@@ -403,7 +438,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   },
 
   copyDemoConversationTemplate: async (templateId) => {
-    const accessToken = getAccessToken();
+    const accessToken = getPersistenceAccessToken();
 
     if (!accessToken) {
       const template = get().demoConversations.find((item) => item.id === templateId);
@@ -455,7 +490,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       sessions: upsertSession(state.sessions, session),
       currentSessionId: session.id,
       isPersistentMode: true,
-      persistentUserId: getAuthenticatedUserId(),
+      persistentUserId: getPersistenceUserId(),
       isCopyingDemoTemplate: false,
       copyDemoTemplateError: null,
       ...createSessionUiState(session, state.currentTaskId),

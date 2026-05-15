@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
 import { fetchRagRetrievals } from '../../services/ragRetrievalApi';
 import { createRunReportArtifact, fetchConversationReportArtifacts } from '../../services/reportArtifactApi';
 import { fetchLatestRunForConversation, fetchRunEvents, fetchToolInvocations } from '../../services/runPersistenceApi';
@@ -15,6 +16,7 @@ const MAX_RUN_EVENT_LOG_LENGTH = 200;
 const initialCurrentRun = getSessionLatestRun(
   initialWorkbenchState.sessions.find((session) => session.id === initialWorkbenchState.currentSessionId),
 );
+const CLOUDBASE_PREVIEW_ACCESS_TOKEN = 'cloudbase-preview';
 let latestRunRequestId = 0;
 let reportArtifactsRequestId = 0;
 
@@ -22,6 +24,14 @@ function getAccessToken(): string | null {
   const session = useAuthStore.getState().session;
   const accessToken = session?.access_token?.trim();
   return accessToken || null;
+}
+
+function getReportArtifactAccessToken(): string | null {
+  if (isCloudBasePrivateApiEnabled()) {
+    return CLOUDBASE_PREVIEW_ACCESS_TOKEN;
+  }
+
+  return getAccessToken();
 }
 
 export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (set, get) => ({
@@ -288,7 +298,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadReportArtifacts: async (conversationId) => {
-    const accessToken = getAccessToken();
+    const accessToken = getReportArtifactAccessToken();
 
     if (!accessToken || !get().isPersistentMode) {
       return;
@@ -401,7 +411,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   saveReportArtifact: async (params) => {
-    const accessToken = getAccessToken();
+    const accessToken = getReportArtifactAccessToken();
 
     if (!accessToken || !get().isPersistentMode) {
       return;

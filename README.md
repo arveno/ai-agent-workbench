@@ -229,6 +229,9 @@ VITE_CLOUDBASE_ENV_ID=
 VITE_CLOUDBASE_REGION=ap-shanghai
 VITE_ENABLE_CLOUDBASE_PRIVATE_API=false
 
+# Local dev proxy env
+CLOUDBASE_PROXY_TARGET=
+
 # Server-only env
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
@@ -242,15 +245,37 @@ POSTGRES_CONNECTION_STRING=
 - `.env.local` 不提交。
 - `VITE_` 开头的变量会进入浏览器，只能放前端公开变量。
 - `VITE_API_BASE_URL` 可选；EdgeOne Pages 调 CloudBase HTTP Functions 时填写 CloudBase 默认域名，留空时继续使用同域相对路径。
+- 本地 CloudBase preview 推荐保持 `VITE_API_BASE_URL=` 为空，并用 `CLOUDBASE_PROXY_TARGET` 让 Vite dev server 代理 `/api`，避免 localhost CORS。
+- `CLOUDBASE_PROXY_TARGET` 不是 `VITE_` 变量，只供本地 Vite dev server 读取，不会暴露给浏览器。
 - 公开 CloudBase API，例如 demo templates，可直接使用 `VITE_API_BASE_URL`，不需要 token。
 - 私有 CloudBase API 仍在迁移验证阶段，必须显式开启 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true`，并使用 CloudBase Auth 产生的 `access_token`。
-- 当前私有 API 开关只影响 service 层的 conversations、messages、reports 和 demo-copy；Run persistence、recent tools 和正式 Agent Run 仍保持 legacy 链路。
+- 当前私有 API 开关会让 CloudBase preview 路径的 conversations、messages、reports 和 demo-copy 使用 CloudBase private APIs。
+- CloudBase preview 只覆盖 mock / demo-copy / report artifact 闭环；Run persistence、recent tools 和正式 Agent Run 仍保持 legacy 链路。
 - legacy Vercel API 仍使用 Supabase `session.access_token`，当前正式页面默认继续走这条链路。
 - CloudBase Auth helper 只用于迁移测试，不替换当前 Supabase `authStore`。
 - 当前不切换正式 Agent Run；`/api/agent/run/stream` 主链路仍保持现状。
 - service role、`GROQ_API_KEY` 和数据库连接串不能加 `VITE_`。
 - Vercel 线上需要在 Environment Variables 中配置这些变量。
 - 修改 Vercel 环境变量后需要重新部署。
+
+本地 CloudBase preview 推荐 `.env.local`：
+
+```env
+VITE_API_BASE_URL=
+VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
+VITE_CLOUDBASE_REGION=ap-shanghai
+VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
+CLOUDBASE_PROXY_TARGET=https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com
+```
+
+EdgeOne 生产环境推荐：
+
+```env
+VITE_API_BASE_URL=https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com
+VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
+VITE_CLOUDBASE_REGION=ap-shanghai
+VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
+```
 
 ---
 
