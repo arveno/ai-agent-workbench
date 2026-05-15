@@ -278,6 +278,24 @@ VITE_CLOUDBASE_REGION=ap-shanghai
 VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
 ```
 
+## CloudBase Preview 状态
+
+当前 CloudBase Preview 已覆盖：
+
+- Public demo templates
+- CloudBase Auth helper
+- Conversations / messages
+- Reports
+- Demo copy
+- Quota 基础闭环
+- Agent Run SSE / fallback
+- 正式页面 CloudBase Preview 分支
+- 本地 Vite proxy
+
+这仍是 Preview，不是生产默认单轨。`VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时，前端继续走 legacy Vercel / Supabase 链路；`authStore` 仍是 Supabase Auth；Vercel / Supabase 旧代码仍保留。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
+
+正式切换前需要完成 EdgeOne Preview 线上回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次，并保留旧 Vercel / Supabase 回滚窗口。
+
 ---
 
 ## 本地运行

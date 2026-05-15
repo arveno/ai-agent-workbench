@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始验证 conversations / messages / reports / demo-copy / quota 私有基础闭环和 Agent Run 流式链路的阶段。
+当前迁移处于 CloudBase Preview 阶段收口：腾讯云 POC 能力验证完成，CloudBase MySQL 正式 schema 已落库，CloudBase HTTP Functions 覆盖 public demo templates、Auth helper、conversations、messages、reports、demo-copy、quota 和 Agent Run SSE；前端已通过 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 接入 CloudBase private API preview，本地 Vite proxy 已用于规避 localhost CORS。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -22,6 +22,81 @@
 8. Tencent-09A：CloudBase Auth helper 与正式 `/api/auth/me` 验证通过。
 
 这些 POC 说明静态部署、普通 HTTP Function、SSE、匿名登录、后端鉴权、RunSql、函数内 MySQL 访问和 CloudBase 身份到业务用户的映射已经具备迁移基础。它们不等同于主业务接口已迁移完成，后续仍需按业务风险分批替换。
+
+## CloudBase Preview 收口结论
+
+Tencent-19 的阶段判断是：CloudBase Preview 已具备正式页面端到端回归基础，但还不是生产默认单轨。
+
+当前已完成能力按模块列如下：
+
+| 模块 | 当前状态 |
+| --- | --- |
+| Public demo templates | `demo-tasks` / `demo-conversations` 公开只读接口已验证，前端支持 `VITE_API_BASE_URL`。 |
+| Auth helper | `/api/auth/me` 与 `_shared/auth.js` 已验证，能通过 CloudBase access token 建立或复用 `app_profiles`。 |
+| Conversations | CloudBase private `GET/POST /api/workbench/conversations` 已验证，前端 preview 分支可创建和读取会话。 |
+| Messages | CloudBase private `GET/POST /api/workbench/messages` 已验证，前端 preview 分支可读写消息。 |
+| Reports | CloudBase private `GET/POST /api/workbench/reports` 已验证，前端 preview 分支可保存和读取 report artifacts。 |
+| Demo copy | CloudBase private `POST /api/workbench/demo-copy` 已验证，前端 preview 分支可复制公开会话模板并读取 seed messages。 |
+| Quota | CloudBase private `GET/POST /api/workbench/quota` 基础闭环已验证，Agent Run stream 后端会 consume / finish usage。 |
+| Agent Run SSE / fallback | CloudBase `/api/agent/run/stream` 已验证鉴权、归属校验、quota、run/events/tools、assistant message、SSE 和明确 fallback。 |
+| Frontend CloudBase Preview | 正式页面可在 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 下走 CloudBase conversations/messages/reports/demo-copy/quota/Agent Run stream。 |
+| Local test panel | `local-tools/cloudbase-auth-test.html` 可用于快速验证 CloudBase Auth 与 API，但不提交、不属于正式产品。 |
+
+## Preview 边界
+
+- 当前仍是 Preview，不是正式单轨。
+- Vercel / Supabase 旧代码仍保留，用于回滚、对照和默认 legacy 路径。
+- 前端 `authStore` 仍是 Supabase Auth，没有替换为 CloudBase Auth。
+- CloudBase private API 只通过 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 显式启用；默认关闭时仍走 legacy。
+- Agent Run 的真实 Groq / data tools 仍可能进入明确 fallback，不能把 fallback 当作真实模型结果宣传。
+- quota consume / finish 已具备基础闭环，但 consume 尚未事务化，也没有 MySQL 行锁并发保护。
+- `local-tools` 测试面板只服务迁移验证，不提交、不进正式页面、不作为产品能力。
+- CloudBase Preview 不等于删除 Vercel/Supabase；正式删除前必须保留回滚窗口。
+
+## 正式切换前清单
+
+正式单轨切换前必须完成：
+
+1. 配置 EdgeOne Preview 环境变量，并确认前端指向 CloudBase 默认域名。
+2. 跑完整浏览器回归：页面初始化、demo templates、创建会话、消息读写、demo-copy、reports、Agent Run、报告确认、错误态和刷新恢复。
+3. 检查 Network：无 CORS、无 legacy `/api/health` 404 噪音、无明显重复 GET、无重复 POST。
+4. 确认用户消息只写一次，CloudBase Agent Run 后端写入 assistant message 后，前端不重复持久化 assistant message。
+5. 确认 quota 只随一次 Agent Run consume 一次，并且失败 / fallback 时 finish usage 状态正确。
+6. 补 quota transaction / 行锁或等效原子扣减方案，再进入高并发或公开流量。
+7. 打开 CloudBase 函数日志和错误观察，记录 401 / 403 / 429 / 500 的前端表现。
+8. 在删除旧 Vercel / Supabase 代码前保留回滚窗口，至少完成一次 EdgeOne Preview 线上回归。
+
+## EdgeOne 环境变量建议
+
+本地 `.env.local` 推荐：
+
+```env
+VITE_API_BASE_URL=
+VITE_CLOUDBASE_ENV_ID=<cloudbase-env-id>
+VITE_CLOUDBASE_REGION=ap-shanghai
+VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
+CLOUDBASE_PROXY_TARGET=https://<cloudbase-default-domain>
+```
+
+EdgeOne Preview / Production 推荐：
+
+```env
+VITE_API_BASE_URL=https://<cloudbase-default-domain>
+VITE_CLOUDBASE_ENV_ID=<cloudbase-env-id>
+VITE_CLOUDBASE_REGION=ap-shanghai
+VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
+```
+
+`CLOUDBASE_PROXY_TARGET` 只给本地 Vite dev server 使用，不是 `VITE_` 变量，不会进入浏览器，也不应配置为 EdgeOne 前端公开环境变量。
+
+## 下一步建议
+
+当前有两个可选路径：
+
+- A. 推送 main，触发一次 EdgeOne Preview 部署，做线上 CloudBase Preview 回归。
+- B. 继续本地做单轨化准备，暂不触发 EdgeOne 构建。
+
+推荐路径是 A：如果本地已经通过，并且 push 前确认 `git status` 干净、`pnpm build` 通过，就应进入 EdgeOne Preview 线上回归。线上回归通过后，再决定是否进入正式默认链路切换和旧链路清理。
 
 ## CloudBase MySQL schema 状态
 
