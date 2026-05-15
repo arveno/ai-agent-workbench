@@ -4,6 +4,8 @@ import type {
   MessageRecord,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
+import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 interface FetchConversationMessagesParams {
   limit?: number;
@@ -44,14 +46,18 @@ async function readPersistenceResponse<TData>(response: Response): Promise<Workb
     return {
       ok: false,
       errorCode:
-        payload.errorCode === 'auth_required' ||
-        payload.errorCode === 'auth_unavailable' ||
-        payload.errorCode === 'db_error' ||
-        payload.errorCode === 'invalid_request' ||
-        payload.errorCode === 'method_not_allowed' ||
-        payload.errorCode === 'not_found'
-          ? payload.errorCode
-          : 'db_error',
+        payload.errorCode === 'validation_error'
+          ? 'invalid_request'
+          : payload.errorCode === 'auth_invalid'
+            ? 'auth_required'
+            : payload.errorCode === 'auth_required' ||
+                payload.errorCode === 'auth_unavailable' ||
+                payload.errorCode === 'db_error' ||
+                payload.errorCode === 'invalid_request' ||
+                payload.errorCode === 'method_not_allowed' ||
+                payload.errorCode === 'not_found'
+              ? payload.errorCode
+              : 'db_error',
       message: typeof payload.message === 'string' ? payload.message : 'Workbench 消息请求失败。',
     };
   }
@@ -80,13 +86,8 @@ export async function fetchConversationMessages(
   params: FetchConversationMessagesParams,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<MessageListResult>> {
-  const token = normalizeAccessToken(accessToken);
-
-  if (!token) {
-    return createAuthRequiredResponse();
-  }
-
   const searchParams = new URLSearchParams();
+  searchParams.set('conversationId', conversationId);
 
   if (params.limit) {
     searchParams.set('limit', String(params.limit));
@@ -98,9 +99,32 @@ export async function fetchConversationMessages(
 
   const query = searchParams.toString();
 
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const response = await requestCloudBasePrivateApi(`/api/workbench/messages?${query}`, {
+        method: 'GET',
+        accessToken: cloudBaseToken,
+      });
+
+      return await readPersistenceResponse<MessageListResult>(response);
+    } catch {
+      return createNetworkErrorResponse();
+    }
+  }
+
+  const token = normalizeAccessToken(accessToken);
+
+  if (!token) {
+    return createAuthRequiredResponse();
+  }
+
+  searchParams.delete('conversationId');
+  const legacyQuery = searchParams.toString();
+
   try {
     const response = await fetch(
-      `/api/workbench/conversations/${encodeURIComponent(conversationId)}/messages${query ? `?${query}` : ''}`,
+      `/api/workbench/conversations/${encodeURIComponent(conversationId)}/messages${legacyQuery ? `?${legacyQuery}` : ''}`,
       {
         method: 'GET',
         headers: createHeaders(token),
@@ -118,6 +142,27 @@ export async function createConversationMessage(
   input: MessageCreateInput,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<MessageRecord>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const response = await requestCloudBasePrivateApi('/api/workbench/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...input,
+          conversationId,
+        }),
+        accessToken: cloudBaseToken,
+      });
+
+      return await readPersistenceResponse<MessageRecord>(response);
+    } catch {
+      return createNetworkErrorResponse();
+    }
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {

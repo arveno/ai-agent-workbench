@@ -6,6 +6,8 @@ import type {
   ConversationUpdateInput,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
+import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 interface FetchConversationsParams {
   limit?: number;
@@ -33,6 +35,14 @@ function createNetworkErrorResponse<TData>(): WorkbenchPersistenceResponse<TData
   };
 }
 
+function createUnsupportedCloudBaseResponse<TData>(message: string): WorkbenchPersistenceResponse<TData> {
+  return {
+    ok: false,
+    errorCode: 'invalid_request',
+    message,
+  };
+}
+
 async function readPersistenceResponse<TData>(response: Response): Promise<WorkbenchPersistenceResponse<TData>> {
   const payload = (await response.json().catch(() => null)) as unknown;
 
@@ -47,14 +57,18 @@ async function readPersistenceResponse<TData>(response: Response): Promise<Workb
     return {
       ok: false,
       errorCode:
-        payload.errorCode === 'auth_required' ||
-        payload.errorCode === 'auth_unavailable' ||
-        payload.errorCode === 'db_error' ||
-        payload.errorCode === 'invalid_request' ||
-        payload.errorCode === 'method_not_allowed' ||
-        payload.errorCode === 'not_found'
-          ? payload.errorCode
-          : 'db_error',
+        payload.errorCode === 'validation_error'
+          ? 'invalid_request'
+          : payload.errorCode === 'auth_invalid'
+            ? 'auth_required'
+            : payload.errorCode === 'auth_required' ||
+                payload.errorCode === 'auth_unavailable' ||
+                payload.errorCode === 'db_error' ||
+                payload.errorCode === 'invalid_request' ||
+                payload.errorCode === 'method_not_allowed' ||
+                payload.errorCode === 'not_found'
+              ? payload.errorCode
+              : 'db_error',
       message: typeof payload.message === 'string' ? payload.message : 'Workbench 会话请求失败。',
     };
   }
@@ -82,12 +96,6 @@ export async function fetchConversations(
   params: FetchConversationsParams,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationListResult>> {
-  const token = normalizeAccessToken(accessToken);
-
-  if (!token) {
-    return createAuthRequiredResponse();
-  }
-
   const searchParams = new URLSearchParams();
 
   if (params.limit) {
@@ -103,6 +111,29 @@ export async function fetchConversations(
   }
 
   const query = searchParams.toString();
+
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const response = await requestCloudBasePrivateApi(
+        `/api/workbench/conversations${query ? `?${query}` : ''}`,
+        {
+          method: 'GET',
+          accessToken: cloudBaseToken,
+        },
+      );
+
+      return await readPersistenceResponse<ConversationListResult>(response);
+    } catch {
+      return createNetworkErrorResponse();
+    }
+  }
+
+  const token = normalizeAccessToken(accessToken);
+
+  if (!token) {
+    return createAuthRequiredResponse();
+  }
 
   try {
     const response = await fetch(`/api/workbench/conversations${query ? `?${query}` : ''}`, {
@@ -120,6 +151,24 @@ export async function createConversation(
   input: ConversationCreateInput,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const response = await requestCloudBasePrivateApi('/api/workbench/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+        accessToken: cloudBaseToken,
+      });
+
+      return await readPersistenceResponse<ConversationRecord>(response);
+    } catch {
+      return createNetworkErrorResponse();
+    }
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -143,6 +192,29 @@ export async function fetchConversation(
   id: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    const conversationResult = await fetchConversations({ limit: 50 }, null);
+
+    if (!conversationResult.ok) {
+      return conversationResult;
+    }
+
+    const conversation = conversationResult.data.conversations.find((item) => item.id === id);
+
+    if (!conversation) {
+      return {
+        ok: false,
+        errorCode: 'not_found',
+        message: 'Workbench 会话不存在。',
+      };
+    }
+
+    return {
+      ok: true,
+      data: conversation,
+    };
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -166,6 +238,10 @@ export async function updateConversation(
   input: ConversationUpdateInput,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    return createUnsupportedCloudBaseResponse('CloudBase 会话更新接口尚未接入，当前仅支持列表和创建。');
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {

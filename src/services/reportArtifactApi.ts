@@ -1,10 +1,12 @@
 import type {
   ReportArtifactCreateInput,
   ReportArtifactCreateResult,
-  ReportArtifactListResult,
   ReportArtifactRecord,
+  ReportArtifactListResult,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
+import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -43,14 +45,18 @@ async function readPersistenceResponse<TData>(
     return {
       ok: false,
       errorCode:
-        payload.errorCode === 'auth_required' ||
-        payload.errorCode === 'auth_unavailable' ||
-        payload.errorCode === 'db_error' ||
-        payload.errorCode === 'invalid_request' ||
-        payload.errorCode === 'method_not_allowed' ||
-        payload.errorCode === 'not_found'
-          ? payload.errorCode
-          : 'db_error',
+        payload.errorCode === 'validation_error'
+          ? 'invalid_request'
+          : payload.errorCode === 'auth_invalid'
+            ? 'auth_required'
+            : payload.errorCode === 'auth_required' ||
+                payload.errorCode === 'auth_unavailable' ||
+                payload.errorCode === 'db_error' ||
+                payload.errorCode === 'invalid_request' ||
+                payload.errorCode === 'method_not_allowed' ||
+                payload.errorCode === 'not_found'
+              ? payload.errorCode
+              : 'db_error',
       message: typeof payload.message === 'string' ? payload.message : fallbackMessage,
     };
   }
@@ -78,6 +84,23 @@ export async function fetchConversationReportArtifacts(
   conversationId: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactListResult>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const response = await requestCloudBasePrivateApi(
+        `/api/workbench/reports?conversationId=${encodeURIComponent(conversationId)}`,
+        {
+          method: 'GET',
+          accessToken: cloudBaseToken,
+        },
+      );
+
+      return await readPersistenceResponse<ReportArtifactListResult>(response, '读取报告 Artifact 失败。');
+    } catch {
+      return createNetworkErrorResponse('网络异常，暂不能读取报告 Artifact。');
+    }
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -100,6 +123,20 @@ export async function fetchReportArtifact(
   reportId: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactRecord>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const response = await requestCloudBasePrivateApi(`/api/workbench/reports?id=${encodeURIComponent(reportId)}`, {
+        method: 'GET',
+        accessToken: cloudBaseToken,
+      });
+
+      return await readPersistenceResponse<ReportArtifactRecord>(response, '读取报告 Artifact 失败。');
+    } catch {
+      return createNetworkErrorResponse('网络异常，暂不能读取报告 Artifact。');
+    }
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -123,6 +160,48 @@ export async function createRunReportArtifact(
   input: ReportArtifactCreateInput,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactCreateResult>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    try {
+      const cloudBaseToken = await ensureCloudBaseAccessToken();
+      const metadata =
+        input.runtimeRunId || runId
+          ? {
+              ...input.metadata,
+              runtimeRunId: input.runtimeRunId ?? runId,
+            }
+          : input.metadata;
+      const response = await requestCloudBasePrivateApi('/api/workbench/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: input.conversationId,
+          runId,
+          title: input.title,
+          contentMarkdown: input.contentMarkdown,
+          status: 'generated',
+          metadata,
+        }),
+        accessToken: cloudBaseToken,
+      });
+      const result = await readPersistenceResponse<ReportArtifactRecord>(response, '保存报告 Artifact 失败。');
+
+      if (!result.ok) {
+        return result;
+      }
+
+      return {
+        ok: true,
+        data: {
+          report: result.data,
+        },
+      };
+    } catch {
+      return createNetworkErrorResponse('网络异常，暂不能保存报告 Artifact。');
+    }
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {

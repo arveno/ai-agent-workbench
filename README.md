@@ -244,6 +244,7 @@ POSTGRES_CONNECTION_STRING=
 - `VITE_API_BASE_URL` 可选；EdgeOne Pages 调 CloudBase HTTP Functions 时填写 CloudBase 默认域名，留空时继续使用同域相对路径。
 - 公开 CloudBase API，例如 demo templates，可直接使用 `VITE_API_BASE_URL`，不需要 token。
 - 私有 CloudBase API 仍在迁移验证阶段，必须显式开启 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true`，并使用 CloudBase Auth 产生的 `access_token`。
+- 当前私有 API 开关只影响 service 层的 conversations、messages、reports 和 demo-copy；Run persistence、recent tools 和正式 Agent Run 仍保持 legacy 链路。
 - legacy Vercel API 仍使用 Supabase `session.access_token`，当前正式页面默认继续走这条链路。
 - CloudBase Auth helper 只用于迁移测试，不替换当前 Supabase `authStore`。
 - 当前不切换正式 Agent Run；`/api/agent/run/stream` 主链路仍保持现状。

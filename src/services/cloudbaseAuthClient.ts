@@ -78,3 +78,33 @@ export async function getCloudBaseAccessToken(): Promise<string | null> {
 
   return result.data.session?.access_token?.trim() || null;
 }
+
+export async function ensureCloudBaseAccessToken(): Promise<string> {
+  const sessionResult = await getCloudBaseSession();
+  const currentToken = sessionResult.error ? null : sessionResult.data.session?.access_token?.trim() || null;
+
+  if (currentToken) {
+    return currentToken;
+  }
+
+  const signInResult = await signInCloudBaseAnonymously();
+
+  if (signInResult.error) {
+    throw new Error(getAuthErrorMessage(signInResult.error, 'CloudBase anonymous sign-in failed.'));
+  }
+
+  const signInToken = signInResult.data.session?.access_token?.trim();
+
+  if (signInToken) {
+    return signInToken;
+  }
+
+  const nextSessionResult = await getCloudBaseSession();
+  const nextToken = nextSessionResult.error ? null : nextSessionResult.data.session?.access_token?.trim() || null;
+
+  if (!nextToken) {
+    throw new Error('CloudBase anonymous sign-in did not return an access token.');
+  }
+
+  return nextToken;
+}
