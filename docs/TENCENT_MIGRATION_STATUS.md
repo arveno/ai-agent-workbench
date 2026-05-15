@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始准备 conversations 私有只读接口验证的阶段。
+当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始验证 conversations / messages 私有基础闭环的阶段。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -66,22 +66,28 @@ Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
 - 当前验证用户的 `role = demo_user`，`status = active`。
 - 第一阶段 `_openid` 与 `user_id` 保持同值。
 
-`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`，也未迁移 conversations、messages、reports、quota 或 Agent Run SSE。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
+`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`；conversations / messages 仅新增 CloudBase 基础函数且尚未接入前端，reports、quota 和 Agent Run SSE 尚未迁移。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
 
 CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，包括 `app_profiles.metadata`，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
 
-## conversations 只读函数状态
+## conversations / messages 函数状态
 
-Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表只读查询。正式路由规划为：
+Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表查询；Tencent-10C 在同一函数中扩展创建会话，并新增 `tencent/functions/workbench-messages/` 验证消息读取和写入。正式路由规划为：
 
 ```txt
 /api/workbench/conversations -> workbench-conversations
 身份认证：开启
+
+/api/workbench/messages -> workbench-messages
+身份认证：开启
+路径透传：关闭
 ```
 
-该函数只实现 `GET /api/workbench/conversations`，复用 `_shared/auth.js` 获取 `currentUser`，复用 `_shared/mysql.js` 查询 CloudBase MySQL，并按 `_openid = currentUser.openid`、`user_id = currentUser.userId`、`visibility = 'private'` 过滤 `conversations`。参数兼容现有 `limit`、`cursor`、`status`，返回 `{ ok: true, data: { conversations, nextCursor } }`。
+该函数实现 `GET /api/workbench/conversations` 和 `POST /api/workbench/conversations`，复用 `_shared/auth.js` 获取 `currentUser`，复用 `_shared/mysql.js` 访问 CloudBase MySQL，并按 `_openid = currentUser.openid`、`user_id = currentUser.userId`、`visibility = 'private'` 过滤或写入 `conversations`。`GET` 参数兼容现有 `limit`、`cursor`、`status`，返回 `{ ok: true, data: { conversations, nextCursor } }`。`POST` 支持 `title`、`summary`、`mode`、`metadata`，写入 `status = 'active'`、`visibility = 'private'`、`message_count = 0`，返回 `{ ok: true, data: conversation }`。
 
-当前状态只表示 conversations 只读函数已加入仓库并可进行部署验证，不代表 conversations/messages/reports 全量迁移完成。`POST`、`PATCH`、messages、reports、Agent Run、SSE、quota 和前端 `authStore` 均未迁移。
+CloudBase HTTP 访问服务不支持 `/api/workbench/conversations/:id/messages` 这类动态参数路径，因此 `workbench-messages` 使用固定路由 `/api/workbench/messages`。读取和写入消息前必须先校验父会话归属，私有查询都带 `_openid` 与 `user_id`。`GET /api/workbench/messages?conversationId=...` 支持 `limit` 和 `before`，返回 `{ ok: true, data: { messages, nextCursor } }`；`POST /api/workbench/messages` 从 JSON body 读取 `conversationId`，并支持 `role`、`kind`、`content`、`runId`、`clientMessageId`、`status`、`metadata`，用 `user_id + client_message_id` 做幂等，写入成功后顺序更新父会话 `message_count`。
+
+当前状态只表示 conversations 列表 / 创建与 messages 读取 / 写入基础闭环函数已加入仓库并可进行部署验证，不代表 conversations/messages/reports 全量迁移完成。`PATCH`、`DELETE`、archive、reports、Agent Run、SSE、quota、demo-copy 和前端 `authStore` 均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务，后续高并发场景需要补事务或原子更新方案。
 
 ## run_events 索引状态
 
@@ -120,7 +126,7 @@ Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 C
 
 1. 先迁低风险 `demo_task_templates`、`demo_conversation_templates` 和 `health` 类接口。当前 demo templates 只读接口已完成验证。
 2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。Tencent-09A 已完成 Auth helper 与 `/api/auth/me` 验证，但前端 `authStore` 尚未迁移。
-3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。当前 Tencent-10A 先新增 conversations 列表只读函数，后续再迁 POST/PATCH、messages 和 reports。
+3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。当前 Tencent-10C 先新增 conversations 列表 / 创建和 messages 读取 / 写入基础闭环，后续再迁 PATCH、archive、reports 和 Agent Run 相关查询。
 4. 再迁 quota transaction，使用 MySQL 事务和行锁验证并发扣减。
 5. 最后迁 Agent Run SSE，包括鉴权、conversation 归属校验、quota、事件流写入和断线处理。
 

@@ -1,8 +1,8 @@
 {
-  "name": "ai-agent-workbench-workbench-conversations",
+  "name": "ai-agent-workbench-workbench-messages",
   "version": "0.1.0",
   "private": true,
-  "description": "CloudBase HTTP Function for Workbench conversation listing and creation.",
+  "description": "CloudBase HTTP Function for Workbench conversation messages.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

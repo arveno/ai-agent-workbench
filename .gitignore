@@ -170,3 +170,4 @@ cypress/videos/
 .vercel
 .env*.local
 !.env.local.example
+local-tools/

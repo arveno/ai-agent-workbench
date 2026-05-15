@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
@@ -6,6 +7,7 @@ const PORT = Number(process.env.PORT || 9000);
 const HOST = '0.0.0.0';
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
+const MAX_BODY_BYTES = 1024 * 1024;
 
 const CONVERSATION_COLUMNS = [
   'id',
@@ -26,6 +28,7 @@ const CONVERSATION_COLUMNS = [
 ].join(',');
 
 const VALID_STATUSES = new Set(['active', 'running', 'completed', 'failed', 'archived']);
+const VALID_MODES = new Set(['mock', 'agent', 'mixed']);
 
 function loadSharedModule(name) {
   const bundledSharedPath = path.join(__dirname, '_shared', `${name}.js`);
@@ -48,7 +51,7 @@ class RequestError extends Error {
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 }
 
@@ -98,10 +101,88 @@ function readStatus(value) {
   }
 
   if (!VALID_STATUSES.has(status)) {
-    throw new RequestError(400, 'invalid_request', 'Invalid conversation status.');
+    throw new RequestError(400, 'validation_error', 'Invalid conversation status.');
   }
 
   return status;
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseRequestBodyValue(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    throw new RequestError(400, 'validation_error', 'Invalid JSON body.');
+  }
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let rawBody = '';
+    let didReject = false;
+
+    req.setEncoding('utf8');
+
+    req.on('data', (chunk) => {
+      if (didReject) {
+        return;
+      }
+
+      rawBody += chunk;
+
+      if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
+        didReject = true;
+        reject(new RequestError(400, 'validation_error', 'Request body too large.'));
+        req.destroy();
+      }
+    });
+
+    req.on('end', () => {
+      if (didReject) {
+        return;
+      }
+
+      try {
+        resolve(parseRequestBodyValue(rawBody));
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    req.on('error', () => {
+      if (!didReject) {
+        reject(new RequestError(400, 'validation_error', 'Invalid request body.'));
+      }
+    });
+  });
+}
+
+function readCreateTitle(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '新会话';
+}
+
+function readCreateSummary(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function readCreateMode(value) {
+  if (typeof value === 'string' && VALID_MODES.has(value)) {
+    return value;
+  }
+
+  return 'mock';
+}
+
+function readCreateMetadata(value) {
+  return isRecord(value) ? value : {};
 }
 
 function normalizeNumber(value) {
@@ -235,6 +316,49 @@ async function fetchConversations(currentUser, params) {
   };
 }
 
+async function fetchConversationById(db, currentUser, conversationId) {
+  const result = await db
+    .from('conversations')
+    .select(CONVERSATION_COLUMNS)
+    .eq('id', conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId)
+    .eq('visibility', 'private');
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
+  return rows.length > 0 ? mapConversation(rows[0]) : null;
+}
+
+async function createConversation(currentUser, body) {
+  const db = getDb();
+  const conversationId = randomUUID();
+  const insertPayload = {
+    id: conversationId,
+    _openid: currentUser.openid,
+    user_id: currentUser.userId,
+    title: readCreateTitle(body.title),
+    summary: readCreateSummary(body.summary),
+    mode: readCreateMode(body.mode),
+    status: 'active',
+    visibility: 'private',
+    message_count: 0,
+    metadata: JSON.stringify(readCreateMetadata(body.metadata)),
+  };
+
+  const insertResult = await db.from('conversations').insert(insertPayload);
+  assertNoQueryError(insertResult);
+
+  const conversation = await fetchConversationById(db, currentUser, conversationId);
+
+  if (!conversation) {
+    throw new Error('Created conversation was not found.');
+  }
+
+  return conversation;
+}
+
 function readListParams(req) {
   const url = new URL(req.url || '/', 'http://localhost');
 
@@ -259,7 +383,7 @@ function toPublicError(error) {
   return {
     statusCode: 500,
     errorCode: 'db_error',
-    message: '读取 Workbench 会话失败。',
+    message: 'Workbench 会话请求失败。',
   };
 }
 
@@ -275,13 +399,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     sendError(res, 405, 'method_not_allowed', 'Method not allowed');
     return;
   }
 
   try {
     const currentUser = await authenticateRequest(req);
+
+    if (req.method === 'POST') {
+      const body = await readRequestBody(req);
+      const conversation = await createConversation(currentUser, body);
+
+      sendJson(res, 200, {
+        ok: true,
+        data: conversation,
+      });
+      return;
+    }
+
     const params = readListParams(req);
     const data = await fetchConversations(currentUser, params);
 
