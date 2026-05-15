@@ -92,8 +92,31 @@ function shouldUseCloudBasePreviewForPersistentState(persistentUserId: string | 
   return persistentUserId === CLOUDBASE_PREVIEW_USER_ID;
 }
 
-function shouldKeepAgentRunOnLegacy(provider: WorkbenchStore['currentModelProvider']): boolean {
-  return provider === 'groq' && isCloudBasePrivateApiEnabled();
+function shouldAllowCloudBasePreviewForProvider(provider: WorkbenchStore['currentModelProvider']): boolean {
+  return isCloudBasePrivateApiEnabled() || provider !== 'groq';
+}
+
+function isPersistentStateCompatibleWithAuthContext(
+  authContext: PersistenceAuthContext,
+  persistentUserId: string | null,
+): boolean {
+  if (isCloudBasePreviewAuthContext(authContext)) {
+    return shouldUseCloudBasePreviewForPersistentState(persistentUserId);
+  }
+
+  return persistentUserId === authContext.userId;
+}
+
+function shouldSkipCloudBaseAgentAssistantPersist(
+  authContext: PersistenceAuthContext,
+  message: WorkbenchMessage,
+): boolean {
+  return (
+    isCloudBasePreviewAuthContext(authContext) &&
+    message.role === 'assistant' &&
+    message.kind === 'normal' &&
+    Boolean(message.runId?.startsWith('agent_run_'))
+  );
 }
 
 function getConversationModeForProvider(provider: WorkbenchStore['currentModelProvider']): ConversationMode {
@@ -221,11 +244,9 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     get().activeAgentRunAbortController?.abort();
 
     const currentProvider = get().currentModelProvider;
-    const authContext = shouldKeepAgentRunOnLegacy(currentProvider)
-      ? null
-      : getPersistenceAuthContext({
-          allowCloudBasePreview: currentProvider !== 'groq',
-        });
+    const authContext = getPersistenceAuthContext({
+      allowCloudBasePreview: shouldAllowCloudBasePreviewForProvider(currentProvider),
+    });
 
     if (authContext) {
       set({
@@ -795,12 +816,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   },
   ensureCurrentPersistentConversation: async () => {
     const currentState = get();
-    if (shouldKeepAgentRunOnLegacy(currentState.currentModelProvider)) {
-      return currentState.currentSessionId;
-    }
-
     const authContext = getPersistenceAuthContext({
-      allowCloudBasePreview: currentState.currentModelProvider !== 'groq',
+      allowCloudBasePreview: shouldAllowCloudBasePreviewForProvider(currentState.currentModelProvider),
     });
 
     if (!authContext) {
@@ -809,7 +826,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     const currentSession = currentState.sessions.find((session) => session.id === currentState.currentSessionId);
 
-    if (currentState.isPersistentMode && currentSession) {
+    if (
+      currentState.isPersistentMode &&
+      currentSession &&
+      isPersistentStateCompatibleWithAuthContext(authContext, currentState.persistentUserId)
+    ) {
       return currentSession.id;
     }
 
@@ -848,6 +869,14 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     });
 
     if (!authContext || !get().isPersistentMode) {
+      return;
+    }
+
+    if (shouldSkipCloudBaseAgentAssistantPersist(authContext, message)) {
+      set({
+        messagesError: null,
+        persistenceError: null,
+      });
       return;
     }
 

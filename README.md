@@ -249,11 +249,12 @@ POSTGRES_CONNECTION_STRING=
 - `CLOUDBASE_PROXY_TARGET` 不是 `VITE_` 变量，只供本地 Vite dev server 读取，不会暴露给浏览器。
 - 公开 CloudBase API，例如 demo templates，可直接使用 `VITE_API_BASE_URL`，不需要 token。
 - 私有 CloudBase API 仍在迁移验证阶段，必须显式开启 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true`，并使用 CloudBase Auth 产生的 `access_token`。
-- 当前私有 API 开关会让 CloudBase preview 路径的 conversations、messages、reports 和 demo-copy 使用 CloudBase private APIs。
-- CloudBase preview 只覆盖 mock / demo-copy / report artifact 闭环；Run persistence、recent tools 和正式 Agent Run 仍保持 legacy 链路。
+- 当前私有 API 开关会让 CloudBase preview 路径的 conversations、messages、reports、demo-copy 和 Agent Run stream 使用 CloudBase private APIs。
+- CloudBase Agent Run preview 会调用 CloudBase `/api/agent/run/stream`，使用 CloudBase Auth `access_token`，不使用 Supabase token。
+- Run persistence 查询、recent tools 和非 preview 默认路径仍保持 legacy 链路；Vercel / Supabase 代码未删除，正式切换前仍需要完整回归测试。
 - legacy Vercel API 仍使用 Supabase `session.access_token`，当前正式页面默认继续走这条链路。
 - CloudBase Auth helper 只用于迁移测试，不替换当前 Supabase `authStore`。
-- 当前不切换正式 Agent Run；`/api/agent/run/stream` 主链路仍保持现状。
+- `VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时，`/api/agent/run/stream` 主链路仍保持现状。
 - service role、`GROQ_API_KEY` 和数据库连接串不能加 `VITE_`。
 - Vercel 线上需要在 Environment Variables 中配置这些变量。
 - 修改 Vercel 环境变量后需要重新部署。

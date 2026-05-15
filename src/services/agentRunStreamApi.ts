@@ -1,4 +1,6 @@
 import type { DataSourceTestableProviderId, RunEvent } from '@/types/workbench';
+import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
   'run_started',
@@ -66,6 +68,29 @@ function consumeSseBlocks(buffer: string, onEvent: (event: RunEvent) => void): s
   return remainingBuffer;
 }
 
+function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunEvent {
+  const normalizedClientRunId = clientRunId?.trim();
+
+  if (!normalizedClientRunId) {
+    return event;
+  }
+
+  if (event.type === 'run_started') {
+    return {
+      ...event,
+      run: {
+        ...event.run,
+        id: normalizedClientRunId,
+      },
+    };
+  }
+
+  return {
+    ...event,
+    runId: normalizedClientRunId,
+  } as RunEvent;
+}
+
 async function readAgentRunStreamError(response: Response): Promise<string> {
   try {
     const contentType = response.headers.get('content-type') ?? '';
@@ -79,6 +104,10 @@ async function readAgentRunStreamError(response: Response): Promise<string> {
         parsed.errorMessage.trim()
       ) {
         return parsed.errorMessage.trim();
+      }
+
+      if (isRecord(parsed) && typeof parsed.message === 'string' && parsed.message.trim()) {
+        return parsed.message.trim();
       }
     }
 
@@ -119,27 +148,44 @@ export async function streamAgentRunAnalysis(params: {
   signal?: AbortSignal;
   onEvent: (event: RunEvent) => void;
 }): Promise<void> {
+  const body = JSON.stringify({
+    prompt: params.prompt,
+    provider: params.provider,
+    conversationId: params.conversationId,
+    modelProvider: 'groq',
+    clientRunId: params.clientRunId,
+  });
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  const accessToken = params.accessToken?.trim();
+  const useCloudBasePreview = isCloudBasePrivateApiEnabled();
+  let response: Response;
 
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+  if (useCloudBasePreview) {
+    const cloudBaseToken = await ensureCloudBaseAccessToken();
+
+    response = await requestCloudBasePrivateApi('/api/agent/run/stream', {
+      method: 'POST',
+      headers,
+      body,
+      accessToken: cloudBaseToken,
+      signal: params.signal,
+    });
+  } else {
+    const accessToken = params.accessToken?.trim();
+
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    response = await fetch('/api/agent/run/stream', {
+      method: 'POST',
+      headers,
+      body,
+      signal: params.signal,
+    });
   }
-
-  const response = await fetch('/api/agent/run/stream', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      prompt: params.prompt,
-      provider: params.provider,
-      conversationId: params.conversationId,
-      modelProvider: 'groq',
-      clientRunId: params.clientRunId,
-    }),
-    signal: params.signal,
-  });
 
   if (!response.ok) {
     throw new Error(await readAgentRunStreamError(response));
@@ -161,9 +207,21 @@ export async function streamAgentRunAnalysis(params: {
     }
 
     buffer += decoder.decode(value, { stream: true });
-    buffer = consumeSseBlocks(buffer, params.onEvent);
+    buffer = consumeSseBlocks(buffer, (event) => {
+      params.onEvent(
+        useCloudBasePreview
+          ? normalizeRunEventForClient(event, params.clientRunId)
+          : event,
+      );
+    });
   }
 
   buffer += decoder.decode();
-  consumeSseBlocks(`${buffer}\n\n`, params.onEvent);
+  consumeSseBlocks(`${buffer}\n\n`, (event) => {
+    params.onEvent(
+      useCloudBasePreview
+        ? normalizeRunEventForClient(event, params.clientRunId)
+        : event,
+    );
+  });
 }
