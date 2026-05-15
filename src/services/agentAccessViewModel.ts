@@ -1,4 +1,5 @@
 import type { AgentAccessView, AuthSessionView } from '@/types/auth';
+import { isCloudBasePrivateApiEnabled } from './cloudbaseApiClient';
 
 export type RealAgentAvailabilityStatus =
   | 'available'
@@ -38,6 +39,16 @@ export function buildRealAgentAvailabilityView(
   params: BuildRealAgentAvailabilityViewParams,
 ): RealAgentAvailabilityView {
   const { authView, agentAccess, isAgentAccessLoading } = params;
+
+  if (isCloudBasePrivateApiEnabled()) {
+    return {
+      status: 'available',
+      canEnterRealAgent: true,
+      title: 'CloudBase Agent Run Preview 可用',
+      description: '当前使用 CloudBase Auth 与 CloudBase Agent Run 预览链路。',
+      actionLabel: null,
+    };
+  }
 
   if (authView.status === 'loading') {
     return {

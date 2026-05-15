@@ -279,14 +279,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       return null;
     }
 
-    if (isCloudBasePrivateApiEnabled()) {
-      set({
-        demoTaskChoiceError: 'CloudBase 私有 API 预览模式暂不切正式 Agent Run，请选择模拟演示。',
-      });
-      return null;
-    }
-
-    const accessToken = getAccessToken();
+    const accessToken = getPersistenceAccessToken();
 
     if (!accessToken) {
       set({
@@ -328,7 +321,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       sessions: upsertSession(state.sessions, session),
       currentSessionId: session.id,
       isPersistentMode: true,
-      persistentUserId: getAuthenticatedUserId(),
+      persistentUserId: getPersistenceUserId(),
       isCopyingDemoTemplate: false,
       isDemoTaskChoiceOpen: false,
       pendingDemoTaskId: null,
