@@ -1,10 +1,10 @@
 # Tencent Cloud Migration Status
 
-生成日期：2026-05-14
+生成日期：2026-05-15
 
 ## 当前阶段
 
-当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始验证 conversations / messages / reports / demo-copy / quota 私有基础闭环和固定 Agent Run 基础闭环的阶段。
+当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始验证 conversations / messages / reports / demo-copy / quota 私有基础闭环和 Agent Run 流式链路的阶段。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -66,13 +66,13 @@ Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
 - 当前验证用户的 `role = demo_user`，`status = active`。
 - 第一阶段 `_openid` 与 `user_id` 保持同值。
 
-`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`；conversations / messages / reports / demo-copy / quota 仅新增 CloudBase 基础函数且尚未接入前端；Tencent-14 仅新增固定 Agent Run 基础闭环，不代表真实 Groq / planner / tools 已迁移。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
+`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`；conversations / messages / reports / demo-copy / quota 仅新增 CloudBase 基础函数且尚未接入前端；Tencent-15 仅在 CloudBase Agent Run 测试函数中新增真实 planner / tools / Groq / fallback 验证路径，不代表前端正式 Agent Run 已切换。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
 
 CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，包括 `app_profiles.metadata`，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
 
 ## conversations / messages / reports / demo-copy / quota / Agent Run 函数状态
 
-Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表查询；Tencent-10C 在同一函数中扩展创建会话，并新增 `tencent/functions/workbench-messages/` 验证消息读取和写入；Tencent-11 新增 `tencent/functions/workbench-reports/` 验证报告列表、单条读取和保存；Tencent-12 新增 `tencent/functions/workbench-demo-copy/` 验证复制示例会话模板；Tencent-13 新增 `tencent/functions/workbench-quota/` 验证 quota 读取、消耗和完成 usage 的基础闭环；Tencent-14 新增 `tencent/functions/workbench-agent-run-stream/` 验证 CloudBase 固定 Agent Run 基础闭环。正式路由规划为：
+Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表查询；Tencent-10C 在同一函数中扩展创建会话，并新增 `tencent/functions/workbench-messages/` 验证消息读取和写入；Tencent-11 新增 `tencent/functions/workbench-reports/` 验证报告列表、单条读取和保存；Tencent-12 新增 `tencent/functions/workbench-demo-copy/` 验证复制示例会话模板；Tencent-13 新增 `tencent/functions/workbench-quota/` 验证 quota 读取、消耗和完成 usage 的基础闭环；Tencent-14 新增 `tencent/functions/workbench-agent-run-stream/` 验证 CloudBase 固定 Agent Run 基础闭环；Tencent-15 在同一 Agent Run 函数中新增 `real` 模式，接入 planner、受控 data tools、Groq 和明确 fallback。正式路由规划为：
 
 ```txt
 /api/workbench/conversations -> workbench-conversations
@@ -109,9 +109,13 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 
 `workbench-quota` 只使用固定路由 `/api/workbench/quota`，路径透传关闭，避免 CloudBase 多路径路由和路径透传差异。`GET /api/workbench/quota` 会读取或自动创建当前用户本月 `agent_run_quota`，默认 `quota_limit = 20`、`quota_used = 0`；`POST /api/workbench/quota` 通过 `body.action` 区分操作，`action = "consume"` 会为 `demo_user` 在未超额时递增 `quota_used` 并写入 `agent_run_usage(status = started)`，`admin` 不递增 quota 但仍写 usage；`action = "finish"` 按 `usageId + _openid + user_id` 更新 `status`、`finished_at`、`error_code` 和 `metadata`。`metadata` 写入前使用 `JSON.stringify(...)`，读取后安全解析。
 
-`workbench-agent-run-stream` 使用固定路由 `/api/agent/run/stream`，路径透传关闭。Tencent-14 实现固定 Agent Run 基础闭环：复用 `_shared/auth.js` 获取 `currentUser`，校验 `conversationId + _openid + user_id + visibility = private` 归属，消耗 quota 并创建 `agent_run_usage`，创建 `agent_runs`，以 SSE 依次输出并写入 `run_events`：`run_started`、`step_started`、`tool_started`、`tool_completed`、`conclusion_delta`、`conclusion_completed`、`run_completed`。该函数会写入一条 mock `tool_invocations` 和一条 assistant `messages`，并在正常结束时 finish usage 为 `completed`；失败时尽量 finish 为 `failed`，客户端断开时停止继续写 SSE 并尽量标记为 `stopped`。本阶段不调用真实 Groq、planner 或 tools，也不接前端正式 Agent Run 调用。
+`workbench-agent-run-stream` 使用固定路由 `/api/agent/run/stream`，路径透传关闭。Tencent-14 的 `body.mode = "basic"` 固定 Agent Run 基础闭环仍保留：复用 `_shared/auth.js` 获取 `currentUser`，校验 `conversationId + _openid + user_id + visibility = private` 归属，消耗 quota 并创建 `agent_run_usage`，创建 `agent_runs`，以 SSE 依次输出并写入 `run_events`，写入 mock `tool_invocations` 和 assistant `messages`，并 finish usage。
 
-当前状态只表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环函数和固定 Agent Run 基础闭环已加入仓库并可进行部署验证，不代表 conversations/messages/reports/quota 或 Agent Run 全量迁移完成。`PATCH`、`DELETE`、archive、Agent Run 报告生成、真实模型调用、真实 planner/tools、真实前端 Agent Run 调用和前端 `authStore` 均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；Tencent-13/Tencent-14 暂未在 quota consume 中使用 MySQL transaction + 行锁，后续高并发场景需要补事务或原子更新方案。
+Tencent-15 在同一函数中新增默认 `real` 模式：先运行 planner 判断 `capability_intro`、`data_analysis`、`knowledge_qa` 或 `unsupported`；`data_analysis` 走服务端受控工具链 `schema_inspect`、`aggregate_table`、`chart_render`，并写入 `tool_invocations` 的 `tool_name`、`status`、`input`、`output`、`elapsed_ms`；配置 `GROQ_API_KEY` 时用 Groq 生成结论，未配置或调用失败时返回明确 fallback，不伪装成真实模型结果。SSE 与 assistant message metadata 会记录 `conclusionSource` 和 `fallbackReason`。`knowledge_qa` 暂不迁真实 RAG，返回 `rag_not_migrated` fallback，因为现有 RAG 仍依赖 Supabase Admin / knowledge 表链路。
+
+CloudBase 部署 `workbench-agent-run-stream` 时需要通过环境变量注入外部依赖，不能写入代码或文档正文：`GROQ_API_KEY`、`GROQ_MODEL`、`SUPABASE_DB_CONNECTION_STRING`、`POSTGRES_CONNECTION_STRING`。`provider = "supabase"` 使用 `SUPABASE_DB_CONNECTION_STRING`，`provider = "postgresql"` 使用 `POSTGRES_CONNECTION_STRING`。`GROQ_API_KEY` 未配置时应仍能通过 fallback 完成 SSE 流并写入 run/message/usage。
+
+当前状态只表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环函数和 Agent Run CloudBase 流式验证函数已加入仓库并可进行部署验证，不代表 conversations/messages/reports/quota 或 Agent Run 全量迁移完成。`PATCH`、`DELETE`、archive、Agent Run 报告生成、RAG knowledge_qa、真实前端 Agent Run 调用和前端 `authStore` 均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；Tencent-13/Tencent-15 暂未在 quota consume 中使用 MySQL transaction + 行锁，后续高并发场景需要补事务或原子更新方案。
 
 ## run_events 索引状态
 
@@ -152,7 +156,7 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。Tencent-09A 已完成 Auth helper 与 `/api/auth/me` 验证，但前端 `authStore` 尚未迁移。
 3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。当前 Tencent-10C/Tencent-12 先新增 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环，后续再迁 PATCH、archive、Agent Run 报告生成和 Agent Run 相关查询。
 4. 再迁 quota transaction。当前 Tencent-13 已新增 quota 基础闭环，后续仍需使用 MySQL 事务和行锁验证并发扣减。
-5. 最后迁 Agent Run SSE。Tencent-14 先验证固定 Agent Run 基础闭环，后续仍需按阶段接入真实 planner/tools/Groq、报告生成入口、前端正式调用、事务化 quota 和更完整的断线恢复。
+5. 最后迁 Agent Run SSE。Tencent-15 已在 CloudBase Agent Run 函数中接入 planner、受控 data tools、Groq 和明确 fallback，用于本地测试面板验证；后续仍需补 RAG knowledge_qa、报告生成入口、前端正式调用、事务化 quota 和更完整的断线恢复。
 
 Agent Run SSE 放在最后，是因为它同时涉及流式输出、真实模型调用、quota、`agent_runs`、`run_events`、`tool_invocations`、报告生成和错误恢复，风险最高。
 

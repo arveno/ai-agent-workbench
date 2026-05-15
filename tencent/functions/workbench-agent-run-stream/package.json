@@ -1,13 +1,14 @@
 {
-  "name": "ai-agent-workbench-agent-run-stream-skeleton",
+  "name": "ai-agent-workbench-agent-run-stream",
   "version": "0.1.0",
   "private": true,
-  "description": "CloudBase HTTP Function for Agent Run basic loop verification.",
+  "description": "CloudBase HTTP Function for Agent Run stream verification.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@cloudbase/node-sdk": "^3.10.1"
+    "@cloudbase/node-sdk": "^3.10.1",
+    "pg": "^8.13.1"
   }
 }
