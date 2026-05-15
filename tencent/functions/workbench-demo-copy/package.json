@@ -1,0 +1,13 @@
+{
+  "name": "ai-agent-workbench-workbench-demo-copy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CloudBase HTTP Function for copying demo conversation templates.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.1"
+  }
+}
