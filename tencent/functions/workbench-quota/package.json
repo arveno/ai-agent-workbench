@@ -1,0 +1,13 @@
+{
+  "name": "ai-agent-workbench-workbench-quota",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CloudBase HTTP Function for Workbench Agent Run quota verification.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.1"
+  }
+}

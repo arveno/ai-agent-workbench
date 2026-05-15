@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始验证 conversations / messages / reports / demo-copy 私有基础闭环的阶段。
+当前迁移处于腾讯云 POC 能力验证完成、CloudBase MySQL 正式 schema 已落库、低风险 demo templates 只读接口已验证、CloudBase Auth helper 与 `/api/auth/me` 已验证通过，并开始验证 conversations / messages / reports / demo-copy / quota 私有基础闭环的阶段。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -66,13 +66,13 @@ Tencent-09A 已完成并验证通过。当前新增的正式能力包括：
 - 当前验证用户的 `role = demo_user`，`status = active`。
 - 第一阶段 `_openid` 与 `user_id` 保持同值。
 
-`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`；conversations / messages / reports / demo-copy 仅新增 CloudBase 基础函数且尚未接入前端，quota 和 Agent Run SSE 尚未迁移。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
+`/api/auth/me` 是正式 Auth helper 验证入口，不是旧 POC 路由 `/api/auth-me` 或旧 POC 函数。当前状态仅表示 CloudBase Auth helper 与 `/api/auth/me` 验证完成，不代表整个 Auth 链路已经切换到腾讯云。当前仍未迁移前端 `authStore`；conversations / messages / reports / demo-copy / quota 仅新增 CloudBase 基础函数且尚未接入前端，Agent Run SSE 尚未迁移。后续私有 CloudBase HTTP Function 应复用该 helper 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。
 
 CloudBase MySQL JSON 字段写入约定也已确认：通过 CloudBase Node SDK 写入 MySQL `JSON` 字段时，不能直接传 JS object / array，包括 `app_profiles.metadata`，必须先 `JSON.stringify(...)`；读取后再安全 `JSON.parse`，解析失败时使用 `{}` 或 `[]` 等安全默认值。
 
-## conversations / messages / reports / demo-copy 函数状态
+## conversations / messages / reports / demo-copy / quota 函数状态
 
-Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表查询；Tencent-10C 在同一函数中扩展创建会话，并新增 `tencent/functions/workbench-messages/` 验证消息读取和写入；Tencent-11 新增 `tencent/functions/workbench-reports/` 验证报告列表、单条读取和保存；Tencent-12 新增 `tencent/functions/workbench-demo-copy/` 验证复制示例会话模板。正式路由规划为：
+Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 CloudBase 私有会话列表查询；Tencent-10C 在同一函数中扩展创建会话，并新增 `tencent/functions/workbench-messages/` 验证消息读取和写入；Tencent-11 新增 `tencent/functions/workbench-reports/` 验证报告列表、单条读取和保存；Tencent-12 新增 `tencent/functions/workbench-demo-copy/` 验证复制示例会话模板；Tencent-13 新增 `tencent/functions/workbench-quota/` 验证 quota 读取、消耗和完成 usage 的基础闭环。正式路由规划为：
 
 ```txt
 /api/workbench/conversations -> workbench-conversations
@@ -89,6 +89,10 @@ Tencent-10A 新增 `tencent/functions/workbench-conversations/`，用于验证 C
 /api/workbench/demo-copy -> workbench-demo-copy
 身份认证：开启
 路径透传：关闭
+
+/api/workbench/quota -> workbench-quota
+身份认证：开启
+路径透传：关闭
 ```
 
 该函数实现 `GET /api/workbench/conversations` 和 `POST /api/workbench/conversations`，复用 `_shared/auth.js` 获取 `currentUser`，复用 `_shared/mysql.js` 访问 CloudBase MySQL，并按 `_openid = currentUser.openid`、`user_id = currentUser.userId`、`visibility = 'private'` 过滤或写入 `conversations`。`GET` 参数兼容现有 `limit`、`cursor`、`status`，返回 `{ ok: true, data: { conversations, nextCursor } }`。`POST` 支持 `title`、`summary`、`mode`、`metadata`，写入 `status = 'active'`、`visibility = 'private'`、`message_count = 0`，返回 `{ ok: true, data: conversation }`。
@@ -99,7 +103,9 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/conversations/:id/messages`
 
 CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy` 这类动态参数路径，因此 Tencent-12 使用固定路由 `/api/workbench/demo-copy`。`POST /api/workbench/demo-copy` 从 JSON body 读取 `templateId`，读取启用且 `visibility in ('demo','system')` 的 `demo_conversation_templates`，为当前用户创建 private conversation，并把有效 `seed_messages` 写入 `messages`。返回 `{ ok: true, data: { conversation, messagesCount } }`。本阶段未使用事务；如果 seed messages 写入失败，会尽量删除刚创建的 conversation 做补偿清理，后续高一致性场景需要事务化。
 
-当前状态只表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy 基础闭环函数已加入仓库并可进行部署验证，不代表 conversations/messages/reports 全量迁移完成。`PATCH`、`DELETE`、archive、Agent Run 报告生成、SSE、quota 和前端 `authStore` 均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务，后续高并发场景需要补事务或原子更新方案。
+`workbench-quota` 只使用固定路由 `/api/workbench/quota`，路径透传关闭，避免 CloudBase 多路径路由和路径透传差异。`GET /api/workbench/quota` 会读取或自动创建当前用户本月 `agent_run_quota`，默认 `quota_limit = 20`、`quota_used = 0`；`POST /api/workbench/quota` 通过 `body.action` 区分操作，`action = "consume"` 会为 `demo_user` 在未超额时递增 `quota_used` 并写入 `agent_run_usage(status = started)`，`admin` 不递增 quota 但仍写 usage；`action = "finish"` 按 `usageId + _openid + user_id` 更新 `status`、`finished_at`、`error_code` 和 `metadata`。`metadata` 写入前使用 `JSON.stringify(...)`，读取后安全解析。
+
+当前状态只表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy 和 quota 基础闭环函数已加入仓库并可进行部署验证，不代表 conversations/messages/reports/quota 全量迁移完成。`PATCH`、`DELETE`、archive、Agent Run 报告生成、SSE、真实 Agent Run quota 接入和前端 `authStore` 均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；Tencent-13 暂未在 quota consume 中使用 MySQL transaction + 行锁，后续高并发场景需要补事务或原子更新方案。
 
 ## run_events 索引状态
 
@@ -139,7 +145,7 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 1. 先迁低风险 `demo_task_templates`、`demo_conversation_templates` 和 `health` 类接口。当前 demo templates 只读接口已完成验证。
 2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。Tencent-09A 已完成 Auth helper 与 `/api/auth/me` 验证，但前端 `authStore` 尚未迁移。
 3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。当前 Tencent-10C/Tencent-12 先新增 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环，后续再迁 PATCH、archive、Agent Run 报告生成和 Agent Run 相关查询。
-4. 再迁 quota transaction，使用 MySQL 事务和行锁验证并发扣减。
+4. 再迁 quota transaction。当前 Tencent-13 已新增 quota 基础闭环，后续仍需使用 MySQL 事务和行锁验证并发扣减。
 5. 最后迁 Agent Run SSE，包括鉴权、conversation 归属校验、quota、事件流写入和断线处理。
 
 Agent Run SSE 放在最后，是因为它同时涉及流式输出、真实模型调用、quota、`agent_runs`、`run_events`、`tool_invocations`、报告生成和错误恢复，风险最高。

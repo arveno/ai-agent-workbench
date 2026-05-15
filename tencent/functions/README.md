@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口，以及 Tencent-10C/Tencent-12 的 conversations / messages / reports / demo-copy 基础闭环验证函数。Tencent-12 仅覆盖复制示例会话到当前用户私有会话，不代表 Agent Run、SSE 或 quota 全量迁移完成；现阶段不替换前端 Auth store。
+本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口，以及 Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数。Tencent-13 仅覆盖 quota 读取、消耗和完成 usage 的基础闭环，不代表 Agent Run、SSE 或 quota 并发事务全量迁移完成；现阶段不替换前端 Auth store。
 
 ## 函数
 
@@ -13,6 +13,7 @@
 | `workbench-messages` | `/api/workbench/messages` | 开启 | 校验会话归属后读取和写入当前用户私有消息。 |
 | `workbench-reports` | `/api/workbench/reports` | 开启 | 校验会话归属后读取和保存当前用户私有报告。 |
 | `workbench-demo-copy` | `/api/workbench/demo-copy` | 开启 | 复制公开示例会话模板为当前用户私有会话。 |
+| `workbench-quota` | `/api/workbench/quota` | 开启 | 查询本月 Agent Run 额度，并通过 `POST body.action` 消耗额度或完成 usage。 |
 
 ## 共享 helper
 
@@ -21,7 +22,7 @@
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
 
-后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports` 和 `workbench-demo-copy` 已按该方式实现基础读写；当前不替换前端 `authStore`。
+后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 和 `workbench-quota` 已按该方式实现基础读写；当前不替换前端 `authStore`。
 
 不迁移：
 
@@ -31,7 +32,7 @@
 /api/workbench/runs/:id/report
 ```
 
-CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy` 这种动态路径，Tencent-12 改用固定 `/api/workbench/demo-copy` 路由。当前只迁移 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环；PATCH、archive、Agent Run、SSE 和 quota 后续再迁。
+CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy` 这种动态路径，Tencent-12 改用固定 `/api/workbench/demo-copy` 路由。当前只迁移 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy 和 quota 基础闭环；PATCH、archive、Agent Run、SSE 和 quota 并发事务后续再迁。
 
 ## 打包上传
 
@@ -120,7 +121,20 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-demo-copy.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-conversations`、`workbench-messages`、`workbench-reports` 和 `workbench-demo-copy` 的 zip 根目录都应包含：
+`workbench-quota` 也依赖 `_shared`。只使用固定路由 `/api/workbench/quota`，路径透传关闭；`GET` 读取额度，`POST` 通过 `body.action = "consume"` 或 `body.action = "finish"` 区分操作。打包说明使用 Git Bash：
+
+```bash
+cd tencent/functions
+stage="$HOME/Desktop/cloudbase-workbench-quota-package"
+rm -rf "$stage"
+mkdir -p "$stage/_shared"
+cp workbench-quota/index.js workbench-quota/package.json workbench-quota/scf_bootstrap workbench-quota/README.md "$stage/"
+cp _shared/mysql.js _shared/auth.js "$stage/_shared/"
+chmod +x "$stage/scf_bootstrap"
+(cd "$stage" && zip -r workbench-quota.zip index.js package.json README.md scf_bootstrap _shared)
+```
+
+`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 和 `workbench-quota` 的 zip 根目录都应包含：
 
 ```txt
 _shared/
@@ -184,6 +198,7 @@ node --check tencent/functions/workbench-conversations/index.js
 node --check tencent/functions/workbench-messages/index.js
 node --check tencent/functions/workbench-reports/index.js
 node --check tencent/functions/workbench-demo-copy/index.js
+node --check tencent/functions/workbench-quota/index.js
 ```
 
 `workbench-conversations` 线上验证建议：
@@ -230,6 +245,18 @@ curl -i -H "Authorization: Bearer <cloudbase-token>" "https://<your-domain>/api/
 
 未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少 `templateId` 时应返回 `validation_error`；带 token 和有效 `templateId` 时应返回 `ok: true`、`conversation` 和 `messagesCount`。随后读取会话列表应能看到复制出来的会话，读取该会话消息应能看到 seed messages。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages` 或 `workbench-reports`。
 
+`workbench-quota` 线上验证建议：
+
+```bash
+curl -i https://<your-domain>/api/workbench/quota
+curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/workbench/quota
+curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"consume\",\"runId\":\"manual-test\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
+curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"finish\",\"usageId\":\"<usage-id>\",\"status\":\"completed\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
+curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/workbench/quota
+```
+
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。读取额度应返回 `ok: true` 和 `quota`；`POST` 缺少或传入非法 `action` 应返回 `validation_error`；`action = "consume"` 应返回 `usageId` 和更新后的 `quota`；`action = "finish"` 应返回更新后的 `usage`；再次读取额度时，`demo_user` 的 `quotaUsed` 应变化。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports` 或 `workbench-demo-copy`。Tencent-13 暂未使用 MySQL transaction + 行锁，接入真实 Agent Run 前必须补事务化。
+
 ## 安全说明
 
 - `demo-tasks` 和 `demo-conversations` 是公开只读接口，不读取 token，不做身份认证。
@@ -239,6 +266,7 @@ curl -i -H "Authorization: Bearer <cloudbase-token>" "https://<your-domain>/api/
 - `workbench-messages` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它会先校验 conversation 归属，再读取或写入 `messages`，不写 reports、Agent Run、SSE 或 quota。
 - `workbench-reports` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它会先校验 conversation 归属，再读取或写入 `report_artifacts`，不写 Agent Run、SSE 或 quota。
 - `workbench-demo-copy` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取公开 demo 模板并写入当前用户私有 `conversations` / `messages`，不写 reports、Agent Run、SSE 或 quota。
+- `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。
