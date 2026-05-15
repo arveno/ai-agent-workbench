@@ -224,7 +224,10 @@ conversation / messages / runs / tools / reports 持久化
 # Frontend public env
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
-VITE_API_BASE_URL=https://你的-cloudbase-默认域名
+VITE_API_BASE_URL=
+VITE_CLOUDBASE_ENV_ID=
+VITE_CLOUDBASE_REGION=ap-shanghai
+VITE_ENABLE_CLOUDBASE_PRIVATE_API=false
 
 # Server-only env
 SUPABASE_URL=
@@ -239,6 +242,11 @@ POSTGRES_CONNECTION_STRING=
 - `.env.local` 不提交。
 - `VITE_` 开头的变量会进入浏览器，只能放前端公开变量。
 - `VITE_API_BASE_URL` 可选；EdgeOne Pages 调 CloudBase HTTP Functions 时填写 CloudBase 默认域名，留空时继续使用同域相对路径。
+- 公开 CloudBase API，例如 demo templates，可直接使用 `VITE_API_BASE_URL`，不需要 token。
+- 私有 CloudBase API 仍在迁移验证阶段，必须显式开启 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true`，并使用 CloudBase Auth 产生的 `access_token`。
+- legacy Vercel API 仍使用 Supabase `session.access_token`，当前正式页面默认继续走这条链路。
+- CloudBase Auth helper 只用于迁移测试，不替换当前 Supabase `authStore`。
+- 当前不切换正式 Agent Run；`/api/agent/run/stream` 主链路仍保持现状。
 - service role、`GROQ_API_KEY` 和数据库连接串不能加 `VITE_`。
 - Vercel 线上需要在 Environment Variables 中配置这些变量。
 - 修改 Vercel 环境变量后需要重新部署。
