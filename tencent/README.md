@@ -85,9 +85,11 @@ CloudBase MySQL 不提供 Supabase RLS。后续 API 迁移必须遵守：
 4. 子资源访问必须同时校验父资源归属，例如读取 `messages` 前确认 `conversation_id + user_id + _openid`。
 5. Demo 模板表只返回 `is_enabled = 1` 且允许公开展示的数据。
 
-## Quota 事务草案
+## Quota 原子扣减状态
 
-Tencent-13 已新增 `workbench-quota` 基础闭环函数，用于读取本月额度、消耗一次额度并完成 `agent_run_usage`。`workbench-agent-run-stream` 已在验证路径中直接写入 quota usage，但当前实现仍没有并发事务保护；切换真实前端流量前，`consume_agent_run_quota` 必须升级为 MySQL 事务或等效原子更新：
+Tencent-13 已新增 `workbench-quota` 基础闭环函数，用于读取本月额度、消耗一次额度并完成 `agent_run_usage`。Tencent-24 后，`workbench-quota` 和 `workbench-agent-run-stream` 都使用 CAS 条件更新做原子扣减：先读取当前 quota，再执行 `quota_used = oldQuotaUsed + 1` 且 `WHERE quota_used = oldQuotaUsed` 的 counted update，失败时重试。`admin` 用户不增加 `quota_used`，但仍写 usage。
+
+当前 quota 扣减没有启用 MySQL transaction / `SELECT ... FOR UPDATE`，原因是当前函数只使用 CloudBase MySQL `app.rdb()` 已验证的 filters 和 counted update API；未在本阶段引入 raw SQL 或事务 API。后续如果进入公开高并发流量，仍建议升级为真正事务或存储过程：
 
 ```sql
 START TRANSACTION;
@@ -153,7 +155,7 @@ Preview 阶段仍需注意：
 
 1. `authStore` 尚未替换为 CloudBase Auth。
 2. `VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时仍走 legacy Vercel / Supabase。
-3. quota consume 尚未事务化，后续需要 MySQL transaction / 行锁或等效原子扣减。
+3. quota consume 已使用 CAS 条件更新做原子扣减重试；Agent Run 幂等需要先执行 `migrations/003_agent_run_idempotency.sql`，为 `agent_runs(user_id, runtime_run_id)` 增加唯一约束；公开高并发前仍建议为 quota 补事务或存储过程。
 4. Agent Run 的模型网关仍可能 fallback，fallback 不能伪装成真实模型结果；`data_table_not_found` / `data_tool_query_failed` / `data_empty` / `model_*` 需要结合 CloudBase MySQL、模型服务和函数日志排查。
 5. `local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品，也不应提交为正式能力。
 6. 删除旧 Vercel / Supabase 前必须保留回滚窗口。
@@ -165,5 +167,5 @@ Preview 阶段仍需注意：
 3. 新增 CloudBase Auth 后端校验 helper，建立 `_openid -> app_profiles.user_id` 映射。当前 `auth-me` 已验证该链路，前端 `authStore` 尚未迁移。
 4. 迁移 conversations/messages/report/run 查询接口，所有 SQL 显式加 `_openid/user_id`。当前 Tencent-10C/Tencent-12 只新增 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环，PATCH、archive、Agent Run 相关报告生成和 run 查询后续再迁。
 5. 迁移 quota 事务。当前 Tencent-13 已新增 quota 基础闭环，后续仍需单独验证 MySQL transaction + 行锁并发扣减。
-6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 已新增轻量 model gateway，Tencent-17/Tencent-18 已接入前端 CloudBase Preview；后续仍需补 quota 事务、RAG knowledge_qa、报告生成入口、断线恢复和 EdgeOne Preview 线上回归。
+6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 已新增轻量 model gateway，Tencent-24 已新增 preview 阶段幂等、`003_agent_run_idempotency.sql` 跨实例唯一约束和 quota CAS 扣减，Tencent-17/Tencent-18 已接入前端 CloudBase Preview；后续仍需补 RAG knowledge_qa、报告生成入口、断线恢复和 EdgeOne Preview 线上回归。
 7. 最后清理旧 Vercel/Supabase 代码，清理前必须保证腾讯云版本已可演示和可回滚。

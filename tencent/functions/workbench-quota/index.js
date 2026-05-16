@@ -46,7 +46,7 @@ function loadSharedModule(name) {
 }
 
 const { authenticateRequest } = loadSharedModule('auth');
-const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
+const { assertNoQueryError, extractMutationCount, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -342,15 +342,17 @@ async function ensureMonthlyQuota(db, currentUser) {
   return quota;
 }
 
-async function updateQuotaUsed(db, currentUser, quota, nextUsed) {
+async function updateQuotaUsedAtomically(db, currentUser, quota) {
+  const nextUsed = quota.quotaUsed + 1;
   const updateResult = await db
     .from('agent_run_quota')
     .update({
       quota_used: nextUsed,
-    })
+    }, { count: 'exact' })
     .eq('id', quota.id)
     .eq('_openid', currentUser.openid)
-    .eq('user_id', currentUser.userId);
+    .eq('user_id', currentUser.userId)
+    .eq('quota_used', quota.quotaUsed);
 
   assertNoQueryError(updateResult);
 
@@ -360,7 +362,15 @@ async function updateQuotaUsed(db, currentUser, quota, nextUsed) {
     throw new Error('Updated quota was not found.');
   }
 
-  return updatedQuota;
+  const mutationCount = extractMutationCount(updateResult);
+  const didUpdate = mutationCount === null
+    ? updatedQuota.quotaUsed === nextUsed
+    : mutationCount > 0;
+
+  return {
+    didUpdate,
+    quota: updatedQuota,
+  };
 }
 
 async function fetchUsageById(db, currentUser, usageId) {
@@ -388,29 +398,51 @@ async function readQuota(currentUser) {
 
 async function consumeQuota(currentUser, body) {
   const db = getDb();
-  const quota = await ensureMonthlyQuota(db, currentUser);
-  let updatedQuota = quota;
+  let updatedQuota = await ensureMonthlyQuota(db, currentUser);
 
   if (!isAdmin(currentUser)) {
-    if (quota.quotaUsed >= quota.quotaLimit) {
-      throw new RequestError(429, 'quota_exceeded', 'Agent Run quota exceeded.');
+    let didConsume = false;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const quota = await ensureMonthlyQuota(db, currentUser);
+
+      if (quota.quotaUsed >= quota.quotaLimit) {
+        console.warn('[workbench-quota] quota_exceeded', currentUser.userId);
+        throw new RequestError(429, 'quota_exceeded', 'Agent Run quota exceeded.');
+      }
+
+      const updateResult = await updateQuotaUsedAtomically(db, currentUser, quota);
+      updatedQuota = updateResult.quota;
+
+      if (updateResult.didUpdate) {
+        didConsume = true;
+        break;
+      }
     }
 
-    updatedQuota = await updateQuotaUsed(db, currentUser, quota, quota.quotaUsed + 1);
+    if (!didConsume) {
+      console.error('[workbench-quota] quota_consume_failed', currentUser.userId);
+      throw new RequestError(409, 'quota_consume_failed', 'Agent Run quota consume failed.');
+    }
   }
 
   const usageId = randomUUID();
-  const insertUsageResult = await db.from('agent_run_usage').insert({
-    id: usageId,
-    _openid: currentUser.openid,
-    user_id: currentUser.userId,
-    run_id: toNullableString(body.runId),
-    quota_type: 'agent_run',
-    status: 'started',
-    metadata: JSON.stringify(readMetadata(body.metadata)),
-  });
+  try {
+    const insertUsageResult = await db.from('agent_run_usage').insert({
+      id: usageId,
+      _openid: currentUser.openid,
+      user_id: currentUser.userId,
+      run_id: toNullableString(body.runId),
+      quota_type: 'agent_run',
+      status: 'started',
+      metadata: JSON.stringify(readMetadata(body.metadata)),
+    });
 
-  assertNoQueryError(insertUsageResult);
+    assertNoQueryError(insertUsageResult);
+  } catch (error) {
+    console.error('[workbench-quota] quota_consume_failed', currentUser.userId);
+    throw error;
+  }
 
   return {
     usageId,

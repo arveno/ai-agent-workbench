@@ -123,8 +123,36 @@ function assertNoQueryError(result) {
   throw new Error('CloudBase MySQL query failed');
 }
 
+function extractMutationCount(result) {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+
+  const candidates = [
+    result.count,
+    result.affectedRows,
+    result.affected,
+    result.rowCount,
+    result.data && result.data.count,
+    result.data && result.data.affectedRows,
+    result.data && result.data.affected,
+    result.data && result.data.rowCount,
+  ];
+
+  for (const candidate of candidates) {
+    const count = Number(candidate);
+
+    if (Number.isInteger(count) && count >= 0) {
+      return count;
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   assertNoQueryError,
+  extractMutationCount,
   extractRows,
   getCloudBaseApp,
   getCloudBaseEnvId,

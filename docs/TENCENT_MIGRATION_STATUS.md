@@ -49,7 +49,7 @@ Tencent-19 的阶段判断是：CloudBase Preview 已具备正式页面端到端
 - 前端 `authStore` 仍是 Supabase Auth，没有替换为 CloudBase Auth。
 - CloudBase private API 只通过 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 显式启用；默认关闭时仍走 legacy。
 - Agent Run 的真实模型调用仍可能进入明确 fallback，不能把 fallback 当作真实模型结果宣传；data tools 失败时会使用 `data_table_not_found`、`data_tool_query_failed`、`data_empty` 等明确原因，模型失败时会使用 `model_*` fallbackReason。
-- quota consume / finish 已具备基础闭环，但 consume 尚未事务化，也没有 MySQL 行锁并发保护。
+- quota consume / finish 已具备基础闭环；Tencent-24 后 consume 使用 CAS 条件更新做原子扣减重试，Agent Run 通过 migration `003_agent_run_idempotency.sql` 增加 `(user_id, runtime_run_id)` 唯一约束，但 quota 尚未使用 MySQL transaction / 行锁。
 - `local-tools` 测试面板只服务迁移验证，不提交、不进正式页面、不作为产品能力。
 - CloudBase Preview 不等于删除 Vercel/Supabase；正式删除前必须保留回滚窗口。
 
@@ -62,7 +62,7 @@ Tencent-19 的阶段判断是：CloudBase Preview 已具备正式页面端到端
 3. 检查 Network：无 CORS、无 legacy `/api/health` 404 噪音、无明显重复 GET、无重复 POST。
 4. 确认用户消息只写一次，CloudBase Agent Run 后端写入 assistant message 后，前端不重复持久化 assistant message。
 5. 确认 quota 只随一次 Agent Run consume 一次，并且失败 / fallback 时 finish usage 状态正确。
-6. 补 quota transaction / 行锁或等效原子扣减方案，再进入高并发或公开流量。
+6. 高并发或公开流量前执行并校验 `003_agent_run_idempotency.sql`，并继续补 quota transaction / 行锁或存储过程。
 7. 打开 CloudBase 函数日志和错误观察，记录 401 / 403 / 429 / 500 的前端表现。
 8. 在删除旧 Vercel / Supabase 代码前保留回滚窗口，至少完成一次 EdgeOne Preview 线上回归。
 
@@ -204,15 +204,15 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/conversations/:id/messages`
 
 CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy` 这类动态参数路径，因此 Tencent-12 使用固定路由 `/api/workbench/demo-copy`。`POST /api/workbench/demo-copy` 从 JSON body 读取 `templateId`，读取启用且 `visibility in ('demo','system')` 的 `demo_conversation_templates`，为当前用户创建 private conversation，并把有效 `seed_messages` 写入 `messages`。返回 `{ ok: true, data: { conversation, messagesCount } }`。本阶段未使用事务；如果 seed messages 写入失败，会尽量删除刚创建的 conversation 做补偿清理，后续高一致性场景需要事务化。
 
-`workbench-quota` 只使用固定路由 `/api/workbench/quota`，路径透传关闭，避免 CloudBase 多路径路由和路径透传差异。`GET /api/workbench/quota` 会读取或自动创建当前用户本月 `agent_run_quota`，默认 `quota_limit = 20`、`quota_used = 0`；`POST /api/workbench/quota` 通过 `body.action` 区分操作，`action = "consume"` 会为 `demo_user` 在未超额时递增 `quota_used` 并写入 `agent_run_usage(status = started)`，`admin` 不递增 quota 但仍写 usage；`action = "finish"` 按 `usageId + _openid + user_id` 更新 `status`、`finished_at`、`error_code` 和 `metadata`。`metadata` 写入前使用 `JSON.stringify(...)`，读取后安全解析。
+`workbench-quota` 只使用固定路由 `/api/workbench/quota`，路径透传关闭，避免 CloudBase 多路径路由和路径透传差异。`GET /api/workbench/quota` 会读取或自动创建当前用户本月 `agent_run_quota`，默认 `quota_limit = 20`、`quota_used = 0`；`POST /api/workbench/quota` 通过 `body.action` 区分操作，`action = "consume"` 会为 `demo_user` 在未超额时使用 `quota_used = oldQuotaUsed` 的 CAS 条件更新递增额度并写入 `agent_run_usage(status = started)`，`admin` 不递增 quota 但仍写 usage；`action = "finish"` 按 `usageId + _openid + user_id` 更新 `status`、`finished_at`、`error_code` 和 `metadata`。`metadata` 写入前使用 `JSON.stringify(...)`，读取后安全解析。
 
-`workbench-agent-run-stream` 使用固定路由 `/api/agent/run/stream`，路径透传关闭。Tencent-14 的 `body.mode = "basic"` 固定 Agent Run 基础闭环仍保留：复用 `_shared/auth.js` 获取 `currentUser`，校验 `conversationId + _openid + user_id + visibility = private` 归属，消耗 quota 并创建 `agent_run_usage`，创建 `agent_runs`，以 SSE 依次输出并写入 `run_events`，写入 mock `tool_invocations` 和 assistant `messages`，并 finish usage。
+`workbench-agent-run-stream` 使用固定路由 `/api/agent/run/stream`，路径透传关闭。Tencent-14 的 `body.mode = "basic"` 固定 Agent Run 基础闭环仍保留：复用 `_shared/auth.js` 获取 `currentUser`，校验 `conversationId + _openid + user_id + visibility = private` 归属，按 `user_id + clientRunId` 做服务端幂等检查。Tencent-24 要求先执行 `tencent/migrations/003_agent_run_idempotency.sql`，为 `agent_runs(user_id, runtime_run_id)` 增加唯一约束；函数会先创建 `agent_runs(status = pending)` 建立幂等边界，再消耗 quota 并创建 `agent_run_usage`，随后标记 run 为 `running`、输出 SSE、写入 `run_events`、写入 mock `tool_invocations` 和 assistant `messages`，并 finish usage。同一用户重复提交相同 `clientRunId` 时返回 `run_reused`，不重复扣 quota、不重复创建 run、不重复写 assistant message，也不重放 run_events / tool_invocations。
 
 Tencent-21 后，默认 `real` 模式先运行 planner 判断 `capability_intro`、`data_analysis`、`knowledge_qa` 或 `unsupported`；`data_analysis` 走服务端受控工具链 `schema_inspect`、`aggregate_table`、`chart_render`。`schema_inspect` 返回固定 `teaching_metrics` schema 描述，`aggregate_table` 通过 CloudBase MySQL `app.rdb()` 读取 `teaching_metrics` 并在 JS 中按 month / grade / subject 聚合，`chart_render` 生成 chart config / series 数据，并写入 `tool_invocations` 的 `tool_name`、`status`、`input`、`output`、`elapsed_ms`。Tencent-22 新增 `_shared/modelGateway.js`，最终结论优先支持 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`，没有 `MODEL_GATEWAY_*` 时继续兼容 `GROQ_API_KEY` / `GROQ_MODEL`，默认 Groq 模型仍是 `llama-3.1-8b-instant`。模型成功时 `conclusionSource` 使用 provider（如 `openai-compatible` 或 `groq`），未配置或调用失败时返回明确 fallback，不伪装成真实模型结果。Tencent-22 将模型失败原因统一为：`model_not_configured`、`model_unauthorized`、`model_forbidden`、`model_not_found`、`model_rate_limited`、`model_timeout`、`model_network_error`、`model_response_parse_failed`、`model_failed`。SSE 与 assistant message metadata 会记录 `conclusionSource`、`fallbackReason`、`modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus` 和脱敏 `modelErrorMessage`，日志只记录脱敏诊断摘要，不输出 raw API key。`knowledge_qa` 暂不迁真实 RAG，返回 `rag_not_migrated` fallback，因为现有 RAG 仍依赖 Supabase Admin / knowledge 表链路。
 
 CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。所有依赖 `_shared/mysql.js` 的函数必须在 CloudBase 函数环境变量中配置 `CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d`，不要配置到 EdgeOne 或前端 `VITE_*`。CloudBase MySQL 由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 访问；模型 Key 只放 `workbench-agent-run-stream` 的 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*`。推荐配置 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`；未配置 `MODEL_GATEWAY_*` 时可继续用 `GROQ_API_KEY`、`GROQ_MODEL`。模型未配置且 data tools 成功时，应通过 `fallbackReason = "model_not_configured"` 完成 SSE 流并写入 run/message/usage，不应再出现 `data_tool_failed`。
 
-当前状态表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环函数和 Agent Run CloudBase 流式验证函数已加入仓库并可进行部署验证，其中前端 CloudBase preview 已接入 conversations、messages、reports、demo-copy、quota 和 Agent Run stream。Tencent-21 还需要在 CloudBase MySQL 执行 `tencent/migrations/002_cloudbase_teaching_metrics.sql` 与 `tencent/seeds/003_teaching_metrics_seed.sql`，否则真实 Agent Run 会明确返回 `fallbackReason = "data_table_not_found"`。`PATCH`、`DELETE`、archive、Agent Run 报告生成、RAG knowledge_qa、前端 `authStore` 和正式默认链路均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；Tencent-13/Tencent-21 暂未在 quota consume 中使用 MySQL transaction + 行锁，后续高并发场景需要补事务或原子更新方案。
+当前状态表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环函数和 Agent Run CloudBase 流式验证函数已加入仓库并可进行部署验证，其中前端 CloudBase preview 已接入 conversations、messages、reports、demo-copy、quota 和 Agent Run stream。Tencent-21 还需要在 CloudBase MySQL 执行 `tencent/migrations/002_cloudbase_teaching_metrics.sql` 与 `tencent/seeds/003_teaching_metrics_seed.sql`，否则真实 Agent Run 会明确返回 `fallbackReason = "data_table_not_found"`。Tencent-24 新增 `tencent/migrations/003_agent_run_idempotency.sql`，部署新版 `workbench-agent-run-stream` 前必须先执行该 migration，确保跨实例重复 `clientRunId` 命中数据库唯一约束。`PATCH`、`DELETE`、archive、Agent Run 报告生成、RAG knowledge_qa、前端 `authStore` 和正式默认链路均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；quota 仍使用 CAS 条件更新而非 MySQL transaction / 行锁。
 
 ## run_events 索引状态
 

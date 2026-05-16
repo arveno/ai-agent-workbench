@@ -85,6 +85,7 @@ Rules:
 
 - `admin` users do not increase `quota_used`, but still create an `agent_run_usage` record.
 - `demo_user` users consume one quota when `quota_used < quota_limit`.
+- Tencent-24 uses a compare-and-set update with `count = "exact"`: update only succeeds when `quota_used` is still the value that was just read; compare failures are retried.
 - When quota is exhausted, the function returns `quota_exceeded`.
 - Created usage uses `status = started`.
 
@@ -143,11 +144,11 @@ Response:
 
 `metadata` is `JSON.stringify(...)` before writing to MySQL and safely parsed after reading.
 
-## Transaction Note
+## Consistency Note
 
-Tencent-13 is a basic loop verification. It currently uses sequential writes instead of a MySQL transaction.
+Tencent-24 upgrades consume from a plain read-then-update to a CAS-style counted update. The function does not add a migration and does not use MySQL transaction / `SELECT ... FOR UPDATE` in this step because the current CloudBase MySQL `app.rdb()` usage is limited to filters and counted updates.
 
-Before this function is connected to real Agent Run, `consume` must be upgraded to a MySQL transaction with row lock, for example `SELECT ... FOR UPDATE` on the current user's monthly `agent_run_quota`, then quota increment and `agent_run_usage` insert in the same transaction. This avoids concurrent quota over-consumption.
+Before public high-concurrency traffic, consider moving quota consume to a true MySQL transaction or stored procedure: lock the current user's monthly `agent_run_quota`, increment quota, and insert `agent_run_usage` in the same transaction.
 
 ## Package
 
@@ -209,6 +210,7 @@ Expected result:
 - Without token: CloudBase gateway returns `401 MISSING_CREDENTIALS`.
 - Reading quota returns `ok: true` and `quota`.
 - Consuming quota returns `ok: true`, `usageId`, and updated quota.
+- Concurrent consumes should not move `quota_used` past `quota_limit`; compare failures retry or return `quota_consume_failed`.
 - Finishing usage returns `ok: true` and updated usage.
 - A later quota read shows `quotaUsed` changed for `demo_user`.
 - Existing `demo-tasks`, `demo-conversations`, `auth-me`, `workbench-conversations`, `workbench-messages`, `workbench-reports`, and `workbench-demo-copy` routes are unaffected.

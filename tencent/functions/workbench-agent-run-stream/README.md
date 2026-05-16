@@ -61,23 +61,51 @@ The Tencent-21 `real` path is:
 
 1. Authenticate request and resolve `currentUser`.
 2. Read and validate `conversationId`.
-3. Consume one Agent Run quota and create `agent_run_usage(status = started)`.
-4. Create `agent_runs(status = running)`.
-5. Run planner.
-6. Stream and persist `run_events`.
-7. For `data_analysis`, execute the controlled CloudBase MySQL tool chain:
+3. Check idempotency by `user_id + clientRunId` when `clientRunId` is provided. Existing runs return a `run_reused` SSE event and do not consume quota or write trace rows again.
+4. Insert `agent_runs(status = pending)` first. Migration `003_agent_run_idempotency.sql` adds the hard unique boundary on `(user_id, runtime_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
+5. Consume one Agent Run quota with a compare-and-set update and create `agent_run_usage(status = started)`.
+6. Attach `usage_id` to the pending run, mark it `running`, and update the conversation latest run.
+7. Run planner.
+8. Stream and persist `run_events`.
+9. For `data_analysis`, execute the controlled CloudBase MySQL tool chain:
    - `schema_inspect`
    - `aggregate_table`
    - `chart_render`
-8. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
-9. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
-10. Fall back explicitly when the model provider is not configured, `teaching_metrics` is missing, queries fail, no rows are returned, or the model provider fails.
-11. Insert one assistant `messages` row with source metadata.
-12. Mark `agent_runs(status = completed)`.
-13. Stream `run_completed`.
-14. Finish quota usage with `status = completed`.
+10. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
+11. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
+12. Fall back explicitly when the model provider is not configured, `teaching_metrics` is missing, queries fail, no rows are returned, or the model provider fails.
+13. Insert one assistant `messages` row with source metadata, skipping insert when the same `run_id` already has an assistant message.
+14. Mark `agent_runs(status = completed)`.
+15. Stream `run_completed`.
+16. Finish quota usage with `status = completed`.
 
 If the client disconnects, the function stops writing later SSE events, marks the run as `stopped` where possible, and tries to finish usage as `stopped`. If another error occurs after quota consumption, it tries to finish usage as `failed`.
+
+## Idempotency And Quota
+
+Tencent-24 adds service-side idempotency for `POST /api/agent/run/stream`:
+
+- `user_id + clientRunId` is the idempotency key when `clientRunId` is provided.
+- A duplicate request that finds an existing `agent_runs.runtime_run_id` for the current user returns `run_reused` over SSE and does not consume quota, create another run, write another assistant message, or replay `run_events` / `tool_invocations`.
+- Migration `003_agent_run_idempotency.sql` must be executed before deploying this Tencent-24 function. It adds `UNIQUE KEY uk_agent_runs_user_runtime_run (user_id, runtime_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
+- The function inserts a pending run before quota consumption. If the insert hits the unique key, it queries the existing run and returns `run_reused` instead of treating the duplicate as a 500.
+- A same-process in-flight guard reduces duplicate work from double clicks and local retries before the first run row is visible.
+- If `clientRunId` is missing, the function still runs with a generated id and records `clientRunIdMissing = true` in run metadata, but full idempotency is not possible.
+
+CloudBase MySQL `rdb()` documentation currently exposes filters and counted updates, but this function does not use a MySQL transaction / `SELECT ... FOR UPDATE` because no stable `rdb()` transaction or raw SQL API is used here. Quota consume therefore uses a compare-and-set update:
+
+```txt
+UPDATE agent_run_quota
+SET quota_used = oldQuotaUsed + 1
+WHERE id = quotaId
+  AND _openid = currentUser.openid
+  AND user_id = currentUser.userId
+  AND quota_used = oldQuotaUsed
+```
+
+The update is requested with `count = "exact"` and retried on compare failure. `admin` users still write `agent_run_usage` without increasing `quota_used`.
+
+If quota consumption fails after the pending run is inserted, the function keeps the run row and marks it `failed` with `quota_exceeded` or `quota_consume_failed`. This avoids deleting the idempotency record and gives operators an audit trail; no usage row or assistant message is written in that case.
 
 ## Basic Mode
 
@@ -239,7 +267,7 @@ JSON fields are written with `JSON.stringify(...)`:
 - `tool_invocations.metadata`
 - `messages.metadata`
 
-This Tencent-21 verification still uses sequential writes rather than a full MySQL transaction. Before switching production Agent Run traffic, quota consume should be upgraded to transaction + row lock or equivalent atomic update, and run/message/event writes should be reviewed for consistency under failures and disconnects.
+This Tencent-24 verification uses CAS-style atomic quota update plus migration `003_agent_run_idempotency.sql` for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public production traffic, review high-concurrency quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
 
 ## Package
 

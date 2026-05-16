@@ -35,6 +35,36 @@ const TEACHING_METRICS_COLUMNS = [
   'created_at',
   'updated_at',
 ].join(',');
+const AGENT_RUN_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+  'conversation_id',
+  'usage_id',
+  'runtime_run_id',
+  'status',
+  'conclusion_source',
+  'report_state',
+  'completed_at',
+  'metadata',
+  'created_at',
+  'updated_at',
+].join(',');
+const ASSISTANT_MESSAGE_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+  'conversation_id',
+  'role',
+  'run_id',
+  'client_message_id',
+  'status',
+  'metadata',
+  'created_at',
+  'updated_at',
+].join(',');
+
+const IDEMPOTENCY_GUARDS = new Map();
 
 function loadSharedModule(name) {
   const bundledSharedPath = path.join(__dirname, '_shared', `${name}.js`);
@@ -44,7 +74,7 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const { getModelGatewayConfig, normalizeModelError, streamChatCompletion } = loadSharedModule('modelGateway');
-const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
+const { assertNoQueryError, extractMutationCount, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -198,7 +228,13 @@ function getCurrentMonthPeriod() {
 
 function isDuplicateKeyError(error) {
   const message = String(error && error.message ? error.message : error).toLowerCase();
-  return message.includes('duplicate') || message.includes('er_dup_entry');
+  const code = String(error?.code || error?.errno || error?.name || '').toLowerCase();
+  return (
+    message.includes('duplicate') ||
+    message.includes('er_dup_entry') ||
+    code.includes('er_dup_entry') ||
+    code.includes('1062')
+  );
 }
 
 function isAdmin(currentUser) {
@@ -252,6 +288,108 @@ async function fetchConversationRecord(db, currentUser, conversationId) {
 
   const rows = extractRows(result).filter((row) => hasExpectedConversationOwner(row, currentUser));
   return rows.length > 0 ? rows[0] : null;
+}
+
+function mapAgentRun(row) {
+  return {
+    id: String(row.id ?? ''),
+    conversationId: String(row.conversation_id ?? ''),
+    usageId: row.usage_id ? String(row.usage_id) : null,
+    runtimeRunId: row.runtime_run_id ? String(row.runtime_run_id) : null,
+    status: String(row.status ?? 'running'),
+    conclusionSource: row.conclusion_source ? String(row.conclusion_source) : null,
+    reportState: row.report_state ? String(row.report_state) : null,
+    completedAt: row.completed_at ? String(row.completed_at) : null,
+    metadata: parseJsonObject(row.metadata),
+    createdAt: row.created_at ? String(row.created_at) : null,
+    updatedAt: row.updated_at ? String(row.updated_at) : null,
+  };
+}
+
+async function fetchAgentRunByClientRunId(db, currentUser, clientRunId) {
+  if (!clientRunId) {
+    return null;
+  }
+
+  const result = await db
+    .from('agent_runs')
+    .select(AGENT_RUN_COLUMNS)
+    .eq('user_id', currentUser.userId)
+    .eq('_openid', currentUser.openid)
+    .eq('runtime_run_id', clientRunId);
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
+  return rows.length > 0 ? mapAgentRun(rows[0]) : null;
+}
+
+async function waitForAgentRunByClientRunId(db, currentUser, clientRunId) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const existingRun = await fetchAgentRunByClientRunId(db, currentUser, clientRunId);
+
+    if (existingRun) {
+      return existingRun;
+    }
+
+    await sleep(100);
+  }
+
+  return null;
+}
+
+function createIdempotencyKey(currentUser, clientRunId) {
+  return clientRunId ? `${currentUser.userId}:${clientRunId}` : null;
+}
+
+function tryAcquireIdempotencyGuard(key) {
+  if (!key) {
+    return true;
+  }
+
+  if (IDEMPOTENCY_GUARDS.has(key)) {
+    return false;
+  }
+
+  IDEMPOTENCY_GUARDS.set(key, Date.now());
+  return true;
+}
+
+function releaseIdempotencyGuard(key) {
+  if (key) {
+    IDEMPOTENCY_GUARDS.delete(key);
+  }
+}
+
+function createRunReusePayload(context, existingRun, reason) {
+  return {
+    type: 'run_reused',
+    runId: existingRun?.id || null,
+    usageId: existingRun?.usageId || null,
+    clientRunId: context.clientRunId,
+    conversationId: existingRun?.conversationId || context.conversationId,
+    timestamp: new Date().toISOString(),
+    duplicate: true,
+    reused: true,
+    reason,
+    status: existingRun?.status || 'running',
+    existingRun: existingRun ? {
+      id: existingRun.id,
+      status: existingRun.status,
+      conclusionSource: existingRun.conclusionSource,
+      reportState: existingRun.reportState,
+      completedAt: existingRun.completedAt,
+    } : null,
+  };
+}
+
+async function respondWithReusedRun(res, context, existingRun, reason) {
+  startSseResponse(res);
+  writeSseEvent(res, createRunReusePayload(context, existingRun, reason));
+
+  if (!res.writableEnded && !res.destroyed) {
+    res.end();
+  }
 }
 
 async function fetchQuotaByPeriod(db, currentUser, periodStart) {
@@ -322,13 +460,15 @@ async function ensureMonthlyQuota(db, currentUser) {
   return quota;
 }
 
-async function updateQuotaUsed(db, currentUser, quota, nextUsed) {
+async function updateQuotaUsedAtomically(db, currentUser, quota) {
+  const nextUsed = quota.quotaUsed + 1;
   const updateResult = await db
     .from('agent_run_quota')
-    .update({ quota_used: nextUsed })
+    .update({ quota_used: nextUsed }, { count: 'exact' })
     .eq('id', quota.id)
     .eq('_openid', currentUser.openid)
-    .eq('user_id', currentUser.userId);
+    .eq('user_id', currentUser.userId)
+    .eq('quota_used', quota.quotaUsed);
 
   assertNoQueryError(updateResult);
 
@@ -338,37 +478,67 @@ async function updateQuotaUsed(db, currentUser, quota, nextUsed) {
     throw new Error('Updated quota was not found.');
   }
 
-  return updatedQuota;
+  const mutationCount = extractMutationCount(updateResult);
+  const didUpdate = mutationCount === null
+    ? updatedQuota.quotaUsed === nextUsed
+    : mutationCount > 0;
+
+  return {
+    didUpdate,
+    quota: updatedQuota,
+  };
 }
 
 async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'cloudbase-agent-run-basic-loop') {
-  const quota = await ensureMonthlyQuota(db, currentUser);
-  let updatedQuota = quota;
+  let updatedQuota = await ensureMonthlyQuota(db, currentUser);
 
   if (!isAdmin(currentUser)) {
-    if (quota.quotaUsed >= quota.quotaLimit) {
-      throw new RequestError(429, 'quota_exceeded', 'Agent Run quota exceeded.');
+    let didConsume = false;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const quota = await ensureMonthlyQuota(db, currentUser);
+
+      if (quota.quotaUsed >= quota.quotaLimit) {
+        console.warn('[workbench-agent-run-stream] quota_exceeded', currentUser.userId, runtimeRunId || runId);
+        throw new RequestError(429, 'quota_exceeded', 'Agent Run quota exceeded.');
+      }
+
+      const updateResult = await updateQuotaUsedAtomically(db, currentUser, quota);
+      updatedQuota = updateResult.quota;
+
+      if (updateResult.didUpdate) {
+        didConsume = true;
+        break;
+      }
     }
 
-    updatedQuota = await updateQuotaUsed(db, currentUser, quota, quota.quotaUsed + 1);
+    if (!didConsume) {
+      console.error('[workbench-agent-run-stream] quota_consume_failed', currentUser.userId, runtimeRunId || runId);
+      throw new RequestError(409, 'quota_consume_failed', 'Agent Run quota consume failed.');
+    }
   }
 
   const usageId = randomUUID();
-  const insertUsageResult = await db.from('agent_run_usage').insert({
-    id: usageId,
-    _openid: currentUser.openid,
-    user_id: currentUser.userId,
-    run_id: runtimeRunId || runId,
-    quota_type: 'agent_run',
-    status: 'started',
-    metadata: JSON.stringify({
-      source,
-      runId,
-      runtimeRunId,
-    }),
-  });
+  try {
+    const insertUsageResult = await db.from('agent_run_usage').insert({
+      id: usageId,
+      _openid: currentUser.openid,
+      user_id: currentUser.userId,
+      run_id: runtimeRunId || runId,
+      quota_type: 'agent_run',
+      status: 'started',
+      metadata: JSON.stringify({
+        source,
+        runId,
+        runtimeRunId,
+      }),
+    });
 
-  assertNoQueryError(insertUsageResult);
+    assertNoQueryError(insertUsageResult);
+  } catch (error) {
+    console.error('[workbench-agent-run-stream] quota_consume_failed', currentUser.userId, runtimeRunId || runId);
+    throw error;
+  }
 
   return {
     usageId,
@@ -396,32 +566,52 @@ async function finishUsage(db, currentUser, usageId, status, errorCode, metadata
   assertNoQueryError(updateResult);
 }
 
-async function createAgentRun(db, currentUser, context) {
-  const insertResult = await db.from('agent_runs').insert({
-    id: context.runId,
-    _openid: currentUser.openid,
-    user_id: currentUser.userId,
-    conversation_id: context.conversationId,
-    usage_id: context.usageId,
-    runtime_run_id: context.runtimeRunId,
-    mode: 'agent',
-    status: 'running',
-    intent: context.intent || 'unknown',
-    prompt: context.prompt,
-    plan: JSON.stringify(context.planSnapshot || {}),
-    data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || { source: 'mock' }),
-    chart_data: JSON.stringify({}),
-    conclusion: null,
-    conclusion_source: null,
-    report_state: context.reportState || 'hidden',
-    metadata: JSON.stringify({
-      source: context.agentMode === 'real' ? 'cloudbase-agent-run-real' : 'cloudbase-agent-run-basic-loop',
-      clientRunId: context.clientRunId,
-      provider: context.provider || 'mock',
-    }),
-  });
+async function createAgentRun(db, currentUser, context, options = {}) {
+  try {
+    const insertResult = await db.from('agent_runs').insert({
+      id: context.runId,
+      _openid: currentUser.openid,
+      user_id: currentUser.userId,
+      conversation_id: context.conversationId,
+      usage_id: context.usageId,
+      runtime_run_id: context.runtimeRunId,
+      mode: 'agent',
+      status: options.status || 'running',
+      intent: context.intent || 'unknown',
+      prompt: context.prompt,
+      plan: JSON.stringify(context.planSnapshot || {}),
+      data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || { source: 'mock' }),
+      chart_data: JSON.stringify({}),
+      conclusion: null,
+      conclusion_source: null,
+      report_state: context.reportState || 'hidden',
+      metadata: JSON.stringify({
+        source: context.agentMode === 'real' ? 'cloudbase-agent-run-real' : 'cloudbase-agent-run-basic-loop',
+        clientRunId: context.clientRunId,
+        clientRunIdMissing: Boolean(context.clientRunIdMissing),
+        provider: context.provider || 'mock',
+      }),
+    });
 
-  assertNoQueryError(insertResult);
+    assertNoQueryError(insertResult);
+  } catch (error) {
+    if (!context.runtimeRunId || !isDuplicateKeyError(error)) {
+      throw error;
+    }
+
+    const existingRun = await waitForAgentRunByClientRunId(db, currentUser, context.runtimeRunId);
+    return {
+      created: false,
+      existingRun,
+    };
+  }
+
+  if (options.updateConversation === false) {
+    return {
+      created: true,
+      existingRun: null,
+    };
+  }
 
   const updateConversationResult = await db
     .from('conversations')
@@ -435,6 +625,60 @@ async function createAgentRun(db, currentUser, context) {
     .eq('visibility', 'private');
 
   assertNoQueryError(updateConversationResult);
+
+  return {
+    created: true,
+    existingRun: null,
+  };
+}
+
+async function startAgentRunAfterQuota(db, currentUser, context) {
+  const updateRunResult = await db
+    .from('agent_runs')
+    .update({
+      usage_id: context.usageId,
+      status: 'running',
+    })
+    .eq('id', context.runId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(updateRunResult);
+
+  const updateConversationResult = await db
+    .from('conversations')
+    .update({
+      latest_run_id: context.runId,
+      status: 'running',
+    })
+    .eq('id', context.conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId)
+    .eq('visibility', 'private');
+
+  assertNoQueryError(updateConversationResult);
+}
+
+async function rejectAgentRunBeforeStart(db, currentUser, context, errorCode, errorMessage) {
+  const updateResult = await db
+    .from('agent_runs')
+    .update({
+      status: 'failed',
+      completed_at: toMysqlDateTime(new Date()),
+      error_message: errorMessage ? String(errorMessage).slice(0, 1000) : errorCode,
+      metadata: JSON.stringify({
+        source: context.agentMode === 'real' ? 'cloudbase-agent-run-real' : 'cloudbase-agent-run-basic-loop',
+        clientRunId: context.clientRunId,
+        clientRunIdMissing: Boolean(context.clientRunIdMissing),
+        provider: context.provider || 'mock',
+        errorCode,
+      }),
+    })
+    .eq('id', context.runId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(updateResult);
 }
 
 async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, options = {}) {
@@ -577,34 +821,99 @@ async function completeToolInvocation(db, currentUser, context, toolInvocationId
   assertNoQueryError(updateResult);
 }
 
-async function createAssistantMessage(db, currentUser, context, conversation, conclusion, metadata = {}) {
-  const messageId = randomUUID();
-  const insertResult = await db.from('messages').insert({
-    id: messageId,
-    _openid: currentUser.openid,
-    user_id: currentUser.userId,
-    conversation_id: context.conversationId,
-    role: 'assistant',
-    kind: 'text',
-    content: conclusion,
-    run_id: context.runId,
-    client_message_id: `agent-assistant-${context.runId}`,
-    status: 'completed',
-    metadata: JSON.stringify({
-      source: metadata.source || context.conclusionSource || 'fallback',
-      conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
-      fallbackReason: metadata.fallbackReason || null,
-      modelProvider: metadata.modelProvider || context.modelDiagnostics?.modelProvider || null,
-      modelName: metadata.modelName || context.modelDiagnostics?.modelName || null,
-      modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
-      modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
-      modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
-      agentMode: context.agentMode || 'basic',
-      runtimeRunId: context.runtimeRunId,
-    }),
-  });
+function mapMessage(row) {
+  return {
+    id: String(row.id ?? ''),
+    conversationId: String(row.conversation_id ?? ''),
+    role: String(row.role ?? ''),
+    runId: row.run_id ? String(row.run_id) : null,
+    clientMessageId: row.client_message_id ? String(row.client_message_id) : null,
+    status: String(row.status ?? 'completed'),
+    metadata: parseJsonObject(row.metadata),
+  };
+}
 
-  assertNoQueryError(insertResult);
+async function fetchAssistantMessageByRunId(db, currentUser, runId) {
+  const result = await db
+    .from('messages')
+    .select(ASSISTANT_MESSAGE_COLUMNS)
+    .eq('run_id', runId)
+    .eq('role', 'assistant')
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
+  return rows.length > 0 ? mapMessage(rows[0]) : null;
+}
+
+async function fetchAssistantMessageByClientMessageId(db, currentUser, clientMessageId) {
+  const result = await db
+    .from('messages')
+    .select(ASSISTANT_MESSAGE_COLUMNS)
+    .eq('client_message_id', clientMessageId)
+    .eq('role', 'assistant')
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
+  return rows.length > 0 ? mapMessage(rows[0]) : null;
+}
+
+async function createAssistantMessage(db, currentUser, context, conversation, conclusion, metadata = {}) {
+  const existingByRun = await fetchAssistantMessageByRunId(db, currentUser, context.runId);
+
+  if (existingByRun) {
+    console.warn('[workbench-agent-run-stream] assistant_message_duplicate', currentUser.userId, context.runId);
+    return existingByRun.id;
+  }
+
+  const messageId = randomUUID();
+  const clientMessageId = `agent-assistant-${context.runId}`;
+
+  try {
+    const insertResult = await db.from('messages').insert({
+      id: messageId,
+      _openid: currentUser.openid,
+      user_id: currentUser.userId,
+      conversation_id: context.conversationId,
+      role: 'assistant',
+      kind: 'text',
+      content: conclusion,
+      run_id: context.runId,
+      client_message_id: clientMessageId,
+      status: 'completed',
+      metadata: JSON.stringify({
+        source: metadata.source || context.conclusionSource || 'fallback',
+        conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
+        fallbackReason: metadata.fallbackReason || null,
+        modelProvider: metadata.modelProvider || context.modelDiagnostics?.modelProvider || null,
+        modelName: metadata.modelName || context.modelDiagnostics?.modelName || null,
+        modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
+        modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
+        modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
+        agentMode: context.agentMode || 'basic',
+        runtimeRunId: context.runtimeRunId,
+      }),
+    });
+    assertNoQueryError(insertResult);
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) {
+      throw error;
+    }
+
+    const existingByClientMessageId = await fetchAssistantMessageByClientMessageId(db, currentUser, clientMessageId);
+
+    if (existingByClientMessageId) {
+      console.warn('[workbench-agent-run-stream] assistant_message_duplicate', currentUser.userId, context.runId);
+      return existingByClientMessageId.id;
+    }
+
+    throw error;
+  }
 
   const updateConversationResult = await db
     .from('conversations')
@@ -1675,39 +1984,88 @@ async function runBasicAgentFlow(req, res, currentUser, body) {
   }
 
   const runId = randomUUID();
-  const clientRunId = readOptionalString(body.clientRunId) || runId;
+  const providedClientRunId = readOptionalString(body.clientRunId);
+  const clientRunId = providedClientRunId || runId;
   const runtimeRunId = clientRunId;
   const context = {
     runId,
     clientRunId,
     runtimeRunId,
+    clientRunIdMissing: !providedClientRunId,
     conversationId,
     prompt: readOptionalString(body.prompt) || 'CloudBase Agent Run 基础闭环测试',
     usageId: null,
+    usageFinished: false,
     eventSeq: 0,
     agentMode: 'basic',
     intent: 'mock_basic_loop',
     planSnapshot: {
       source: 'cloudbase-basic-loop',
-      steps: ['validate_conversation', 'consume_quota', 'mock_tool', 'fixed_conclusion', 'assistant_message'],
+      steps: ['validate_conversation', 'create_pending_run', 'consume_quota', 'mock_tool', 'fixed_conclusion', 'assistant_message'],
     },
     dataSourceSnapshot: { source: 'mock' },
     conclusionSource: 'mock_fixed',
     reportState: 'hidden',
   };
+  const idempotencyKey = providedClientRunId ? createIdempotencyKey(currentUser, clientRunId) : null;
 
-  const startedAt = Date.now();
-  const quotaResult = await consumeQuota(db, currentUser, runId, runtimeRunId);
-  context.usageId = quotaResult.usageId;
-  await createAgentRun(db, currentUser, context);
+  if (!providedClientRunId) {
+    console.warn('[workbench-agent-run-stream] clientRunId_missing', currentUser.userId, runId);
+  }
 
-  const disconnect = createDisconnectTracker(req, res, context.runId);
-  let assistantMessageId = null;
-  let didComplete = false;
+  if (idempotencyKey) {
+    const existingRun = await fetchAgentRunByClientRunId(db, currentUser, clientRunId);
 
-  startSseResponse(res);
+    if (existingRun) {
+      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
+      await respondWithReusedRun(res, context, existingRun, 'existing_run');
+      return;
+    }
+
+    if (!tryAcquireIdempotencyGuard(idempotencyKey)) {
+      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
+      const guardedRun = await waitForAgentRunByClientRunId(db, currentUser, clientRunId);
+      await respondWithReusedRun(res, context, guardedRun, 'in_flight');
+      return;
+    }
+  }
 
   try {
+    const startedAt = Date.now();
+    const createResult = await createAgentRun(db, currentUser, context, {
+      status: 'pending',
+      updateConversation: false,
+    });
+
+    if (!createResult.created) {
+      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
+      await respondWithReusedRun(res, context, createResult.existingRun, 'duplicate_key');
+      return;
+    }
+
+    let quotaResult;
+
+    try {
+      quotaResult = await consumeQuota(db, currentUser, runId, runtimeRunId);
+      context.usageId = quotaResult.usageId;
+      await startAgentRunAfterQuota(db, currentUser, context);
+    } catch (error) {
+      try {
+        await rejectAgentRunBeforeStart(db, currentUser, context, error?.errorCode || 'quota_consume_failed', error?.message);
+      } catch (rejectError) {
+        console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(rejectError.message));
+      }
+
+      throw error;
+    }
+
+    const disconnect = createDisconnectTracker(req, res, context.runId);
+    let assistantMessageId = null;
+    let didComplete = false;
+
+    startSseResponse(res);
+
+    try {
     if (
       !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'run_started', {
         status: 'running',
@@ -1797,6 +2155,7 @@ async function runBasicAgentFlow(req, res, currentUser, body) {
         runId: context.runId,
         assistantMessageId,
       });
+      context.usageFinished = true;
     } catch (finishError) {
       console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
     }
@@ -1807,44 +2166,62 @@ async function runBasicAgentFlow(req, res, currentUser, body) {
     if (!res.writableEnded && !res.destroyed) {
       res.end();
     }
-  } catch (error) {
-    const disconnected = error && error.errorCode === 'client_disconnected';
-    const finalStatus = disconnected ? 'stopped' : 'failed';
+    } catch (error) {
+      const disconnected = error && error.errorCode === 'client_disconnected';
+      const finalStatus = disconnected ? 'stopped' : 'failed';
 
-    try {
-      await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
-    } catch (cleanupError) {
-      console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(cleanupError.message));
-    }
+      try {
+        await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
+      } catch (cleanupError) {
+        console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(cleanupError.message));
+      }
 
-    try {
-      await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
+      try {
+        await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
         source: 'cloudbase-agent-run-basic-loop',
         runId: context.runId,
       });
-    } catch (cleanupError) {
-      console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
-    }
-
-    if (!disconnected && !res.writableEnded && !res.destroyed) {
-      const failEvent = createRunEvent('run_failed', context, {
-        status: 'failed',
-        errorCode: 'run_failed',
-      });
-
-      try {
-        await appendRunEvent(db, currentUser, context, failEvent);
-      } catch (eventError) {
-        console.error('[workbench-agent-run-stream] failure event persist failed', sanitizeLogMessage(eventError.message));
+        context.usageFinished = true;
+      } catch (cleanupError) {
+        console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
       }
 
-      writeSseEvent(res, failEvent);
-      res.end();
+      if (!disconnected && !res.writableEnded && !res.destroyed) {
+        const failEvent = createRunEvent('run_failed', context, {
+          status: 'failed',
+          errorCode: 'run_failed',
+        });
+
+        try {
+          await appendRunEvent(db, currentUser, context, failEvent);
+        } catch (eventError) {
+          console.error('[workbench-agent-run-stream] failure event persist failed', sanitizeLogMessage(eventError.message));
+        }
+
+        writeSseEvent(res, failEvent);
+        res.end();
+      }
+
+      if (!didComplete && !disconnected) {
+        throw error;
+      }
+    }
+  } catch (error) {
+    if (context.usageId && !context.usageFinished) {
+      try {
+        await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
+          source: 'cloudbase-agent-run-basic-loop',
+          runId: context.runId,
+        });
+        context.usageFinished = true;
+      } catch (finishError) {
+        console.error('[workbench-agent-run-stream] usage_finish_failed', sanitizeLogMessage(finishError.message));
+      }
     }
 
-    if (!didComplete && !disconnected) {
-      throw error;
-    }
+    throw error;
+  } finally {
+    releaseIdempotencyGuard(idempotencyKey);
   }
 }
 
@@ -2324,16 +2701,19 @@ async function runRealAgentFlow(req, res, currentUser, body) {
   }
 
   const runId = randomUUID();
-  const clientRunId = readOptionalString(body.clientRunId) || runId;
+  const providedClientRunId = readOptionalString(body.clientRunId);
+  const clientRunId = providedClientRunId || runId;
   const provider = readProvider(body.provider);
   const context = {
     runId,
     clientRunId,
     runtimeRunId: clientRunId,
+    clientRunIdMissing: !providedClientRunId,
     conversationId,
     provider,
     prompt: readOptionalString(body.prompt) || '分析本月教学质量数据，找出异常指标',
     usageId: null,
+    usageFinished: false,
     eventSeq: 0,
     agentMode: 'real',
     createdAt: nowIso(),
@@ -2350,18 +2730,65 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     steps: [],
     toolInvocations: [],
   };
-  const startedAt = Date.now();
-  const quotaResult = await consumeQuota(db, currentUser, runId, context.runtimeRunId, 'cloudbase-agent-run-real');
-  context.usageId = quotaResult.usageId;
-  await createAgentRun(db, currentUser, context);
+  const idempotencyKey = providedClientRunId ? createIdempotencyKey(currentUser, clientRunId) : null;
 
-  const disconnect = createDisconnectTracker(req, res, context.runId);
-  let assistantMessageId = null;
-  let didComplete = false;
+  if (!providedClientRunId) {
+    console.warn('[workbench-agent-run-stream] clientRunId_missing', currentUser.userId, runId);
+  }
 
-  startSseResponse(res);
+  if (idempotencyKey) {
+    const existingRun = await fetchAgentRunByClientRunId(db, currentUser, clientRunId);
+
+    if (existingRun) {
+      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
+      await respondWithReusedRun(res, context, existingRun, 'existing_run');
+      return;
+    }
+
+    if (!tryAcquireIdempotencyGuard(idempotencyKey)) {
+      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
+      const guardedRun = await waitForAgentRunByClientRunId(db, currentUser, clientRunId);
+      await respondWithReusedRun(res, context, guardedRun, 'in_flight');
+      return;
+    }
+  }
 
   try {
+    const startedAt = Date.now();
+    const createResult = await createAgentRun(db, currentUser, context, {
+      status: 'pending',
+      updateConversation: false,
+    });
+
+    if (!createResult.created) {
+      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
+      await respondWithReusedRun(res, context, createResult.existingRun, 'duplicate_key');
+      return;
+    }
+
+    let quotaResult;
+
+    try {
+      quotaResult = await consumeQuota(db, currentUser, runId, context.runtimeRunId, 'cloudbase-agent-run-real');
+      context.usageId = quotaResult.usageId;
+      await startAgentRunAfterQuota(db, currentUser, context);
+    } catch (error) {
+      try {
+        await rejectAgentRunBeforeStart(db, currentUser, context, error?.errorCode || 'quota_consume_failed', error?.message);
+      } catch (rejectError) {
+        console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(rejectError.message));
+      }
+
+      throw error;
+    }
+
+    const disconnect = createDisconnectTracker(req, res, context.runId);
+    let assistantMessageId = null;
+    let didComplete = false;
+
+    startSseResponse(res);
+
+    try {
     await persistAndWriteRawEvent(
       db,
       currentUser,
@@ -2499,6 +2926,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         fallbackReason: context.fallbackReason,
         ...createModelEventMetadata(context.modelDiagnostics),
       });
+      context.usageFinished = true;
     } catch (finishError) {
       console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
     }
@@ -2509,43 +2937,61 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     if (!res.writableEnded && !res.destroyed) {
       res.end();
     }
-  } catch (error) {
-    const disconnected = error && error.errorCode === 'client_disconnected';
-    const finalStatus = disconnected ? 'stopped' : 'failed';
+    } catch (error) {
+      const disconnected = error && error.errorCode === 'client_disconnected';
+      const finalStatus = disconnected ? 'stopped' : 'failed';
 
-    try {
-      await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
-    } catch (cleanupError) {
-      console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(cleanupError.message));
-    }
+      try {
+        await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
+      } catch (cleanupError) {
+        console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(cleanupError.message));
+      }
 
-    try {
+      try {
       await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
         source: 'cloudbase-agent-run-real',
         runId: context.runId,
       });
-    } catch (cleanupError) {
-      console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
-    }
-
-    if (!disconnected && !res.writableEnded && !res.destroyed) {
-      const failEvent = createRunEvent('run_failed', context, {
-        errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
-      });
-
-      try {
-        await appendRunEvent(db, currentUser, context, failEvent);
-      } catch (eventError) {
-        console.error('[workbench-agent-run-stream] failure event persist failed', sanitizeLogMessage(eventError.message));
+        context.usageFinished = true;
+      } catch (cleanupError) {
+        console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
       }
 
-      writeSseEvent(res, failEvent);
-      res.end();
+      if (!disconnected && !res.writableEnded && !res.destroyed) {
+        const failEvent = createRunEvent('run_failed', context, {
+          errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
+        });
+
+        try {
+          await appendRunEvent(db, currentUser, context, failEvent);
+        } catch (eventError) {
+          console.error('[workbench-agent-run-stream] failure event persist failed', sanitizeLogMessage(eventError.message));
+        }
+
+        writeSseEvent(res, failEvent);
+        res.end();
+      }
+
+      if (!didComplete && !disconnected) {
+        throw error;
+      }
+    }
+  } catch (error) {
+    if (context.usageId && !context.usageFinished) {
+      try {
+        await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
+          source: 'cloudbase-agent-run-real',
+          runId: context.runId,
+        });
+        context.usageFinished = true;
+      } catch (finishError) {
+        console.error('[workbench-agent-run-stream] usage_finish_failed', sanitizeLogMessage(finishError.message));
+      }
     }
 
-    if (!didComplete && !disconnected) {
-      throw error;
-    }
+    throw error;
+  } finally {
+    releaseIdempotencyGuard(idempotencyKey);
   }
 }
 
