@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Tencent-15 的 Agent Run 流式验证函数。Tencent-15 在保留固定 `basic` 验证路径的同时，为 `workbench-agent-run-stream` 增加 `real` 路径，接入 planner、受控 data tools、Groq 和明确 fallback；现阶段不替换前端 Auth store，也不切换前端正式 Agent Run 调用。
+本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Agent Run 流式验证函数。Tencent-21 保留固定 `basic` 验证路径，并将 `workbench-agent-run-stream` 的 `real` data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，接入 planner、受控 data tools、Groq 和明确 fallback；现阶段不替换前端 Auth store，也不删除旧 Vercel / Supabase 代码。
 
 ## 函数
 
@@ -14,7 +14,7 @@
 | `workbench-reports` | `/api/workbench/reports` | 开启 | 校验会话归属后读取和保存当前用户私有报告。 |
 | `workbench-demo-copy` | `/api/workbench/demo-copy` | 开启 | 复制公开示例会话模板为当前用户私有会话。 |
 | `workbench-quota` | `/api/workbench/quota` | 开启 | 查询本月 Agent Run 额度，并通过 `POST body.action` 消耗额度或完成 usage。 |
-| `workbench-agent-run-stream` | `/api/agent/run/stream` | 开启 | CloudBase Agent Run 流式验证；保留 `basic` mock 路径，并新增 `real` planner / data tools / Groq / fallback 路径。 |
+| `workbench-agent-run-stream` | `/api/agent/run/stream` | 开启 | CloudBase Agent Run 流式验证；保留 `basic` mock 路径，`real` 路径直接读取 CloudBase MySQL `teaching_metrics`。 |
 
 ## 共享 helper
 
@@ -135,7 +135,7 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-quota.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-agent-run-stream` 依赖 `_shared`。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：consume quota、创建 `agent_runs`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入 planner、受控 data tools、Groq 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk` 和 `pg`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
+`workbench-agent-run-stream` 依赖 `_shared`。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：consume quota、创建 `agent_runs`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、Groq 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
 cd tencent/functions
@@ -168,16 +168,14 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-agent-run-stream` 的 `real` 模式还需要通过 CloudBase 环境变量或密钥管理注入外部依赖配置，不要写进代码或文档：
+`workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。可选外部依赖配置为：
 
 ```txt
 GROQ_API_KEY
 GROQ_MODEL
-SUPABASE_DB_CONNECTION_STRING
-POSTGRES_CONNECTION_STRING
 ```
 
-其中 `GROQ_API_KEY` 未配置时应走明确 fallback；`provider = "supabase"` 使用 `SUPABASE_DB_CONNECTION_STRING`，`provider = "postgresql"` 使用 `POSTGRES_CONNECTION_STRING`。
+其中 `GROQ_API_KEY` 未配置时应走 `fallbackReason = "groq_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -305,11 +303,11 @@ curl -N -i -X POST \
 curl -N -i -X POST \
   -H "Authorization: Bearer <cloudbase-token>" \
   -H "Content-Type: application/json" \
-  -d "{\"prompt\":\"分析本月教学质量数据，找出异常指标\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-real-run\",\"mode\":\"real\",\"provider\":\"supabase\"}" \
+  -d "{\"prompt\":\"分析本月教学质量数据，找出异常指标\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-real-run\",\"mode\":\"real\"}" \
   https://<your-domain>/api/agent/run/stream
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 应输出 planner、tool、chart、conclusion 和 run completion 相关事件；Groq 未配置时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "groq_not_configured"` 或其他明确 fallback，不应返回 500。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。该验证不切换前端正式 Agent Run，不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；Groq 未配置且 data tools 成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "groq_not_configured"`，不应返回 `data_tool_failed` 或 500。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。该验证不切换前端正式 Agent Run，不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
 
 ## 安全说明
 

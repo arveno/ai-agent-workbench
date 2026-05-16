@@ -2,7 +2,6 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const { Pool } = require('pg');
 
 const PORT = Number(process.env.PORT || 9000);
 const HOST = '0.0.0.0';
@@ -11,8 +10,6 @@ const EVENT_DELAY_MS = 450;
 const DEFAULT_QUOTA_LIMIT = 20;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_GROQ_MODEL = 'llama-3.1-8b-instant';
-const POSTGRES_CONNECT_TIMEOUT_MS = 5000;
-const POSTGRES_QUERY_TIMEOUT_MS = 5000;
 const MAX_TOOL_ROWS = 20;
 
 const CONVERSATION_COLUMNS = ['id', '_openid', 'user_id', 'visibility', 'message_count'].join(',');
@@ -26,6 +23,20 @@ const QUOTA_COLUMNS = [
   'period_start',
   'period_end',
 ].join(',');
+const TEACHING_METRICS_COLUMNS = [
+  'id',
+  'month',
+  'grade',
+  'class_name',
+  'subject',
+  'avg_score',
+  'attendance_rate',
+  'homework_completion_rate',
+  'warning_count',
+  'metadata',
+  'created_at',
+  'updated_at',
+].join(',');
 
 function loadSharedModule(name) {
   const bundledSharedPath = path.join(__dirname, '_shared', `${name}.js`);
@@ -34,7 +45,7 @@ function loadSharedModule(name) {
 }
 
 const { authenticateRequest } = loadSharedModule('auth');
-const { assertNoQueryError, extractRows, getDb } = loadSharedModule('mysql');
+const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -42,6 +53,15 @@ class RequestError extends Error {
     this.name = 'RequestError';
     this.statusCode = statusCode;
     this.errorCode = errorCode;
+    this.publicMessage = publicMessage;
+  }
+}
+
+class DataToolError extends Error {
+  constructor(fallbackReason, publicMessage) {
+    super(publicMessage);
+    this.name = 'DataToolError';
+    this.fallbackReason = fallbackReason;
     this.publicMessage = publicMessage;
   }
 }
@@ -613,16 +633,17 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function readProvider(value) {
-  return value === 'postgresql' || value === 'supabase' ? value : 'supabase';
+function readProvider() {
+  return 'cloudbase_mysql';
 }
 
-function getDataSourceSnapshot(provider) {
+function getDataSourceSnapshot() {
   return {
-    provider,
-    name: provider === 'supabase' ? 'Supabase / Agent Run' : 'PostgreSQL / Agent Run',
-    typeLabel: provider === 'supabase' ? 'Supabase 托管 PostgreSQL' : 'PostgreSQL',
-    schema: 'public',
+    provider: 'cloudbase_mysql',
+    name: 'CloudBase MySQL / teaching_metrics',
+    typeLabel: 'CloudBase MySQL',
+    schema: 'public_demo',
+    tableName: 'teaching_metrics',
   };
 }
 
@@ -654,7 +675,7 @@ function createRunSnapshot(context, options = {}) {
       shouldUseDataAnalysis: false,
       reason: '正在判断任务类型',
     },
-    dataSource: context.dataSourceSnapshot || getDataSourceSnapshot(context.provider || 'supabase'),
+    dataSource: context.dataSourceSnapshot || getDataSourceSnapshot(),
     steps: options.steps || context.steps || [],
     toolInvocations: options.toolInvocations || context.toolInvocations || [],
     chartData: options.chartData || context.chartData,
@@ -803,15 +824,23 @@ function extractExplicitMonth(prompt) {
 }
 
 function pickMetricFromPrompt(prompt) {
-  if (prompt.includes('异常')) return 'abnormal_count';
+  if (prompt.includes('异常') || prompt.includes('预警')) return 'warning_count';
   if (prompt.includes('出勤') || prompt.includes('出勤率')) return 'attendance_rate';
   if (prompt.includes('作业') || prompt.includes('完成率')) return 'homework_completion_rate';
   if (prompt.includes('平均分') || prompt.includes('成绩') || prompt.includes('分数')) return 'avg_score';
-  return 'abnormal_count';
+  return 'warning_count';
 }
 
 function pickGroupByFromPrompt(prompt) {
-  return includesAnyKeyword(prompt, ['趋势', '月份', '对比', '上月', '环比']) ? 'metric_month' : 'subject';
+  if (includesAnyKeyword(prompt, ['趋势', '月份', '对比', '上月', '环比'])) {
+    return 'month';
+  }
+
+  if (includesAnyKeyword(prompt, ['年级'])) {
+    return 'grade';
+  }
+
+  return 'subject';
 }
 
 function pickTimeRangeFromPrompt(prompt) {
@@ -895,6 +924,24 @@ function fallbackPlanAgentRun(prompt) {
   };
 }
 
+function normalizeMetric(value) {
+  if (value === 'abnormal_count') {
+    return 'warning_count';
+  }
+
+  return ['avg_score', 'attendance_rate', 'homework_completion_rate', 'warning_count'].includes(value)
+    ? value
+    : 'warning_count';
+}
+
+function normalizeGroupBy(value) {
+  if (value === 'metric_month') {
+    return 'month';
+  }
+
+  return ['subject', 'grade', 'month'].includes(value) ? value : 'subject';
+}
+
 function normalizePlan(rawPlan, fallback) {
   if (!isRecord(rawPlan)) {
     return fallback;
@@ -935,10 +982,8 @@ function normalizePlan(rawPlan, fallback) {
     intent,
     shouldUseDataAnalysis: true,
     reason: readOptionalString(rawPlan.reason) || fallback.reason,
-    metric: ['avg_score', 'attendance_rate', 'homework_completion_rate', 'abnormal_count'].includes(rawPlan.metric)
-      ? rawPlan.metric
-      : fallback.metric || 'abnormal_count',
-    groupBy: ['subject', 'metric_month'].includes(rawPlan.groupBy) ? rawPlan.groupBy : fallback.groupBy || 'subject',
+    metric: normalizeMetric(rawPlan.metric || fallback.metric),
+    groupBy: normalizeGroupBy(rawPlan.groupBy || fallback.groupBy),
     timeRange,
     comparison: rawPlan.comparison === 'previous_month' ? 'previous_month' : 'none',
   };
@@ -1001,7 +1046,7 @@ async function planAgentRun(prompt) {
           content: [
             '你是教育数据分析工作台的请求分类器，只返回 JSON。',
             'intent 只能是 capability_intro、data_analysis、knowledge_qa、unsupported。',
-            'data_analysis 只能选择 avg_score、attendance_rate、homework_completion_rate、abnormal_count 和 subject、metric_month。',
+            'data_analysis 只能选择 avg_score、attendance_rate、homework_completion_rate、warning_count 和 subject、grade、month。',
             '不要生成 SQL，不要输出 Markdown。',
           ].join('\n'),
         },
@@ -1023,32 +1068,6 @@ async function planAgentRun(prompt) {
   }
 }
 
-function getConnectionStringByProvider(provider) {
-  if (provider === 'postgresql') {
-    return process.env.POSTGRES_CONNECTION_STRING || null;
-  }
-
-  return process.env.SUPABASE_DB_CONNECTION_STRING || null;
-}
-
-function createPostgresPool(provider) {
-  const connectionString = getConnectionStringByProvider(provider);
-
-  if (!connectionString) {
-    throw new Error('Data source connection string is not configured.');
-  }
-
-  return new Pool({
-    connectionString,
-    max: 1,
-    connectionTimeoutMillis: POSTGRES_CONNECT_TIMEOUT_MS,
-    idleTimeoutMillis: POSTGRES_CONNECT_TIMEOUT_MS,
-    query_timeout: POSTGRES_QUERY_TIMEOUT_MS,
-    statement_timeout: POSTGRES_QUERY_TIMEOUT_MS,
-    ssl: provider === 'supabase' ? { rejectUnauthorized: false } : undefined,
-  });
-}
-
 function normalizeCellValue(value) {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value;
@@ -1065,70 +1084,36 @@ function normalizeCellValue(value) {
   return String(value);
 }
 
-function sanitizeRows(rows) {
-  return rows.map((row) => {
-    const sanitized = {};
+function inspectSchema() {
+  const columns = [
+    { columnName: 'id', dataType: 'VARCHAR(36)', description: '演示数据行 ID。' },
+    { columnName: 'month', dataType: 'VARCHAR(20)', description: '统计月份，格式为 YYYY-MM。' },
+    { columnName: 'grade', dataType: 'VARCHAR(50)', description: '年级，例如七年级、八年级、九年级。' },
+    { columnName: 'class_name', dataType: 'VARCHAR(100)', description: '班级名称。' },
+    { columnName: 'subject', dataType: 'VARCHAR(100)', description: '学科，例如数学、语文、英语。' },
+    { columnName: 'avg_score', dataType: 'DECIMAL(5,2)', description: '班级该学科平均分。' },
+    { columnName: 'attendance_rate', dataType: 'DECIMAL(5,2)', description: '出勤率，单位为百分比。' },
+    { columnName: 'homework_completion_rate', dataType: 'DECIMAL(5,2)', description: '作业完成率，单位为百分比。' },
+    { columnName: 'warning_count', dataType: 'INT UNSIGNED', description: '需要关注的预警或异常数量。' },
+    { columnName: 'metadata', dataType: 'JSON', description: '演示数据标签和趋势说明。' },
+  ].map((column, index) => ({
+    ...column,
+    isNullable: false,
+    ordinalPosition: index + 1,
+  }));
 
-    for (const [key, value] of Object.entries(row)) {
-      sanitized[key] = normalizeCellValue(value);
-    }
-
-    return sanitized;
-  });
-}
-
-async function inspectSchema(provider) {
-  const pool = createPostgresPool(provider);
-
-  try {
-    const result = await pool.query(`
-      select
-        c.table_schema,
-        c.table_name,
-        c.column_name,
-        c.data_type,
-        c.is_nullable,
-        c.ordinal_position
-      from information_schema.columns c
-      join information_schema.tables t
-        on t.table_schema = c.table_schema
-       and t.table_name = c.table_name
-      where c.table_schema = 'public'
-        and t.table_type = 'BASE TABLE'
-      order by c.table_schema, c.table_name, c.ordinal_position
-    `);
-    const tableMap = new Map();
-
-    for (const row of result.rows) {
-      const key = `${row.table_schema}.${row.table_name}`;
-      const existing = tableMap.get(key);
-      const column = {
-        columnName: row.column_name,
-        dataType: row.data_type,
-        isNullable: row.is_nullable === 'YES',
-        ordinalPosition: Number(row.ordinal_position),
-      };
-
-      if (existing) {
-        existing.columns.push(column);
-      } else {
-        tableMap.set(key, {
-          schema: row.table_schema,
-          tableName: row.table_name,
-          columns: [column],
-        });
-      }
-    }
-
-    const tables = Array.from(tableMap.values());
-    return {
-      schemas: Array.from(new Set(tables.map((table) => table.schema))),
-      tableCount: tables.length,
-      tables,
-    };
-  } finally {
-    await pool.end().catch(() => undefined);
-  }
+  return {
+    schemas: ['public_demo'],
+    tableCount: 1,
+    tables: [
+      {
+        schema: 'public_demo',
+        tableName: 'teaching_metrics',
+        description: 'CloudBase MySQL 公开教学质量演示数据源。',
+        columns,
+      },
+    ],
+  };
 }
 
 function getPreviousMonth(month) {
@@ -1138,73 +1123,176 @@ function getPreviousMonth(month) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-function getNextMonth(month) {
-  const [year, monthValue] = month.split('-').map((value) => Number.parseInt(value, 10));
-  const date = new Date(Date.UTC(year, monthValue - 1, 1));
-  date.setUTCMonth(date.getUTCMonth() + 1);
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+function isMissingTableError(error) {
+  const message = (error && typeof error === 'object'
+    ? `${error.message || ''} ${error.code || ''} ${error.errCode || ''} ${JSON.stringify(error)}`
+    : String(error && error.message ? error.message : error)
+  ).toLowerCase();
+  return (
+    message.includes('teaching_metrics') &&
+    (
+      message.includes('not exist') ||
+      message.includes('doesn\'t exist') ||
+      message.includes('unknown table') ||
+      message.includes('no such table') ||
+      message.includes('er_no_such_table')
+    )
+  );
 }
 
-function getMetricAggregateExpression(metric) {
-  return metric === 'abnormal_count' ? `sum("${metric}")::double precision` : `avg("${metric}")::double precision`;
-}
-
-function buildAggregateSql(input) {
-  const metric = ['avg_score', 'attendance_rate', 'homework_completion_rate', 'abnormal_count'].includes(input.metric)
-    ? input.metric
-    : 'abnormal_count';
-  const groupBy = ['subject', 'metric_month'].includes(input.groupBy) ? input.groupBy : 'subject';
-  const values = [];
-  let whereClause = '';
-
-  if (input.timeRange?.type === 'month') {
-    const startMonth = input.comparison === 'previous_month' ? getPreviousMonth(input.timeRange.month) : input.timeRange.month;
-    const endMonth = getNextMonth(input.timeRange.month);
-    values.push(`${startMonth}-01`);
-    values.push(`${endMonth}-01`);
-    whereClause = 'where metric_month >= $1::date and metric_month < $2::date';
-  } else if (input.timeRange?.type === 'latest_available_month') {
-    whereClause = 'where metric_month = (select max(metric_month) from "teaching_metrics")';
+function toDataToolError(error) {
+  if (error instanceof DataToolError) {
+    return error;
   }
 
-  values.push(MAX_TOOL_ROWS);
-  const limitParam = values.length;
+  if (isMissingTableError(error)) {
+    return new DataToolError('data_table_not_found', 'CloudBase MySQL teaching_metrics table was not found.');
+  }
 
+  return new DataToolError('data_tool_query_failed', 'CloudBase MySQL teaching_metrics query failed.');
+}
+
+function normalizeTeachingMetricRow(row) {
   return {
-    sql: `
-      select
-        "${groupBy}" as dimension,
-        ${getMetricAggregateExpression(metric)} as value
-      from "teaching_metrics"
-      ${whereClause}
-      group by "${groupBy}"
-      order by value desc nulls last
-      limit $${limitParam}
-    `,
-    values,
-    metric,
-    groupBy,
+    id: String(row.id ?? ''),
+    month: String(row.month ?? ''),
+    grade: String(row.grade ?? ''),
+    class_name: String(row.class_name ?? ''),
+    subject: String(row.subject ?? ''),
+    avg_score: Number(row.avg_score) || 0,
+    attendance_rate: Number(row.attendance_rate) || 0,
+    homework_completion_rate: Number(row.homework_completion_rate) || 0,
+    warning_count: normalizeNumber(row.warning_count, 0),
+    metadata: parseJsonObject(row.metadata),
+    created_at: normalizeCellValue(row.created_at),
+    updated_at: normalizeCellValue(row.updated_at),
   };
 }
 
-async function aggregateTable(provider, input) {
-  const { sql, values, metric, groupBy } = buildAggregateSql(input);
-  const pool = createPostgresPool(provider);
-  const startedAt = Date.now();
-
+async function fetchTeachingMetricRows(db) {
   try {
-    const result = await pool.query({ text: sql, values });
-    return {
-      metric,
-      groupBy,
-      rows: sanitizeRows(result.rows),
-      rowCount: result.rowCount || result.rows.length,
-      elapsedMs: Date.now() - startedAt,
-      timeRangeLabel: input.timeRange?.type !== 'none' ? input.timeRange?.label : undefined,
-    };
-  } finally {
-    await pool.end().catch(() => undefined);
+    const result = await db.from('teaching_metrics').select(TEACHING_METRICS_COLUMNS);
+    if (result && result.error) {
+      throw toDataToolError(result.error);
+    }
+
+    assertNoQueryError(result);
+    return extractRows(result).map(normalizeTeachingMetricRow);
+  } catch (error) {
+    throw toDataToolError(error);
   }
+}
+
+function filterTeachingRows(rows, input) {
+  let filteredRows = rows;
+  const normalizedGrade = readOptionalString(input.grade);
+  const normalizedSubject = readOptionalString(input.subject);
+
+  if (normalizedGrade) {
+    filteredRows = filteredRows.filter((row) => row.grade === normalizedGrade);
+  }
+
+  if (normalizedSubject) {
+    filteredRows = filteredRows.filter((row) => row.subject === normalizedSubject);
+  }
+
+  if (input.timeRange?.type === 'month') {
+    const months = input.comparison === 'previous_month'
+      ? [getPreviousMonth(input.timeRange.month), input.timeRange.month]
+      : [input.timeRange.month];
+    filteredRows = filteredRows.filter((row) => months.includes(row.month));
+  } else if (input.timeRange?.type === 'latest_available_month') {
+    const latestMonth = filteredRows.reduce((latest, row) => (row.month > latest ? row.month : latest), '');
+    filteredRows = latestMonth ? filteredRows.filter((row) => row.month === latestMonth) : [];
+  }
+
+  return filteredRows;
+}
+
+function roundMetric(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
+}
+
+function createSummary(rows, groupBy) {
+  const groupMap = new Map();
+
+  for (const row of rows) {
+    const dimension = String(row[groupBy] ?? '');
+    const key = dimension || '未分组';
+    const current = groupMap.get(key) || {
+      dimension: key,
+      recordCount: 0,
+      avgScoreTotal: 0,
+      attendanceRateTotal: 0,
+      homeworkCompletionRateTotal: 0,
+      warningCount: 0,
+    };
+
+    current.recordCount += 1;
+    current.avgScoreTotal += row.avg_score;
+    current.attendanceRateTotal += row.attendance_rate;
+    current.homeworkCompletionRateTotal += row.homework_completion_rate;
+    current.warningCount += row.warning_count;
+    groupMap.set(key, current);
+  }
+
+  return Array.from(groupMap.values()).map((summary) => ({
+    dimension: summary.dimension,
+    recordCount: summary.recordCount,
+    avg_score: roundMetric(summary.avgScoreTotal / summary.recordCount),
+    attendance_rate: roundMetric(summary.attendanceRateTotal / summary.recordCount),
+    homework_completion_rate: roundMetric(summary.homeworkCompletionRateTotal / summary.recordCount),
+    warning_count: summary.warningCount,
+  }));
+}
+
+function getMetricValue(summary, metric) {
+  if (metric === 'warning_count') {
+    return summary.warning_count;
+  }
+
+  return Number(summary[metric]) || 0;
+}
+
+function sortSummaryRows(rows, metric) {
+  return rows.sort((a, b) => getMetricValue(b, metric) - getMetricValue(a, metric));
+}
+
+async function aggregateTable(db, input) {
+  const metric = normalizeMetric(input.metric);
+  const groupBy = normalizeGroupBy(input.groupBy);
+  const startedAt = Date.now();
+  const allRows = await fetchTeachingMetricRows(db);
+  const filteredRows = filterTeachingRows(allRows, input);
+  const totalRecords = filteredRows.length;
+  const summaryByGrade = sortSummaryRows(createSummary(filteredRows, 'grade'), metric);
+  const summaryBySubject = sortSummaryRows(createSummary(filteredRows, 'subject'), metric);
+  const summaryByMonth = sortSummaryRows(createSummary(filteredRows, 'month'), metric);
+  const groupedSummary = sortSummaryRows(createSummary(filteredRows, groupBy), metric).slice(0, input.limit || MAX_TOOL_ROWS);
+  const rows = groupedSummary.map((summary) => ({
+    ...summary,
+    value: getMetricValue(summary, metric),
+  }));
+
+  return {
+    metric,
+    groupBy,
+    totalRecords,
+    rowCount: rows.length,
+    averages: createSummary(filteredRows, 'all').find((summary) => summary.dimension === '未分组') || {
+      recordCount: 0,
+      avg_score: 0,
+      attendance_rate: 0,
+      homework_completion_rate: 0,
+      warning_count: 0,
+    },
+    summaryByGrade,
+    summaryBySubject,
+    summaryByMonth,
+    rows,
+    elapsedMs: Date.now() - startedAt,
+    timeRangeLabel: input.timeRange?.type !== 'none' ? input.timeRange?.label : undefined,
+  };
 }
 
 function renderChart(input) {
@@ -1223,8 +1311,20 @@ function renderChart(input) {
   return {
     title: input.title,
     chartType: input.chartType,
+    config: {
+      xField: input.labelKey,
+      yField: input.valueKey,
+      metric: input.metric,
+      groupBy: input.groupBy,
+    },
     labels,
     values,
+    series: [
+      {
+        name: getMetricLabel(input.metric),
+        data: values,
+      },
+    ],
     summary: labels.length
       ? `已生成 ${labels.length} 个数据点，图表类型为 ${input.chartType}。`
       : '没有可用于图表渲染的有效数据点。',
@@ -1235,6 +1335,7 @@ function toRunChartData(chartResult) {
   return {
     title: chartResult.title,
     chartType: chartResult.chartType,
+    config: chartResult.config || {},
     labels: chartResult.labels,
     series: [
       {
@@ -1251,12 +1352,17 @@ function getMetricLabel(metric) {
     avg_score: '平均分',
     attendance_rate: '出勤率',
     homework_completion_rate: '作业完成率',
-    abnormal_count: '异常指标',
+    warning_count: '预警数量',
+    abnormal_count: '预警数量',
   }[metric] || '异常指标';
 }
 
 function getGroupByLabel(groupBy) {
-  return groupBy === 'metric_month' ? '月份' : '学科';
+  if (groupBy === 'month' || groupBy === 'metric_month') {
+    return '月份';
+  }
+
+  return groupBy === 'grade' ? '年级' : '学科';
 }
 
 function getTimeRangeLabel(timeRange) {
@@ -1267,7 +1373,7 @@ function buildChartTitle(plan) {
   const timeRangeLabel = getTimeRangeLabel(plan.timeRange);
   const timePrefix = timeRangeLabel === '未指定' ? '' : timeRangeLabel;
   const comparisonText = plan.comparison === 'previous_month' && timePrefix ? '及上月' : '';
-  const suffix = plan.groupBy === 'metric_month' ? '趋势分析' : '分布分析';
+  const suffix = normalizeGroupBy(plan.groupBy) === 'month' ? '趋势分析' : '分布分析';
   return `${timePrefix}${comparisonText}${getMetricLabel(plan.metric)}${suffix}` || `${getMetricLabel(plan.metric)}${suffix}`;
 }
 
@@ -1278,11 +1384,37 @@ function buildFallbackConclusion(plan, chartResult, fallbackReason) {
   const labels = chartResult?.labels || [];
   const values = chartResult?.values || [];
 
-  if (fallbackReason === 'data_tool_failed') {
+  if (fallbackReason === 'data_table_not_found') {
     return [
-      '当前 CloudBase Agent Run 已完成鉴权、quota 和运行记录写入，但数据分析工具执行失败。',
+      '当前 CloudBase Agent Run 已完成鉴权、quota 和运行记录写入，但 CloudBase MySQL 中未找到 `teaching_metrics` 表。',
       '本次不会伪造模型或工具结果，因此只返回 fallback 说明。',
-      '请检查 CloudBase 函数的数据源连接环境变量和 `teaching_metrics` 表后重试。',
+      '请先执行 `tencent/migrations/002_cloudbase_teaching_metrics.sql` 和 `tencent/seeds/003_teaching_metrics_seed.sql` 后重试。',
+    ].join('\n\n');
+  }
+
+  if (fallbackReason === 'data_tool_query_failed') {
+    return [
+      '当前 CloudBase Agent Run 已完成鉴权、quota 和运行记录写入，但读取 CloudBase MySQL 教学指标数据失败。',
+      '本次不会伪造模型或工具结果，因此只返回 fallback 说明。',
+      '请检查 CloudBase 函数运行日志、MySQL 权限和 `teaching_metrics` 表结构后重试。',
+    ].join('\n\n');
+  }
+
+  if (fallbackReason === 'unknown_tool_error') {
+    return [
+      '当前 CloudBase Agent Run 已完成鉴权、quota 和运行记录写入，但受控工具链出现未知错误。',
+      '本次不会伪造模型或工具结果，因此只返回 fallback 说明。',
+      '请检查 schema_inspect、aggregate_table 和 chart_render 对应的 tool_invocations 记录。',
+    ].join('\n\n');
+  }
+
+  if (fallbackReason === 'groq_not_configured') {
+    return [
+      `数据工具已从 CloudBase MySQL 的 \`teaching_metrics\` 表读取并聚合教学质量数据${timeRangeLabel !== '未指定' ? `，时间范围为“${timeRangeLabel}”` : ''}。`,
+      '当前未配置 Groq 模型，因此最终回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。',
+      labels.length > 0 && values.length > 0
+        ? `${labels[0]} 在“${metricName}”上最需要关注（约 ${Number(values[0] || 0).toFixed(2)}），建议结合年级、班级和学科继续排查。`
+        : '当前工具结果没有足够数据点生成明确排序。',
     ].join('\n\n');
   }
 
@@ -1918,10 +2050,13 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
     return output;
   } catch (error) {
     const elapsedMs = Math.max(Date.now() - startedAt, 1);
-    const errorMessage = '受控工具执行失败';
+    const fallbackReason = error instanceof DataToolError ? error.fallbackReason : 'unknown_tool_error';
+    const errorMessage = error instanceof DataToolError ? error.publicMessage : '受控工具执行失败';
     await updateToolInvocationRecord(db, currentUser, toolInvocationId, {
       status: 'failed',
-      output: {},
+      output: {
+        fallbackReason,
+      },
       outputSummary: errorMessage,
       elapsedMs,
       error: errorMessage,
@@ -1929,6 +2064,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
         source: 'cloudbase-agent-run-real',
         runtimeToolId: params.runtimeToolId,
         runId: context.runId,
+        fallbackReason,
       },
     });
     await persistAndWriteRawEvent(
@@ -1940,6 +2076,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
       createRunEvent('tool_failed', context, {
         toolId: params.runtimeToolId,
         errorMessage,
+        fallbackReason,
         completedAt: nowIso(),
         elapsedMs,
       }),
@@ -1972,7 +2109,7 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       displayName: '数据源结构读取',
       input: { includeColumns: true },
       inputSummary: 'includeColumns=true',
-      execute: () => inspectSchema(context.provider),
+      execute: () => inspectSchema(),
       outputSummary: (output) => `读取 ${output.tableCount} 张表`,
     });
     await persistAndWriteRawEvent(
@@ -1990,10 +2127,10 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
 
     const aggregateStart = Date.now();
     const aggregateInput = {
-      metric: plan.metric || 'abnormal_count',
+      metric: normalizeMetric(plan.metric),
       groupBy: plan.comparison === 'previous_month' && plan.timeRange?.type === 'month'
-        ? 'metric_month'
-        : plan.groupBy || 'subject',
+        ? 'month'
+        : normalizeGroupBy(plan.groupBy),
       limit: MAX_TOOL_ROWS,
       timeRange: plan.timeRange || { type: 'none' },
       comparison: plan.comparison || 'none',
@@ -2017,8 +2154,8 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       displayName: '数据聚合分析',
       input: aggregateInput,
       inputSummary: JSON.stringify(aggregateInput),
-      execute: () => aggregateTable(context.provider, aggregateInput),
-      outputSummary: (output) => output.rowCount > 0 ? `返回 ${output.rowCount} 条聚合结果` : '未找到可聚合的数据',
+      execute: () => aggregateTable(db, aggregateInput),
+      outputSummary: (output) => output.totalRecords > 0 ? `读取 ${output.totalRecords} 条记录，返回 ${output.rowCount} 条聚合结果` : '未找到可聚合的数据',
     });
     await persistAndWriteRawEvent(
       db,
@@ -2052,6 +2189,8 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       chartType: 'bar',
       labelKey: 'dimension',
       valueKey: 'value',
+      metric: aggregateInput.metric,
+      groupBy: aggregateInput.groupBy,
       rows: aggregateResult.rows,
     };
     const chartResult = await runControlledTool(db, currentUser, context, res, disconnect, {
@@ -2106,7 +2245,7 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       schemaResult: null,
       aggregateResult: null,
       chartResult: null,
-      fallbackReason: 'data_tool_failed',
+      fallbackReason: error instanceof DataToolError ? error.fallbackReason : 'unknown_tool_error',
     };
   }
 }
@@ -2140,8 +2279,8 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       conclusionNotice,
       fallbackReason,
     });
-  } else if (!toolContext.aggregateResult || toolContext.aggregateResult.rowCount === 0) {
-    fallbackReason = 'no_tool_rows';
+  } else if (!toolContext.aggregateResult || toolContext.aggregateResult.totalRecords === 0) {
+    fallbackReason = 'data_empty';
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
     conclusionNotice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
