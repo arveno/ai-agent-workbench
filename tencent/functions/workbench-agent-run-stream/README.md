@@ -2,7 +2,7 @@
 
 CloudBase HTTP Function for Tencent-21 Agent Run stream verification.
 
-This function keeps the Tencent-14 fixed `basic` mode and updates the `real` mode to read CloudBase MySQL `teaching_metrics` directly through `@cloudbase/node-sdk` / `app.rdb()`. It verifies the CloudBase Agent Run path with Auth, conversation ownership, quota, `agent_runs`, `run_events`, `tool_invocations`, assistant message persistence, SSE output, planner, controlled data tools, Groq conclusion generation, and explicit fallback.
+This function keeps the Tencent-14 fixed `basic` mode and updates the `real` mode to read CloudBase MySQL `teaching_metrics` directly through `@cloudbase/node-sdk` / `app.rdb()`. It verifies the CloudBase Agent Run path with Auth, conversation ownership, quota, `agent_runs`, `run_events`, `tool_invocations`, assistant message persistence, SSE output, planner, controlled data tools, lightweight model gateway conclusion generation, and explicit fallback.
 
 It still does not switch the production frontend traffic, does not migrate the full report generation entry, and does not delete the Vercel / Supabase implementation.
 
@@ -70,8 +70,8 @@ The Tencent-21 `real` path is:
    - `aggregate_table`
    - `chart_render`
 8. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
-9. Use Groq to generate the conclusion when `GROQ_API_KEY` is configured.
-10. Fall back explicitly when Groq is not configured, planner fails, `teaching_metrics` is missing, queries fail, no rows are returned, or Groq fails.
+9. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
+10. Fall back explicitly when the model provider is not configured, `teaching_metrics` is missing, queries fail, no rows are returned, or the model provider fails.
 11. Insert one assistant `messages` row with source metadata.
 12. Mark `agent_runs(status = completed)`.
 13. Stream `run_completed`.
@@ -98,57 +98,72 @@ This mode uses a fixed mock tool result and fixed conclusion text. It remains us
 ## Mock / Real / Fallback Boundary
 
 - `basic` mode is a fixed mock verification path and records `source = cloudbase-agent-run-basic-loop`.
-- `real` mode calls the planner and the controlled data tools. It never lets a model execute SQL directly.
+- `real` mode calls the local planner rules and the controlled data tools. It never lets a model execute SQL directly.
 - `schema_inspect` returns a fixed schema description for `teaching_metrics`.
 - `aggregate_table` reads `teaching_metrics` through CloudBase MySQL and aggregates in JavaScript by month, grade, or subject.
 - `chart_render` converts aggregate results into chart config and series data; it does not render an image.
-- `conclusionSource = "groq"` means Groq generated the final conclusion.
+- `conclusionSource = "groq"` means the Groq compatibility provider generated the final conclusion.
+- `conclusionSource = "openai-compatible"` means the generic OpenAI-compatible model gateway generated the final conclusion.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
 - `knowledge_qa` currently returns an explicit `rag_not_migrated` fallback because the existing RAG path depends on Supabase Admin / knowledge tables that are not migrated to CloudBase in this step.
-- The assistant message metadata records `source`, `fallbackReason`, `groqModel`, `groqErrorType`, `groqErrorMessage`, `agentMode`, and `runtimeRunId`.
+- The assistant message metadata records `source`, `conclusionSource`, `fallbackReason`, `modelProvider`, `modelName`, `modelErrorType`, `modelHttpStatus`, `modelErrorMessage`, `agentMode`, and `runtimeRunId`.
 
 ## Environment Variables
 
 Do not hard-code keys or connection strings in source code.
 
+Preferred model gateway configuration:
+
 ```txt
-GROQ_API_KEY                 Optional. Enables planner/model conclusion calls.
-GROQ_MODEL                   Optional. Defaults to llama-3.1-8b-instant.
+MODEL_GATEWAY_PROVIDER=openai-compatible
+MODEL_GATEWAY_BASE_URL=https://provider.example.com/v1
+MODEL_GATEWAY_API_KEY=...
+MODEL_GATEWAY_MODEL=...
+```
+
+Groq compatibility configuration remains supported when no `MODEL_GATEWAY_*` variables are set:
+
+```txt
+GROQ_API_KEY=...
+GROQ_MODEL=llama-3.1-8b-instant
 CLOUDBASE_ENV_ID / TCB_ENV_ID Provided by CloudBase runtime or deployment config.
 ```
 
 Tencent-21 no longer needs `POSTGRES_CONNECTION_STRING` or `SUPABASE_DB_CONNECTION_STRING` for Agent Run data tools. CloudBase MySQL access comes from the CloudBase function runtime through `@cloudbase/node-sdk` and `app.rdb()`.
 
-When `GROQ_API_KEY` is missing, the function should still return SSE and complete the run through explicit fallback instead of returning 500.
+Model keys must be CloudBase function environment variables only. Do not put `MODEL_GATEWAY_API_KEY` or `GROQ_API_KEY` in EdgeOne / frontend `VITE_*` variables.
+
+When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/modelGateway.js` is intentionally lightweight: it only wraps OpenAI-compatible chat completions and normalized diagnostics, not an enterprise model platform.
 
 Fallback reasons used by the real data-analysis path:
 
 - `data_table_not_found`: `teaching_metrics` has not been created.
 - `data_tool_query_failed`: CloudBase MySQL query failed.
 - `data_empty`: query succeeded but no matching rows were available.
-- `groq_not_configured`: data tools succeeded but Groq is not configured.
-- `groq_unauthorized`: Groq returned 401 or an invalid API key error.
-- `groq_forbidden`: Groq returned 403 or a forbidden / region / permission response.
-- `groq_model_not_found`: configured Groq model does not exist or is not supported.
-- `groq_rate_limited`: Groq returned 429 or a rate-limit response.
-- `groq_timeout`: Groq request timed out.
-- `groq_network_error`: fetch or network transport failed.
-- `groq_response_parse_failed`: streamed response could not be parsed.
-- `groq_failed`: other unknown Groq conclusion generation failure.
+- `model_not_configured`: data tools succeeded but no model provider is configured.
+- `model_unauthorized`: provider returned 401 or an invalid API key error.
+- `model_forbidden`: provider returned 403 or a forbidden / region / permission response.
+- `model_not_found`: configured model does not exist or is not supported.
+- `model_rate_limited`: provider returned 429 or a rate-limit response.
+- `model_timeout`: model request timed out.
+- `model_network_error`: fetch or network transport failed.
+- `model_response_parse_failed`: streamed response could not be parsed.
+- `model_failed`: other unknown model conclusion generation failure.
 - `unknown_tool_error`: controlled tool chain failed for another reason.
 
-Groq diagnostics are deliberately redacted. Function logs record only:
+Model diagnostics are deliberately redacted. Function logs record only:
 
 ```txt
-hasGroqApiKey
-groqApiKeyLength
-groqModel
-groqHttpStatus
-groqErrorType
-groqErrorMessage
+hasModelApiKey
+modelApiKeyLength
+modelProvider
+modelName
+modelHttpStatus
+modelErrorType
+modelErrorMessage
 ```
 
-`groqErrorMessage` is truncated to 300 characters. The function does not log the raw `GROQ_API_KEY`, full request headers, or connection strings.
+`modelErrorMessage` is truncated to 300 characters. The function does not log raw API keys, full request headers, or connection strings.
 
 ## SSE Response
 
@@ -195,7 +210,9 @@ Example event:
   "conversationId": "...",
   "timestamp": "2026-05-15T00:00:00.000Z",
   "conclusionSource": "fallback",
-  "fallbackReason": "groq_not_configured"
+  "fallbackReason": "model_not_configured",
+  "modelProvider": "groq",
+  "modelName": "llama-3.1-8b-instant"
 }
 ```
 
@@ -236,7 +253,7 @@ stage="$HOME/Desktop/cloudbase-workbench-agent-run-stream-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
 cp workbench-agent-run-stream/index.js workbench-agent-run-stream/package.json workbench-agent-run-stream/scf_bootstrap workbench-agent-run-stream/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js "$stage/_shared/"
+cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-agent-run-stream.zip index.js package.json README.md scf_bootstrap _shared)
 ```
@@ -256,6 +273,7 @@ scf_bootstrap
 Syntax check:
 
 ```bash
+node --check tencent/functions/_shared/modelGateway.js
 node --check tencent/functions/workbench-agent-run-stream/index.js
 ```
 
@@ -281,9 +299,9 @@ Expected result:
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
 - `mode = "basic"` streams the fixed Tencent-14 event sequence.
 - `mode = "real"` streams `schema_inspect` / `aggregate_table` / `chart_render` tool completions, chart, conclusion, and completion events where available.
-- If Groq succeeds after data tools succeed, the real mode returns `conclusionSource = "groq"`.
-- If Groq fails after data tools succeed, the real mode returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `groq_unauthorized`, `groq_forbidden`, `groq_model_not_found`, `groq_rate_limited`, `groq_timeout`, `groq_network_error`, `groq_response_parse_failed`, or `groq_failed`.
-- `conclusion_completed` and `run_completed` include `groqErrorType`, `groqHttpStatus`, and redacted `groqErrorMessage` when available; neither event includes raw tokens or request headers.
+- If the model provider succeeds after data tools succeed, the real mode returns provider-specific `conclusionSource`, such as `openai-compatible` or `groq`.
+- If the model provider fails after data tools succeed, the real mode returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
+- `conclusion_completed` and `run_completed` include `modelProvider`, `modelName`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
 - `quotaUsed` increases for `demo_user`.
 - `messages` contains the assistant message.
 - `agent_runs`, `run_events`, and `tool_invocations` contain records for the run.

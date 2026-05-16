@@ -9,7 +9,7 @@ EdgeOne Pages
 + CloudBase MySQL
 ```
 
-当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；Tencent-09A 已验证 CloudBase Auth helper 与正式 `/api/auth/me`，Tencent-10C/Tencent-13 已新增 conversations / messages / reports / demo-copy / quota 基础闭环函数，Tencent-21 新增 `teaching_metrics` 演示数据源并将 Agent Run `real` data tools 改为直接读取 CloudBase MySQL，Tencent-16 到 Tencent-18 已让正式前端在 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 下接入 CloudBase Preview。当前仍不是正式单轨：前端 `authStore` 仍是 Supabase，Vercel / Supabase legacy 代码仍保留，正式切换前还需要 EdgeOne Preview 线上回归。
+当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；Tencent-09A 已验证 CloudBase Auth helper 与正式 `/api/auth/me`，Tencent-10C/Tencent-13 已新增 conversations / messages / reports / demo-copy / quota 基础闭环函数，Tencent-21 新增 `teaching_metrics` 演示数据源并将 Agent Run `real` data tools 改为直接读取 CloudBase MySQL，Tencent-22 新增轻量 OpenAI-compatible model gateway 并保留 Groq 兼容，Tencent-16 到 Tencent-18 已让正式前端在 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 下接入 CloudBase Preview。当前仍不是正式单轨：前端 `authStore` 仍是 Supabase，Vercel / Supabase legacy 代码仍保留，正式切换前还需要 EdgeOne Preview 线上回归。
 
 ## 文件
 
@@ -29,7 +29,7 @@ EdgeOne Pages
 - `functions/workbench-reports/`：Tencent-11 reports HTTP Function，固定路由为 `/api/workbench/reports`，GET 从 query 读取 `conversationId` 或 `id`，POST 从 JSON body 保存报告。
 - `functions/workbench-demo-copy/`：Tencent-12 demo-copy HTTP Function，固定路由为 `/api/workbench/demo-copy`，POST 从 JSON body 读取 `templateId` 并复制示例会话模板。
 - `functions/workbench-quota/`：Tencent-13 quota HTTP Function，固定路由为 `/api/workbench/quota`，`GET` 读取额度，`POST` 通过 `body.action` 区分消耗额度和完成 usage。
-- `functions/workbench-agent-run-stream/`：Agent Run 流式验证 HTTP Function，固定路由为 `/api/agent/run/stream`，保留 `basic` mock 基础闭环；`real` 路径通过 CloudBase MySQL `teaching_metrics` 执行 `schema_inspect` / `aggregate_table` / `chart_render`，再进入 Groq 或明确 fallback；Tencent-17/Tencent-18 已在前端 CloudBase Preview 下接入正式页面 stream 调用。
+- `functions/workbench-agent-run-stream/`：Agent Run 流式验证 HTTP Function，固定路由为 `/api/agent/run/stream`，保留 `basic` mock 基础闭环；`real` 路径通过 CloudBase MySQL `teaching_metrics` 执行 `schema_inspect` / `aggregate_table` / `chart_render`，再进入轻量 model gateway 或明确 fallback；Tencent-17/Tencent-18 已在前端 CloudBase Preview 下接入正式页面 stream 调用。
 
 ## 表用途
 
@@ -113,14 +113,23 @@ WHERE id = ? AND user_id = ? AND _openid = ?;
 
 ## Agent Run 环境变量
 
-Tencent-21 后，`workbench-agent-run-stream` 的 data tools 不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase 部署时可选注入：
+Tencent-21 后，`workbench-agent-run-stream` 的 data tools 不再需要 PostgreSQL / Supabase 数据库连接串。Tencent-22 后推荐使用统一模型网关配置：
 
 ```txt
-GROQ_API_KEY
-GROQ_MODEL
+MODEL_GATEWAY_PROVIDER=openai-compatible
+MODEL_GATEWAY_BASE_URL=https://provider.example.com/v1
+MODEL_GATEWAY_API_KEY=...
+MODEL_GATEWAY_MODEL=...
 ```
 
-`GROQ_API_KEY` 未配置时，`real` 模式应在 data tools 成功后通过 `fallbackReason = "groq_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。RAG knowledge_qa、报告生成入口和正式前端默认链路尚未迁移。
+未配置 `MODEL_GATEWAY_*` 时仍兼容旧 Groq 配置：
+
+```txt
+GROQ_API_KEY=...
+GROQ_MODEL=llama-3.1-8b-instant
+```
+
+模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。模型未配置时，`real` 模式应在 data tools 成功后通过 `fallbackReason = "model_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。当前 `_shared/modelGateway.js` 是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台；RAG knowledge_qa、报告生成入口和正式前端默认链路尚未迁移。
 
 ## Migration 执行说明
 
@@ -137,7 +146,7 @@ Preview 阶段仍需注意：
 1. `authStore` 尚未替换为 CloudBase Auth。
 2. `VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时仍走 legacy Vercel / Supabase。
 3. quota consume 尚未事务化，后续需要 MySQL transaction / 行锁或等效原子扣减。
-4. Agent Run 的 Groq 仍可能 fallback，fallback 不能伪装成真实模型结果；`data_table_not_found` / `data_tool_query_failed` / `data_empty` 需要结合 CloudBase MySQL 和函数日志排查。
+4. Agent Run 的模型网关仍可能 fallback，fallback 不能伪装成真实模型结果；`data_table_not_found` / `data_tool_query_failed` / `data_empty` / `model_*` 需要结合 CloudBase MySQL、模型服务和函数日志排查。
 5. `local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品，也不应提交为正式能力。
 6. 删除旧 Vercel / Supabase 前必须保留回滚窗口。
 
@@ -148,5 +157,5 @@ Preview 阶段仍需注意：
 3. 新增 CloudBase Auth 后端校验 helper，建立 `_openid -> app_profiles.user_id` 映射。当前 `auth-me` 已验证该链路，前端 `authStore` 尚未迁移。
 4. 迁移 conversations/messages/report/run 查询接口，所有 SQL 显式加 `_openid/user_id`。当前 Tencent-10C/Tencent-12 只新增 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环，PATCH、archive、Agent Run 相关报告生成和 run 查询后续再迁。
 5. 迁移 quota 事务。当前 Tencent-13 已新增 quota 基础闭环，后续仍需单独验证 MySQL transaction + 行锁并发扣减。
-6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-17/Tencent-18 已接入前端 CloudBase Preview；后续仍需补 quota 事务、RAG knowledge_qa、报告生成入口、断线恢复和 EdgeOne Preview 线上回归。
+6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 已新增轻量 model gateway，Tencent-17/Tencent-18 已接入前端 CloudBase Preview；后续仍需补 quota 事务、RAG knowledge_qa、报告生成入口、断线恢复和 EdgeOne Preview 线上回归。
 7. 最后清理旧 Vercel/Supabase 代码，清理前必须保证腾讯云版本已可演示和可回滚。

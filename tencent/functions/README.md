@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Agent Run 流式验证函数。Tencent-21 保留固定 `basic` 验证路径，并将 `workbench-agent-run-stream` 的 `real` data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，接入 planner、受控 data tools、Groq 和明确 fallback；现阶段不替换前端 Auth store，也不删除旧 Vercel / Supabase 代码。
+本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Agent Run 流式验证函数。Tencent-21 保留固定 `basic` 验证路径，并将 `workbench-agent-run-stream` 的 `real` data tools 改为直接读取 CloudBase MySQL `teaching_metrics`；Tencent-22 新增轻量 `_shared/modelGateway.js`，支持 OpenAI-compatible provider，并保留 Groq 兼容 fallback。现阶段不替换前端 Auth store，也不删除旧 Vercel / Supabase 代码。
 
 ## 函数
 
@@ -135,7 +135,7 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-quota.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-agent-run-stream` 依赖 `_shared`。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：consume quota、创建 `agent_runs`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、Groq 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
+`workbench-agent-run-stream` 依赖 `_shared`。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：consume quota、创建 `agent_runs`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入本地 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、轻量 model gateway 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
 cd tencent/functions
@@ -143,7 +143,7 @@ stage="$HOME/Desktop/cloudbase-workbench-agent-run-stream-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
 cp workbench-agent-run-stream/index.js workbench-agent-run-stream/package.json workbench-agent-run-stream/scf_bootstrap workbench-agent-run-stream/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js "$stage/_shared/"
+cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-agent-run-stream.zip index.js package.json README.md scf_bootstrap _shared)
 ```
@@ -168,14 +168,23 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。可选外部依赖配置为：
+`workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。推荐使用统一模型网关配置：
 
 ```txt
-GROQ_API_KEY
-GROQ_MODEL
+MODEL_GATEWAY_PROVIDER=openai-compatible
+MODEL_GATEWAY_BASE_URL=https://provider.example.com/v1
+MODEL_GATEWAY_API_KEY=...
+MODEL_GATEWAY_MODEL=...
 ```
 
-其中 `GROQ_API_KEY` 未配置时应走 `fallbackReason = "groq_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。
+如果没有任何 `MODEL_GATEWAY_*` 变量，函数继续兼容旧 Groq 配置：
+
+```txt
+GROQ_API_KEY=...
+GROQ_MODEL=llama-3.1-8b-instant
+```
+
+模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -233,6 +242,7 @@ node --check tencent/functions/workbench-reports/index.js
 node --check tencent/functions/workbench-demo-copy/index.js
 node --check tencent/functions/workbench-quota/index.js
 node --check tencent/functions/workbench-agent-run-stream/index.js
+node --check tencent/functions/_shared/modelGateway.js
 ```
 
 `workbench-conversations` 线上验证建议：
@@ -307,7 +317,7 @@ curl -N -i -X POST \
   https://<your-domain>/api/agent/run/stream
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；Groq 未配置且 data tools 成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "groq_not_configured"`，不应返回 `data_tool_failed` 或 500。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。该验证不切换前端正式 Agent Run，不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；模型未配置且 data tools 成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。模型失败时 SSE 和 metadata 应包含 `modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus`。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。该验证不切换前端正式 Agent Run，不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
 
 ## 安全说明
 
@@ -319,7 +329,7 @@ curl -N -i -X POST \
 - `workbench-reports` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它会先校验 conversation 归属，再读取或写入 `report_artifacts`，不写 Agent Run、SSE 或 quota。
 - `workbench-demo-copy` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取公开 demo 模板并写入当前用户私有 `conversations` / `messages`，不写 reports、Agent Run、SSE 或 quota。
 - `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
-- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js` 与 `_shared/mysql.js` 验证 CloudBase Agent Run 流式链路。`basic` 模式为固定 mock 基础闭环，`real` 模式接入 planner、受控 data tools、Groq 和明确 fallback，但仍不切换前端正式调用。
+- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js` 与 `_shared/modelGateway.js` 验证 CloudBase Agent Run 流式链路。`basic` 模式为固定 mock 基础闭环，`real` 模式接入本地 planner、受控 data tools、OpenAI-compatible model gateway / Groq 兼容和明确 fallback，但仍不切换前端正式调用。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。

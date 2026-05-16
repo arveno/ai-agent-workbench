@@ -38,7 +38,7 @@ Tencent-19 的阶段判断是：CloudBase Preview 已具备正式页面端到端
 | Reports | CloudBase private `GET/POST /api/workbench/reports` 已验证，前端 preview 分支可保存和读取 report artifacts。 |
 | Demo copy | CloudBase private `POST /api/workbench/demo-copy` 已验证，前端 preview 分支可复制公开会话模板并读取 seed messages。 |
 | Quota | CloudBase private `GET/POST /api/workbench/quota` 基础闭环已验证，Agent Run stream 后端会 consume / finish usage。 |
-| Agent Run SSE / fallback | CloudBase `/api/agent/run/stream` 已验证鉴权、归属校验、quota、run/events/tools、assistant message、SSE 和明确 fallback；Tencent-21 将 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`。 |
+| Agent Run SSE / fallback | CloudBase `/api/agent/run/stream` 已验证鉴权、归属校验、quota、run/events/tools、assistant message、SSE 和明确 fallback；Tencent-21 将 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 新增轻量 OpenAI-compatible model gateway 并保留 Groq 兼容。 |
 | Frontend CloudBase Preview | 正式页面可在 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 下走 CloudBase conversations/messages/reports/demo-copy/quota/Agent Run stream。 |
 | Local test panel | `local-tools/cloudbase-auth-test.html` 可用于快速验证 CloudBase Auth 与 API，但不提交、不属于正式产品。 |
 
@@ -48,7 +48,7 @@ Tencent-19 的阶段判断是：CloudBase Preview 已具备正式页面端到端
 - Vercel / Supabase 旧代码仍保留，用于回滚、对照和默认 legacy 路径。
 - 前端 `authStore` 仍是 Supabase Auth，没有替换为 CloudBase Auth。
 - CloudBase private API 只通过 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true` 显式启用；默认关闭时仍走 legacy。
-- Agent Run 的真实 Groq 仍可能进入明确 fallback，不能把 fallback 当作真实模型结果宣传；data tools 失败时会使用 `data_table_not_found`、`data_tool_query_failed`、`data_empty` 等明确原因。
+- Agent Run 的真实模型调用仍可能进入明确 fallback，不能把 fallback 当作真实模型结果宣传；data tools 失败时会使用 `data_table_not_found`、`data_tool_query_failed`、`data_empty` 等明确原因，模型失败时会使用 `model_*` fallbackReason。
 - quota consume / finish 已具备基础闭环，但 consume 尚未事务化，也没有 MySQL 行锁并发保护。
 - `local-tools` 测试面板只服务迁移验证，不提交、不进正式页面、不作为产品能力。
 - CloudBase Preview 不等于删除 Vercel/Supabase；正式删除前必须保留回滚窗口。
@@ -186,9 +186,9 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 
 `workbench-agent-run-stream` 使用固定路由 `/api/agent/run/stream`，路径透传关闭。Tencent-14 的 `body.mode = "basic"` 固定 Agent Run 基础闭环仍保留：复用 `_shared/auth.js` 获取 `currentUser`，校验 `conversationId + _openid + user_id + visibility = private` 归属，消耗 quota 并创建 `agent_run_usage`，创建 `agent_runs`，以 SSE 依次输出并写入 `run_events`，写入 mock `tool_invocations` 和 assistant `messages`，并 finish usage。
 
-Tencent-21 后，默认 `real` 模式先运行 planner 判断 `capability_intro`、`data_analysis`、`knowledge_qa` 或 `unsupported`；`data_analysis` 走服务端受控工具链 `schema_inspect`、`aggregate_table`、`chart_render`。`schema_inspect` 返回固定 `teaching_metrics` schema 描述，`aggregate_table` 通过 CloudBase MySQL `app.rdb()` 读取 `teaching_metrics` 并在 JS 中按 month / grade / subject 聚合，`chart_render` 生成 chart config / series 数据，并写入 `tool_invocations` 的 `tool_name`、`status`、`input`、`output`、`elapsed_ms`；配置 `GROQ_API_KEY` 时用 Groq 生成结论，成功时 `conclusionSource = "groq"`，未配置或调用失败时返回明确 fallback，不伪装成真实模型结果。Tencent-21B 进一步细分 Groq 失败原因：`groq_unauthorized`、`groq_forbidden`、`groq_model_not_found`、`groq_rate_limited`、`groq_timeout`、`groq_network_error`、`groq_response_parse_failed`、`groq_failed`。SSE 与 assistant message metadata 会记录 `conclusionSource`、`fallbackReason`、`groqModel`、`groqErrorType` 和脱敏 `groqErrorMessage`，日志只记录脱敏诊断摘要，不输出 raw API key。`knowledge_qa` 暂不迁真实 RAG，返回 `rag_not_migrated` fallback，因为现有 RAG 仍依赖 Supabase Admin / knowledge 表链路。
+Tencent-21 后，默认 `real` 模式先运行 planner 判断 `capability_intro`、`data_analysis`、`knowledge_qa` 或 `unsupported`；`data_analysis` 走服务端受控工具链 `schema_inspect`、`aggregate_table`、`chart_render`。`schema_inspect` 返回固定 `teaching_metrics` schema 描述，`aggregate_table` 通过 CloudBase MySQL `app.rdb()` 读取 `teaching_metrics` 并在 JS 中按 month / grade / subject 聚合，`chart_render` 生成 chart config / series 数据，并写入 `tool_invocations` 的 `tool_name`、`status`、`input`、`output`、`elapsed_ms`。Tencent-22 新增 `_shared/modelGateway.js`，最终结论优先支持 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`，没有 `MODEL_GATEWAY_*` 时继续兼容 `GROQ_API_KEY` / `GROQ_MODEL`，默认 Groq 模型仍是 `llama-3.1-8b-instant`。模型成功时 `conclusionSource` 使用 provider（如 `openai-compatible` 或 `groq`），未配置或调用失败时返回明确 fallback，不伪装成真实模型结果。Tencent-22 将模型失败原因统一为：`model_not_configured`、`model_unauthorized`、`model_forbidden`、`model_not_found`、`model_rate_limited`、`model_timeout`、`model_network_error`、`model_response_parse_failed`、`model_failed`。SSE 与 assistant message metadata 会记录 `conclusionSource`、`fallbackReason`、`modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus` 和脱敏 `modelErrorMessage`，日志只记录脱敏诊断摘要，不输出 raw API key。`knowledge_qa` 暂不迁真实 RAG，返回 `rag_not_migrated` fallback，因为现有 RAG 仍依赖 Supabase Admin / knowledge 表链路。
 
-CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。CloudBase MySQL 由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 访问；可选环境变量为 `GROQ_API_KEY`、`GROQ_MODEL`。`GROQ_API_KEY` 未配置且 data tools 成功时，应通过 `fallbackReason = "groq_not_configured"` 完成 SSE 流并写入 run/message/usage，不应再出现 `data_tool_failed`。
+CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。CloudBase MySQL 由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 访问；模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*`。推荐配置 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`；未配置 `MODEL_GATEWAY_*` 时可继续用 `GROQ_API_KEY`、`GROQ_MODEL`。模型未配置且 data tools 成功时，应通过 `fallbackReason = "model_not_configured"` 完成 SSE 流并写入 run/message/usage，不应再出现 `data_tool_failed`。
 
 当前状态表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环函数和 Agent Run CloudBase 流式验证函数已加入仓库并可进行部署验证，其中前端 CloudBase preview 已接入 conversations、messages、reports、demo-copy、quota 和 Agent Run stream。Tencent-21 还需要在 CloudBase MySQL 执行 `tencent/migrations/002_cloudbase_teaching_metrics.sql` 与 `tencent/seeds/003_teaching_metrics_seed.sql`，否则真实 Agent Run 会明确返回 `fallbackReason = "data_table_not_found"`。`PATCH`、`DELETE`、archive、Agent Run 报告生成、RAG knowledge_qa、前端 `authStore` 和正式默认链路均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；Tencent-13/Tencent-21 暂未在 quota consume 中使用 MySQL transaction + 行锁，后续高并发场景需要补事务或原子更新方案。
 
@@ -231,7 +231,7 @@ CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTI
 2. 再迁 CloudBase Auth helper 与 `app_profiles`，建立 `_openid -> user_id` 映射。Tencent-09A 已完成 Auth helper 与 `/api/auth/me` 验证，但前端 `authStore` 尚未迁移。
 3. 再迁 `conversations`、`messages`、`report_artifacts` 等会话、消息和报告接口。当前 Tencent-10C/Tencent-12 先新增 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环，后续再迁 PATCH、archive、Agent Run 报告生成和 Agent Run 相关查询。
 4. 再迁 quota transaction。当前 Tencent-13 已新增 quota 基础闭环，后续仍需使用 MySQL 事务和行锁验证并发扣减。
-5. 最后迁 Agent Run SSE。Tencent-21 已在 CloudBase Agent Run 函数中接入 CloudBase MySQL `teaching_metrics` data tools、Groq 和明确 fallback；Tencent-17 已在 CloudBase preview 开关下接入前端 stream 调用。后续仍需补 RAG knowledge_qa、报告生成入口、事务化 quota、断线恢复和正式切换前回归测试。
+5. 最后迁 Agent Run SSE。Tencent-21 已在 CloudBase Agent Run 函数中接入 CloudBase MySQL `teaching_metrics` data tools，Tencent-22 已新增轻量 OpenAI-compatible model gateway / Groq 兼容和明确 fallback；Tencent-17 已在 CloudBase preview 开关下接入前端 stream 调用。后续仍需补 RAG knowledge_qa、报告生成入口、事务化 quota、断线恢复和正式切换前回归测试。
 
 Agent Run SSE 放在最后，是因为它同时涉及流式输出、真实模型调用、quota、`agent_runs`、`run_events`、`tool_invocations`、报告生成和错误恢复，风险最高。
 

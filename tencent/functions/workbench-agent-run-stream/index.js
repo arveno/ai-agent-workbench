@@ -8,10 +8,6 @@ const HOST = '0.0.0.0';
 const MAX_BODY_BYTES = 1024 * 1024;
 const EVENT_DELAY_MS = 450;
 const DEFAULT_QUOTA_LIMIT = 20;
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_GROQ_MODEL = 'llama-3.1-8b-instant';
-const GROQ_REQUEST_TIMEOUT_MS = 30000;
-const MAX_GROQ_ERROR_MESSAGE_LENGTH = 300;
 const MAX_TOOL_ROWS = 20;
 
 const CONVERSATION_COLUMNS = ['id', '_openid', 'user_id', 'visibility', 'message_count'].join(',');
@@ -47,6 +43,7 @@ function loadSharedModule(name) {
 }
 
 const { authenticateRequest } = loadSharedModule('auth');
+const { getModelGatewayConfig, normalizeModelError, streamChatCompletion } = loadSharedModule('modelGateway');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 
 class RequestError extends Error {
@@ -65,15 +62,6 @@ class DataToolError extends Error {
     this.name = 'DataToolError';
     this.fallbackReason = fallbackReason;
     this.publicMessage = publicMessage;
-  }
-}
-
-class GroqError extends Error {
-  constructor(fallbackReason, diagnostics) {
-    super(diagnostics.groqErrorMessage || fallbackReason);
-    this.name = 'GroqError';
-    this.fallbackReason = fallbackReason;
-    this.diagnostics = diagnostics;
   }
 }
 
@@ -604,10 +592,13 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
     status: 'completed',
     metadata: JSON.stringify({
       source: metadata.source || context.conclusionSource || 'fallback',
+      conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
       fallbackReason: metadata.fallbackReason || null,
-      groqModel: metadata.groqModel || context.groqDiagnostics?.groqModel || null,
-      groqErrorType: metadata.groqErrorType || context.groqDiagnostics?.groqErrorType || null,
-      groqErrorMessage: metadata.groqErrorMessage || context.groqDiagnostics?.groqErrorMessage || null,
+      modelProvider: metadata.modelProvider || context.modelDiagnostics?.modelProvider || null,
+      modelName: metadata.modelName || context.modelDiagnostics?.modelName || null,
+      modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
+      modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
+      modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
       agentMode: context.agentMode || 'basic',
       runtimeRunId: context.runtimeRunId,
     }),
@@ -1003,81 +994,13 @@ function normalizePlan(rawPlan, fallback) {
   };
 }
 
-async function callGroqJson(params) {
-  const response = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: createGroqRequestBody({
-      messages: params.messages,
-      temperature: 0,
-      maxTokens: 320,
-    }, false),
-  });
-
-  if (!response.ok) {
-    throw new Error('Planner model request failed.');
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content?.trim();
-
-  if (!content) {
-    throw new Error('Planner model returned empty content.');
-  }
-
-  const firstBraceIndex = content.indexOf('{');
-  const lastBraceIndex = content.lastIndexOf('}');
-  const jsonText = firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex
-    ? content.slice(firstBraceIndex, lastBraceIndex + 1)
-    : content;
-
-  return JSON.parse(jsonText);
-}
-
 async function planAgentRun(prompt) {
   const fallback = fallbackPlanAgentRun(prompt);
-  const apiKey = process.env.GROQ_API_KEY?.trim();
-
-  if (!apiKey) {
-    return {
-      plan: fallback,
-      plannerSource: 'fallback',
-      fallbackReason: 'groq_not_configured',
-    };
-  }
-
-  try {
-    const rawPlan = await callGroqJson({
-      apiKey,
-      messages: [
-        {
-          role: 'system',
-          content: [
-            '你是教育数据分析工作台的请求分类器，只返回 JSON。',
-            'intent 只能是 capability_intro、data_analysis、knowledge_qa、unsupported。',
-            'data_analysis 只能选择 avg_score、attendance_rate、homework_completion_rate、warning_count 和 subject、grade、month。',
-            '不要生成 SQL，不要输出 Markdown。',
-          ].join('\n'),
-        },
-        { role: 'user', content: prompt },
-      ],
-    });
-
-    return {
-      plan: normalizePlan(rawPlan, fallback),
-      plannerSource: 'model',
-      fallbackReason: null,
-    };
-  } catch {
-    return {
-      plan: fallback,
-      plannerSource: 'fallback',
-      fallbackReason: 'planner_failed',
-    };
-  }
+  return {
+    plan: fallback,
+    plannerSource: 'local_rules',
+    fallbackReason: null,
+  };
 }
 
 function normalizeCellValue(value) {
@@ -1420,20 +1343,20 @@ function buildFallbackConclusion(plan, chartResult, fallbackReason) {
     ].join('\n\n');
   }
 
-  if (fallbackReason === 'groq_not_configured') {
+  if (fallbackReason === 'model_not_configured') {
     return [
       `数据工具已从 CloudBase MySQL 的 \`teaching_metrics\` 表读取并聚合教学质量数据${timeRangeLabel !== '未指定' ? `，时间范围为“${timeRangeLabel}”` : ''}。`,
-      '当前未配置 Groq 模型，因此最终回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。',
+      '当前未配置模型网关，因此最终回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。',
       labels.length > 0 && values.length > 0
         ? `${labels[0]} 在“${metricName}”上最需要关注（约 ${Number(values[0] || 0).toFixed(2)}），建议结合年级、班级和学科继续排查。`
         : '当前工具结果没有足够数据点生成明确排序。',
     ].join('\n\n');
   }
 
-  if (String(fallbackReason || '').startsWith('groq_')) {
+  if (String(fallbackReason || '').startsWith('model_')) {
     return [
       `数据工具已从 CloudBase MySQL 的 \`teaching_metrics\` 表读取并聚合教学质量数据${timeRangeLabel !== '未指定' ? `，时间范围为“${timeRangeLabel}”` : ''}。`,
-      `Groq 结论生成失败，fallbackReason=${fallbackReason}。当前回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。`,
+      `模型结论生成失败，fallbackReason=${fallbackReason}。当前回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。`,
       labels.length > 0 && values.length > 0
         ? `${labels[0]} 在“${metricName}”上最需要关注（约 ${Number(values[0] || 0).toFixed(2)}），建议结合年级、班级和学科继续排查。`
         : '当前工具结果没有足够数据点生成明确排序。',
@@ -1545,120 +1468,40 @@ function buildConclusionMessages(context) {
   ];
 }
 
-async function streamGroqText(params) {
-  const apiKey = process.env.GROQ_API_KEY?.trim();
+function createConfiguredModelDiagnostics(errorType, errorMessage) {
+  const config = getModelGatewayConfig();
 
-  if (!apiKey) {
-    throw createGroqError({
-      groqErrorMessage: 'Groq API key is not configured.',
-    });
-  }
+  return {
+    modelProvider: config.provider || null,
+    modelName: config.model || null,
+    modelErrorType: errorType || null,
+    modelHttpStatus: null,
+    modelErrorMessage: errorMessage || null,
+  };
+}
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GROQ_REQUEST_TIMEOUT_MS);
-  let response;
+function createFailedModelDiagnostics(error) {
+  const modelError = normalizeModelError(error);
 
-  try {
-    response = await fetch(GROQ_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: createGroqRequestBody({
-        messages: params.messages,
-        temperature: 0.2,
-        maxTokens: 600,
-      }, true),
-    });
-  } catch (error) {
-    throw createGroqError({
-      errorName: error && error.name,
-      groqErrorMessage: error && error.message ? error.message : 'Groq fetch failed.',
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  return {
+    modelProvider: modelError.provider || null,
+    modelName: modelError.model || null,
+    modelErrorType: modelError.errorType || 'model_failed',
+    modelHttpStatus: modelError.httpStatus,
+    modelErrorMessage: modelError.message || null,
+    hasModelApiKey: Boolean(modelError.hasApiKey),
+    modelApiKeyLength: Number(modelError.apiKeyLength) || 0,
+  };
+}
 
-  if (!response.ok) {
-    const errorText = await readGroqErrorResponse(response);
-
-    throw createGroqError({
-      groqHttpStatus: response.status,
-      groqErrorMessage: errorText || response.statusText || 'Groq stream request failed.',
-    });
-  }
-
-  if (!response.body) {
-    throw createGroqError({
-      groqHttpStatus: response.status,
-      groqErrorMessage: 'Groq stream response did not include a body.',
-    });
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let text = '';
-  let parseFailedCount = 0;
-
-  function flushLines() {
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-
-      if (!line.startsWith('data:')) {
-        continue;
-      }
-
-      const dataText = line.slice('data:'.length).trim();
-
-      if (!dataText || dataText === '[DONE]') {
-        continue;
-      }
-
-      try {
-        const event = JSON.parse(dataText);
-        const delta = event?.choices?.[0]?.delta?.content;
-
-        if (delta) {
-          text += delta;
-          params.onDelta(delta);
-        }
-      } catch {
-        parseFailedCount += 1;
-      }
-    }
-  }
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-    flushLines();
-  }
-
-  buffer += decoder.decode();
-  flushLines();
-
-  if (!text.trim()) {
-    throw createGroqError({
-      groqHttpStatus: response.status,
-      parseFailed: parseFailedCount > 0,
-      groqErrorMessage: parseFailedCount > 0
-        ? `Groq stream response parse failed ${parseFailedCount} time(s).`
-        : 'Groq stream returned empty text.',
-    });
-  }
-
-  return text;
+function createModelEventMetadata(diagnostics = {}) {
+  return {
+    modelProvider: diagnostics.modelProvider || null,
+    modelName: diagnostics.modelName || null,
+    modelErrorType: diagnostics.modelErrorType || null,
+    modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus) ? diagnostics.modelHttpStatus : null,
+    modelErrorMessage: diagnostics.modelErrorMessage || null,
+  };
 }
 
 async function createToolInvocationRecord(db, currentUser, context, params) {
@@ -1810,148 +1653,6 @@ function sanitizeLogMessage(value) {
   return String(value || '')
     .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
     .replace(/(token|secret|password|connection|string)=([^&\s]+)/gi, '$1=[redacted]');
-}
-
-function getGroqModel() {
-  return process.env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
-}
-
-function getGroqTemperature(value, fallback = 0.2) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
-
-function createGroqRequestBody(params, stream) {
-  return JSON.stringify({
-    model: getGroqModel(),
-    messages: params.messages,
-    temperature: getGroqTemperature(params.temperature),
-    max_tokens: normalizeNumber(params.maxTokens, 600),
-    stream,
-  });
-}
-
-async function readGroqErrorResponse(response) {
-  const contentType = response.headers.get('content-type') || '';
-
-  try {
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      const rawError = data?.error;
-      const message =
-        rawError?.message ||
-        rawError?.type ||
-        (isRecord(rawError) ? JSON.stringify(rawError) : rawError) ||
-        data?.message ||
-        JSON.stringify(data);
-      return String(message || response.statusText || 'Groq request failed.');
-    }
-
-    const text = await response.text();
-    return text.trim() || response.statusText || 'Groq request failed.';
-  } catch {
-    return response.statusText || 'Groq request failed.';
-  }
-}
-
-function truncateGroqErrorMessage(value) {
-  return sanitizeLogMessage(value || '')
-    .replace(process.env.GROQ_API_KEY?.trim() || '__no_groq_key__', '[redacted]')
-    .slice(0, MAX_GROQ_ERROR_MESSAGE_LENGTH);
-}
-
-function createGroqDiagnostics(params = {}) {
-  const apiKey = process.env.GROQ_API_KEY?.trim() || '';
-  return {
-    hasGroqApiKey: Boolean(apiKey),
-    groqApiKeyLength: apiKey.length,
-    groqModel: getGroqModel(),
-    groqHttpStatus: Number.isInteger(params.groqHttpStatus) ? params.groqHttpStatus : null,
-    groqErrorType: params.groqErrorType || 'unknown',
-    groqErrorMessage: truncateGroqErrorMessage(params.groqErrorMessage || ''),
-  };
-}
-
-function classifyGroqError(params = {}) {
-  const status = Number(params.groqHttpStatus);
-  const message = String(params.groqErrorMessage || '').toLowerCase();
-  const errorName = String(params.errorName || '').toLowerCase();
-
-  if (errorName === 'aborterror') {
-    return 'groq_timeout';
-  }
-
-  if (status === 401 || message.includes('invalid api key') || message.includes('unauthorized')) {
-    return 'groq_unauthorized';
-  }
-
-  if (
-    status === 403 ||
-    message.includes('forbidden') ||
-    message.includes('permission') ||
-    message.includes('not allowed') ||
-    message.includes('country') ||
-    message.includes('region') ||
-    message.includes('territory')
-  ) {
-    return 'groq_forbidden';
-  }
-
-  if (
-    status === 404 ||
-    (
-      message.includes('model') &&
-      (
-        message.includes('not found') ||
-        message.includes('does not exist') ||
-        message.includes('not exist') ||
-        message.includes('unsupported') ||
-        message.includes('decommissioned')
-      )
-    )
-  ) {
-    return 'groq_model_not_found';
-  }
-
-  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
-    return 'groq_rate_limited';
-  }
-
-  if (params.parseFailed) {
-    return 'groq_response_parse_failed';
-  }
-
-  if (
-    errorName === 'typeerror' ||
-    message.includes('fetch failed') ||
-    message.includes('network') ||
-    message.includes('econnreset') ||
-    message.includes('enotfound') ||
-    message.includes('etimedout')
-  ) {
-    return 'groq_network_error';
-  }
-
-  return 'groq_failed';
-}
-
-function createGroqError(params = {}) {
-  const fallbackReason = classifyGroqError(params);
-  return new GroqError(fallbackReason, createGroqDiagnostics({
-    groqHttpStatus: params.groqHttpStatus,
-    groqErrorType: fallbackReason,
-    groqErrorMessage: params.groqErrorMessage || fallbackReason,
-  }));
-}
-
-function toGroqError(error) {
-  if (error instanceof GroqError) {
-    return error;
-  }
-
-  return createGroqError({
-    errorName: error && error.name,
-    groqErrorMessage: error && error.message ? error.message : String(error || 'Unknown Groq error.'),
-  });
 }
 
 async function runBasicAgentFlow(req, res, currentUser, body) {
@@ -2175,9 +1876,11 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
       conclusionSource: params.conclusionSource,
       conclusionNotice: params.conclusionNotice,
       fallbackReason: params.fallbackReason,
-      groqErrorType: params.groqErrorType,
-      groqHttpStatus: params.groqHttpStatus,
-      groqErrorMessage: params.groqErrorMessage,
+      modelProvider: params.modelProvider,
+      modelName: params.modelName,
+      modelErrorType: params.modelErrorType,
+      modelHttpStatus: params.modelHttpStatus,
+      modelErrorMessage: params.modelErrorMessage,
     }),
   );
 }
@@ -2469,6 +2172,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   let conclusionSource = 'fallback';
   let fallbackReason = toolContext.fallbackReason;
   let conclusionNotice = null;
+  const modelConfig = getModelGatewayConfig();
 
   if (fallbackReason) {
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
@@ -2489,27 +2193,27 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       conclusionNotice,
       fallbackReason,
     });
-  } else if (!process.env.GROQ_API_KEY?.trim()) {
-    fallbackReason = 'groq_not_configured';
-    context.groqDiagnostics = createGroqDiagnostics({
-      groqErrorType: fallbackReason,
-      groqErrorMessage: 'Groq API key is not configured.',
-    });
+  } else if (!modelConfig.isConfigured) {
+    fallbackReason = 'model_not_configured';
+    context.modelDiagnostics = createConfiguredModelDiagnostics(
+      fallbackReason,
+      modelConfig.source === 'model_gateway'
+        ? 'MODEL_GATEWAY_* is not fully configured.'
+        : 'GROQ_API_KEY is not configured.',
+    );
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '未配置 Groq API Key，当前结论由本地工具结果摘要生成。';
+    conclusionNotice = '未配置模型网关，当前结论由本地工具结果摘要生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
       conclusionNotice,
       fallbackReason,
-      groqErrorType: context.groqDiagnostics.groqErrorType,
-      groqHttpStatus: context.groqDiagnostics.groqHttpStatus,
-      groqErrorMessage: context.groqDiagnostics.groqErrorMessage,
+      ...createModelEventMetadata(context.modelDiagnostics),
     });
   } else {
     try {
       let deltaQueue = Promise.resolve();
-      const modelText = await streamGroqText({
+      const modelResult = await streamChatCompletion({
         messages: buildConclusionMessages({
           prompt: context.prompt,
           plan: context.plan,
@@ -2533,8 +2237,15 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       });
       await deltaQueue;
 
-      conclusion = modelText;
-      conclusionSource = 'groq';
+      conclusion = modelResult.text;
+      conclusionSource = modelResult.provider || 'model';
+      context.modelDiagnostics = {
+        modelProvider: modelResult.provider || modelConfig.provider || null,
+        modelName: modelResult.model || modelConfig.model || null,
+        modelErrorType: null,
+        modelHttpStatus: null,
+        modelErrorMessage: null,
+      };
       await persistAndWriteRawEvent(
         db,
         currentUser,
@@ -2544,24 +2255,30 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         createRunEvent('conclusion_completed', context, {
           conclusion,
           conclusionSource,
+          ...createModelEventMetadata(context.modelDiagnostics),
         }),
       );
     } catch (error) {
-      const groqError = toGroqError(error);
-      const groqDiagnostics = groqError.diagnostics;
-      fallbackReason = groqError.fallbackReason;
-      context.groqDiagnostics = groqDiagnostics;
-      console.error('[workbench-agent-run-stream] groq conclusion failed', JSON.stringify(groqDiagnostics));
+      const modelDiagnostics = createFailedModelDiagnostics(error);
+      fallbackReason = modelDiagnostics.modelErrorType || 'model_failed';
+      context.modelDiagnostics = modelDiagnostics;
+      console.error('[workbench-agent-run-stream] model conclusion failed', JSON.stringify({
+        modelProvider: modelDiagnostics.modelProvider,
+        modelName: modelDiagnostics.modelName,
+        modelErrorType: modelDiagnostics.modelErrorType,
+        modelHttpStatus: modelDiagnostics.modelHttpStatus,
+        modelErrorMessage: modelDiagnostics.modelErrorMessage,
+        hasModelApiKey: modelDiagnostics.hasModelApiKey,
+        modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
+      }));
       conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-      conclusionNotice = 'Groq 生成失败，当前结论由本地工具结果摘要生成。';
+      conclusionNotice = '模型生成失败，当前结论由本地工具结果摘要生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
         conclusionNotice,
         fallbackReason,
-        groqErrorType: groqDiagnostics.groqErrorType,
-        groqHttpStatus: groqDiagnostics.groqHttpStatus,
-        groqErrorMessage: groqDiagnostics.groqErrorMessage,
+        ...createModelEventMetadata(modelDiagnostics),
       });
     }
   }
@@ -2618,7 +2335,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     conclusion: '',
     conclusionSource: 'none',
     fallbackReason: null,
-    groqDiagnostics: null,
+    modelDiagnostics: null,
     reportState: 'hidden',
     steps: [],
     toolInvocations: [],
@@ -2738,9 +2455,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
       source: context.conclusionSource,
       fallbackReason: context.fallbackReason,
-      groqModel: context.groqDiagnostics?.groqModel,
-      groqErrorType: context.groqDiagnostics?.groqErrorType,
-      groqErrorMessage: context.groqDiagnostics?.groqErrorMessage,
+      ...createModelEventMetadata(context.modelDiagnostics),
     });
     const elapsedMs = Math.max(Date.now() - startedAt, 1);
     await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
@@ -2761,9 +2476,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         assistantMessageId,
         conclusionSource: context.conclusionSource,
         fallbackReason: context.fallbackReason,
-        groqErrorType: context.groqDiagnostics?.groqErrorType,
-        groqHttpStatus: context.groqDiagnostics?.groqHttpStatus,
-        groqErrorMessage: context.groqDiagnostics?.groqErrorMessage,
+        ...createModelEventMetadata(context.modelDiagnostics),
       }),
     );
 
@@ -2774,10 +2487,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         assistantMessageId,
         conclusionSource: context.conclusionSource,
         fallbackReason: context.fallbackReason,
-        groqModel: context.groqDiagnostics?.groqModel,
-        groqErrorType: context.groqDiagnostics?.groqErrorType,
-        groqHttpStatus: context.groqDiagnostics?.groqHttpStatus,
-        groqErrorMessage: context.groqDiagnostics?.groqErrorMessage,
+        ...createModelEventMetadata(context.modelDiagnostics),
       });
     } catch (finishError) {
       console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
