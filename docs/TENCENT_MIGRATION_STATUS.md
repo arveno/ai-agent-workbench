@@ -89,6 +89,28 @@ VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
 
 `CLOUDBASE_PROXY_TARGET` 只给本地 Vite dev server 使用，不是 `VITE_` 变量，不会进入浏览器，也不应配置为 EdgeOne 前端公开环境变量。
 
+## CloudBase 函数环境变量要求
+
+所有使用 `tencent/functions/_shared/mysql.js` 的 CloudBase HTTP Function 都必须在 CloudBase 控制台配置函数环境变量：
+
+```env
+CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
+```
+
+受影响函数清单：
+
+- `auth-me`
+- `workbench-conversations`
+- `workbench-messages`
+- `workbench-reports`
+- `workbench-demo-copy`
+- `workbench-quota`
+- `workbench-agent-run-stream`
+
+这是 CloudBase 函数运行时变量，用于 `@cloudbase/node-sdk` 初始化 CloudBase MySQL / `app.rdb()`。它不是 EdgeOne 变量，不是 `VITE_` 前端变量，不要写入前端，也不要写入代码。EdgeOne 只需要配置前端公开的 `VITE_*` 变量；`CLOUDBASE_ENV_ID` 应只出现在 CloudBase 函数环境变量中。
+
+`workbench-agent-run-stream` 的模型配置同样只放 CloudBase 函数环境变量，包括 `MODEL_GATEWAY_PROVIDER`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`，或兼容旧配置 `GROQ_API_KEY`、`GROQ_MODEL`。模型 Key 不放 EdgeOne / 前端 `VITE_*` 变量。`local-tools/cloudbase-auth-test.html` 仍只作为本地验证工具，不提交、不进入正式页面。
+
 ## 下一步建议
 
 当前有两个可选路径：
@@ -188,7 +210,7 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 
 Tencent-21 后，默认 `real` 模式先运行 planner 判断 `capability_intro`、`data_analysis`、`knowledge_qa` 或 `unsupported`；`data_analysis` 走服务端受控工具链 `schema_inspect`、`aggregate_table`、`chart_render`。`schema_inspect` 返回固定 `teaching_metrics` schema 描述，`aggregate_table` 通过 CloudBase MySQL `app.rdb()` 读取 `teaching_metrics` 并在 JS 中按 month / grade / subject 聚合，`chart_render` 生成 chart config / series 数据，并写入 `tool_invocations` 的 `tool_name`、`status`、`input`、`output`、`elapsed_ms`。Tencent-22 新增 `_shared/modelGateway.js`，最终结论优先支持 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`，没有 `MODEL_GATEWAY_*` 时继续兼容 `GROQ_API_KEY` / `GROQ_MODEL`，默认 Groq 模型仍是 `llama-3.1-8b-instant`。模型成功时 `conclusionSource` 使用 provider（如 `openai-compatible` 或 `groq`），未配置或调用失败时返回明确 fallback，不伪装成真实模型结果。Tencent-22 将模型失败原因统一为：`model_not_configured`、`model_unauthorized`、`model_forbidden`、`model_not_found`、`model_rate_limited`、`model_timeout`、`model_network_error`、`model_response_parse_failed`、`model_failed`。SSE 与 assistant message metadata 会记录 `conclusionSource`、`fallbackReason`、`modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus` 和脱敏 `modelErrorMessage`，日志只记录脱敏诊断摘要，不输出 raw API key。`knowledge_qa` 暂不迁真实 RAG，返回 `rag_not_migrated` fallback，因为现有 RAG 仍依赖 Supabase Admin / knowledge 表链路。
 
-CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。CloudBase MySQL 由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 访问；模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*`。推荐配置 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`；未配置 `MODEL_GATEWAY_*` 时可继续用 `GROQ_API_KEY`、`GROQ_MODEL`。模型未配置且 data tools 成功时，应通过 `fallbackReason = "model_not_configured"` 完成 SSE 流并写入 run/message/usage，不应再出现 `data_tool_failed`。
+CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。所有依赖 `_shared/mysql.js` 的函数必须在 CloudBase 函数环境变量中配置 `CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d`，不要配置到 EdgeOne 或前端 `VITE_*`。CloudBase MySQL 由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 访问；模型 Key 只放 `workbench-agent-run-stream` 的 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*`。推荐配置 `MODEL_GATEWAY_PROVIDER=openai-compatible`、`MODEL_GATEWAY_BASE_URL`、`MODEL_GATEWAY_API_KEY`、`MODEL_GATEWAY_MODEL`；未配置 `MODEL_GATEWAY_*` 时可继续用 `GROQ_API_KEY`、`GROQ_MODEL`。模型未配置且 data tools 成功时，应通过 `fallbackReason = "model_not_configured"` 完成 SSE 流并写入 run/message/usage，不应再出现 `data_tool_failed`。
 
 当前状态表示 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环函数和 Agent Run CloudBase 流式验证函数已加入仓库并可进行部署验证，其中前端 CloudBase preview 已接入 conversations、messages、reports、demo-copy、quota 和 Agent Run stream。Tencent-21 还需要在 CloudBase MySQL 执行 `tencent/migrations/002_cloudbase_teaching_metrics.sql` 与 `tencent/seeds/003_teaching_metrics_seed.sql`，否则真实 Agent Run 会明确返回 `fallbackReason = "data_table_not_found"`。`PATCH`、`DELETE`、archive、Agent Run 报告生成、RAG knowledge_qa、前端 `authStore` 和正式默认链路均未迁移。Tencent-10C 暂未在消息写入和会话计数更新之间使用事务；Tencent-13/Tencent-21 暂未在 quota consume 中使用 MySQL transaction + 行锁，后续高并发场景需要补事务或原子更新方案。
 

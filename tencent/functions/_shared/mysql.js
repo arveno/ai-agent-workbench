@@ -7,7 +7,9 @@ function getCloudBaseEnvId() {
   const envId = (process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || '').trim();
 
   if (!envId) {
-    throw new Error('CLOUDBASE_ENV_ID or TCB_ENV_ID is required before using CloudBase MySQL.');
+    throw new Error(
+      'Missing CloudBase function env var: set CLOUDBASE_ENV_ID or TCB_ENV_ID before using CloudBase MySQL.',
+    );
   }
 
   return envId;

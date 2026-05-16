@@ -113,6 +113,14 @@ WHERE id = ? AND user_id = ? AND _openid = ?;
 
 ## Agent Run 环境变量
 
+所有依赖 `functions/_shared/mysql.js` 的 CloudBase HTTP Function 都必须在 CloudBase 控制台配置函数环境变量：
+
+```txt
+CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
+```
+
+受影响函数包括 `auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota` 和 `workbench-agent-run-stream`。这是 CloudBase 函数运行时变量，不是前端变量；不要写入代码，不要放进 EdgeOne，也不要加 `VITE_` 前缀。
+
 Tencent-21 后，`workbench-agent-run-stream` 的 data tools 不再需要 PostgreSQL / Supabase 数据库连接串。Tencent-22 后推荐使用统一模型网关配置：
 
 ```txt
@@ -129,7 +137,7 @@ GROQ_API_KEY=...
 GROQ_MODEL=llama-3.1-8b-instant
 ```
 
-模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。模型未配置时，`real` 模式应在 data tools 成功后通过 `fallbackReason = "model_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。当前 `_shared/modelGateway.js` 是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台；RAG knowledge_qa、报告生成入口和正式前端默认链路尚未迁移。
+模型 Key 只放 `workbench-agent-run-stream` 的 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。EdgeOne 只放 `VITE_API_BASE_URL`、`VITE_CLOUDBASE_ENV_ID`、`VITE_CLOUDBASE_REGION`、`VITE_ENABLE_CLOUDBASE_PRIVATE_API` 等前端公开变量。模型未配置时，`real` 模式应在 data tools 成功后通过 `fallbackReason = "model_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。当前 `_shared/modelGateway.js` 是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台；RAG knowledge_qa、报告生成入口和正式前端默认链路尚未迁移。
 
 ## Migration 执行说明
 

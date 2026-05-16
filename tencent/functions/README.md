@@ -25,6 +25,28 @@
 
 后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota` 和 `workbench-agent-run-stream` 已按该方式实现基础验证；当前不替换前端 `authStore`。
 
+## CloudBase 函数环境变量
+
+所有依赖 `_shared/mysql.js` 的 CloudBase HTTP Function 都必须在 CloudBase 控制台配置函数环境变量：
+
+```txt
+CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
+```
+
+受影响函数：
+
+- `auth-me`
+- `workbench-conversations`
+- `workbench-messages`
+- `workbench-reports`
+- `workbench-demo-copy`
+- `workbench-quota`
+- `workbench-agent-run-stream`
+
+这是 CloudBase 函数运行时环境变量，用于 `@cloudbase/node-sdk` 初始化 `app.rdb()`。不要写入代码，不要写入前端，不要配置到 EdgeOne，也不要加 `VITE_` 前缀。EdgeOne 只配置前端公开的 `VITE_*` 变量；本地 Vite proxy 可继续使用 `CLOUDBASE_PROXY_TARGET`，但它不是 CloudBase 函数变量。
+
+`workbench-agent-run-stream` 的模型 Key 也只放 CloudBase 函数环境变量。`MODEL_GATEWAY_API_KEY` 或 `GROQ_API_KEY` 不放 EdgeOne / 前端 `VITE_*` 变量。
+
 不迁移：
 
 ```txt
@@ -169,6 +191,8 @@ scf_bootstrap
 ```
 
 `workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。推荐使用统一模型网关配置：
+
+所有依赖 `_shared/mysql.js` 的函数都需要先在 CloudBase 函数环境变量中配置 `CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d`；EdgeOne 不需要也不应配置该变量。
 
 ```txt
 MODEL_GATEWAY_PROVIDER=openai-compatible
