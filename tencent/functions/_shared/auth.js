@@ -99,8 +99,12 @@ function mapProfileToCurrentUser(profile, identity) {
   };
 }
 
-async function findProfileByOpenId(db, openid) {
-  const result = await db.from('app_profiles').select(PROFILE_COLUMNS).eq('_openid', openid);
+async function findProfileByIdentity(db, identity) {
+  const result = await db
+    .from('app_profiles')
+    .select(PROFILE_COLUMNS)
+    .eq('_openid', identity.openid)
+    .eq('user_id', identity.userId);
   assertNoQueryError(result);
 
   const rows = extractRows(result);
@@ -128,12 +132,12 @@ async function createProfile(db, identity) {
     }
   }
 
-  return (await findProfileByOpenId(db, identity.openid)) || profile;
+  return (await findProfileByIdentity(db, identity)) || profile;
 }
 
 async function getOrCreateProfile(identity) {
   const db = getDb();
-  const existingProfile = await findProfileByOpenId(db, identity.openid);
+  const existingProfile = await findProfileByIdentity(db, identity);
 
   if (existingProfile) {
     return existingProfile;

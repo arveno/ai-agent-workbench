@@ -44,6 +44,16 @@ function isAbortError(error: unknown): boolean {
 
 const AGENT_UNAVAILABLE_HINT = '真实 Agent 暂不可用，可切换公开演示模式继续体验完整流程。';
 
+let agentRunStartInFlight = false;
+
+function isAgentRunInProgress(state: WorkbenchStore): boolean {
+  return (
+    state.agentRunStatus === 'running' ||
+    Boolean(state.activeAgentRunRequestId) ||
+    (state.currentRun?.mode === 'agent' && state.currentRun.status === 'running')
+  );
+}
+
 function withDemoFallbackHint(message: string): string {
   const normalizedMessage = message.trim();
 
@@ -113,9 +123,16 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       return;
     }
 
-    const ensuredConversationId = await get().ensureCurrentPersistentConversation();
+    if (agentRunStartInFlight || isAgentRunInProgress(initialState)) {
+      return;
+    }
+
+    agentRunStartInFlight = true;
+
+    const ensuredConversationId = await get().ensureCurrentPersistentConversation().catch(() => null);
 
     if (ensuredConversationId === null) {
+      agentRunStartInFlight = false;
       set({
         agentRunStatus: 'error',
         agentRunErrorMessage: '创建真实会话失败，请稍后重试。',
@@ -148,34 +165,38 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       });
     }
 
-    previousAbortController?.abort();
+    try {
+      previousAbortController?.abort();
 
-    const userMessage = get().appendUserMessageToCurrentSession(prompt, {
-      runId,
-      kind: 'normal',
-    });
+      const userMessage = get().appendUserMessageToCurrentSession(prompt, {
+        runId,
+        kind: 'normal',
+      });
 
-    if (userMessage && get().isPersistentMode) {
-      void get().persistMessageToConversation(sessionId, userMessage);
+      if (userMessage && get().isPersistentMode) {
+        void get().persistMessageToConversation(sessionId, userMessage);
+      }
+
+      get().applyRunEvent(pendingRunEvent);
+      get().clearChatDraft();
+
+      set({
+        activeAgentRunRequestId: requestId,
+        activeAgentRunAbortController: abortController,
+        agentRunStatus: 'running',
+        agentRunErrorMessage: null,
+        generationStatus: 'streaming',
+        realModelNotice: '',
+        errorMessage: undefined,
+        confirmStatus: 'cancelled',
+        currentReportRunId: null,
+        reportActionState: 'skipped',
+        isRagSourcesLoading: false,
+        ragSourcesError: null,
+      });
+    } finally {
+      agentRunStartInFlight = false;
     }
-
-    get().applyRunEvent(pendingRunEvent);
-    get().clearChatDraft();
-
-    set({
-      activeAgentRunRequestId: requestId,
-      activeAgentRunAbortController: abortController,
-      agentRunStatus: 'running',
-      agentRunErrorMessage: null,
-      generationStatus: 'streaming',
-      realModelNotice: '',
-      errorMessage: undefined,
-      confirmStatus: 'cancelled',
-      currentReportRunId: null,
-      reportActionState: 'skipped',
-      isRagSourcesLoading: false,
-      ragSourcesError: null,
-    });
 
     try {
       const accessToken = useAuthStore.getState().session?.access_token;
@@ -319,6 +340,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         activeAgentRunAbortController: null,
       });
     } finally {
+      agentRunStartInFlight = false;
       void useAuthStore.getState().refreshAgentAccess();
       void get().loadRecentTools();
 

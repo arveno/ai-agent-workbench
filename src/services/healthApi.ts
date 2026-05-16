@@ -1,5 +1,5 @@
 import type { HealthCheckResponse, HealthServiceStatus } from '@/types/health';
-import { isCloudBasePrivateApiEnabled } from './cloudbaseApiClient';
+import { buildApiPath, isCloudBasePrivateApiEnabled } from './cloudbaseApiClient';
 
 let healthCheckInFlight: Promise<HealthCheckResponse> | null = null;
 
@@ -33,7 +33,7 @@ export async function requestHealthCheck(): Promise<HealthCheckResponse> {
     return healthCheckInFlight;
   }
 
-  healthCheckInFlight = fetch('/api/health', {
+  healthCheckInFlight = fetch(buildApiPath('/api/health'), {
     method: 'GET',
   })
     .then(async (response) => {

@@ -1,5 +1,5 @@
 import type { DataSourceTestableProviderId, RunEvent } from '@/types/workbench';
-import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
@@ -165,7 +165,7 @@ export async function streamAgentRunAnalysis(params: {
   if (useCloudBasePreview) {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
 
-    response = await requestCloudBasePrivateApi('/api/agent/run/stream', {
+    response = await requestCloudBasePrivateApi(buildApiPath('/api/agent/run/stream'), {
       method: 'POST',
       headers,
       body,
@@ -179,7 +179,7 @@ export async function streamAgentRunAnalysis(params: {
       headers.Authorization = `Bearer ${accessToken}`;
     }
 
-    response = await fetch('/api/agent/run/stream', {
+    response = await fetch(buildApiPath('/api/agent/run/stream'), {
       method: 'POST',
       headers,
       body,

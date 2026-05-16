@@ -12,6 +12,29 @@ function normalizeApiPath(path: string): string {
   return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
 }
 
+type ApiQueryValue = string | number | boolean | null | undefined;
+type ApiQueryParams = URLSearchParams | Record<string, ApiQueryValue>;
+
+function buildApiQueryString(query?: ApiQueryParams): string {
+  if (!query) {
+    return '';
+  }
+
+  const searchParams = query instanceof URLSearchParams ? new URLSearchParams(query) : new URLSearchParams();
+
+  if (!(query instanceof URLSearchParams)) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === null || value === undefined || value === '') {
+        continue;
+      }
+
+      searchParams.set(key, String(value));
+    }
+  }
+
+  return searchParams.toString();
+}
+
 function normalizeAccessToken(accessToken: string | null | undefined): string {
   const token = accessToken?.trim();
 
@@ -30,9 +53,20 @@ export interface CloudBasePrivateApiRequestOptions extends CloudBaseApiRequestOp
   accessToken: string | null | undefined;
 }
 
-export function buildCloudBaseApiUrl(path: string): string {
-  const apiBaseUrl = getPublicEnvValue(import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, '');
+export function buildApiPath(path: string, query?: ApiQueryParams): string {
   const apiPath = normalizeApiPath(path);
+  const queryString = buildApiQueryString(query);
+
+  if (!queryString) {
+    return apiPath;
+  }
+
+  return `${apiPath}${apiPath.includes('?') ? '&' : '?'}${queryString}`;
+}
+
+export function buildCloudBaseApiUrl(path: string, query?: ApiQueryParams): string {
+  const apiBaseUrl = getPublicEnvValue(import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, '');
+  const apiPath = buildApiPath(path, query);
 
   return apiBaseUrl ? `${apiBaseUrl}${apiPath}` : apiPath;
 }

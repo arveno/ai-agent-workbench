@@ -5,79 +5,29 @@ import type {
   ReportArtifactListResult,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
-import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+import {
+  createAuthRequiredPersistenceResponse,
+  createLegacyJsonAuthHeaders,
+  createNetworkPersistenceResponse,
+  normalizeLegacyAccessToken,
+  readWorkbenchPersistenceResponse,
+} from './persistenceApiClient';
 
 function createAuthRequiredResponse<TData>(): WorkbenchPersistenceResponse<TData> {
-  return {
-    ok: false,
-    errorCode: 'auth_required',
-    message: '请先登录后使用报告 Artifact。',
-  };
+  return createAuthRequiredPersistenceResponse('请先登录后使用报告 Artifact。');
 }
 
 function createNetworkErrorResponse<TData>(message: string): WorkbenchPersistenceResponse<TData> {
-  return {
-    ok: false,
-    errorCode: 'db_error',
-    message,
-  };
+  return createNetworkPersistenceResponse(message);
 }
 
 async function readPersistenceResponse<TData>(
   response: Response,
   fallbackMessage: string,
 ): Promise<WorkbenchPersistenceResponse<TData>> {
-  const payload = (await response.json().catch(() => null)) as unknown;
-
-  if (isRecord(payload) && payload.ok === true && 'data' in payload) {
-    return {
-      ok: true,
-      data: payload.data as TData,
-    };
-  }
-
-  if (isRecord(payload) && payload.ok === false) {
-    return {
-      ok: false,
-      errorCode:
-        payload.errorCode === 'validation_error'
-          ? 'invalid_request'
-          : payload.errorCode === 'auth_invalid'
-            ? 'auth_required'
-            : payload.errorCode === 'auth_required' ||
-                payload.errorCode === 'auth_unavailable' ||
-                payload.errorCode === 'db_error' ||
-                payload.errorCode === 'invalid_request' ||
-                payload.errorCode === 'method_not_allowed' ||
-                payload.errorCode === 'not_found'
-              ? payload.errorCode
-              : 'db_error',
-      message: typeof payload.message === 'string' ? payload.message : fallbackMessage,
-    };
-  }
-
-  return {
-    ok: false,
-    errorCode: response.status === 401 ? 'auth_required' : 'db_error',
-    message: fallbackMessage,
-  };
-}
-
-function normalizeAccessToken(accessToken: string | null | undefined): string | null {
-  const token = accessToken?.trim();
-  return token ? token : null;
-}
-
-function createHeaders(accessToken: string): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken}`,
-  };
+  return readWorkbenchPersistenceResponse(response, fallbackMessage);
 }
 
 export async function fetchConversationReportArtifacts(
@@ -88,7 +38,7 @@ export async function fetchConversationReportArtifacts(
     try {
       const cloudBaseToken = await ensureCloudBaseAccessToken();
       const response = await requestCloudBasePrivateApi(
-        `/api/workbench/reports?conversationId=${encodeURIComponent(conversationId)}`,
+        buildApiPath('/api/workbench/reports', { conversationId }),
         {
           method: 'GET',
           accessToken: cloudBaseToken,
@@ -101,17 +51,20 @@ export async function fetchConversationReportArtifacts(
     }
   }
 
-  const token = normalizeAccessToken(accessToken);
+  const token = normalizeLegacyAccessToken(accessToken);
 
   if (!token) {
     return createAuthRequiredResponse();
   }
 
   try {
-    const response = await fetch(`/api/workbench/conversations/${encodeURIComponent(conversationId)}/reports`, {
-      method: 'GET',
-      headers: createHeaders(token),
-    });
+    const response = await fetch(
+      buildApiPath(`/api/workbench/conversations/${encodeURIComponent(conversationId)}/reports`),
+      {
+        method: 'GET',
+        headers: createLegacyJsonAuthHeaders(token),
+      },
+    );
 
     return await readPersistenceResponse<ReportArtifactListResult>(response, '读取报告 Artifact 失败。');
   } catch {
@@ -126,7 +79,7 @@ export async function fetchReportArtifact(
   if (isCloudBasePrivateApiEnabled()) {
     try {
       const cloudBaseToken = await ensureCloudBaseAccessToken();
-      const response = await requestCloudBasePrivateApi(`/api/workbench/reports?id=${encodeURIComponent(reportId)}`, {
+      const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/reports', { id: reportId }), {
         method: 'GET',
         accessToken: cloudBaseToken,
       });
@@ -137,16 +90,16 @@ export async function fetchReportArtifact(
     }
   }
 
-  const token = normalizeAccessToken(accessToken);
+  const token = normalizeLegacyAccessToken(accessToken);
 
   if (!token) {
     return createAuthRequiredResponse();
   }
 
   try {
-    const response = await fetch(`/api/workbench/reports/${encodeURIComponent(reportId)}`, {
+    const response = await fetch(buildApiPath(`/api/workbench/reports/${encodeURIComponent(reportId)}`), {
       method: 'GET',
-      headers: createHeaders(token),
+      headers: createLegacyJsonAuthHeaders(token),
     });
 
     return await readPersistenceResponse<ReportArtifactRecord>(response, '读取报告 Artifact 失败。');
@@ -170,7 +123,7 @@ export async function createRunReportArtifact(
               runtimeRunId: input.runtimeRunId ?? runId,
             }
           : input.metadata;
-      const response = await requestCloudBasePrivateApi('/api/workbench/reports', {
+      const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/reports'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -202,16 +155,16 @@ export async function createRunReportArtifact(
     }
   }
 
-  const token = normalizeAccessToken(accessToken);
+  const token = normalizeLegacyAccessToken(accessToken);
 
   if (!token) {
     return createAuthRequiredResponse();
   }
 
   try {
-    const response = await fetch(`/api/workbench/runs/${encodeURIComponent(runId)}/report`, {
+    const response = await fetch(buildApiPath(`/api/workbench/runs/${encodeURIComponent(runId)}/report`), {
       method: 'POST',
-      headers: createHeaders(token),
+      headers: createLegacyJsonAuthHeaders(token),
       body: JSON.stringify(input),
     });
 

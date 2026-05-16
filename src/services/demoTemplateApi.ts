@@ -7,8 +7,20 @@ import type {
   MessageRecord,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
-import { isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import {
+  buildApiPath,
+  isCloudBasePrivateApiEnabled,
+  requestCloudBasePrivateApi,
+  requestCloudBasePublicApi,
+} from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
+import {
+  createAuthRequiredPersistenceResponse,
+  createLegacyAuthHeaders,
+  createNetworkPersistenceResponse,
+  normalizeLegacyAccessToken,
+  readWorkbenchPersistenceResponse,
+} from './persistenceApiClient';
 
 interface CloudBaseDemoConversationCopyResult {
   conversation: ConversationRecord;
@@ -16,83 +28,24 @@ interface CloudBaseDemoConversationCopyResult {
   messagesCount?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function createNetworkErrorResponse<TData>(message: string): WorkbenchPersistenceResponse<TData> {
-  return {
-    ok: false,
-    errorCode: 'db_error',
-    message,
-  };
+  return createNetworkPersistenceResponse(message);
 }
 
 function createAuthRequiredResponse<TData>(): WorkbenchPersistenceResponse<TData> {
-  return {
-    ok: false,
-    errorCode: 'auth_required',
-    message: '请先登录后复制示例会话。',
-  };
-}
-
-function getPublicEnvValue(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function buildApiUrl(path: string): string {
-  const apiBaseUrl = getPublicEnvValue(import.meta.env.VITE_API_BASE_URL).replace(/\/+$/, '');
-  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
+  return createAuthRequiredPersistenceResponse('请先登录后复制示例会话。');
 }
 
 async function readPersistenceResponse<TData>(
   response: Response,
   fallbackMessage: string,
 ): Promise<WorkbenchPersistenceResponse<TData>> {
-  const payload = (await response.json().catch(() => null)) as unknown;
-
-  if (isRecord(payload) && payload.ok === true && 'data' in payload) {
-    return {
-      ok: true,
-      data: payload.data as TData,
-    };
-  }
-
-  if (isRecord(payload) && payload.ok === false) {
-    return {
-      ok: false,
-      errorCode:
-        payload.errorCode === 'validation_error'
-          ? 'invalid_request'
-          : payload.errorCode === 'auth_invalid'
-            ? 'auth_required'
-            : payload.errorCode === 'auth_required' ||
-                payload.errorCode === 'auth_unavailable' ||
-                payload.errorCode === 'db_error' ||
-                payload.errorCode === 'invalid_request' ||
-                payload.errorCode === 'method_not_allowed' ||
-                payload.errorCode === 'not_found'
-              ? payload.errorCode
-              : 'db_error',
-      message: typeof payload.message === 'string' ? payload.message : fallbackMessage,
-    };
-  }
-
-  return {
-    ok: false,
-    errorCode: response.status === 401 ? 'auth_required' : 'db_error',
-    message: fallbackMessage,
-  };
-}
-
-function normalizeAccessToken(accessToken: string | null | undefined): string | null {
-  const token = accessToken?.trim();
-  return token ? token : null;
+  return readWorkbenchPersistenceResponse(response, fallbackMessage);
 }
 
 export async function fetchDemoTasks(): Promise<WorkbenchPersistenceResponse<DemoTaskTemplateListResult>> {
   try {
-    const response = await fetch(buildApiUrl('/api/workbench/demo-tasks'), {
+    const response = await requestCloudBasePublicApi(buildApiPath('/api/workbench/demo-tasks'), {
       method: 'GET',
     });
 
@@ -106,7 +59,7 @@ export async function fetchDemoConversations(): Promise<
   WorkbenchPersistenceResponse<DemoConversationTemplateListResult>
 > {
   try {
-    const response = await fetch(buildApiUrl('/api/workbench/demo-conversations'), {
+    const response = await requestCloudBasePublicApi(buildApiPath('/api/workbench/demo-conversations'), {
       method: 'GET',
     });
 
@@ -123,7 +76,7 @@ export async function copyDemoConversationTemplate(
   if (isCloudBasePrivateApiEnabled()) {
     try {
       const cloudBaseToken = await ensureCloudBaseAccessToken();
-      const response = await requestCloudBasePrivateApi('/api/workbench/demo-copy', {
+      const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/demo-copy'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +105,10 @@ export async function copyDemoConversationTemplate(
 
       const conversationId = copyResult.data.conversation.id;
       const messagesResponse = await requestCloudBasePrivateApi(
-        `/api/workbench/messages?conversationId=${encodeURIComponent(conversationId)}&limit=100`,
+        buildApiPath('/api/workbench/messages', {
+          conversationId,
+          limit: 100,
+        }),
         {
           method: 'GET',
           accessToken: cloudBaseToken,
@@ -179,19 +135,20 @@ export async function copyDemoConversationTemplate(
     }
   }
 
-  const token = normalizeAccessToken(accessToken);
+  const token = normalizeLegacyAccessToken(accessToken);
 
   if (!token) {
     return createAuthRequiredResponse();
   }
 
   try {
-    const response = await fetch(`/api/workbench/demo-conversations/${encodeURIComponent(templateId)}/copy`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const response = await fetch(
+      buildApiPath(`/api/workbench/demo-conversations/${encodeURIComponent(templateId)}/copy`),
+      {
+        method: 'POST',
+        headers: createLegacyAuthHeaders(token),
       },
-    });
+    );
 
     return await readPersistenceResponse<DemoConversationCopyResult>(response, '复制示例会话失败。');
   } catch {

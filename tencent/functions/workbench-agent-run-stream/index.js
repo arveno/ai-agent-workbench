@@ -1554,6 +1554,16 @@ function sleep(ms) {
   });
 }
 
+function isDebugLogEnabled() {
+  return String(process.env.WORKBENCH_AGENT_DEBUG || '').trim().toLowerCase() === 'true';
+}
+
+function debugLog(...args) {
+  if (isDebugLogEnabled()) {
+    console.log(...args);
+  }
+}
+
 function createDisconnectTracker(req, res, runId) {
   let closed = false;
   let finished = false;
@@ -1566,7 +1576,7 @@ function createDisconnectTracker(req, res, runId) {
     closed = true;
 
     if (!finished) {
-      console.log('[workbench-agent-run-stream] stream closed', source, runId);
+      debugLog('[workbench-agent-run-stream] stream closed', source, runId);
     }
   }
 
@@ -1611,7 +1621,7 @@ function writeSseEvent(res, event) {
   }
 
   res.write(`data: ${JSON.stringify(event)}\n\n`);
-  console.log('[workbench-agent-run-stream] event', event.type, event.runId || event.run?.id);
+  debugLog('[workbench-agent-run-stream] event', event.type, event.runId || event.run?.id);
   return true;
 }
 

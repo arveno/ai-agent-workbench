@@ -35,25 +35,26 @@ function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
 }
 
-function getModelGatewayConfig() {
-  if (hasModelGatewayEnv()) {
-    const provider = readEnv('MODEL_GATEWAY_PROVIDER') || 'openai-compatible';
-    const baseUrl = stripTrailingSlash(readEnv('MODEL_GATEWAY_BASE_URL'));
-    const apiKey = readEnv('MODEL_GATEWAY_API_KEY');
-    const model = readEnv('MODEL_GATEWAY_MODEL');
+function createOpenAiCompatibleConfig() {
+  const provider = readEnv('MODEL_GATEWAY_PROVIDER') || 'openai-compatible';
+  const baseUrl = stripTrailingSlash(readEnv('MODEL_GATEWAY_BASE_URL'));
+  const apiKey = readEnv('MODEL_GATEWAY_API_KEY');
+  const model = readEnv('MODEL_GATEWAY_MODEL');
 
-    return {
-      provider,
-      baseUrl,
-      apiKey,
-      model,
-      source: 'model_gateway',
-      hasApiKey: Boolean(apiKey),
-      apiKeyLength: apiKey.length,
-      isConfigured: provider === 'openai-compatible' && Boolean(baseUrl && apiKey && model),
-    };
-  }
+  return {
+    provider,
+    baseUrl,
+    apiKey,
+    model,
+    source: 'model_gateway',
+    compatibility: 'openai-compatible',
+    hasApiKey: Boolean(apiKey),
+    apiKeyLength: apiKey.length,
+    isConfigured: provider === 'openai-compatible' && Boolean(baseUrl && apiKey && model),
+  };
+}
 
+function createGroqCompatibleConfig() {
   const apiKey = readEnv('GROQ_API_KEY');
   const model = readEnv('GROQ_MODEL') || DEFAULT_GROQ_MODEL;
 
@@ -63,10 +64,15 @@ function getModelGatewayConfig() {
     apiKey,
     model,
     source: 'groq_compat',
+    compatibility: 'groq-openai-compatible',
     hasApiKey: Boolean(apiKey),
     apiKeyLength: apiKey.length,
     isConfigured: Boolean(apiKey && model),
   };
+}
+
+function getModelGatewayConfig() {
+  return hasModelGatewayEnv() ? createOpenAiCompatibleConfig() : createGroqCompatibleConfig();
 }
 
 function sanitizeMessage(value) {

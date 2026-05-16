@@ -1,12 +1,16 @@
 const cloudbase = require('@cloudbase/node-sdk');
 
-const DEFAULT_ENV_ID = 'ai-agent-workbench-poc-d6731923d';
-
 let cachedApp = null;
 let cachedDb = null;
 
 function getCloudBaseEnvId() {
-  return (process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || DEFAULT_ENV_ID).trim();
+  const envId = (process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || '').trim();
+
+  if (!envId) {
+    throw new Error('CLOUDBASE_ENV_ID or TCB_ENV_ID is required before using CloudBase MySQL.');
+  }
+
+  return envId;
 }
 
 function getCloudBaseApp() {

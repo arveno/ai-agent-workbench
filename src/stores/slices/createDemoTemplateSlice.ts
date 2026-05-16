@@ -239,6 +239,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   },
 
   startDemoTask: async (taskId) => {
+    if (get().isCopyingDemoTemplate) {
+      return null;
+    }
+
     const task = findDemoTask(get().demoTasks, taskId);
 
     if (!task) {
@@ -269,6 +273,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   },
 
   confirmRunDemoTaskWithAgent: async (taskId) => {
+    if (get().isCopyingDemoTemplate) {
+      return null;
+    }
+
     const task = findDemoTask(get().demoTasks, taskId);
 
     if (!task) {
@@ -337,6 +345,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   },
 
   runDemoTaskAsMock: async (taskId) => {
+    if (get().isCopyingDemoTemplate) {
+      return null;
+    }
+
     const task = findDemoTask(get().demoTasks, taskId);
 
     if (!task) {
@@ -431,6 +443,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
   },
 
   copyDemoConversationTemplate: async (templateId) => {
+    if (get().isCopyingDemoTemplate) {
+      return null;
+    }
+
     const accessToken = getPersistenceAccessToken();
 
     if (!accessToken) {
