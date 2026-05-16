@@ -102,10 +102,10 @@ This mode uses a fixed mock tool result and fixed conclusion text. It remains us
 - `schema_inspect` returns a fixed schema description for `teaching_metrics`.
 - `aggregate_table` reads `teaching_metrics` through CloudBase MySQL and aggregates in JavaScript by month, grade, or subject.
 - `chart_render` converts aggregate results into chart config and series data; it does not render an image.
-- `conclusionSource = "model"` means Groq generated the final conclusion.
+- `conclusionSource = "groq"` means Groq generated the final conclusion.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
 - `knowledge_qa` currently returns an explicit `rag_not_migrated` fallback because the existing RAG path depends on Supabase Admin / knowledge tables that are not migrated to CloudBase in this step.
-- The assistant message metadata records `source`, `fallbackReason`, `agentMode`, and `runtimeRunId`.
+- The assistant message metadata records `source`, `fallbackReason`, `groqModel`, `groqErrorType`, `groqErrorMessage`, `agentMode`, and `runtimeRunId`.
 
 ## Environment Variables
 
@@ -127,8 +127,28 @@ Fallback reasons used by the real data-analysis path:
 - `data_tool_query_failed`: CloudBase MySQL query failed.
 - `data_empty`: query succeeded but no matching rows were available.
 - `groq_not_configured`: data tools succeeded but Groq is not configured.
-- `groq_failed`: Groq conclusion generation failed after data tools succeeded.
+- `groq_unauthorized`: Groq returned 401 or an invalid API key error.
+- `groq_forbidden`: Groq returned 403 or a forbidden / region / permission response.
+- `groq_model_not_found`: configured Groq model does not exist or is not supported.
+- `groq_rate_limited`: Groq returned 429 or a rate-limit response.
+- `groq_timeout`: Groq request timed out.
+- `groq_network_error`: fetch or network transport failed.
+- `groq_response_parse_failed`: streamed response could not be parsed.
+- `groq_failed`: other unknown Groq conclusion generation failure.
 - `unknown_tool_error`: controlled tool chain failed for another reason.
+
+Groq diagnostics are deliberately redacted. Function logs record only:
+
+```txt
+hasGroqApiKey
+groqApiKeyLength
+groqModel
+groqHttpStatus
+groqErrorType
+groqErrorMessage
+```
+
+`groqErrorMessage` is truncated to 300 characters. The function does not log the raw `GROQ_API_KEY`, full request headers, or connection strings.
 
 ## SSE Response
 
@@ -261,7 +281,9 @@ Expected result:
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
 - `mode = "basic"` streams the fixed Tencent-14 event sequence.
 - `mode = "real"` streams `schema_inspect` / `aggregate_table` / `chart_render` tool completions, chart, conclusion, and completion events where available.
-- If Groq is not configured after data tools succeed, the real mode returns `conclusionSource = "fallback"` and `fallbackReason = "groq_not_configured"` instead of `data_tool_failed` or 500.
+- If Groq succeeds after data tools succeed, the real mode returns `conclusionSource = "groq"`.
+- If Groq fails after data tools succeed, the real mode returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `groq_unauthorized`, `groq_forbidden`, `groq_model_not_found`, `groq_rate_limited`, `groq_timeout`, `groq_network_error`, `groq_response_parse_failed`, or `groq_failed`.
+- `conclusion_completed` and `run_completed` include `groqErrorType`, `groqHttpStatus`, and redacted `groqErrorMessage` when available; neither event includes raw tokens or request headers.
 - `quotaUsed` increases for `demo_user`.
 - `messages` contains the assistant message.
 - `agent_runs`, `run_events`, and `tool_invocations` contain records for the run.
