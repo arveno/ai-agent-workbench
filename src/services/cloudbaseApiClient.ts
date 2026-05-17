@@ -71,14 +71,6 @@ export function buildCloudBaseApiUrl(path: string, query?: ApiQueryParams): stri
   return apiBaseUrl ? `${apiBaseUrl}${apiPath}` : apiPath;
 }
 
-export function isCloudBasePrivateApiEnabled(): boolean {
-  return getPublicEnvValue(import.meta.env.VITE_ENABLE_CLOUDBASE_PRIVATE_API).toLowerCase() !== 'false';
-}
-
-export function isLegacyApiModeEnabled(): boolean {
-  return !isCloudBasePrivateApiEnabled();
-}
-
 export async function requestCloudBasePublicApi(
   path: string,
   options: CloudBaseApiRequestOptions = {},
@@ -96,10 +88,6 @@ export async function requestCloudBasePrivateApi(
   path: string,
   options: CloudBasePrivateApiRequestOptions,
 ): Promise<Response> {
-  if (!isCloudBasePrivateApiEnabled()) {
-    throw new Error('CloudBase private API is disabled by the legacy rollback flag.');
-  }
-
   const { accessToken, headers: requestHeaders, ...requestOptions } = options;
   const headers = new Headers(requestHeaders);
   headers.set('Authorization', `Bearer ${normalizeAccessToken(accessToken)}`);

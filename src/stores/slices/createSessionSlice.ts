@@ -1,7 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { mockTasks } from '../../mocks/tasks';
-import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
-import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
+import { createConversation, fetchConversations } from '../../services/conversationApi';
 import { createConversationMessage, fetchConversationMessages } from '../../services/messageApi';
 import type { ConversationMode, ConversationRecord } from '../../types/persistence';
 import type { SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
@@ -29,12 +28,9 @@ let persistenceRequestId = 0;
 let messageLoadRequestId = 0;
 let olderMessageLoadRequestId = 0;
 
-type PersistenceAuthSource = 'legacy' | 'cloudbase';
-
 interface PersistenceAuthContext {
   accessToken: string;
   userId: string;
-  source: PersistenceAuthSource;
 }
 
 interface PersistenceAuthOptions {
@@ -42,10 +38,6 @@ interface PersistenceAuthOptions {
 }
 
 function getCloudBaseAuthContext(): PersistenceAuthContext | null {
-  if (!isCloudBasePrivateApiEnabled()) {
-    return null;
-  }
-
   const authState = useAuthStore.getState();
   const accessToken = authState.accessToken?.trim() || authState.session?.access_token?.trim();
   const userId = authState.currentUser?.userId ?? authState.user?.id ?? authState.session?.user.id ?? null;
@@ -57,49 +49,15 @@ function getCloudBaseAuthContext(): PersistenceAuthContext | null {
   return {
     accessToken,
     userId,
-    source: 'cloudbase',
-  };
-}
-
-function getLegacyPersistenceAuthContext(): PersistenceAuthContext | null {
-  if (isCloudBasePrivateApiEnabled()) {
-    return null;
-  }
-
-  const authState = useAuthStore.getState();
-
-  if (authState.authProvider !== 'supabase') {
-    return null;
-  }
-
-  const accessToken = authState.session?.access_token?.trim();
-  const userId = authState.user?.id ?? authState.session?.user.id ?? null;
-
-  if (authState.status !== 'authenticated' || !accessToken || !userId) {
-    return null;
-  }
-
-  return {
-    accessToken,
-    userId,
-    source: 'legacy',
   };
 }
 
 function getPersistenceAuthContext(options: PersistenceAuthOptions = {}): PersistenceAuthContext | null {
-  if (options.allowCloudBasePersistence !== false) {
-    const cloudBaseContext = getCloudBaseAuthContext();
-
-    if (cloudBaseContext) {
-      return cloudBaseContext;
-    }
+  if (options.allowCloudBasePersistence === false) {
+    return null;
   }
 
-  return getLegacyPersistenceAuthContext();
-}
-
-function isCloudBaseAuthContext(authContext: PersistenceAuthContext): boolean {
-  return authContext.source === 'cloudbase';
+  return getCloudBaseAuthContext();
 }
 
 function shouldUseCloudBaseForPersistentState(persistentUserId: string | null): boolean {
@@ -108,27 +66,18 @@ function shouldUseCloudBaseForPersistentState(persistentUserId: string | null): 
   return Boolean(userId && persistentUserId === userId);
 }
 
-function shouldAllowCloudBaseForProvider(provider: WorkbenchStore['currentModelProvider']): boolean {
-  return isCloudBasePrivateApiEnabled() || provider !== 'groq';
-}
-
 function isPersistentStateCompatibleWithAuthContext(
   authContext: PersistenceAuthContext,
   persistentUserId: string | null,
 ): boolean {
-  if (isCloudBaseAuthContext(authContext)) {
-    return shouldUseCloudBaseForPersistentState(persistentUserId);
-  }
-
-  return persistentUserId === authContext.userId;
+  void authContext;
+  return shouldUseCloudBaseForPersistentState(persistentUserId);
 }
 
 function shouldSkipCloudBaseAgentAssistantPersist(
-  authContext: PersistenceAuthContext,
   message: WorkbenchMessage,
 ): boolean {
   return (
-    isCloudBaseAuthContext(authContext) &&
     message.role === 'assistant' &&
     message.kind === 'normal' &&
     Boolean(message.runId?.startsWith('agent_run_'))
@@ -322,10 +271,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   createSession: async () => {
     get().activeAgentRunAbortController?.abort();
 
-    const currentProvider = get().currentModelProvider;
-    const authContext = getPersistenceAuthContext({
-      allowCloudBasePersistence: shouldAllowCloudBaseForProvider(currentProvider),
-    });
+    const authContext = getPersistenceAuthContext();
 
     if (authContext) {
       set({
@@ -894,9 +840,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   },
   ensureCurrentPersistentConversation: async () => {
     const currentState = get();
-    const authContext = getPersistenceAuthContext({
-      allowCloudBasePersistence: shouldAllowCloudBaseForProvider(currentState.currentModelProvider),
-    });
+    const authContext = getPersistenceAuthContext();
 
     if (!authContext) {
       return get().currentSessionId;
@@ -956,7 +900,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return;
     }
 
-    if (shouldSkipCloudBaseAgentAssistantPersist(authContext, message)) {
+    if (shouldSkipCloudBaseAgentAssistantPersist(message)) {
       set({
         messagesError: null,
         persistenceError: null,
@@ -976,24 +920,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         persistenceError: result.message,
       });
       return;
-    }
-
-    if (message.role === 'user') {
-      const currentSession = get().sessions.find((session) => session.id === conversationId);
-      const shouldUpdateTitle =
-        currentSession &&
-        currentSession.title.trim() !== '新会话' &&
-        currentSession.messages.filter((sessionMessage) => sessionMessage.role === 'user').length === 1;
-
-      if (shouldUpdateTitle && !isCloudBaseAuthContext(authContext)) {
-        void updateConversation(
-          conversationId,
-          {
-            title: currentSession.title,
-          },
-          authContext.accessToken,
-        );
-      }
     }
 
     set({

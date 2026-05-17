@@ -1,5 +1,4 @@
 import type { StateCreator } from 'zustand';
-import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
 import { createConversation } from '../../services/conversationApi';
 import {
   copyDemoConversationTemplate as copyDemoConversationTemplateApi,
@@ -40,18 +39,10 @@ function getAuthenticatedUserId(): string | null {
 }
 
 function getPersistenceAccessToken(): string | null {
-  if (isCloudBasePrivateApiEnabled()) {
-    return getAccessToken();
-  }
-
   return getAccessToken();
 }
 
 function getPersistenceUserId(): string | null {
-  if (isCloudBasePrivateApiEnabled()) {
-    return getAuthenticatedUserId();
-  }
-
   return getAuthenticatedUserId();
 }
 

@@ -1,11 +1,8 @@
 import type { StateCreator } from 'zustand';
-import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
-import { fetchRagRetrievals } from '../../services/ragRetrievalApi';
 import { createRunReportArtifact, fetchConversationReportArtifacts } from '../../services/reportArtifactApi';
 import { fetchLatestRunBundleForConversation, fetchRunEvents, fetchToolInvocations } from '../../services/runPersistenceApi';
 import type { ReportArtifactRecord } from '../../types/persistence';
 import type { RunEvent, RunSlice, RunSnapshot, WorkbenchStore } from '../../types/workbench';
-import { ragRetrievalLogsToSources } from '../../utils/ragSourceMapper';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
 import { runEventsRecordToRunEvents, runPersistenceRecordsToSnapshot } from '../../utils/runPersistenceMapper';
 import { applyRunEventToSnapshot } from '../../utils/runReducer';
@@ -213,52 +210,30 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runId = runRecord.runtime_run_id ?? runRecord.id;
-    const emptyRetrievalsResult = Promise.resolve({
-      ok: true as const,
-      data: {
-        retrievals: [],
-      },
-    });
-    const retrievalsResult = await (
-      isCloudBasePrivateApiEnabled() ? emptyRetrievalsResult : fetchRagRetrievals(runId, accessToken)
-    );
-
     if (requestId !== latestRunRequestId || get().currentSessionId !== conversationId) {
       return;
     }
 
-    const restoredSources = retrievalsResult.ok
-      ? ragRetrievalLogsToSources(retrievalsResult.data.retrievals)
-      : [];
     const runSnapshot = runPersistenceRecordsToSnapshot({
       run: runRecord,
       events: latestRunResult.data.events,
       tools: latestRunResult.data.toolInvocations,
     });
-    const runSnapshotWithSources: RunSnapshot = restoredSources.length > 0 && (runSnapshot.sources ?? []).length === 0
-      ? {
-          ...runSnapshot,
-          sources: restoredSources,
-        }
-      : runSnapshot;
     const runEvents = runEventsRecordToRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((state) => {
-      const nextSessions = upsertRunIntoSessions(state.sessions, conversationId, runSnapshotWithSources);
+      const nextSessions = upsertRunIntoSessions(state.sessions, conversationId, runSnapshot);
 
       return {
         sessions: nextSessions,
-        currentRun: runSnapshotWithSources,
+        currentRun: runSnapshot,
         runEventLog: runEvents,
         isLatestRunLoading: false,
         isRunEventsLoading: false,
         isRagSourcesLoading: false,
         latestRunError: null,
         runEventsError: null,
-        ragSourcesError: retrievalsResult.ok || (runSnapshotWithSources.sources ?? []).length > 0
-          ? null
-          : retrievalsResult.message,
+        ragSourcesError: null,
       };
     });
   },
@@ -368,55 +343,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadRagRetrievals: async (runId) => {
-    if (isCloudBasePrivateApiEnabled()) {
-      return;
-    }
-
-    const accessToken = getAccessToken();
-
-    if (!accessToken || !get().isPersistentMode) {
-      return;
-    }
-
-    set({
-      isRagSourcesLoading: true,
-      ragSourcesError: null,
-    });
-
-    const result = await fetchRagRetrievals(runId, accessToken);
-
-    if (!result.ok) {
-      set({
-        isRagSourcesLoading: false,
-        ragSourcesError: result.message,
-      });
-      return;
-    }
-
-    const sources = ragRetrievalLogsToSources(result.data.retrievals);
-
-    set((state) => {
-      if (!state.currentRun || state.currentRun.id !== runId) {
-        return {
-          isRagSourcesLoading: false,
-          ragSourcesError: null,
-        };
-      }
-
-      const nextRun: RunSnapshot = {
-        ...state.currentRun,
-        sources,
-        updatedAt: new Date().toISOString(),
-      };
-      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, nextRun);
-
-      return {
-        currentRun: nextRun,
-        sessions: nextSessions,
-        isRagSourcesLoading: false,
-        ragSourcesError: null,
-      };
-    });
+    void runId;
   },
 
   saveReportArtifact: async (params) => {

@@ -4,7 +4,7 @@ export type UserRole = 'anonymous' | 'demo_user' | 'admin';
 
 export type AuthRole = UserRole;
 
-export type AuthProvider = 'cloudbase' | 'supabase' | 'none';
+export type AuthProvider = 'cloudbase' | 'none';
 
 export type AgentAccessStatus =
   | 'anonymous'
@@ -80,7 +80,6 @@ export interface AuthStoreState {
   closeLoginModal: () => void;
   initializeAuth: () => Promise<void>;
   signInWithPassword: (username: string, password: string) => Promise<boolean>;
-  signInWithPasswordLegacy: (email: string, password: string) => Promise<boolean>;
   signUpWithUsername: (username: string, password: string) => Promise<boolean>;
   signOut: () => Promise<boolean>;
   refreshAgentAccess: () => Promise<void>;

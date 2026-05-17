@@ -6,13 +6,10 @@ import type {
   ConversationUpdateInput,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
-import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 import {
-  createAuthRequiredPersistenceResponse,
-  createLegacyJsonAuthHeaders,
   createNetworkPersistenceResponse,
-  normalizeLegacyAccessToken,
   readWorkbenchPersistenceResponse,
 } from './persistenceApiClient';
 
@@ -20,10 +17,6 @@ interface FetchConversationsParams {
   limit?: number;
   cursor?: string | null;
   status?: ConversationStatus;
-}
-
-function createAuthRequiredResponse<TData>(): WorkbenchPersistenceResponse<TData> {
-  return createAuthRequiredPersistenceResponse('请先登录后使用 Workbench 持久化会话。');
 }
 
 function createNetworkErrorResponse<TData>(): WorkbenchPersistenceResponse<TData> {
@@ -44,7 +37,7 @@ async function readPersistenceResponse<TData>(response: Response): Promise<Workb
 
 export async function fetchConversations(
   params: FetchConversationsParams,
-  accessToken: string | null | undefined,
+  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationListResult>> {
   const apiPath = buildApiPath('/api/workbench/conversations', {
     limit: params.limit,
@@ -52,30 +45,11 @@ export async function fetchConversations(
     status: params.status,
   });
 
-  if (isCloudBasePrivateApiEnabled()) {
-    try {
-      const cloudBaseToken = await ensureCloudBaseAccessToken();
-      const response = await requestCloudBasePrivateApi(apiPath, {
-        method: 'GET',
-        accessToken: cloudBaseToken,
-      });
-
-      return await readPersistenceResponse<ConversationListResult>(response);
-    } catch {
-      return createNetworkErrorResponse();
-    }
-  }
-
-  const token = normalizeLegacyAccessToken(accessToken);
-
-  if (!token) {
-    return createAuthRequiredResponse();
-  }
-
   try {
-    const response = await fetch(apiPath, {
+    const cloudBaseToken = await ensureCloudBaseAccessToken();
+    const response = await requestCloudBasePrivateApi(apiPath, {
       method: 'GET',
-      headers: createLegacyJsonAuthHeaders(token),
+      accessToken: cloudBaseToken,
     });
 
     return await readPersistenceResponse<ConversationListResult>(response);
@@ -86,37 +60,17 @@ export async function fetchConversations(
 
 export async function createConversation(
   input: ConversationCreateInput,
-  accessToken: string | null | undefined,
+  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
-  if (isCloudBasePrivateApiEnabled()) {
-    try {
-      const cloudBaseToken = await ensureCloudBaseAccessToken();
-      const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/conversations'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(input),
-        accessToken: cloudBaseToken,
-      });
-
-      return await readPersistenceResponse<ConversationRecord>(response);
-    } catch {
-      return createNetworkErrorResponse();
-    }
-  }
-
-  const token = normalizeLegacyAccessToken(accessToken);
-
-  if (!token) {
-    return createAuthRequiredResponse();
-  }
-
   try {
-    const response = await fetch(buildApiPath('/api/workbench/conversations'), {
+    const cloudBaseToken = await ensureCloudBaseAccessToken();
+    const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/conversations'), {
       method: 'POST',
-      headers: createLegacyJsonAuthHeaders(token),
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(input),
+      accessToken: cloudBaseToken,
     });
 
     return await readPersistenceResponse<ConversationRecord>(response);
@@ -127,73 +81,36 @@ export async function createConversation(
 
 export async function fetchConversation(
   id: string,
-  accessToken: string | null | undefined,
+  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
-  if (isCloudBasePrivateApiEnabled()) {
-    const conversationResult = await fetchConversations({ limit: 50 }, null);
+  const conversationResult = await fetchConversations({ limit: 50 }, null);
 
-    if (!conversationResult.ok) {
-      return conversationResult;
-    }
+  if (!conversationResult.ok) {
+    return conversationResult;
+  }
 
-    const conversation = conversationResult.data.conversations.find((item) => item.id === id);
+  const conversation = conversationResult.data.conversations.find((item) => item.id === id);
 
-    if (!conversation) {
-      return {
-        ok: false,
-        errorCode: 'not_found',
-        message: 'Workbench 会话不存在。',
-      };
-    }
-
+  if (!conversation) {
     return {
-      ok: true,
-      data: conversation,
+      ok: false,
+      errorCode: 'not_found',
+      message: 'Workbench 会话不存在。',
     };
   }
 
-  const token = normalizeLegacyAccessToken(accessToken);
-
-  if (!token) {
-    return createAuthRequiredResponse();
-  }
-
-  try {
-    const response = await fetch(buildApiPath(`/api/workbench/conversations/${encodeURIComponent(id)}`), {
-      method: 'GET',
-      headers: createLegacyJsonAuthHeaders(token),
-    });
-
-    return await readPersistenceResponse<ConversationRecord>(response);
-  } catch {
-    return createNetworkErrorResponse();
-  }
+  return {
+    ok: true,
+    data: conversation,
+  };
 }
 
 export async function updateConversation(
   id: string,
   input: ConversationUpdateInput,
-  accessToken: string | null | undefined,
+  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
-  if (isCloudBasePrivateApiEnabled()) {
-    return createUnsupportedCloudBaseResponse('CloudBase 会话更新接口尚未接入，当前仅支持列表和创建。');
-  }
-
-  const token = normalizeLegacyAccessToken(accessToken);
-
-  if (!token) {
-    return createAuthRequiredResponse();
-  }
-
-  try {
-    const response = await fetch(buildApiPath(`/api/workbench/conversations/${encodeURIComponent(id)}`), {
-      method: 'PATCH',
-      headers: createLegacyJsonAuthHeaders(token),
-      body: JSON.stringify(input),
-    });
-
-    return await readPersistenceResponse<ConversationRecord>(response);
-  } catch {
-    return createNetworkErrorResponse();
-  }
+  void id;
+  void input;
+  return createUnsupportedCloudBaseResponse('CloudBase 会话更新接口尚未接入，当前仅支持列表和创建。');
 }

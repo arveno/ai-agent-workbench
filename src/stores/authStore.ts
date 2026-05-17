@@ -1,12 +1,10 @@
 import { useMemo } from 'react';
 import { create } from 'zustand';
-import { isSupabaseAuthConfigured, supabase } from '@/lib/supabaseClient';
 import {
-  createAgentAccessUnavailableView,
   createAnonymousAgentAccessView,
   fetchAgentAccessView,
 } from '@/services/agentAccessApi';
-import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from '@/services/cloudbaseApiClient';
+import { buildApiPath, requestCloudBasePrivateApi } from '@/services/cloudbaseApiClient';
 import {
   getCloudBaseAuthErrorMessage,
   initCloudBaseAuth,
@@ -27,7 +25,6 @@ import type {
   UserRole,
 } from '@/types/auth';
 
-let authSubscription: { unsubscribe: () => void } | null = null;
 let initializeAuthPromise: Promise<void> | null = null;
 let agentAccessRequestId = 0;
 
@@ -38,14 +35,6 @@ interface AuthMeResponse {
   };
   errorCode?: string;
   message?: string;
-}
-
-function toAuthErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message;
-  }
-
-  return getCloudBaseAuthErrorMessage(error, '登录状态处理失败，请稍后重试。');
 }
 
 function toCloudBaseAuthErrorMessage(error: unknown, fallbackMessage = 'CloudBase 登录失败，请稍后重试。'): string {
@@ -173,25 +162,6 @@ function createAuthSessionView(
   };
 }
 
-function createAnonymousState() {
-  return {
-    status: 'anonymous' as const,
-    session: null,
-    user: null,
-    currentUser: null,
-    accessToken: null,
-    isAuthenticated: false,
-    isAnonymous: true,
-    authProvider: 'none' as const,
-    error: null,
-    isInitialized: true,
-    agentAccess: createAnonymousAgentAccessView(),
-    isAgentAccessLoading: false,
-    agentAccessError: null,
-    isLoginModalOpen: false,
-  };
-}
-
 function createCloudBaseSignedOutState(error: string | null = null) {
   return {
     status: error ? ('error' as const) : ('anonymous' as const),
@@ -267,20 +237,15 @@ async function restoreAuthenticatedCloudBaseSession(): Promise<{
   return cloudBaseAuth;
 }
 
-function unsubscribeLegacyAuth() {
-  authSubscription?.unsubscribe();
-  authSubscription = null;
-}
-
 export const useAuthStore = create<AuthStoreState>()((set, get) => ({
-  status: isCloudBasePrivateApiEnabled() ? 'loading' : isSupabaseAuthConfigured ? 'loading' : 'anonymous',
+  status: 'loading',
   session: null,
   user: null,
   currentUser: null,
   accessToken: null,
   isAuthenticated: false,
   isAnonymous: true,
-  authProvider: isCloudBasePrivateApiEnabled() ? 'cloudbase' : 'supabase',
+  authProvider: 'cloudbase',
   error: null,
   isInitialized: false,
   agentAccess: createAnonymousAgentAccessView(),
@@ -295,137 +260,6 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   },
 
   initializeAuth: async () => {
-    if (!isCloudBasePrivateApiEnabled()) {
-      if (!isSupabaseAuthConfigured || supabase === null) {
-        set(createAnonymousState());
-        return;
-      }
-
-      if (get().isInitialized && authSubscription !== null) {
-        return;
-      }
-
-      if (initializeAuthPromise !== null) {
-        return initializeAuthPromise;
-      }
-
-      set({ status: 'loading', error: null, authProvider: 'supabase' });
-
-      initializeAuthPromise = (async () => {
-        try {
-          const { data, error } = await supabase.auth.getSession();
-
-          if (error) {
-            set({
-              status: 'error',
-              session: null,
-              user: null,
-              currentUser: null,
-              accessToken: null,
-              isAuthenticated: false,
-              isAnonymous: true,
-              authProvider: 'supabase',
-              error: error.message,
-              isInitialized: true,
-            });
-            return;
-          }
-
-          const legacyUser = data.session?.user
-            ? createAuthUser({
-                id: data.session.user.id,
-                email: data.session.user.email ?? null,
-                displayName: data.session.user.email ?? null,
-                isAnonymous: false,
-                provider: 'supabase',
-                role: 'demo_user',
-              })
-            : null;
-          const legacySession = data.session && legacyUser
-            ? createAuthSession(data.session.access_token, legacyUser)
-            : null;
-
-          set({
-            status: legacySession ? 'authenticated' : 'anonymous',
-            session: legacySession,
-            user: legacyUser,
-            currentUser: null,
-            accessToken: legacySession?.access_token ?? null,
-            isAuthenticated: Boolean(legacySession),
-            isAnonymous: !legacySession,
-            authProvider: 'supabase',
-            error: null,
-            isInitialized: true,
-          });
-
-          if (legacySession) {
-            void get().refreshAgentAccess();
-          } else {
-            get().clearAgentAccess();
-          }
-
-          if (authSubscription === null) {
-            const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-              const nextUser = session?.user
-                ? createAuthUser({
-                    id: session.user.id,
-                    email: session.user.email ?? null,
-                    displayName: session.user.email ?? null,
-                    isAnonymous: false,
-                    provider: 'supabase',
-                    role: 'demo_user',
-                  })
-                : null;
-              const nextSession = session && nextUser ? createAuthSession(session.access_token, nextUser) : null;
-
-              set({
-                status: nextSession ? 'authenticated' : 'anonymous',
-                session: nextSession,
-                user: nextUser,
-                currentUser: null,
-                accessToken: nextSession?.access_token ?? null,
-                isAuthenticated: Boolean(nextSession),
-                isAnonymous: !nextSession,
-                authProvider: 'supabase',
-                error: null,
-                isInitialized: true,
-              });
-
-              if (nextSession) {
-                void get().refreshAgentAccess();
-              } else {
-                get().clearAgentAccess();
-              }
-            });
-
-            authSubscription = authListener.subscription;
-          }
-        } catch (error) {
-          set({
-            status: 'error',
-            session: null,
-            user: null,
-            currentUser: null,
-            accessToken: null,
-            isAuthenticated: false,
-            isAnonymous: true,
-            authProvider: 'supabase',
-            error: toAuthErrorMessage(error),
-            isInitialized: true,
-            agentAccess: createAgentAccessUnavailableView('登录状态检查失败，暂不能读取真实 Agent 额度。'),
-            isAgentAccessLoading: false,
-            agentAccessError: '登录状态检查失败，暂不能读取真实 Agent 额度。',
-          });
-        } finally {
-          initializeAuthPromise = null;
-        }
-      })();
-
-      return initializeAuthPromise;
-    }
-
-    unsubscribeLegacyAuth();
-
     if (get().isInitialized && get().authProvider === 'cloudbase') {
       return;
     }
@@ -524,91 +358,6 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
     }
   },
 
-  signInWithPasswordLegacy: async (email, password) => {
-    if (!isSupabaseAuthConfigured || supabase === null) {
-      set({
-        ...createAnonymousState(),
-        authProvider: 'supabase',
-        error: 'Supabase Auth 未配置，当前只能使用公开演示模式。',
-      });
-      return false;
-    }
-
-    set({ status: 'loading', error: null, authProvider: 'supabase' });
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        set({
-          status: 'anonymous',
-          session: null,
-          user: null,
-          currentUser: null,
-          accessToken: null,
-          isAuthenticated: false,
-          isAnonymous: true,
-          authProvider: 'supabase',
-          error: error.message,
-          isInitialized: true,
-          agentAccess: createAnonymousAgentAccessView(),
-          isAgentAccessLoading: false,
-          agentAccessError: null,
-        });
-        return false;
-      }
-
-      const legacyUser = data.user
-        ? createAuthUser({
-            id: data.user.id,
-            email: data.user.email ?? null,
-            displayName: data.user.email ?? null,
-            isAnonymous: false,
-            provider: 'supabase',
-            role: 'demo_user',
-          })
-        : null;
-      const legacySession = data.session && legacyUser ? createAuthSession(data.session.access_token, legacyUser) : null;
-
-      set({
-        status: legacySession ? 'authenticated' : 'anonymous',
-        session: legacySession,
-        user: legacyUser,
-        currentUser: null,
-        accessToken: legacySession?.access_token ?? null,
-        isAuthenticated: Boolean(legacySession),
-        isAnonymous: !legacySession,
-        authProvider: 'supabase',
-        error: null,
-        isInitialized: true,
-        isLoginModalOpen: false,
-      });
-      await get().refreshAgentAccess();
-      return true;
-    } catch (error) {
-      set({
-        status: 'anonymous',
-        session: null,
-        user: null,
-        currentUser: null,
-        accessToken: null,
-        isAuthenticated: false,
-        isAnonymous: true,
-        authProvider: 'supabase',
-        error: toAuthErrorMessage(error),
-        isInitialized: true,
-        agentAccess: createAnonymousAgentAccessView(),
-        isAgentAccessLoading: false,
-        agentAccessError: null,
-        isLoginModalOpen: false,
-      });
-      return false;
-    }
-  },
-
   signUpWithUsername: async (username, password) => {
     set({ status: 'loading', error: null, authProvider: 'cloudbase' });
 
@@ -669,62 +418,17 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
   },
 
   signOut: async () => {
-    if (get().authProvider !== 'supabase') {
-      set({ status: 'loading', error: null, authProvider: 'cloudbase' });
-
-      try {
-        await signOutCloudBase();
-        set(createCloudBaseSignedOutState());
-        get().clearAgentAccess();
-        return true;
-      } catch (error) {
-        set({
-          status: get().user ? 'authenticated' : 'anonymous',
-          error: toCloudBaseAuthErrorMessage(error, 'CloudBase 退出登录失败。'),
-          isInitialized: true,
-        });
-        return false;
-      }
-    }
-
-    if (!isSupabaseAuthConfigured || supabase === null) {
-      set(createAnonymousState());
-      return true;
-    }
-
-    set({ status: 'loading', error: null, authProvider: 'supabase' });
+    set({ status: 'loading', error: null, authProvider: 'cloudbase' });
 
     try {
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        set({
-          status: get().user ? 'authenticated' : 'anonymous',
-          error: error.message,
-          isInitialized: true,
-        });
-        return false;
-      }
-
-      set({
-        status: 'anonymous',
-        session: null,
-        user: null,
-        currentUser: null,
-        accessToken: null,
-        isAuthenticated: false,
-        isAnonymous: true,
-        authProvider: 'supabase',
-        error: null,
-        isInitialized: true,
-        isLoginModalOpen: false,
-      });
+      await signOutCloudBase();
+      set(createCloudBaseSignedOutState());
       get().clearAgentAccess();
       return true;
     } catch (error) {
       set({
         status: get().user ? 'authenticated' : 'anonymous',
-        error: toAuthErrorMessage(error),
+        error: toCloudBaseAuthErrorMessage(error, 'CloudBase 退出登录失败。'),
         isInitialized: true,
       });
       return false;

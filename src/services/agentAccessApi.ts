@@ -1,10 +1,5 @@
-import type { AgentAccessStatus, AgentAccessView, UserRole } from '@/types/auth';
-import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
-
-interface AgentAccessApiResponse {
-  ok: boolean;
-  access?: unknown;
-}
+import type { AgentAccessView, UserRole } from '@/types/auth';
+import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 
 interface AgentAccessContext {
   userId: string | null;
@@ -25,29 +20,6 @@ const DEFAULT_UNAVAILABLE_REASON = '额度暂不可用。';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isAgentAccessStatus(value: unknown): value is AgentAccessStatus {
-  return (
-    value === 'anonymous' ||
-    value === 'allowed' ||
-    value === 'auth_required' ||
-    value === 'quota_exceeded' ||
-    value === 'forbidden' ||
-    value === 'auth_unavailable'
-  );
-}
-
-function isUserRole(value: unknown): value is UserRole {
-  return value === 'anonymous' || value === 'demo_user' || value === 'admin';
-}
-
-function readNullableString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-function readNullableNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function readNumberValue(value: unknown): number | null {
@@ -91,48 +63,6 @@ export function createAgentAccessUnavailableView(reason = DEFAULT_UNAVAILABLE_RE
     canUseRealAgent: false,
     reason,
   };
-}
-
-function normalizeAgentAccessView(value: unknown): AgentAccessView | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const status = value.status;
-  const role = value.role;
-  const quotaType = value.quotaType;
-
-  if (!isAgentAccessStatus(status) || !isUserRole(role) || quotaType !== 'agent_run') {
-    return null;
-  }
-
-  return {
-    status,
-    userId: readNullableString(value.userId),
-    email: readNullableString(value.email),
-    role,
-    quotaType,
-    quotaLimit: readNullableNumber(value.quotaLimit),
-    quotaUsed: readNullableNumber(value.quotaUsed),
-    quotaRemaining: readNullableNumber(value.quotaRemaining),
-    canUseRealAgent: value.canUseRealAgent === true,
-    reason: typeof value.reason === 'string' ? value.reason : DEFAULT_UNAVAILABLE_REASON,
-  };
-}
-
-async function readAgentAccessResponse(response: Response): Promise<AgentAccessView> {
-  const payload = (await response.json().catch(() => null)) as AgentAccessApiResponse | null;
-  const access = normalizeAgentAccessView(payload?.access);
-
-  if (access) {
-    return access;
-  }
-
-  if (response.status === 401) {
-    return createAnonymousAgentAccessView();
-  }
-
-  return createAgentAccessUnavailableView();
 }
 
 function normalizeCloudBaseQuotaAccessView(value: unknown, context?: AgentAccessContext): AgentAccessView | null {
@@ -195,20 +125,5 @@ export async function fetchAgentAccessView(
     return createAnonymousAgentAccessView();
   }
 
-  if (isCloudBasePrivateApiEnabled()) {
-    return fetchCloudBaseAgentAccessView(token, context);
-  }
-
-  try {
-    const response = await fetch('/api/auth/agent-access', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    return await readAgentAccessResponse(response);
-  } catch {
-    return createAgentAccessUnavailableView('网络异常，暂不能读取真实 Agent 额度。');
-  }
+  return fetchCloudBaseAgentAccessView(token, context);
 }

@@ -37,7 +37,7 @@ Run Trace 与持久化数据资产
 ## 当前核心能力
 
 - 公开演示模式 / Mock：匿名用户可直接体验完整工作台流程。
-- CloudBase Auth：默认使用用户名密码登录和 session 恢复，Supabase Auth 仅保留为迁移期回滚路径。
+- CloudBase Auth：默认使用用户名密码登录和 session 恢复；Supabase Auth 已转为历史 legacy 代码，等待后续删除。
 - AgentAccessView / role / quota：展示用户角色和真实 Agent Run 额度。
 - 真实 Agent 服务端保护：`/api/agent/run/stream` 由服务端鉴权、校验 conversation 归属并扣减 quota。
 - 会话与消息持久化：`conversations` / `messages` 支持刷新恢复。
@@ -159,7 +159,7 @@ knowledge_chunks
 - CloudBase Auth
 - CloudBase MySQL
 - CloudBase HTTP Functions / EdgeOne Pages
-- Supabase Auth / Supabase PostgreSQL / Vercel Serverless Functions legacy rollback
+- Supabase Auth / Supabase PostgreSQL / Vercel Serverless Functions 历史 legacy 代码
 - Groq
 - ECharts
 - react-markdown / remark-gfm
@@ -232,17 +232,8 @@ VITE_CLOUDBASE_REGION=ap-shanghai
 # Local dev proxy env
 CLOUDBASE_PROXY_TARGET=
 
-# Optional legacy rollback
-# Set to false only when temporarily forcing the old Vercel/Supabase path.
-VITE_ENABLE_CLOUDBASE_PRIVATE_API=
-VITE_SUPABASE_URL=
-VITE_SUPABASE_PUBLISHABLE_KEY=
-
 # Server-only env
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_DB_CONNECTION_STRING=
-POSTGRES_CONNECTION_STRING=
+GROQ_API_KEY=
 ```
 
 说明：
@@ -253,13 +244,13 @@ POSTGRES_CONNECTION_STRING=
 - 本地 CloudBase 开发推荐保持 `VITE_API_BASE_URL=` 为空，并用 `CLOUDBASE_PROXY_TARGET` 让 Vite dev server 代理 `/api`，避免 localhost CORS。
 - `CLOUDBASE_PROXY_TARGET` 不是 `VITE_` 变量，只供本地 Vite dev server 读取，不会暴露给浏览器。
 - CloudBase 控制台需要开启“用户名密码登录”；未开启时前端登录会提示开启该身份源。
-- 正式登录弹窗默认只调用 CloudBase 用户名密码登录；Supabase 密码登录仅保留在代码级 legacy 回滚方法中。
+- 正式登录弹窗只调用 CloudBase 用户名密码登录，不再调用 Supabase 密码登录。
 - 公开 CloudBase API，例如 demo templates，可直接使用 `VITE_API_BASE_URL`，不需要 token。
 - 私有 CloudBase API 默认使用 CloudBase Auth 产生的 `access_token`，不使用 Supabase token。
 - conversations、messages、reports、demo-copy、quota 和 Agent Run stream 默认走 CloudBase private APIs。
-- `VITE_ENABLE_CLOUDBASE_PRIVATE_API` 只保留为临时回滚 / 调试开关；默认不配置或留空时走 CloudBase，设置为 `false` 才强制旧 Vercel/Supabase 链路。
-- Supabase / Vercel legacy 代码仍保留，但不再是默认正式主链路。
-- Run persistence 已通过 CloudBase `workbench-runs` 恢复；少量 legacy 查询仍保留为回滚路径，不影响主 Agent Run SSE、messages、reports 和 RAG 闭环。
+- `VITE_ENABLE_CLOUDBASE_PRIVATE_API` 不再作为前端运行时开关，也不应配置到新环境。
+- Supabase / Vercel legacy 代码仍暂存在仓库中，作为历史迁移记录和下一阶段删除对象，不再被正式前端主线调用。
+- Run persistence 已通过 CloudBase `workbench-runs` 恢复；主 Agent Run SSE、messages、reports 和 RAG 闭环均走 CloudBase。
 - service role、模型 Key 和数据库连接串不能加 `VITE_`。
 
 本地 CloudBase 默认链路推荐 `.env.local`：
@@ -303,7 +294,7 @@ MODEL_GATEWAY_MODEL=
 - 正式页面 CloudBase 默认分支
 - 本地 Vite proxy
 
-`authStore` 默认恢复 CloudBase 用户名密码登录 session；没有 session 时保持访客状态，公开演示仍可使用，私有会话和真实 Agent 需要登录。正式登录弹窗调用 CloudBase Auth，不再调用 Supabase `/auth/v1/token`。业务 private API 使用 CloudBase access token。Agent Run 运行走 `/api/agent/run/stream`，刷新页面或切换会话后的 Run Trace 恢复走 `/api/workbench/runs`。`VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时才进入 legacy Vercel / Supabase 回滚路径；旧代码保留用于迁移期回滚，不再作为默认正式路径。匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
+`authStore` 默认恢复 CloudBase 用户名密码登录 session；没有 session 时保持访客状态，公开演示仍可使用，私有会话和真实 Agent 需要登录。正式登录弹窗调用 CloudBase Auth，不再调用 Supabase `/auth/v1/token`。业务 private API 使用 CloudBase access token。Agent Run 运行走 `/api/agent/run/stream`，刷新页面或切换会话后的 Run Trace 恢复走 `/api/workbench/runs`。`VITE_ENABLE_CLOUDBASE_PRIVATE_API` 已退出正式前端运行分支；旧 Vercel / Supabase 代码暂存于仓库中，作为历史迁移记录和后续删除对象。匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
 
 正式删除旧链路前仍需要完成 EdgeOne Preview / Production 回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次，并保留旧 Vercel / Supabase 回滚窗口。
 
@@ -340,37 +331,22 @@ pnpm exec vercel dev
 
 ```txt
 pnpm dev 适合查看前端基础页面和公开演示模式。
-pnpm exec vercel dev 适合完整测试 Serverless API、Auth、真实 Agent、quota、持久化和 RAG。
+本地 CloudBase 联调用 Vite proxy 转发 `/api` 到 CloudBase HTTP Functions。
 ```
 
 ---
 
-## Supabase 初始化 / Migration
+## 历史 Supabase Migration
 
-项目依赖多份 Supabase SQL migration，需要按顺序执行：
+`supabase/migrations/` 仍保留为历史迁移记录和旧链路对照，不再是当前 CloudBase 单轨启动步骤。当前表结构和 seed 以 `tencent/migrations/`、`tencent/seeds/` 为准，并在 CloudBase MySQL 中执行。
 
-```txt
-1. auth / quota 基础结构
-2. agent_run quota RPC
-3. conversations / messages
-4. demo templates
-5. run artifacts
-6. RAG minimal
-```
-
-对应文件位于：
-
-```txt
-supabase/migrations/
-```
-
-如果没有执行对应 migration，相关能力会不可用：
+CloudBase 单轨需要确认：
 
 - `conversations` / `messages` 缺失：会话和消息无法持久化。
 - demo templates 缺失：示例任务和示例会话无法从模板读取。
 - run artifacts 缺失：Run Trace、工具调用和报告 artifact 无法恢复。
 - RAG migration 缺失：CloudBase `knowledge_search` 无法读取 `knowledge_documents` / `knowledge_chunks`。
-- quota RPC 缺失：真实 Agent quota 扣减和 usage 结束状态无法正常工作。
+- quota 表结构或幂等约束缺失：真实 Agent quota 扣减、usage 结束状态和重复请求保护无法正常工作。
 
 ---
 
@@ -391,7 +367,7 @@ supabase/migrations/
 12. 展示长文本折叠 / 加载更早消息 / 大 JSON 展开
 ```
 
-建议部署或投递前做一次浏览器 smoke test，确认 Supabase migrations 已执行、真实 Agent quota 可用、RAG seed 数据存在。
+建议部署或投递前做一次浏览器 smoke test，确认 CloudBase migrations / seeds 已执行、真实 Agent quota 可用、RAG seed 数据存在。
 
 ---
 

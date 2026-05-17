@@ -1,5 +1,5 @@
 import type { DataSourceTestableProviderId, RunEvent } from '@/types/workbench';
-import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
@@ -159,33 +159,15 @@ export async function streamAgentRunAnalysis(params: {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  const useCloudBasePrivateApi = isCloudBasePrivateApiEnabled();
-  let response: Response;
+  const cloudBaseToken = await ensureCloudBaseAccessToken();
 
-  if (useCloudBasePrivateApi) {
-    const cloudBaseToken = await ensureCloudBaseAccessToken();
-
-    response = await requestCloudBasePrivateApi(buildApiPath('/api/agent/run/stream'), {
-      method: 'POST',
-      headers,
-      body,
-      accessToken: cloudBaseToken,
-      signal: params.signal,
-    });
-  } else {
-    const accessToken = params.accessToken?.trim();
-
-    if (accessToken) {
-      headers.Authorization = `Bearer ${accessToken}`;
-    }
-
-    response = await fetch(buildApiPath('/api/agent/run/stream'), {
-      method: 'POST',
-      headers,
-      body,
-      signal: params.signal,
-    });
-  }
+  const response = await requestCloudBasePrivateApi(buildApiPath('/api/agent/run/stream'), {
+    method: 'POST',
+    headers,
+    body,
+    accessToken: cloudBaseToken,
+    signal: params.signal,
+  });
 
   if (!response.ok) {
     throw new Error(await readAgentRunStreamError(response));
@@ -208,20 +190,12 @@ export async function streamAgentRunAnalysis(params: {
 
     buffer += decoder.decode(value, { stream: true });
     buffer = consumeSseBlocks(buffer, (event) => {
-      params.onEvent(
-        useCloudBasePrivateApi
-          ? normalizeRunEventForClient(event, params.clientRunId)
-          : event,
-      );
+      params.onEvent(normalizeRunEventForClient(event, params.clientRunId));
     });
   }
 
   buffer += decoder.decode();
   consumeSseBlocks(`${buffer}\n\n`, (event) => {
-    params.onEvent(
-      useCloudBasePrivateApi
-        ? normalizeRunEventForClient(event, params.clientRunId)
-        : event,
-    );
+    params.onEvent(normalizeRunEventForClient(event, params.clientRunId));
   });
 }
