@@ -651,9 +651,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     }));
 
     if (activeSession?.id) {
-      if (!isCloudBaseAuthContext(authContext)) {
-        void get().loadLatestRunForConversation(activeSession.id);
-      }
+      void get().loadLatestRunForConversation(activeSession.id);
       void get().loadReportArtifacts(activeSession.id);
     }
   },
@@ -759,9 +757,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     });
 
     if (get().currentSessionId === sessionId) {
-      if (!isCloudBaseAuthContext(authContext)) {
-        void get().loadLatestRunForConversation(sessionId);
-      }
+      void get().loadLatestRunForConversation(sessionId);
       void get().loadReportArtifacts(sessionId);
     }
   },

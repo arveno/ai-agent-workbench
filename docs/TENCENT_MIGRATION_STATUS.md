@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-当前迁移进入 CloudBase 用户名密码登录单轨化阶段：腾讯云 POC 能力验证完成，CloudBase MySQL 正式 schema 已落库，CloudBase HTTP Functions 覆盖 public demo templates、Auth helper、conversations、messages、reports、demo-copy、quota 和 Agent Run SSE；Tencent-25B 后前端 `authStore` 默认使用 CloudBase 用户名密码登录与 session 恢复，业务 private API 默认使用 CloudBase access token，本地 Vite proxy 已用于规避 localhost CORS。
+当前迁移进入 CloudBase Agent Run 恢复能力补齐阶段：腾讯云 POC 能力验证完成，CloudBase MySQL 正式 schema 已落库，CloudBase HTTP Functions 覆盖 public demo templates、Auth helper、conversations、messages、reports、demo-copy、quota、Agent Run SSE 和 Run Trace 恢复；Tencent-25B 后前端 `authStore` 默认使用 CloudBase 用户名密码登录与 session 恢复，Tencent-26 后刷新页面或切换会话可通过 CloudBase 读取最近一次 run、run_events 和 tool_invocations，业务 private API 默认使用 CloudBase access token，本地 Vite proxy 已用于规避 localhost CORS。
 
 本阶段不再把 Vercel / Supabase 作为后续主线维护方向。现有 Vercel / Supabase 代码和文档只作为历史参考、能力对照和必要时的回滚依据；腾讯云后续主线以 EdgeOne Pages、CloudBase HTTP Functions、CloudBase Auth v2 和 CloudBase MySQL 为准。
 
@@ -25,7 +25,7 @@
 
 ## CloudBase 默认链路收口结论
 
-Tencent-25B 的阶段判断是：CloudBase 已成为正式前端默认 Auth 和 private API 来源，并从匿名登录主线切到用户名密码登录主线；Vercel / Supabase legacy 代码仍保留为迁移期回滚路径，尚未删除。
+Tencent-26 的阶段判断是：CloudBase 已成为正式前端默认 Auth 和 private API 来源，并补齐 Agent Run 读取恢复能力；Vercel / Supabase legacy 代码仍保留为迁移期回滚路径，尚未删除。
 
 当前已完成能力按模块列如下：
 
@@ -39,7 +39,8 @@ Tencent-25B 的阶段判断是：CloudBase 已成为正式前端默认 Auth 和 
 | Demo copy | CloudBase private `POST /api/workbench/demo-copy` 已验证，前端默认分支可复制公开会话模板并读取 seed messages。 |
 | Quota | CloudBase private `GET/POST /api/workbench/quota` 基础闭环已验证，Agent Run stream 后端会 consume / finish usage。 |
 | Agent Run SSE / fallback | CloudBase `/api/agent/run/stream` 已验证鉴权、归属校验、quota、run/events/tools、assistant message、SSE 和明确 fallback；Tencent-21 将 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 新增轻量 OpenAI-compatible model gateway 并保留 Groq 兼容。 |
-| Frontend CloudBase default | 正式页面默认恢复 CloudBase 用户名密码 session；未登录保持访客状态，登录后走 CloudBase conversations/messages/reports/demo-copy/quota/Agent Run stream。 |
+| Run recovery | CloudBase private `GET /api/workbench/runs?conversationId=...&latest=1` 与 `GET /api/workbench/runs?runId=...` 返回 run、events 和 toolInvocations，前端用于刷新页面或切换会话后的 Run Trace 恢复。 |
+| Frontend CloudBase default | 正式页面默认恢复 CloudBase 用户名密码 session；未登录保持访客状态，登录后走 CloudBase conversations/messages/reports/demo-copy/quota/Agent Run stream/Run recovery。 |
 | Local test panel | `local-tools/cloudbase-auth-test.html` 可用于快速验证 CloudBase Auth 与 API，但不提交、不属于正式产品。 |
 
 ## 单轨化边界
@@ -47,6 +48,7 @@ Tencent-25B 的阶段判断是：CloudBase 已成为正式前端默认 Auth 和 
 - CloudBase Auth / CloudBase private APIs 已成为前端默认主链路。
 - Vercel / Supabase 旧代码仍保留，用于回滚、对照和 legacy 路径，不再作为默认路径。
 - 前端 `authStore` 默认恢复 CloudBase 用户名密码 session；没有 session 时保持未登录访客状态，公开 demo 仍可用。正式登录弹窗只调用 CloudBase Auth，Supabase 密码登录仅保留为明确 legacy 方法。
+- Agent Run 运行和刷新恢复都已走 CloudBase：`/api/agent/run/stream` 负责写入，`/api/workbench/runs` 负责读取最近一次 run、run_events 和 tool_invocations，不会重新触发 run 或重复扣 quota。
 - 匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。
 - `VITE_ENABLE_CLOUDBASE_PRIVATE_API` 保留为临时回滚 / 调试开关；默认不配置或留空时走 CloudBase，设置为 `false` 时才强制 legacy。
 - Agent Run 的真实模型调用仍可能进入明确 fallback，不能把 fallback 当作真实模型结果宣传；data tools 失败时会使用 `data_table_not_found`、`data_tool_query_failed`、`data_empty` 等明确原因，模型失败时会使用 `model_*` fallbackReason。

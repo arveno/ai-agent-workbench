@@ -2,12 +2,22 @@ import type {
   AgentRunRecord,
   LatestRunResult,
   RunEventListResult,
+  RunEventRecord,
+  ToolInvocationRecord,
   ToolInvocationListResult,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
+import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from './cloudbaseApiClient';
+import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+export interface RunPersistenceBundleResult {
+  run: AgentRunRecord | null;
+  events: RunEventRecord[];
+  toolInvocations: ToolInvocationRecord[];
 }
 
 function createAuthRequiredResponse<TData>(): WorkbenchPersistenceResponse<TData> {
@@ -73,10 +83,116 @@ function createHeaders(accessToken: string): HeadersInit {
   };
 }
 
+function toCloudBaseRunBundle(value: unknown): RunPersistenceBundleResult {
+  const data = isRecord(value) ? value : {};
+  return {
+    run: isRecord(data.run) ? (data.run as unknown as AgentRunRecord) : null,
+    events: Array.isArray(data.events) ? (data.events as RunEventRecord[]) : [],
+    toolInvocations: Array.isArray(data.toolInvocations)
+      ? (data.toolInvocations as ToolInvocationRecord[])
+      : [],
+  };
+}
+
+async function fetchCloudBaseRunBundle(
+  query: { conversationId?: string; runId?: string; latest?: 1 },
+  fallbackMessage: string,
+): Promise<WorkbenchPersistenceResponse<RunPersistenceBundleResult>> {
+  try {
+    const cloudBaseToken = await ensureCloudBaseAccessToken();
+    const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/runs', query), {
+      method: 'GET',
+      accessToken: cloudBaseToken,
+    });
+    const result = await readPersistenceResponse<unknown>(response, fallbackMessage);
+
+    if (!result.ok) {
+      return result;
+    }
+
+    return {
+      ok: true,
+      data: toCloudBaseRunBundle(result.data),
+    };
+  } catch {
+    return createNetworkErrorResponse(fallbackMessage);
+  }
+}
+
+export async function fetchLatestRunBundleForConversation(
+  conversationId: string,
+  accessToken: string | null | undefined,
+): Promise<WorkbenchPersistenceResponse<RunPersistenceBundleResult>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    return fetchCloudBaseRunBundle(
+      { conversationId, latest: 1 },
+      '读取最近 Run 失败。',
+    );
+  }
+
+  const latestRunResult = await fetchLatestRunForConversation(conversationId, accessToken);
+
+  if (!latestRunResult.ok) {
+    return latestRunResult;
+  }
+
+  if (!latestRunResult.data.run) {
+    return {
+      ok: true,
+      data: {
+        run: null,
+        events: [],
+        toolInvocations: [],
+      },
+    };
+  }
+
+  const runId = latestRunResult.data.run.runtime_run_id ?? latestRunResult.data.run.id;
+  const [eventsResult, toolsResult] = await Promise.all([
+    fetchRunEvents(runId, accessToken),
+    fetchToolInvocations(runId, accessToken),
+  ]);
+
+  if (!eventsResult.ok) {
+    return eventsResult;
+  }
+
+  if (!toolsResult.ok) {
+    return toolsResult;
+  }
+
+  return {
+    ok: true,
+    data: {
+      run: latestRunResult.data.run,
+      events: eventsResult.data.events,
+      toolInvocations: toolsResult.data.tools,
+    },
+  };
+}
+
 export async function fetchLatestRunForConversation(
   conversationId: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<LatestRunResult>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    const result = await fetchCloudBaseRunBundle(
+      { conversationId, latest: 1 },
+      '读取最近 Run 失败。',
+    );
+
+    if (!result.ok) {
+      return result;
+    }
+
+    return {
+      ok: true,
+      data: {
+        run: result.data.run,
+      },
+    };
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -99,6 +215,27 @@ export async function fetchRun(
   runId: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<AgentRunRecord>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    const result = await fetchCloudBaseRunBundle({ runId }, '读取 Run 失败。');
+
+    if (!result.ok) {
+      return result;
+    }
+
+    if (!result.data.run) {
+      return {
+        ok: false,
+        errorCode: 'not_found',
+        message: 'Run 不存在。',
+      };
+    }
+
+    return {
+      ok: true,
+      data: result.data.run,
+    };
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -121,6 +258,21 @@ export async function fetchRunEvents(
   runId: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<RunEventListResult>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    const result = await fetchCloudBaseRunBundle({ runId }, '读取 Run Events 失败。');
+
+    if (!result.ok) {
+      return result;
+    }
+
+    return {
+      ok: true,
+      data: {
+        events: result.data.events,
+      },
+    };
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {
@@ -143,6 +295,21 @@ export async function fetchToolInvocations(
   runId: string,
   accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ToolInvocationListResult>> {
+  if (isCloudBasePrivateApiEnabled()) {
+    const result = await fetchCloudBaseRunBundle({ runId }, '读取工具调用失败。');
+
+    if (!result.ok) {
+      return result;
+    }
+
+    return {
+      ok: true,
+      data: {
+        tools: result.data.toolInvocations,
+      },
+    };
+  }
+
   const token = normalizeAccessToken(accessToken);
 
   if (!token) {

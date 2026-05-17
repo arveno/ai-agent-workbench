@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand';
 import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
 import { fetchRagRetrievals } from '../../services/ragRetrievalApi';
 import { createRunReportArtifact, fetchConversationReportArtifacts } from '../../services/reportArtifactApi';
-import { fetchLatestRunForConversation, fetchRunEvents, fetchToolInvocations } from '../../services/runPersistenceApi';
+import { fetchLatestRunBundleForConversation, fetchRunEvents, fetchToolInvocations } from '../../services/runPersistenceApi';
 import type { RunEvent, RunSlice, RunSnapshot, WorkbenchStore } from '../../types/workbench';
 import { ragRetrievalLogsToSources } from '../../utils/ragSourceMapper';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
@@ -102,10 +102,6 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadLatestRunForConversation: async (conversationId) => {
-    if (isCloudBasePrivateApiEnabled()) {
-      return;
-    }
-
     const accessToken = getAccessToken();
 
     if (!accessToken || !get().isPersistentMode) {
@@ -123,7 +119,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       ragSourcesError: null,
     });
 
-    const latestRunResult = await fetchLatestRunForConversation(conversationId, accessToken);
+    const latestRunResult = await fetchLatestRunBundleForConversation(conversationId, accessToken);
 
     if (requestId !== latestRunRequestId || get().currentSessionId !== conversationId) {
       return;
@@ -158,37 +154,17 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     }
 
     const runId = runRecord.runtime_run_id ?? runRecord.id;
-    const [eventsResult, toolsResult, retrievalsResult] = await Promise.all([
-      fetchRunEvents(runId, accessToken),
-      fetchToolInvocations(runId, accessToken),
-      fetchRagRetrievals(runId, accessToken),
-    ]);
+    const emptyRetrievalsResult = Promise.resolve({
+      ok: true as const,
+      data: {
+        retrievals: [],
+      },
+    });
+    const retrievalsResult = await (
+      isCloudBasePrivateApiEnabled() ? emptyRetrievalsResult : fetchRagRetrievals(runId, accessToken)
+    );
 
     if (requestId !== latestRunRequestId || get().currentSessionId !== conversationId) {
-      return;
-    }
-
-    if (!eventsResult.ok) {
-      set({
-        isLatestRunLoading: false,
-        isRunEventsLoading: false,
-        isRagSourcesLoading: false,
-        latestRunError: null,
-        runEventsError: eventsResult.message,
-        ragSourcesError: null,
-      });
-      return;
-    }
-
-    if (!toolsResult.ok) {
-      set({
-        isLatestRunLoading: false,
-        isRunEventsLoading: false,
-        isRagSourcesLoading: false,
-        latestRunError: null,
-        runEventsError: toolsResult.message,
-        ragSourcesError: null,
-      });
       return;
     }
 
@@ -197,8 +173,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       : [];
     const runSnapshot = runPersistenceRecordsToSnapshot({
       run: runRecord,
-      events: eventsResult.data.events,
-      tools: toolsResult.data.tools,
+      events: latestRunResult.data.events,
+      tools: latestRunResult.data.toolInvocations,
     });
     const runSnapshotWithSources: RunSnapshot = restoredSources.length > 0 && (runSnapshot.sources ?? []).length === 0
       ? {
@@ -206,7 +182,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
           sources: restoredSources,
         }
       : runSnapshot;
-    const runEvents = runEventsRecordToRunEvents(eventsResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
+    const runEvents = runEventsRecordToRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((state) => {
       const nextSessions = upsertRunIntoSessions(state.sessions, conversationId, runSnapshotWithSources);
@@ -228,10 +204,6 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadRunEvents: async (runId) => {
-    if (isCloudBasePrivateApiEnabled()) {
-      return;
-    }
-
     const accessToken = getAccessToken();
 
     if (!accessToken) {
@@ -261,10 +233,6 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadToolInvocations: async (runId) => {
-    if (isCloudBasePrivateApiEnabled()) {
-      return;
-    }
-
     const accessToken = getAccessToken();
 
     if (!accessToken) {

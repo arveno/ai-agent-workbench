@@ -298,10 +298,11 @@ MODEL_GATEWAY_MODEL=
 - Demo copy
 - Quota 原子扣减基础闭环
 - Agent Run SSE / fallback
+- Agent Run 读取恢复 / Run Trace 恢复
 - 正式页面 CloudBase 默认分支
 - 本地 Vite proxy
 
-`authStore` 默认恢复 CloudBase 用户名密码登录 session；没有 session 时保持访客状态，公开演示仍可使用，私有会话和真实 Agent 需要登录。正式登录弹窗调用 CloudBase Auth，不再调用 Supabase `/auth/v1/token`。业务 private API 使用 CloudBase access token。`VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时才进入 legacy Vercel / Supabase 回滚路径；旧代码保留用于迁移期回滚，不再作为默认正式路径。匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
+`authStore` 默认恢复 CloudBase 用户名密码登录 session；没有 session 时保持访客状态，公开演示仍可使用，私有会话和真实 Agent 需要登录。正式登录弹窗调用 CloudBase Auth，不再调用 Supabase `/auth/v1/token`。业务 private API 使用 CloudBase access token。Agent Run 运行走 `/api/agent/run/stream`，刷新页面或切换会话后的 Run Trace 恢复走 `/api/workbench/runs`。`VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时才进入 legacy Vercel / Supabase 回滚路径；旧代码保留用于迁移期回滚，不再作为默认正式路径。匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
 
 正式删除旧链路前仍需要完成 EdgeOne Preview / Production 回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次，并保留旧 Vercel / Supabase 回滚窗口。
 

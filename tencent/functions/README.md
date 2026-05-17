@@ -157,6 +157,19 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-quota.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
+`workbench-runs` 依赖 `_shared`。只使用固定路由 `/api/workbench/runs`，路径透传关闭；`GET /api/workbench/runs?conversationId=<id>&latest=1` 读取当前会话最近一次 run，`GET /api/workbench/runs?runId=<id>` 读取指定 run，并一起返回 `run_events` 和 `tool_invocations`。该函数只读，不创建 run、不 consume quota、不写 assistant message。打包说明使用 Git Bash：
+
+```bash
+cd tencent/functions
+stage="$HOME/Desktop/cloudbase-workbench-runs-package"
+rm -rf "$stage"
+mkdir -p "$stage/_shared"
+cp workbench-runs/index.js workbench-runs/package.json workbench-runs/scf_bootstrap workbench-runs/README.md "$stage/"
+cp _shared/mysql.js _shared/auth.js "$stage/_shared/"
+chmod +x "$stage/scf_bootstrap"
+(cd "$stage" && zip -r workbench-runs.zip index.js package.json README.md scf_bootstrap _shared)
+```
+
 `workbench-agent-run-stream` 依赖 `_shared`。部署 Tencent-24 版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/003_agent_run_idempotency.sql`，为 `agent_runs(user_id, runtime_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入本地 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、轻量 model gateway 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
@@ -180,7 +193,7 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota` 和 `workbench-agent-run-stream` 的 zip 根目录都应包含：
+`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs` 和 `workbench-agent-run-stream` 的 zip 根目录都应包含：
 
 ```txt
 _shared/
@@ -353,6 +366,7 @@ curl -N -i -X POST \
 - `workbench-reports` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它会先校验 conversation 归属，再读取或写入 `report_artifacts`，不写 Agent Run、SSE 或 quota。
 - `workbench-demo-copy` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取公开 demo 模板并写入当前用户私有 `conversations` / `messages`，不写 reports、Agent Run、SSE 或 quota。
 - `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
+- `workbench-runs` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只读 `agent_runs` / `run_events` / `tool_invocations`，用于刷新页面或切换会话后的 Run Trace 恢复，不写 quota、messages 或 run 事件。
 - `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js` 与 `_shared/modelGateway.js` 验证 CloudBase Agent Run 流式链路。`basic` 模式为固定 mock 基础闭环，`real` 模式接入本地 planner、受控 data tools、OpenAI-compatible model gateway / Groq 兼容和明确 fallback，但仍不切换前端正式调用。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
