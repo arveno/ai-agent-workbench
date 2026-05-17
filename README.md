@@ -4,11 +4,7 @@ AI Agent Workbench 是一个面向教育数据分析场景的 AI 应用工作台
 
 它不是普通聊天框，而是一个包含会话管理、真实 Agent 调用、工具执行可视化、Run Trace、报告生成、RAG 来源展示和权限 / quota 控制的 AI 应用前端样例。项目重点展示 AI 应用从公开演示到登录后的真实 Agent 执行、从消息到工具调用和报告产物的完整闭环。
 
-在线预览：
-
-```txt
-https://ai-agent-workbench.vercel.app
-```
+在线预览以当前 EdgeOne 部署地址为准。
 
 ---
 

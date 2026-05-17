@@ -149,9 +149,15 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     const pendingRunEvent = createAgentPendingRunStartedEvent({
       runId,
       prompt,
-      provider: 'supabase',
+      provider: 'postgresql',
       sessionId,
     });
+    pendingRunEvent.run.dataSource = {
+      provider: 'postgresql',
+      name: 'CloudBase MySQL / Agent Run',
+      typeLabel: 'CloudBase MySQL',
+      schema: 'public_demo',
+    };
     let finalConclusion = '';
     let finalConclusionSource: RunConclusionSource = 'fallback';
     let finalConclusionNotice: string | undefined;
@@ -204,7 +210,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
       await streamAgentRunAnalysis({
         prompt,
-        provider: 'supabase',
         conversationId: sessionId,
         clientRunId: runId,
         accessToken,

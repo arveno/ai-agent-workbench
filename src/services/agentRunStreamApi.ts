@@ -1,4 +1,4 @@
-import type { DataSourceTestableProviderId, RunEvent } from '@/types/workbench';
+import type { RunEvent } from '@/types/workbench';
 import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
@@ -141,7 +141,6 @@ async function readAgentRunStreamError(response: Response): Promise<string> {
 
 export async function streamAgentRunAnalysis(params: {
   prompt: string;
-  provider: DataSourceTestableProviderId;
   conversationId: string;
   clientRunId?: string;
   accessToken?: string | null;
@@ -150,7 +149,7 @@ export async function streamAgentRunAnalysis(params: {
 }): Promise<void> {
   const body = JSON.stringify({
     prompt: params.prompt,
-    provider: params.provider,
+    provider: 'cloudbase_mysql',
     conversationId: params.conversationId,
     modelProvider: 'groq',
     clientRunId: params.clientRunId,

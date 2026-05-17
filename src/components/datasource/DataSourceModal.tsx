@@ -19,45 +19,31 @@ import {
 
 const DATA_SOURCE_PROVIDERS: DataSourceProvider[] = [
   {
-    id: 'postgresql',
-    name: 'PostgreSQL',
-    description: '通用 PostgreSQL 数据源能力，适合企业自建库或云数据库接入。',
-    relationHint: '当前可使用 Supabase PostgreSQL 连接串验证通用 PostgreSQL 能力。',
-    status: 'idle',
+    id: 'mysql',
+    name: 'CloudBase MySQL',
+    description: '当前正式数据链路，由 CloudBase HTTP Functions 受控访问。',
+    relationHint: 'Agent Run 的 teaching_metrics 数据工具和 knowledge_search 均读取 CloudBase MySQL。',
+    demoBadgeText: '当前主线数据源',
+    status: 'connected',
     enabled: true,
     meta: {
-      connectionMode: 'Server Env',
-      database: 'edu_analytics_prod',
-      schemas: [],
-      tableCount: undefined,
-      rowCountLabel: '-',
+      connectionMode: 'CloudBase HTTP Functions',
+      database: 'CloudBase MySQL',
+      schemas: ['teaching_metrics', 'knowledge_documents', 'knowledge_chunks'],
+      tableCount: 3,
+      rowCountLabel: '由 CloudBase seed 与业务表提供',
       updatedAt: undefined,
     },
   },
   {
-    id: 'supabase',
-    name: 'Supabase',
-    description: '当前 Demo 使用的托管 PostgreSQL 数据源，适合快速演示真实数据连接。',
-    demoBadgeText: '当前演示数据源',
-    status: 'idle',
-    enabled: false,
-    meta: {
-      connectionMode: 'Server Env',
-      schemas: [],
-      tableCount: undefined,
-      rowCountLabel: '-',
-      updatedAt: undefined,
-    },
-  },
-  {
-    id: 'mysql',
-    name: 'MySQL',
-    description: '预留企业常见业务库接入方式',
+    id: 'postgresql',
+    name: '外部关系型数据库（历史占位）',
+    description: '旧外部数据源测试入口已下线；当前正式数据能力已收敛到 CloudBase MySQL。',
     status: 'idle',
     enabled: false,
     comingSoon: true,
     meta: {
-      connectionMode: '暂未开放',
+      connectionMode: '已下线',
     },
   },
 ];
@@ -80,17 +66,17 @@ const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
   {
     id: 'all',
     label: '全部数据源',
-    description: '查看当前工作台展示的全部数据源能力。',
+    description: '查看当前工作台展示的数据源能力和历史占位。',
   },
   {
     id: 'connected',
     label: '已连接',
-    description: '最近测试成功或已成功读取 Schema 的数据源。',
+    description: '当前 CloudBase 主线已经接入的数据源。',
   },
   {
     id: 'testable',
     label: '可测试',
-    description: '当前可以通过服务端环境变量测试连接的数据源。',
+    description: '旧外部数据源测试入口已下线，当前没有可测试项。',
   },
   {
     id: 'planned',
@@ -100,7 +86,8 @@ const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
 ];
 
 function isTestableProvider(providerId: DataSourceProvider['id']): providerId is DataSourceTestableProviderId {
-  return providerId === 'postgresql' || providerId === 'supabase';
+  void providerId;
+  return false;
 }
 
 function isConnectedProvider(
@@ -108,6 +95,10 @@ function isConnectedProvider(
   providerTestState: ProviderTestState,
   providerSchemaState: ProviderSchemaState
 ): boolean {
+  if (provider.status === 'connected') {
+    return true;
+  }
+
   if (!isTestableProvider(provider.id)) {
     return false;
   }
@@ -302,8 +293,7 @@ export function DataSourceModal() {
               配置 Agent 可访问的数据源。第一版仅支持服务端受控连接，前端不保存数据库连接串。
             </p>
             <p className="datasource-modal-relation-note">
-              说明：Supabase 底层使用 PostgreSQL。当前 Demo 以 Supabase 托管库作为真实数据源，同时保留通用
-              PostgreSQL 接入能力展示。
+              说明：当前正式链路使用 CloudBase MySQL，数据访问由 CloudBase HTTP Functions 控制。
             </p>
           </div>
           <Button
@@ -321,12 +311,9 @@ export function DataSourceModal() {
         <div className="datasource-modal-body">
           <Card className="datasource-modal-info-card" size="sm">
             <CardContent className="datasource-modal-info-content">
-              <p>
-                当前 Demo 使用 Supabase 托管 PostgreSQL 作为真实数据源，同时保留通用 PostgreSQL
-                接入能力展示。
-              </p>
-              <p>前端不保存数据库连接串，连接信息仅通过服务端环境变量读取。</p>
-              <p>线上部署时请在 Vercel Environment Variables 中配置数据库连接串。</p>
+              <p>当前主线使用 CloudBase MySQL，Agent Run 的数据分析和 RAG 检索均通过受控函数读取。</p>
+              <p>前端不保存数据库连接串，也不直接连接数据库。</p>
+              <p>线上部署时仅在 CloudBase 函数环境变量中配置服务端需要的密钥。</p>
             </CardContent>
           </Card>
 

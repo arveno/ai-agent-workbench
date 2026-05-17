@@ -122,8 +122,12 @@ export function EnvironmentStatus() {
     [activeProviderStatus, hasFailed],
   );
 
-  const supabaseMessageFallback = hasFailed ? '环境检查失败，暂未获取 Supabase 状态。' : '正在检查 Supabase 数据源。';
-  const postgresMessageFallback = hasFailed ? '环境检查失败，暂未获取 PostgreSQL 状态。' : '正在检查 PostgreSQL 数据源。';
+  const cloudBaseAuthMessageFallback = hasFailed
+    ? '环境检查失败，暂未获取 CloudBase Auth 状态。'
+    : '正在检查 CloudBase Auth 状态。';
+  const cloudBaseMysqlMessageFallback = hasFailed
+    ? '环境检查失败，暂未获取 CloudBase MySQL 状态。'
+    : '正在检查 CloudBase MySQL 状态。';
 
   useEffect(() => {
     let isMounted = true;
@@ -212,22 +216,22 @@ export function EnvironmentStatus() {
               </div>
               <div className="environment-status-message">{groqStatus.statusDescription}</div>
               <div className="environment-status-row">
-                <span>Supabase</span>
+                <span>CloudBase Auth</span>
                 <Badge variant="outline" className="environment-status-value">
                   {health ? getServiceText(health.services.supabase) : '-'}
                 </Badge>
               </div>
               <div className="environment-status-message">
-                {health?.services.supabase.message ?? supabaseMessageFallback}
+                {health?.services.supabase.message ?? cloudBaseAuthMessageFallback}
               </div>
               <div className="environment-status-row">
-                <span>PostgreSQL</span>
+                <span>CloudBase MySQL</span>
                 <Badge variant="outline" className="environment-status-value">
                   {health ? getServiceText(health.services.postgres) : '-'}
                 </Badge>
               </div>
               <div className="environment-status-message">
-                {health?.services.postgres.message ?? postgresMessageFallback}
+                {health?.services.postgres.message ?? cloudBaseMysqlMessageFallback}
               </div>
             </>
           )}

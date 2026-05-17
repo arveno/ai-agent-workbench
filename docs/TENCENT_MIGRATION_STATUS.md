@@ -237,7 +237,7 @@ CloudBase 部署 `workbench-agent-run-stream` 时不再需要 `POSTGRES_CONNECTI
 | CloudBase 临时函数 | `sse-test` | 正式 SSE 迁移完成后删除。 |
 | CloudBase 临时函数 | 旧 `auth-me` POC 版本 | 已由正式 `/api/auth/me -> auth-me` 替代；只清理旧 POC 包或旧配置，不删除正式函数。 |
 | CloudBase 临时函数 | `mysql-poc` | MySQL repository 正式化后删除。 |
-| CloudBase 临时路由 | `/api/health` | 正式 health 接口迁移后替换或删除临时实现。 |
+| CloudBase 临时路由 | `/api/health` | 前端已不调用 legacy health；若控制台仍保留旧路由，可确认无依赖后删除。 |
 | CloudBase 临时路由 | `/api/sse-test` | Agent Run SSE 迁移完成后删除。 |
 | CloudBase 临时路由 | `/api/auth-me` | 旧 POC 路由。正式路由为 `/api/auth/me`，确认无依赖后删除旧路由。 |
 | CloudBase 临时路由 | `/api/mysql-poc` | 正式 MySQL 读写接口迁移后删除。 |

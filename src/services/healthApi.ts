@@ -15,8 +15,8 @@ function createCloudBaseDefaultHealthCheck(): HealthCheckResponse {
     checkedAt: new Date().toISOString(),
     services: {
       groq: createCloudBaseHealthService('模型状态由 CloudBase Agent Run 事件和 fallback metadata 体现。'),
-      supabase: createCloudBaseHealthService('当前默认使用 CloudBase Auth，不检查 Supabase。'),
-      postgres: createCloudBaseHealthService('CloudBase 默认链路不检查 legacy PostgreSQL。'),
+      supabase: createCloudBaseHealthService('CloudBase Auth 由登录 session 和 /api/auth/me 验证。'),
+      postgres: createCloudBaseHealthService('CloudBase MySQL 由 CloudBase HTTP Functions 受控访问。'),
     },
   };
 }

@@ -11,7 +11,7 @@ export async function testDataSourceConnection(
     ok: false,
     provider,
     status: 'error',
-    errorMessage: '旧 Vercel 数据源连接测试已删除；当前正式数据链路由 CloudBase MySQL 和受控工具提供。',
+    errorMessage: '旧外部数据源连接测试已删除；当前正式数据链路由 CloudBase MySQL 和受控工具提供。',
     elapsedMs: 0,
   };
 }
@@ -23,7 +23,7 @@ export async function readDataSourceSchema(
     ok: false,
     provider,
     status: 'error',
-    errorMessage: '旧 Vercel 数据源 schema 接口已删除；当前正式数据链路由 CloudBase MySQL 和受控工具提供。',
+    errorMessage: '旧外部数据源 schema 接口已删除；当前正式数据链路由 CloudBase MySQL 和受控工具提供。',
     elapsedMs: 0,
   };
 }
