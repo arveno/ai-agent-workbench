@@ -2,7 +2,7 @@
 
 CloudBase HTTP Function for Tencent-21 Agent Run stream verification.
 
-This function keeps the Tencent-14 fixed `basic` mode and updates the `real` mode to read CloudBase MySQL `teaching_metrics` directly through `@cloudbase/node-sdk` / `app.rdb()`. It verifies the CloudBase Agent Run path with Auth, conversation ownership, quota, `agent_runs`, `run_events`, `tool_invocations`, assistant message persistence, SSE output, planner, controlled data tools, lightweight model gateway conclusion generation, and explicit fallback.
+This function keeps the Tencent-14 fixed `basic` mode and updates the `real` mode to read CloudBase MySQL `teaching_metrics` and public demo knowledge tables directly through `@cloudbase/node-sdk` / `app.rdb()`. It verifies the CloudBase Agent Run path with Auth, conversation ownership, quota, `agent_runs`, `run_events`, `tool_invocations`, assistant message persistence, SSE output, planner, controlled data tools, controlled knowledge search, lightweight model gateway conclusion generation, and explicit fallback.
 
 It still does not switch the production frontend traffic, does not migrate the full report generation entry, and does not delete the Vercel / Supabase implementation.
 
@@ -71,13 +71,14 @@ The Tencent-21 `real` path is:
    - `schema_inspect`
    - `aggregate_table`
    - `chart_render`
-10. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
-11. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
-12. Fall back explicitly when the model provider is not configured, `teaching_metrics` is missing, queries fail, no rows are returned, or the model provider fails.
-13. Insert one assistant `messages` row with source metadata, skipping insert when the same `run_id` already has an assistant message.
-14. Mark `agent_runs(status = completed)`.
-15. Stream `run_completed`.
-16. Finish quota usage with `status = completed`.
+10. For `knowledge_qa`, execute `knowledge_search` against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
+11. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
+12. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
+13. Fall back explicitly when the model provider is not configured, MySQL tables are missing, queries fail, no rows are returned, no knowledge chunks match, or the model provider fails.
+14. Insert one assistant `messages` row with source metadata, skipping insert when the same `run_id` already has an assistant message.
+15. Mark `agent_runs(status = completed)`.
+16. Stream `run_completed`.
+17. Finish quota usage with `status = completed`.
 
 If the client disconnects, the function stops writing later SSE events, marks the run as `stopped` where possible, and tries to finish usage as `stopped`. If another error occurs after quota consumption, it tries to finish usage as `failed`.
 
@@ -133,7 +134,7 @@ This mode uses a fixed mock tool result and fixed conclusion text. It remains us
 - `conclusionSource = "groq"` means the Groq compatibility provider generated the final conclusion.
 - `conclusionSource = "openai-compatible"` means the generic OpenAI-compatible model gateway generated the final conclusion.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
-- `knowledge_qa` currently returns an explicit `rag_not_migrated` fallback because the existing RAG path depends on Supabase Admin / knowledge tables that are not migrated to CloudBase in this step.
+- `knowledge_qa` runs the controlled `knowledge_search` tool against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`. It uses keyword scoring in the function and never lets the model execute SQL directly.
 - The assistant message metadata records `source`, `conclusionSource`, `fallbackReason`, `modelProvider`, `modelName`, `modelErrorType`, `modelHttpStatus`, `modelErrorMessage`, `agentMode`, and `runtimeRunId`.
 
 ## Environment Variables
@@ -178,6 +179,13 @@ Fallback reasons used by the real data-analysis path:
 - `model_response_parse_failed`: streamed response could not be parsed.
 - `model_failed`: other unknown model conclusion generation failure.
 - `unknown_tool_error`: controlled tool chain failed for another reason.
+
+Additional fallback reasons used by the controlled knowledge path:
+
+- `rag_table_not_found`: `knowledge_documents` or `knowledge_chunks` has not been created.
+- `rag_query_failed`: CloudBase MySQL knowledge query failed.
+- `rag_empty`: knowledge tables exist but have no enabled demo/system content.
+- `rag_no_match`: query succeeded but no relevant chunks matched the prompt.
 
 Model diagnostics are deliberately redacted. Function logs record only:
 

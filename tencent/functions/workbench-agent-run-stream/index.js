@@ -35,6 +35,27 @@ const TEACHING_METRICS_COLUMNS = [
   'created_at',
   'updated_at',
 ].join(',');
+const KNOWLEDGE_DOCUMENT_COLUMNS = [
+  'id',
+  'title',
+  'category',
+  'visibility',
+  'is_enabled',
+  'metadata',
+  'created_at',
+  'updated_at',
+].join(',');
+const KNOWLEDGE_CHUNK_COLUMNS = [
+  'id',
+  'document_id',
+  'chunk_index',
+  'title',
+  'content',
+  'keywords',
+  'metadata',
+  'created_at',
+  'updated_at',
+].join(',');
 const AGENT_RUN_COLUMNS = [
   'id',
   '_openid',
@@ -74,7 +95,14 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const { getModelGatewayConfig, normalizeModelError, streamChatCompletion } = loadSharedModule('modelGateway');
-const { assertNoQueryError, extractMutationCount, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
+const {
+  assertNoQueryError,
+  extractMutationCount,
+  extractRows,
+  getDb,
+  parseJsonArray,
+  parseJsonObject,
+} = loadSharedModule('mysql');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -888,6 +916,8 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
       status: 'completed',
       metadata: JSON.stringify({
         source: metadata.source || context.conclusionSource || 'fallback',
+        retrievedChunkCount: Number.isInteger(metadata.retrievedChunkCount) ? metadata.retrievedChunkCount : null,
+        sourceDocumentIds: Array.isArray(metadata.sourceDocumentIds) ? metadata.sourceDocumentIds : [],
         conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
         fallbackReason: metadata.fallbackReason || null,
         modelProvider: metadata.modelProvider || context.modelDiagnostics?.modelProvider || null,
@@ -958,6 +988,16 @@ function getDataSourceSnapshot() {
     typeLabel: 'CloudBase MySQL',
     schema: 'public_demo',
     tableName: 'teaching_metrics',
+  };
+}
+
+function getKnowledgeDataSourceSnapshot() {
+  return {
+    provider: 'cloudbase_mysql',
+    name: 'CloudBase MySQL / knowledge_documents',
+    typeLabel: 'CloudBase MySQL',
+    schema: 'public_demo',
+    tableName: 'knowledge_documents / knowledge_chunks',
   };
 }
 
@@ -1093,7 +1133,49 @@ const DATA_ANALYSIS_PRIORITY_KEYWORDS = [
   '平均分',
   '成绩',
 ];
+const DATA_ANALYSIS_ACTION_KEYWORDS = [
+  '教学质量数据',
+  '找出异常',
+  '找异常',
+  '异常指标',
+  '指标变化',
+  '数据异常',
+  '生成图表',
+  '画图',
+  '图表',
+  '趋势',
+  '对比',
+  '本月',
+  '上月',
+  '环比',
+  '按年级',
+  '按学科',
+  '按班级',
+  '年级对比',
+  '学科对比',
+  '班级对比',
+];
 const KNOWLEDGE_QA_KEYWORDS = [
+  '知识库',
+  '解释',
+  '说明',
+  '含义',
+  '是什么',
+  '怎么使用',
+  '如何使用',
+  '平台能力',
+  '指标含义',
+  'warning_count',
+  'avg_score',
+  'attendance_rate',
+  'homework_completion_rate',
+  'agent run 是什么',
+  'agent run',
+  'fallback 是什么',
+  'fallback',
+  'quota 是什么',
+  'quota',
+  '报告怎么生成',
   '制度',
   '政策',
   '依据',
@@ -1107,6 +1189,22 @@ const KNOWLEDGE_QA_KEYWORDS = [
   '教学评价',
   '学业预警',
   '数据异常处理',
+];
+const KNOWLEDGE_EXPLANATION_KEYWORDS = [
+  '解释',
+  '是什么',
+  '含义',
+  '怎么理解',
+  '如何理解',
+  '说明',
+  '定义',
+  '指标含义',
+  '平台能力',
+  'agent run 是什么',
+  'fallback 是什么',
+  'quota 是什么',
+  '报告怎么生成',
+  '怎么生成报告',
 ];
 
 function includesAnyKeyword(text, keywords) {
@@ -1181,6 +1279,7 @@ function pickTimeRangeFromPrompt(prompt) {
 function fallbackPlanAgentRun(prompt) {
   const normalizedPrompt = prompt.trim();
   const lowerPrompt = normalizedPrompt.toLowerCase();
+  const explicitMonth = extractExplicitMonth(normalizedPrompt);
 
   if (includesAnyKeyword(normalizedPrompt, CAPABILITY_KEYWORDS) || includesAnyKeyword(lowerPrompt, CAPABILITY_KEYWORDS)) {
     return {
@@ -1190,14 +1289,32 @@ function fallbackPlanAgentRun(prompt) {
     };
   }
 
+  const hasDataAnalysisAction =
+    includesAnyKeyword(normalizedPrompt, DATA_ANALYSIS_ACTION_KEYWORDS) ||
+    includesAnyKeyword(lowerPrompt, DATA_ANALYSIS_ACTION_KEYWORDS) ||
+    Boolean(explicitMonth);
   const shouldUseDataAnalysis =
     includesAnyKeyword(normalizedPrompt, DATA_ANALYSIS_PRIORITY_KEYWORDS) ||
     includesAnyKeyword(lowerPrompt, DATA_ANALYSIS_PRIORITY_KEYWORDS) ||
-    Boolean(extractExplicitMonth(normalizedPrompt));
+    Boolean(explicitMonth);
 
   const shouldUseKnowledgeQa =
     includesAnyKeyword(normalizedPrompt, KNOWLEDGE_QA_KEYWORDS) ||
     includesAnyKeyword(lowerPrompt, KNOWLEDGE_QA_KEYWORDS);
+  const isKnowledgeExplanationRequest =
+    shouldUseKnowledgeQa &&
+    (
+      includesAnyKeyword(normalizedPrompt, KNOWLEDGE_EXPLANATION_KEYWORDS) ||
+      includesAnyKeyword(lowerPrompt, KNOWLEDGE_EXPLANATION_KEYWORDS)
+    );
+
+  if (isKnowledgeExplanationRequest && !hasDataAnalysisAction) {
+    return {
+      intent: 'knowledge_qa',
+      shouldUseDataAnalysis: false,
+      reason: '用户在询问概念、指标含义或平台能力说明，需要优先检索知识库。',
+    };
+  }
 
   if (shouldUseDataAnalysis) {
     return {
@@ -1714,10 +1831,310 @@ function buildUnsupportedConclusion() {
 
 function buildKnowledgeFallbackConclusion(fallbackReason) {
   return [
-    '当前 CloudBase Agent Run 尚未迁移 RAG 知识库检索链路，因此本次不会伪装成真实知识库回答。',
+    '当前 CloudBase Agent Run 知识检索链路未能完成，因此本次不会伪装成真实知识库回答。',
     `fallbackReason=${fallbackReason}`,
-    '后续需要迁移知识库表、检索逻辑和 rag_retrieval_logs 后，再开启真实 knowledge_qa。',
+    '请检查 knowledge_documents / knowledge_chunks 表、seed 数据和 CloudBase 函数日志后重试。',
   ].join('\n\n');
+}
+
+function isMissingKnowledgeTableError(error) {
+  const message = (error && typeof error === 'object'
+    ? `${error.message || ''} ${error.code || ''} ${error.errCode || ''} ${JSON.stringify(error)}`
+    : String(error && error.message ? error.message : error)
+  ).toLowerCase();
+  return (
+    (message.includes('knowledge_documents') || message.includes('knowledge_chunks')) &&
+    (
+      message.includes('not exist') ||
+      message.includes('doesn\'t exist') ||
+      message.includes('unknown table') ||
+      message.includes('no such table') ||
+      message.includes('er_no_such_table')
+    )
+  );
+}
+
+function toRagToolError(error) {
+  if (error instanceof DataToolError) {
+    return error;
+  }
+
+  if (isMissingKnowledgeTableError(error)) {
+    return new DataToolError('rag_table_not_found', 'CloudBase MySQL knowledge tables were not found.');
+  }
+
+  return new DataToolError('rag_query_failed', 'CloudBase MySQL knowledge query failed.');
+}
+
+function normalizeKnowledgeDocument(row) {
+  return {
+    id: String(row.id ?? ''),
+    title: String(row.title ?? ''),
+    category: String(row.category ?? ''),
+    visibility: String(row.visibility ?? 'demo'),
+    is_enabled: row.is_enabled === true || row.is_enabled === 1 || row.is_enabled === '1',
+    metadata: parseJsonObject(row.metadata),
+    created_at: normalizeCellValue(row.created_at),
+    updated_at: normalizeCellValue(row.updated_at),
+  };
+}
+
+function normalizeKnowledgeChunk(row) {
+  return {
+    id: String(row.id ?? ''),
+    document_id: String(row.document_id ?? ''),
+    chunk_index: normalizeNumber(row.chunk_index, 0),
+    title: String(row.title ?? ''),
+    content: String(row.content ?? ''),
+    keywords: parseJsonArray(row.keywords).map((keyword) => String(keyword || '').trim()).filter(Boolean),
+    metadata: parseJsonObject(row.metadata),
+    created_at: normalizeCellValue(row.created_at),
+    updated_at: normalizeCellValue(row.updated_at),
+  };
+}
+
+async function fetchKnowledgeDocuments(db) {
+  try {
+    const result = await db.from('knowledge_documents').select(KNOWLEDGE_DOCUMENT_COLUMNS);
+    if (result && result.error) {
+      throw toRagToolError(result.error);
+    }
+
+    assertNoQueryError(result);
+    return extractRows(result).map(normalizeKnowledgeDocument);
+  } catch (error) {
+    throw toRagToolError(error);
+  }
+}
+
+async function fetchKnowledgeChunks(db) {
+  try {
+    const result = await db.from('knowledge_chunks').select(KNOWLEDGE_CHUNK_COLUMNS);
+    if (result && result.error) {
+      throw toRagToolError(result.error);
+    }
+
+    assertNoQueryError(result);
+    return extractRows(result).map(normalizeKnowledgeChunk);
+  } catch (error) {
+    throw toRagToolError(error);
+  }
+}
+
+const KNOWLEDGE_TERM_ALIASES = [
+  ['warning_count', 'warning_count', '预警', '异常数量', '异常指标', '风险数'],
+  ['avg_score', 'avg_score', '平均分', '成绩', '分数'],
+  ['attendance_rate', 'attendance_rate', '出勤', '出勤率'],
+  ['homework_completion_rate', 'homework_completion_rate', '作业', '作业完成率', '完成率'],
+  ['agent run', 'Agent Run', '真实 Agent', '运行链路', 'run trace'],
+  ['fallback', 'fallback', '降级', '兜底', '模型失败'],
+  ['quota', 'quota', '额度', '扣减', '配额'],
+  ['report', '报告', 'report', 'report_artifacts', '生成报告'],
+  ['cloudbase', 'CloudBase', '腾讯云', '迁移'],
+  ['rag', 'RAG', '知识库', '检索', '引用', '来源'],
+  ['tool', '工具', 'tool_invocations', '数据工具'],
+];
+
+function extractKnowledgeSearchTerms(prompt) {
+  const normalizedPrompt = prompt.trim();
+  const lowerPrompt = normalizedPrompt.toLowerCase();
+  const terms = new Set();
+
+  for (const group of KNOWLEDGE_TERM_ALIASES) {
+    if (group.some((term) => lowerPrompt.includes(String(term).toLowerCase()) || normalizedPrompt.includes(term))) {
+      for (const term of group) {
+        terms.add(String(term).toLowerCase());
+      }
+    }
+  }
+
+  const asciiTerms = lowerPrompt.match(/[a-z][a-z0-9_ -]{2,}/g) || [];
+  for (const term of asciiTerms) {
+    terms.add(term.trim());
+  }
+
+  const chineseTerms = normalizedPrompt.match(/[\u4e00-\u9fa5]{2,8}/g) || [];
+  for (const term of chineseTerms) {
+    terms.add(term.trim());
+  }
+
+  return [...terms].filter(Boolean);
+}
+
+function textIncludesTerm(text, term) {
+  return String(text || '').toLowerCase().includes(String(term || '').toLowerCase());
+}
+
+function scoreKnowledgeChunk(prompt, terms, document, chunk) {
+  let score = 0;
+  const directPrompt = prompt.trim().toLowerCase();
+  const keywordText = chunk.keywords.join(' ').toLowerCase();
+
+  for (const term of terms) {
+    if (!term) {
+      continue;
+    }
+
+    if (textIncludesTerm(chunk.title, term)) score += 5;
+    if (textIncludesTerm(chunk.content, term)) score += 3;
+    if (textIncludesTerm(keywordText, term)) score += 4;
+    if (textIncludesTerm(document.title, term)) score += 2;
+    if (textIncludesTerm(document.category, term)) score += 1;
+  }
+
+  if (directPrompt && textIncludesTerm(chunk.content, directPrompt)) {
+    score += 8;
+  }
+
+  return score;
+}
+
+function createContentPreview(content) {
+  const normalizedContent = String(content || '').replace(/\s+/g, ' ').trim();
+  return normalizedContent.length > 180 ? `${normalizedContent.slice(0, 179)}…` : normalizedContent;
+}
+
+function toRunRagSources(searchResult) {
+  return searchResult.matchedChunks.map((chunk, index) => ({
+    id: chunk.id,
+    documentTitle: chunk.documentTitle,
+    chunkTitle: chunk.title,
+    contentPreview: chunk.contentPreview,
+    score: chunk.score,
+    citationLabel: chunk.citationLabel || `[S${index + 1}]`,
+    usedInAnswer: index < 3,
+    sourceType: 'knowledge_base',
+    sourceName: 'CloudBase MySQL 知识库',
+    isMock: false,
+    updatedAt: chunk.updatedAt || undefined,
+  }));
+}
+
+async function searchKnowledgeBase(db, input) {
+  let documents;
+  let chunks;
+
+  try {
+    [documents, chunks] = await Promise.all([
+      fetchKnowledgeDocuments(db),
+      fetchKnowledgeChunks(db),
+    ]);
+  } catch (error) {
+    throw toRagToolError(error);
+  }
+
+  const enabledDocuments = documents.filter(
+    (document) => document.is_enabled && (document.visibility === 'demo' || document.visibility === 'system'),
+  );
+  const documentById = new Map(enabledDocuments.map((document) => [document.id, document]));
+
+  if (enabledDocuments.length === 0 || chunks.length === 0) {
+    throw new DataToolError('rag_empty', 'CloudBase knowledge base is empty.');
+  }
+
+  const prompt = readOptionalString(input.prompt);
+  const terms = extractKnowledgeSearchTerms(prompt);
+  const scoredChunks = chunks
+    .filter((chunk) => documentById.has(chunk.document_id))
+    .map((chunk) => {
+      const document = documentById.get(chunk.document_id);
+      return {
+        document,
+        chunk,
+        score: scoreKnowledgeChunk(prompt, terms, document, chunk),
+      };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.chunk.chunk_index - right.chunk.chunk_index);
+
+  const topK = Math.max(1, Math.min(Number(input.topK) || 5, 5));
+  const topMatches = scoredChunks.slice(0, topK).map((item, index) => ({
+    id: item.chunk.id,
+    documentId: item.document.id,
+    documentTitle: item.document.title,
+    category: item.document.category,
+    title: item.chunk.title,
+    content: item.chunk.content,
+    contentPreview: createContentPreview(item.chunk.content),
+    keywords: item.chunk.keywords,
+    score: Number((item.score / 20).toFixed(4)),
+    rawScore: item.score,
+    citationLabel: `[S${index + 1}]`,
+    updatedAt: item.chunk.updated_at || item.document.updated_at || null,
+  }));
+
+  return {
+    query: prompt,
+    terms,
+    totalMatches: scoredChunks.length,
+    matchedChunks: topMatches,
+    retrievedChunkCount: topMatches.length,
+    topTitles: topMatches.map((chunk) => chunk.title),
+    sourceDocumentIds: [...new Set(topMatches.map((chunk) => chunk.documentId))],
+  };
+}
+
+function buildKnowledgeAnswerMessages(context, searchResult) {
+  const sourcesText = searchResult.matchedChunks
+    .slice(0, 5)
+    .map((chunk) => [
+      `${chunk.citationLabel} ${chunk.documentTitle} / ${chunk.title}`,
+      chunk.content,
+    ].join('\n'))
+    .join('\n\n');
+
+  return [
+    {
+      role: 'system',
+      content: [
+        '你是 AI Agent Workbench 的教育数据分析知识助手。',
+        '只能基于给定 CloudBase MySQL 知识片段回答，不要编造来源。',
+        '回答应包含要点、使用场景和注意事项，必要时引用 [S1] / [S2]。',
+      ].join('\n'),
+    },
+    {
+      role: 'user',
+      content: [
+        `用户问题：${context.prompt}`,
+        '',
+        '知识片段：',
+        sourcesText || '无',
+      ].join('\n'),
+    },
+  ];
+}
+
+function buildKnowledgeFallbackAnswer(searchResult, fallbackReason) {
+  if (fallbackReason === 'rag_no_match') {
+    return [
+      '未在 CloudBase MySQL 知识库中找到与该问题足够相关的片段。',
+      '本次不会伪造知识库来源。你可以换一种问法，例如询问“warning_count 是什么”或“Agent Run 是什么”。',
+    ].join('\n\n');
+  }
+
+  if (!searchResult || searchResult.matchedChunks.length === 0) {
+    return buildKnowledgeFallbackConclusion(fallbackReason);
+  }
+
+  const bullets = searchResult.matchedChunks.slice(0, 3).map((chunk) => (
+    `- ${chunk.citationLabel} ${chunk.title}：${chunk.contentPreview}`
+  ));
+
+  if (String(fallbackReason || '').startsWith('model_')) {
+    return [
+      '已从 CloudBase MySQL 知识库检索到相关片段，但模型生成不可用，因此使用结构化 fallback 回答，不会伪装成模型输出。',
+      '',
+      ...bullets,
+      '',
+      `fallbackReason=${fallbackReason}`,
+    ].join('\n');
+  }
+
+  return [
+    '已从 CloudBase MySQL 知识库检索到相关片段，以下为结构化摘要：',
+    '',
+    ...bullets,
+  ].join('\n');
 }
 
 function splitTextIntoDeltas(text) {
@@ -2691,6 +3108,239 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   return conclusion;
 }
 
+async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
+  const searchStart = Date.now();
+
+  try {
+    await persistAndWriteRawEvent(
+      db,
+      currentUser,
+      context,
+      res,
+      disconnect,
+      createRunEvent('step_started', context, {
+        stepId: 'step_knowledge_search',
+        title: '检索知识库',
+        description: '通过 knowledge_search 检索 CloudBase MySQL 公开知识片段。',
+        startedAt: nowIso(),
+      }),
+    );
+
+    const searchInput = {
+      prompt: context.prompt,
+      topK: 5,
+    };
+    const searchResult = await runControlledTool(db, currentUser, context, res, disconnect, {
+      runtimeToolId: 'knowledge_search',
+      toolName: 'knowledge_search',
+      displayName: '知识库检索',
+      input: searchInput,
+      inputSummary: JSON.stringify(searchInput),
+      execute: () => searchKnowledgeBase(db, searchInput),
+      outputSummary: (output) => output.retrievedChunkCount > 0
+        ? `检索到 ${output.retrievedChunkCount} 条相关知识片段`
+        : '未找到相关知识片段',
+    });
+
+    await persistAndWriteRawEvent(
+      db,
+      currentUser,
+      context,
+      res,
+      disconnect,
+      createRunEvent('rag_sources_ready', context, {
+        sources: toRunRagSources(searchResult),
+      }),
+    );
+
+    await persistAndWriteRawEvent(
+      db,
+      currentUser,
+      context,
+      res,
+      disconnect,
+      createRunEvent('step_completed', context, {
+        stepId: 'step_knowledge_search',
+        completedAt: nowIso(),
+        elapsedMs: Math.max(Date.now() - searchStart, 1),
+      }),
+    );
+
+    return {
+      searchResult,
+      fallbackReason: searchResult.retrievedChunkCount > 0 ? null : 'rag_no_match',
+    };
+  } catch (error) {
+    if (error && error.errorCode === 'client_disconnected') {
+      throw error;
+    }
+
+    const fallbackReason = error instanceof DataToolError ? error.fallbackReason : 'rag_query_failed';
+    await persistAndWriteRawEvent(
+      db,
+      currentUser,
+      context,
+      res,
+      disconnect,
+      createRunEvent('step_failed', context, {
+        stepId: 'step_knowledge_search',
+        errorMessage: error instanceof DataToolError ? error.publicMessage : '知识检索失败。',
+        completedAt: nowIso(),
+        elapsedMs: Math.max(Date.now() - searchStart, 1),
+        fallbackReason,
+      }),
+    );
+
+    return {
+      searchResult: null,
+      fallbackReason,
+    };
+  }
+}
+
+async function generateKnowledgeConclusion(db, currentUser, context, res, disconnect, ragContext) {
+  await persistAndWriteRawEvent(
+    db,
+    currentUser,
+    context,
+    res,
+    disconnect,
+    createRunEvent('step_started', context, {
+      stepId: 'step_knowledge_answer',
+      title: '生成知识回答',
+      description: '基于知识检索片段生成结构化回答。',
+      startedAt: nowIso(),
+    }),
+  );
+
+  let conclusion = '';
+  let conclusionSource = 'fallback';
+  let fallbackReason = ragContext.fallbackReason;
+  let conclusionNotice = null;
+  const modelConfig = getModelGatewayConfig();
+  const hasMatches = Boolean(ragContext.searchResult && ragContext.searchResult.retrievedChunkCount > 0);
+
+  if (!hasMatches) {
+    fallbackReason = fallbackReason || 'rag_no_match';
+    conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
+    conclusionNotice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
+    await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+      conclusion,
+      conclusionSource,
+      conclusionNotice,
+      fallbackReason,
+    });
+  } else if (!modelConfig.isConfigured) {
+    fallbackReason = 'model_not_configured';
+    context.modelDiagnostics = createConfiguredModelDiagnostics(
+      fallbackReason,
+      modelConfig.source === 'model_gateway'
+        ? 'MODEL_GATEWAY_* is not fully configured.'
+        : 'GROQ_API_KEY is not configured.',
+    );
+    conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
+    conclusionNotice = '未配置模型网关，当前知识回答由检索片段结构化生成。';
+    await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+      conclusion,
+      conclusionSource,
+      conclusionNotice,
+      fallbackReason,
+      ...createModelEventMetadata(context.modelDiagnostics),
+    });
+  } else {
+    try {
+      let deltaQueue = Promise.resolve();
+      const modelResult = await streamChatCompletion({
+        messages: buildKnowledgeAnswerMessages(context, ragContext.searchResult),
+        temperature: 0.2,
+        onDelta: (delta) => {
+          deltaQueue = deltaQueue.then(() => (
+            persistAndWriteRawEvent(
+              db,
+              currentUser,
+              context,
+              res,
+              disconnect,
+              createRunEvent('conclusion_delta', context, { delta }),
+              0,
+            )
+          ));
+        },
+      });
+      await deltaQueue;
+
+      conclusion = modelResult.text;
+      conclusionSource = modelResult.provider || 'model';
+      context.modelDiagnostics = {
+        modelProvider: modelResult.provider || modelConfig.provider || null,
+        modelName: modelResult.model || modelConfig.model || null,
+        modelErrorType: null,
+        modelHttpStatus: null,
+        modelErrorMessage: null,
+      };
+      await persistAndWriteRawEvent(
+        db,
+        currentUser,
+        context,
+        res,
+        disconnect,
+        createRunEvent('conclusion_completed', context, {
+          conclusion,
+          conclusionSource,
+          ...createModelEventMetadata(context.modelDiagnostics),
+        }),
+      );
+    } catch (error) {
+      const modelDiagnostics = createFailedModelDiagnostics(error);
+      fallbackReason = modelDiagnostics.modelErrorType || 'model_failed';
+      context.modelDiagnostics = modelDiagnostics;
+      console.error('[workbench-agent-run-stream] knowledge model conclusion failed', JSON.stringify({
+        modelProvider: modelDiagnostics.modelProvider,
+        modelName: modelDiagnostics.modelName,
+        modelErrorType: modelDiagnostics.modelErrorType,
+        modelHttpStatus: modelDiagnostics.modelHttpStatus,
+        modelErrorMessage: modelDiagnostics.modelErrorMessage,
+        hasModelApiKey: modelDiagnostics.hasModelApiKey,
+        modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
+      }));
+      conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
+      conclusionNotice = '模型生成失败，当前知识回答由检索片段结构化生成。';
+      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+        conclusion,
+        conclusionSource,
+        conclusionNotice,
+        fallbackReason,
+        ...createModelEventMetadata(modelDiagnostics),
+      });
+    }
+  }
+
+  context.conclusion = conclusion;
+  context.conclusionSource = conclusionSource;
+  context.fallbackReason = fallbackReason;
+  context.conclusionNotice = conclusionNotice;
+  context.assistantMessageMetadata = {
+    source: 'knowledge_qa',
+    retrievedChunkCount: ragContext.searchResult?.retrievedChunkCount ?? 0,
+    sourceDocumentIds: ragContext.searchResult?.sourceDocumentIds ?? [],
+  };
+
+  await persistAndWriteRawEvent(
+    db,
+    currentUser,
+    context,
+    res,
+    disconnect,
+    createRunEvent('step_completed', context, {
+      stepId: 'step_knowledge_answer',
+      completedAt: nowIso(),
+      elapsedMs: Math.max(Date.now() - context.conclusionStartedAt, 1),
+    }),
+  );
+
+  return conclusion;
+}
+
 async function runRealAgentFlow(req, res, currentUser, body) {
   const db = getDb();
   const conversationId = readRequiredString(body.conversationId, 'Missing conversation id.');
@@ -2823,6 +3473,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     context.plan = planned.plan;
     context.intent = planned.plan.intent;
     context.planSnapshot = planToRunSnapshot(planned.plan);
+    if (planned.plan.intent === 'knowledge_qa') {
+      context.dataSourceSnapshot = getKnowledgeDataSourceSnapshot();
+    }
     context.steps = [
       createRunStep('step_intent', '理解用户问题', 'success', `intent=${planned.plan.intent}，reason=${planned.plan.reason}`),
     ];
@@ -2864,15 +3517,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         fallbackReason: context.fallbackReason,
       });
     } else if (planned.plan.intent === 'knowledge_qa') {
-      conclusion = buildKnowledgeFallbackConclusion('rag_not_migrated');
-      context.conclusionSource = 'fallback';
-      context.fallbackReason = 'rag_not_migrated';
-      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
-        conclusion,
-        conclusionSource: 'fallback',
-        conclusionNotice: 'CloudBase RAG 知识库链路尚未迁移。',
-        fallbackReason: context.fallbackReason,
-      });
+      const ragContext = await runKnowledgeQaSearch(db, currentUser, context, res, disconnect);
+      context.conclusionStartedAt = Date.now();
+      conclusion = await generateKnowledgeConclusion(db, currentUser, context, res, disconnect, ragContext);
     } else {
       const toolContext = await runRealDataAnalysis(db, currentUser, context, res, disconnect);
       context.conclusionStartedAt = Date.now();
@@ -2892,6 +3539,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
       source: context.conclusionSource,
       fallbackReason: context.fallbackReason,
+      ...(context.assistantMessageMetadata || {}),
       ...createModelEventMetadata(context.modelDiagnostics),
     });
     const elapsedMs = Math.max(Date.now() - startedAt, 1);

@@ -44,7 +44,7 @@ Run Trace 与持久化数据资产
 - Demo Templates：示例任务和示例会话模板与用户真实会话隔离。
 - Run / Tool / Report 持久化：真实 Agent Run、事件、工具调用和报告 artifact 可恢复。
 - 最近使用工具真实化：从真实 `tool_invocations` 聚合展示。
-- RAG 最小闭环：通过 `rag_search` 检索示例知识库，回答可带 `[S1]` / `[S2]` 引用。
+- RAG 最小闭环：通过 CloudBase MySQL `knowledge_search` 检索示例知识库，回答可带 `[S1]` / `[S2]` 引用。
 - 长会话 / 大文本性能保护：最近消息加载、长文本折叠、Markdown memo、大 JSON 按需展开。
 
 ---
@@ -91,7 +91,8 @@ run_events
 tool_invocations
 report_artifacts
 agent_run_usage
-rag_retrieval_logs
+knowledge_documents
+knowledge_chunks
 ```
 
 这些数据分别用于：
@@ -102,7 +103,7 @@ rag_retrieval_logs
 - `run_events` 保存 Run Trace 事件流。
 - `tool_invocations` 保存工具调用记录，并作为最近工具统计来源。
 - `report_artifacts` 将报告作为独立 artifact 保存。
-- `rag_retrieval_logs` 记录 RAG 检索结果，用于恢复右侧来源展示。
+- `knowledge_documents` / `knowledge_chunks` 提供 CloudBase RAG demo 知识源，检索结果随 `knowledge_search` 写入 `tool_invocations` 和 `run_events`。
 
 `agent_run_usage` 不等同于完整 Run Trace，它只负责 quota / audit；完整执行过程由 `agent_runs`、`run_events` 和 `tool_invocations` 承担。
 
@@ -115,12 +116,12 @@ rag_retrieval_logs
 已实现：
 
 - 小规模教学评价知识库 seed 数据
-- `knowledge_sources` / `knowledge_documents` / `knowledge_chunks`
-- `rag_search` 服务端工具
+- CloudBase MySQL `knowledge_documents` / `knowledge_chunks`
+- `knowledge_search` 服务端受控工具
 - 政策 / 制度 / 依据类问题走 `knowledge_qa`
 - 回答中使用 `[S1]` / `[S2]` 引用真实检索结果
 - 右侧来源面板展示真实检索来源
-- 检索日志写入 `rag_retrieval_logs`
+- 检索结果写入 `tool_invocations`，Run Trace 可通过 CloudBase runs 恢复
 - Mock 来源和真实 RAG 来源在 UI 上明确区分
 
 当前限制：
@@ -129,7 +130,7 @@ rag_retrieval_logs
 - 没有文档上传
 - 没有完整 embedding pipeline
 - 没有复杂向量库管理
-- 第一版使用小规模 PostgreSQL 关键词检索，后续可升级为 pgvector / hybrid search
+- 第一版使用 CloudBase MySQL 小规模关键词检索，后续可升级为 embedding / hybrid search
 
 ---
 
@@ -184,7 +185,7 @@ Planner
   ↓
 Tool Registry
   ↓
-schema_inspect / aggregate_table / query_table / chart_render / rag_search
+schema_inspect / aggregate_table / query_table / chart_render / knowledge_search
   ↓
 SSE Run Events
   ↓
@@ -258,7 +259,7 @@ POSTGRES_CONNECTION_STRING=
 - conversations、messages、reports、demo-copy、quota 和 Agent Run stream 默认走 CloudBase private APIs。
 - `VITE_ENABLE_CLOUDBASE_PRIVATE_API` 只保留为临时回滚 / 调试开关；默认不配置或留空时走 CloudBase，设置为 `false` 才强制旧 Vercel/Supabase 链路。
 - Supabase / Vercel legacy 代码仍保留，但不再是默认正式主链路。
-- Run persistence 查询、recent tools 等尚未迁入 CloudBase 的旧查询保持 legacy-only，不影响主 Agent Run SSE、messages 和 reports 闭环。
+- Run persistence 已通过 CloudBase `workbench-runs` 恢复；少量 legacy 查询仍保留为回滚路径，不影响主 Agent Run SSE、messages、reports 和 RAG 闭环。
 - service role、模型 Key 和数据库连接串不能加 `VITE_`。
 
 本地 CloudBase 默认链路推荐 `.env.local`：
@@ -368,7 +369,7 @@ supabase/migrations/
 - `conversations` / `messages` 缺失：会话和消息无法持久化。
 - demo templates 缺失：示例任务和示例会话无法从模板读取。
 - run artifacts 缺失：Run Trace、工具调用和报告 artifact 无法恢复。
-- RAG migration 缺失：`rag_search` 无法读取知识切片或写入 retrieval logs。
+- RAG migration 缺失：CloudBase `knowledge_search` 无法读取 `knowledge_documents` / `knowledge_chunks`。
 - quota RPC 缺失：真实 Agent quota 扣减和 usage 结束状态无法正常工作。
 
 ---

@@ -55,7 +55,7 @@ CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 /api/workbench/runs/:id/report
 ```
 
-CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy` 这种动态路径，Tencent-12 改用固定 `/api/workbench/demo-copy` 路由。当前只迁移 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环和 Agent Run 流式验证；PATCH、archive、报告生成入口、RAG knowledge_qa 和 quota transaction / 行锁后续再迁。
+CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy` 这种动态路径，Tencent-12 改用固定 `/api/workbench/demo-copy` 路由。当前已迁移 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存、demo-copy、quota 基础闭环、Agent Run 流式验证和 CloudBase MySQL `knowledge_qa` 受控检索；PATCH、archive 和更强 quota transaction / 行锁后续再迁。
 
 ## 打包上传
 
@@ -221,7 +221,7 @@ GROQ_API_KEY=...
 GROQ_MODEL=llama-3.1-8b-instant
 ```
 
-模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
+模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -354,7 +354,7 @@ curl -N -i -X POST \
   https://<your-domain>/api/agent/run/stream
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；模型未配置且 data tools 成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。模型失败时 SSE 和 metadata 应包含 `modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus`。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `003_agent_run_idempotency.sql` 已先执行。该验证不切换前端正式 Agent Run，不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 数据分析问题应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus`。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `003_agent_run_idempotency.sql` 已先执行。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
 
 ## 安全说明
 

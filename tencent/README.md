@@ -140,7 +140,7 @@ GROQ_API_KEY=...
 GROQ_MODEL=llama-3.1-8b-instant
 ```
 
-模型 Key 只放 `workbench-agent-run-stream` 的 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。EdgeOne 只放 `VITE_API_BASE_URL`、`VITE_CLOUDBASE_ENV_ID`、`VITE_CLOUDBASE_REGION`、`VITE_ENABLE_CLOUDBASE_PRIVATE_API` 等前端公开变量。模型未配置时，`real` 模式应在 data tools 成功后通过 `fallbackReason = "model_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。当前 `_shared/modelGateway.js` 是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台；RAG knowledge_qa、报告生成入口和正式前端默认链路尚未迁移。
+模型 Key 只放 `workbench-agent-run-stream` 的 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。EdgeOne 只放 `VITE_API_BASE_URL`、`VITE_CLOUDBASE_ENV_ID`、`VITE_CLOUDBASE_REGION`、`VITE_ENABLE_CLOUDBASE_PRIVATE_API` 等前端公开变量。模型未配置时，`real` 模式应在受控工具成功后通过 `fallbackReason = "model_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，RAG `knowledge_qa` 通过受控 `knowledge_search` 读取 `knowledge_documents` / `knowledge_chunks`，不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。当前 `_shared/modelGateway.js` 是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
 
 ## Migration 执行说明
 
@@ -165,8 +165,8 @@ Preview 阶段仍需注意：
 
 1. 先在 CloudBase MySQL 执行并校验 `001_cloudbase_mysql_schema.sql`。
 2. 新增 MySQL repository 层，只覆盖 `health`、`demo_task_templates`、`demo_conversation_templates` 等低风险读接口。
-3. 新增 CloudBase Auth 后端校验 helper，建立 `_openid -> app_profiles.user_id` 映射。当前 `auth-me` 已验证该链路，前端 `authStore` 尚未迁移。
-4. 迁移 conversations/messages/report/run 查询接口，所有 SQL 显式加 `_openid/user_id`。当前 Tencent-10C/Tencent-12 只新增 conversations 列表 / 创建、messages 读取 / 写入、reports 列表 / 单条读取 / 保存和 demo-copy 基础闭环，PATCH、archive、Agent Run 相关报告生成和 run 查询后续再迁。
+3. 新增 CloudBase Auth 后端校验 helper，建立 `_openid -> app_profiles.user_id` 映射。当前 `auth-me` 已验证该链路，Tencent-25/Tencent-25B 已把前端默认登录主线切到 CloudBase 用户名密码登录。
+4. 迁移 conversations/messages/report/run 查询接口，所有 SQL 显式加 `_openid/user_id`。当前 conversations、messages、reports、demo-copy、workbench-runs 和报告闭环已完成，PATCH、archive 后续再迁。
 5. 迁移 quota 事务。当前 Tencent-13 已新增 quota 基础闭环，后续仍需单独验证 MySQL transaction + 行锁并发扣减。
-6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 已新增轻量 model gateway，Tencent-24 已新增 preview 阶段幂等、`003_agent_run_idempotency.sql` 跨实例唯一约束和 quota CAS 扣减，Tencent-17/Tencent-18 已接入前端 CloudBase Preview；后续仍需补 RAG knowledge_qa、报告生成入口、断线恢复和 EdgeOne Preview 线上回归。
+6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 已新增轻量 model gateway，Tencent-24 已新增 preview 阶段幂等、`003_agent_run_idempotency.sql` 跨实例唯一约束和 quota CAS 扣减，Tencent-28 已将 `knowledge_qa` 迁到 CloudBase MySQL `knowledge_search`；后续仍需做 EdgeOne Preview 线上回归和旧链路删除前回滚窗口验证。
 7. 最后清理旧 Vercel/Supabase 代码，清理前必须保证腾讯云版本已可演示和可回滚。
