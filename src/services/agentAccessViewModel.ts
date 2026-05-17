@@ -1,5 +1,4 @@
 import type { AgentAccessView, AuthSessionView } from '@/types/auth';
-import { isCloudBasePrivateApiEnabled } from './cloudbaseApiClient';
 
 export type RealAgentAvailabilityStatus =
   | 'available'
@@ -40,16 +39,6 @@ export function buildRealAgentAvailabilityView(
 ): RealAgentAvailabilityView {
   const { authView, agentAccess, isAgentAccessLoading } = params;
 
-  if (isCloudBasePrivateApiEnabled()) {
-    return {
-      status: 'available',
-      canEnterRealAgent: true,
-      title: 'CloudBase Agent Run Preview 可用',
-      description: '当前使用 CloudBase Auth 与 CloudBase Agent Run 预览链路。',
-      actionLabel: null,
-    };
-  }
-
   if (authView.status === 'loading') {
     return {
       status: 'checking',
@@ -64,8 +53,8 @@ export function buildRealAgentAvailabilityView(
     return {
       status: 'auth_unavailable',
       canEnterRealAgent: false,
-      title: '真实 Agent 暂不可用',
-      description: '登录能力暂不可用，可继续使用公开演示模式。',
+      title: '需要配置 CloudBase 登录',
+      description: '公开演示仍可使用；私有会话和真实 Agent 需要 CloudBase 用户名密码登录。',
       actionLabel: null,
     };
   }
@@ -114,8 +103,8 @@ export function buildRealAgentAvailabilityView(
     return {
       status: 'auth_unavailable',
       canEnterRealAgent: false,
-      title: '真实 Agent 暂不可用',
-      description: '服务端权限检查暂不可用，可继续使用公开演示模式。',
+      title: '额度检查未完成',
+      description: '暂未读取到当前账号的真实 Agent 额度，可继续使用公开演示模式。',
       actionLabel: null,
     };
   }
@@ -149,7 +138,7 @@ export function getRealAgentBlockedMessage(view: RealAgentAvailabilityView): str
   }
 
   if (view.status === 'auth_unavailable' || view.status === 'checking') {
-    return '真实 Agent 权限检查暂不可用，可继续使用公开演示模式。';
+    return '当前未完成登录或额度检查，可继续使用公开演示模式。';
   }
 
   if (view.status === 'forbidden') {

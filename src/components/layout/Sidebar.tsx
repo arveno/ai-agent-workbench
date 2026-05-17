@@ -399,7 +399,7 @@ export function Sidebar() {
           disabled={isAuthLoading || (!isAuthenticated && !authView.isAuthConfigured)}
           title={
             !authView.isAuthConfigured
-              ? '请配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_PUBLISHABLE_KEY'
+              ? '请配置 VITE_CLOUDBASE_ENV_ID 和 VITE_CLOUDBASE_REGION'
               : undefined
           }
           onClick={() => {

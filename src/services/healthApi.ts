@@ -3,7 +3,7 @@ import { buildApiPath, isCloudBasePrivateApiEnabled } from './cloudbaseApiClient
 
 let healthCheckInFlight: Promise<HealthCheckResponse> | null = null;
 
-function createPreviewHealthService(message: string): HealthServiceStatus {
+function createCloudBaseHealthService(message: string): HealthServiceStatus {
   return {
     configured: false,
     status: 'not_configured',
@@ -11,22 +11,22 @@ function createPreviewHealthService(message: string): HealthServiceStatus {
   };
 }
 
-function createCloudBasePreviewHealthCheck(): HealthCheckResponse {
+function createCloudBaseDefaultHealthCheck(): HealthCheckResponse {
   return {
     ok: true,
     environment: 'development',
     checkedAt: new Date().toISOString(),
     services: {
-      groq: createPreviewHealthService('CloudBase preview 未检查 legacy Groq health。'),
-      supabase: createPreviewHealthService('CloudBase preview 使用 CloudBase Auth 迁移链路，未检查 Supabase。'),
-      postgres: createPreviewHealthService('CloudBase preview 未检查 legacy PostgreSQL。'),
+      groq: createCloudBaseHealthService('CloudBase 默认链路不检查 legacy Groq health。'),
+      supabase: createCloudBaseHealthService('当前默认使用 CloudBase Auth，不检查 Supabase。'),
+      postgres: createCloudBaseHealthService('CloudBase 默认链路不检查 legacy PostgreSQL。'),
     },
   };
 }
 
 export async function requestHealthCheck(): Promise<HealthCheckResponse> {
   if (isCloudBasePrivateApiEnabled()) {
-    return createCloudBasePreviewHealthCheck();
+    return createCloudBaseDefaultHealthCheck();
   }
 
   if (healthCheckInFlight) {

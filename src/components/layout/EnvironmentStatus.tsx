@@ -74,7 +74,7 @@ function getSummaryText(params: {
       return params.groqStatus.statusDescription;
     }
 
-    return '服务端 Groq Key 未配置，真实 Agent 暂不可用，可继续使用公开演示模式。';
+    return '服务端模型 Key 未配置，可继续使用公开演示模式。';
   }
 
   if (!params.health) {

@@ -75,7 +75,7 @@ function getGroqStatus(params: {
     isAvailable: false,
     availability: 'not_configured',
     statusLabel: '未配置',
-    statusDescription: '未配置服务端 GROQ_API_KEY，真实 Agent 暂不可用，可继续使用公开演示模式。',
+    statusDescription: '未配置服务端模型 Key，可继续使用公开演示模式。',
     badgeTone: 'warning',
   };
 }

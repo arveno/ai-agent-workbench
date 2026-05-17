@@ -8,12 +8,13 @@ import {
 } from '@/services/agentAccessApi';
 import { buildApiPath, isCloudBasePrivateApiEnabled, requestCloudBasePrivateApi } from '@/services/cloudbaseApiClient';
 import {
-  ensureCloudBaseAccessToken,
-  getCloudBaseSession,
+  getCloudBaseAuthErrorMessage,
   initCloudBaseAuth,
   isCloudBaseAuthConfigured,
-  signInCloudBaseAnonymously,
+  restoreCloudBaseSession,
+  signInWithUsername as signInCloudBaseWithUsername,
   signOutCloudBase,
+  signUpWithUsername as signUpCloudBaseWithUsername,
 } from '@/services/cloudbaseAuthClient';
 import type {
   AuthProvider,
@@ -44,7 +45,11 @@ function toAuthErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return '登录状态处理失败，请稍后重试。';
+  return getCloudBaseAuthErrorMessage(error, '登录状态处理失败，请稍后重试。');
+}
+
+function toCloudBaseAuthErrorMessage(error: unknown, fallbackMessage = 'CloudBase 登录失败，请稍后重试。'): string {
+  return getCloudBaseAuthErrorMessage(error, fallbackMessage);
 }
 
 function readNullableString(value: unknown): string | null {
@@ -82,7 +87,7 @@ function normalizeCloudBaseCurrentUser(value: unknown): CloudBaseCurrentUser {
     email: readNullableString(value.email),
     displayName,
     role: normalizeRole(value.role),
-    isAnonymous: value.isAnonymous === false || value.is_anonymous === false ? false : true,
+    isAnonymous: value.isAnonymous === true || value.is_anonymous === true,
   };
 }
 
@@ -135,16 +140,16 @@ function getDisplayName(user: AuthUser | null, status: AuthStatus): string {
     return user.email;
   }
 
-  if (user?.isAnonymous && user.provider === 'cloudbase') {
-    return 'CloudBase 匿名用户';
-  }
-
   if (status === 'loading') {
     return '登录状态检查中';
   }
 
   if (status === 'error') {
     return '登录状态异常';
+  }
+
+  if (status === 'authenticated') {
+    return 'CloudBase 用户';
   }
 
   return '未登录';
@@ -164,7 +169,7 @@ function createAuthSessionView(
     displayName: getDisplayName(user, state.status),
     role: isAuthenticated ? role : 'anonymous',
     canUseRealAgent: isAuthenticated,
-    isAuthConfigured: state.authProvider === 'cloudbase' ? isCloudBaseAuthConfigured() : isSupabaseAuthConfigured,
+    isAuthConfigured: isCloudBaseAuthConfigured(),
   };
 }
 
@@ -187,7 +192,26 @@ function createAnonymousState() {
   };
 }
 
-async function resolveCloudBaseSession(): Promise<{
+function createCloudBaseSignedOutState(error: string | null = null) {
+  return {
+    status: error ? ('error' as const) : ('anonymous' as const),
+    session: null,
+    user: null,
+    currentUser: null,
+    accessToken: null,
+    isAuthenticated: false,
+    isAnonymous: true,
+    authProvider: 'cloudbase' as const,
+    error,
+    isInitialized: true,
+    agentAccess: createAnonymousAgentAccessView(),
+    isAgentAccessLoading: false,
+    agentAccessError: null,
+    isLoginModalOpen: false,
+  };
+}
+
+async function resolveCloudBaseSession(accessToken: string): Promise<{
   session: AuthSession;
   user: AuthUser;
   currentUser: CloudBaseCurrentUser;
@@ -195,18 +219,6 @@ async function resolveCloudBaseSession(): Promise<{
 }> {
   initCloudBaseAuth();
 
-  const initialSession = await getCloudBaseSession();
-  const initialToken = initialSession.error ? null : initialSession.data.session?.access_token?.trim() || null;
-
-  if (!initialToken) {
-    const signInResult = await signInCloudBaseAnonymously();
-
-    if (signInResult.error) {
-      throw new Error(toAuthErrorMessage(signInResult.error));
-    }
-  }
-
-  const accessToken = await ensureCloudBaseAccessToken();
   const currentUser = await fetchCloudBaseCurrentUser(accessToken);
   const user = createAuthUser({
     id: currentUser.userId,
@@ -223,6 +235,36 @@ async function resolveCloudBaseSession(): Promise<{
     currentUser,
     accessToken,
   };
+}
+
+async function restoreAuthenticatedCloudBaseSession(): Promise<{
+  session: AuthSession;
+  user: AuthUser;
+  currentUser: CloudBaseCurrentUser;
+  accessToken: string;
+} | null> {
+  initCloudBaseAuth();
+
+  const sessionResult = await restoreCloudBaseSession();
+
+  if (sessionResult.error) {
+    throw new Error(toCloudBaseAuthErrorMessage(sessionResult.error, 'CloudBase session 恢复失败。'));
+  }
+
+  const accessToken = sessionResult.data.session?.access_token?.trim() || null;
+
+  if (!accessToken) {
+    return null;
+  }
+
+  const cloudBaseAuth = await resolveCloudBaseSession(accessToken);
+
+  if (cloudBaseAuth.user.isAnonymous) {
+    await signOutCloudBase().catch(() => undefined);
+    return null;
+  }
+
+  return cloudBaseAuth;
 }
 
 function unsubscribeLegacyAuth() {
@@ -384,7 +426,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
 
     unsubscribeLegacyAuth();
 
-    if (get().isInitialized && get().authProvider === 'cloudbase' && get().accessToken) {
+    if (get().isInitialized && get().authProvider === 'cloudbase') {
       return;
     }
 
@@ -396,7 +438,13 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
 
     initializeAuthPromise = (async () => {
       try {
-        const cloudBaseAuth = await resolveCloudBaseSession();
+        const cloudBaseAuth = await restoreAuthenticatedCloudBaseSession();
+
+        if (!cloudBaseAuth) {
+          set(createCloudBaseSignedOutState());
+          get().clearAgentAccess();
+          return;
+        }
 
         set({
           status: 'authenticated',
@@ -414,21 +462,7 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
 
         await get().refreshAgentAccess();
       } catch (error) {
-        set({
-          status: 'error',
-          session: null,
-          user: null,
-          currentUser: null,
-          accessToken: null,
-          isAuthenticated: false,
-          isAnonymous: true,
-          authProvider: 'cloudbase',
-          error: toAuthErrorMessage(error),
-          isInitialized: true,
-          agentAccess: createAgentAccessUnavailableView('CloudBase 登录状态检查失败，暂不能读取真实 Agent 额度。'),
-          isAgentAccessLoading: false,
-          agentAccessError: 'CloudBase 登录状态检查失败，暂不能读取真实 Agent 额度。',
-        });
+        set(createCloudBaseSignedOutState(toCloudBaseAuthErrorMessage(error, 'CloudBase 登录状态检查失败。')));
       } finally {
         initializeAuthPromise = null;
       }
@@ -437,40 +471,60 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
     return initializeAuthPromise;
   },
 
-  signInWithPassword: async (email, password) => {
-    if (isCloudBasePrivateApiEnabled()) {
-      void email;
-      void password;
-      set({ status: 'loading', error: null, authProvider: 'cloudbase' });
+  signInWithPassword: async (username, password) => {
+    set({ status: 'loading', error: null, authProvider: 'cloudbase' });
 
-      try {
-        const cloudBaseAuth = await resolveCloudBaseSession();
+    try {
+      const signInResult = await signInCloudBaseWithUsername(username, password);
 
-        set({
-          status: 'authenticated',
-          session: cloudBaseAuth.session,
-          user: cloudBaseAuth.user,
-          currentUser: cloudBaseAuth.currentUser,
-          accessToken: cloudBaseAuth.accessToken,
-          isAuthenticated: true,
-          isAnonymous: cloudBaseAuth.user.isAnonymous,
-          authProvider: 'cloudbase',
-          error: null,
-          isInitialized: true,
-          isLoginModalOpen: false,
-        });
-        await get().refreshAgentAccess();
-        return true;
-      } catch (error) {
-        set({
-          status: 'error',
-          error: toAuthErrorMessage(error),
-          isInitialized: true,
-        });
-        return false;
+      if (signInResult.error) {
+        throw new Error(toCloudBaseAuthErrorMessage(signInResult.error, 'CloudBase 用户名密码登录失败。'));
       }
-    }
 
+      const accessToken = signInResult.data.session?.access_token?.trim() || null;
+
+      if (!accessToken) {
+        throw new Error('CloudBase 登录成功但未返回 access token。');
+      }
+
+      const cloudBaseAuth = await resolveCloudBaseSession(accessToken);
+
+      set({
+        status: 'authenticated',
+        session: cloudBaseAuth.session,
+        user: cloudBaseAuth.user,
+        currentUser: cloudBaseAuth.currentUser,
+        accessToken: cloudBaseAuth.accessToken,
+        isAuthenticated: true,
+        isAnonymous: cloudBaseAuth.user.isAnonymous,
+        authProvider: 'cloudbase',
+        error: null,
+        isInitialized: true,
+        isLoginModalOpen: false,
+      });
+      await get().refreshAgentAccess();
+      return true;
+    } catch (error) {
+      set({
+        status: 'anonymous',
+        session: null,
+        user: null,
+        currentUser: null,
+        accessToken: null,
+        isAuthenticated: false,
+        isAnonymous: true,
+        authProvider: 'cloudbase',
+        error: toCloudBaseAuthErrorMessage(error, 'CloudBase 用户名密码登录失败。'),
+        isInitialized: true,
+        agentAccess: createAnonymousAgentAccessView(),
+        isAgentAccessLoading: false,
+        agentAccessError: null,
+      });
+      return false;
+    }
+  },
+
+  signInWithPasswordLegacy: async (email, password) => {
     if (!isSupabaseAuthConfigured || supabase === null) {
       set({
         ...createAnonymousState(),
@@ -555,33 +609,78 @@ export const useAuthStore = create<AuthStoreState>()((set, get) => ({
     }
   },
 
+  signUpWithUsername: async (username, password) => {
+    set({ status: 'loading', error: null, authProvider: 'cloudbase' });
+
+    try {
+      const signUpResult = await signUpCloudBaseWithUsername(username, password);
+
+      if (signUpResult.error) {
+        throw new Error(toCloudBaseAuthErrorMessage(signUpResult.error, 'CloudBase 用户名注册失败。'));
+      }
+
+      const signInResult = await signInCloudBaseWithUsername(username, password);
+
+      if (signInResult.error) {
+        throw new Error(toCloudBaseAuthErrorMessage(signInResult.error, '注册成功，请使用用户名和密码登录。'));
+      }
+
+      const accessToken = signInResult.data.session?.access_token?.trim() || null;
+
+      if (!accessToken) {
+        throw new Error('注册成功，请重新登录。');
+      }
+
+      const cloudBaseAuth = await resolveCloudBaseSession(accessToken);
+
+      set({
+        status: 'authenticated',
+        session: cloudBaseAuth.session,
+        user: cloudBaseAuth.user,
+        currentUser: cloudBaseAuth.currentUser,
+        accessToken: cloudBaseAuth.accessToken,
+        isAuthenticated: true,
+        isAnonymous: false,
+        authProvider: 'cloudbase',
+        error: null,
+        isInitialized: true,
+        isLoginModalOpen: false,
+      });
+      await get().refreshAgentAccess();
+      return true;
+    } catch (error) {
+      set({
+        status: 'anonymous',
+        session: null,
+        user: null,
+        currentUser: null,
+        accessToken: null,
+        isAuthenticated: false,
+        isAnonymous: true,
+        authProvider: 'cloudbase',
+        error: toCloudBaseAuthErrorMessage(error, 'CloudBase 用户名注册失败。'),
+        isInitialized: true,
+        agentAccess: createAnonymousAgentAccessView(),
+        isAgentAccessLoading: false,
+        agentAccessError: null,
+      });
+      return false;
+    }
+  },
+
   signOut: async () => {
-    if (isCloudBasePrivateApiEnabled()) {
+    if (get().authProvider !== 'supabase') {
       set({ status: 'loading', error: null, authProvider: 'cloudbase' });
 
       try {
         await signOutCloudBase();
-        const cloudBaseAuth = await resolveCloudBaseSession();
-
-        set({
-          status: 'authenticated',
-          session: cloudBaseAuth.session,
-          user: cloudBaseAuth.user,
-          currentUser: cloudBaseAuth.currentUser,
-          accessToken: cloudBaseAuth.accessToken,
-          isAuthenticated: true,
-          isAnonymous: cloudBaseAuth.user.isAnonymous,
-          authProvider: 'cloudbase',
-          error: null,
-          isInitialized: true,
-          isLoginModalOpen: false,
-        });
-        await get().refreshAgentAccess();
+        set(createCloudBaseSignedOutState());
+        get().clearAgentAccess();
         return true;
       } catch (error) {
         set({
-          status: get().user ? 'authenticated' : 'error',
-          error: toAuthErrorMessage(error),
+          status: get().user ? 'authenticated' : 'anonymous',
+          error: toCloudBaseAuthErrorMessage(error, 'CloudBase 退出登录失败。'),
           isInitialized: true,
         });
         return false;

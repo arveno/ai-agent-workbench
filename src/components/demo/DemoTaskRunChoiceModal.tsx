@@ -31,7 +31,7 @@ function getChoiceDescription(availability: RealAgentAvailabilityView): string {
     return '正在检查真实 Agent 使用资格。你可以等待检查完成，也可以使用公开演示模式查看完整流程。';
   }
 
-  return '真实 Agent 暂不可用。可使用公开演示模式查看示例流程。';
+  return '当前未完成登录或额度检查。可使用公开演示模式查看示例流程。';
 }
 
 export function DemoTaskRunChoiceModal({

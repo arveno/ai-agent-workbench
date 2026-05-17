@@ -79,7 +79,9 @@ export interface AuthStoreState {
   openLoginModal: () => void;
   closeLoginModal: () => void;
   initializeAuth: () => Promise<void>;
-  signInWithPassword: (email: string, password: string) => Promise<boolean>;
+  signInWithPassword: (username: string, password: string) => Promise<boolean>;
+  signInWithPasswordLegacy: (email: string, password: string) => Promise<boolean>;
+  signUpWithUsername: (username: string, password: string) => Promise<boolean>;
   signOut: () => Promise<boolean>;
   refreshAgentAccess: () => Promise<void>;
   clearAgentAccess: () => void;

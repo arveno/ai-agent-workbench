@@ -42,7 +42,7 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
-const AGENT_UNAVAILABLE_HINT = '真实 Agent 暂不可用，可切换公开演示模式继续体验完整流程。';
+const AGENT_UNAVAILABLE_HINT = '真实 Agent 需要登录或有效额度，可切换公开演示模式继续体验完整流程。';
 
 let agentRunStartInFlight = false;
 
