@@ -1,8 +1,22 @@
-# AI Agent Workbench / AI 应用工作台
+# AI Agent Workbench / AI 应用工作台 Demo
 
-AI Agent Workbench 是一个面向教育数据分析场景的 AI 应用工作台 Demo。
+AI Agent Workbench 是一个面向 AI 应用前端、Agent 工作台和 B 端数据分析场景的作品 Demo。
 
-它不是普通聊天框，而是一个包含会话管理、真实 Agent 调用、工具执行可视化、Run Trace、报告生成、RAG 来源展示和权限 / quota 控制的 AI 应用前端样例。项目重点展示 AI 应用从公开演示到登录后的真实 Agent 执行、从消息到工具调用和报告产物的完整闭环。
+它不是普通聊天框，而是一个小规模但链路完整的 AI 应用样例：用户可以先体验公开示例，登录后进入真实 CloudBase 私有会话，触发服务端 Agent Run，查看工具执行、Run Trace、图表、报告和 RAG 来源，并在刷新页面后恢复会话、消息、Run Trace 和报告。
+
+当前版本是阶段性 CloudBase 单轨演示版，不宣称生产可用。重点是展示一条完整、可回归、可讲清楚边界的腾讯云迁移主线。
+
+当前主链路：
+
+```txt
+EdgeOne / Vite
+  ↓
+CloudBase Auth
+  ↓
+CloudBase HTTP Functions
+  ↓
+CloudBase MySQL
+```
 
 在线预览以当前 EdgeOne 部署地址为准。
 
@@ -26,21 +40,23 @@ Planner + Tool Registry
 Run Trace 与持久化数据资产
 ```
 
-当前主要面向教育数据分析场景，例如教学质量指标分析、月度对比、异常指标定位、简版报告生成、教学评价制度问答和公开演示任务。
+当前主要面向教育数据分析场景，例如教学质量指标分析、月度对比、异常指标定位、简版报告生成、教学评价制度问答和公开示例任务。
 
 ---
 
 ## 当前核心能力
 
-- 公开演示模式 / Mock：匿名用户可直接体验完整工作台流程。
-- CloudBase Auth：默认使用用户名密码登录和 session 恢复；Supabase Auth 旧主体代码已删除。
-- AgentAccessView / role / quota：展示用户角色和真实 Agent Run 额度。
-- 真实 Agent 服务端保护：`/api/agent/run/stream` 由服务端鉴权、校验 conversation 归属并扣减 quota。
-- 会话与消息持久化：`conversations` / `messages` 支持刷新恢复。
-- Demo Templates：示例任务和示例会话模板与用户真实会话隔离。
-- Run / Tool / Report 持久化：真实 Agent Run、事件、工具调用和报告 artifact 可恢复。
-- 最近使用工具真实化：从真实 `tool_invocations` 聚合展示。
-- RAG 最小闭环：通过 CloudBase MySQL `knowledge_search` 检索示例知识库，回答可带 `[S1]` / `[S2]` 引用。
+- CloudBase 用户名密码登录：正式登录、退出登录和 session 恢复都走 CloudBase Auth。
+- 会话列表与消息持久化：`conversations` / `messages` 支持登录后读写和刷新恢复。
+- 公开示例任务：未登录也可查看公开 demo，登录后可从示例任务进入私有会话。
+- Demo copy：公开示例会话可复制为当前用户的 CloudBase private conversation。
+- Agent Run SSE：真实 Agent 通过 `/api/agent/run/stream` 流式返回运行事件。
+- Run Trace：`agent_runs` / `run_events` / `tool_invocations` 可恢复，刷新页面不重新触发 Agent Run。
+- Quota：真实 Agent Run 有额度读取、consume、finish 和重复请求保护。
+- Reports：报告 artifact 归属当前 CloudBase conversation，可保存、读取、刷新恢复和切换会话隔离。
+- teaching_metrics 数据分析：`schema_inspect`、`aggregate_table`、`chart_render` 读取 CloudBase MySQL 演示数据。
+- knowledge_qa / RAG：`knowledge_search` 从 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 检索知识片段。
+- 明确 fallback 边界：`conclusionSource` 和 `fallbackReason` 会说明结果来自模型、结构化 fallback、模型未配置、模型拒绝或数据工具异常。
 - 长会话 / 大文本性能保护：最近消息加载、长文本折叠、Markdown memo、大 JSON 按需展开。
 
 ---
@@ -152,36 +168,48 @@ knowledge_chunks
 - Vite
 - TypeScript
 - Zustand
+- EdgeOne Pages
 - CloudBase Auth
+- CloudBase HTTP Functions
 - CloudBase MySQL
-- CloudBase HTTP Functions / EdgeOne Pages
-- Supabase Auth / Supabase PostgreSQL / Vercel Serverless Functions 历史迁移来源
-- Groq
+- 轻量 modelGateway / OpenAI-compatible provider
 - ECharts
 - react-markdown / remark-gfm
 - Tailwind CSS
 - shadcn/ui / Radix UI
+
+Vercel / Supabase 只作为历史迁移来源记录，旧 `api/`、`src/server/`、`supabase/` 主体代码已经删除，不再是当前运行主线。
 
 ---
 
 ## 核心链路
 
 ```txt
-用户输入
+EdgeOne / Vite 前端
   ↓
+CloudBase Auth 用户名密码登录
+  ↓
+CloudBase private APIs
+  ↓
+CloudBase MySQL
+```
+
+真实 Agent 运行链路：
+
+```txt
 ChatInput / sendPrompt
   ↓
-Mock 或真实 Agent 分流
+CloudBase conversation / messages
   ↓
-真实 Agent：/api/agent/run/stream
+/api/agent/run/stream
   ↓
 服务端校验 token / conversation / quota
   ↓
-Planner
+Planner / Intent Router
   ↓
 Tool Registry
   ↓
-schema_inspect / aggregate_table / query_table / chart_render / knowledge_search
+schema_inspect / aggregate_table / chart_render / knowledge_search
   ↓
 SSE Run Events
   ↓
@@ -219,23 +247,17 @@ conversation / messages / runs / tools / reports 持久化
 本地 `.env.local` 示例：
 
 ```env
-# Frontend public env
 VITE_API_BASE_URL=
-VITE_CLOUDBASE_ENV_ID=
+VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 VITE_CLOUDBASE_REGION=ap-shanghai
-
-# Local dev proxy env
-CLOUDBASE_PROXY_TARGET=
-
-# Server-only env
-GROQ_API_KEY=
+CLOUDBASE_PROXY_TARGET=https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com
 ```
 
 说明：
 
 - `.env.local` 不提交。
 - `VITE_` 开头的变量会进入浏览器，只能放前端公开变量。
-- `VITE_API_BASE_URL` 可选；EdgeOne Pages 调 CloudBase HTTP Functions 时填写 CloudBase 默认域名，留空时继续使用同域相对路径。
+- `VITE_API_BASE_URL` 本地留空，让 Vite dev server 代理相对路径 `/api`。
 - 本地 CloudBase 开发推荐保持 `VITE_API_BASE_URL=` 为空，并用 `CLOUDBASE_PROXY_TARGET` 让 Vite dev server 代理 `/api`，避免 localhost CORS。
 - `CLOUDBASE_PROXY_TARGET` 不是 `VITE_` 变量，只供本地 Vite dev server 读取，不会暴露给浏览器。
 - CloudBase 控制台需要开启“用户名密码登录”；未开启时前端登录会提示开启该身份源。
@@ -248,15 +270,6 @@ GROQ_API_KEY=
 - Run persistence 已通过 CloudBase `workbench-runs` 恢复；主 Agent Run SSE、messages、reports 和 RAG 闭环均走 CloudBase。
 - service role、模型 Key 和数据库连接串不能加 `VITE_`。
 
-本地 CloudBase 默认链路推荐 `.env.local`：
-
-```env
-VITE_API_BASE_URL=
-VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
-VITE_CLOUDBASE_REGION=ap-shanghai
-CLOUDBASE_PROXY_TARGET=https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com
-```
-
 EdgeOne 生产环境推荐：
 
 ```env
@@ -265,31 +278,46 @@ VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 VITE_CLOUDBASE_REGION=ap-shanghai
 ```
 
-CloudBase 函数侧模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端：
+CloudBase 函数环境变量：
+
+所有使用 `tencent/functions/_shared/mysql.js` 的 CloudBase HTTP Function 都需要：
+
+```env
+CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
+```
+
+`workbench-agent-run-stream` 可选配置模型网关或 Groq 兼容变量。模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端：
 
 ```env
 MODEL_GATEWAY_PROVIDER=openai-compatible
 MODEL_GATEWAY_BASE_URL=
 MODEL_GATEWAY_API_KEY=
 MODEL_GATEWAY_MODEL=
+GROQ_API_KEY=
+GROQ_MODEL=
 ```
 
 ## CloudBase 默认链路状态
 
-当前 CloudBase 默认链路已覆盖：
+当前 CloudBase 单轨演示链路已覆盖：
 
 - Public demo templates
-- CloudBase Auth helper / 前端 authStore 默认身份来源
+- CloudBase Auth 用户名密码登录 / session 恢复
 - Conversations / messages
-- Reports
-- Demo copy
-- Quota 原子扣减基础闭环
+- Reports / demo-copy / quota
 - Agent Run SSE / fallback
+- Agent Run 幂等保护与 quota 原子扣减
+- teaching_metrics 数据分析工具
+- modelGateway 轻量模型网关
 - Agent Run 读取恢复 / Run Trace 恢复
-- 正式页面 CloudBase 默认分支
+- Workbench 生命周期闭环
+- Report 闭环
+- knowledge_qa / RAG knowledge_search
 - 本地 Vite proxy
 
 `authStore` 默认恢复 CloudBase 用户名密码登录 session；没有 session 时保持访客状态，公开演示仍可使用，私有会话和真实 Agent 需要登录。正式登录弹窗调用 CloudBase Auth，不再调用 Supabase `/auth/v1/token`。业务 private API 使用 CloudBase access token。Agent Run 运行走 `/api/agent/run/stream`，刷新页面或切换会话后的 Run Trace 恢复走 `/api/workbench/runs`。`VITE_ENABLE_CLOUDBASE_PRIVATE_API` 已退出正式前端运行分支；旧 Vercel / Supabase 主体代码已删除。匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
+
+当前模型 Provider 问题暂时后置。Groq 或未配置模型时可能出现 `model_forbidden` / `model_not_configured` fallback；这不影响腾讯云迁移主链路判断，因为数据工具、SSE、持久化、quota、Run Trace 恢复和报告闭环仍应正常完成。后续会接入国内 OpenAI-compatible provider。
 
 旧链路主体删除后仍需要完成 EdgeOne Preview / Production 回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次。
 
@@ -342,18 +370,18 @@ CloudBase 单轨需要确认：
 ## 推荐演示路径
 
 ```txt
-1. 打开项目，先展示匿名公开演示模式
-2. 点击“你能做什么？”
-3. 展示 Chat / Run Trace / 右侧面板
-4. 登录 Demo 用户
-5. 展示左下角 role / Agent Run 额度
-6. 新建或恢复真实会话
-7. 运行真实 Agent 数据分析示例
-8. 展示 quota 扣减、Run Trace、图表和报告
-9. 展示报告 artifact / 刷新恢复
-10. 展示最近使用工具
-11. 运行 RAG 示例，展示 [S1] / [S2] 引用和右侧来源
-12. 展示长文本折叠 / 加载更早消息 / 大 JSON 展开
+1. 未登录打开项目，查看公开示例任务
+2. 登录 CloudBase 用户
+3. 查看会话列表和真实 Agent quota
+4. 从示例任务触发真实 Agent
+5. 查看 SSE 流式输出和 Run Trace
+6. 查看 schema_inspect / aggregate_table / chart_render 工具调用
+7. 查看图表和 assistant 结论
+8. 保存报告
+9. 刷新页面，恢复会话、消息、Run Trace 和报告
+10. 切换会话，确认 reports / messages / runs 不串会话
+11. 运行 RAG 示例：解释 warning_count 是什么
+12. 展示 knowledge_search 来源和 [S1] / [S2] 引用
 ```
 
 建议部署或投递前做一次浏览器 smoke test，确认 CloudBase migrations / seeds 已执行、真实 Agent quota 可用、RAG seed 数据存在。
@@ -362,7 +390,7 @@ CloudBase 单轨需要确认：
 
 ## 当前能力边界
 
-当前项目是阶段性 Demo，不是完整生产系统。
+当前项目是阶段性 CloudBase 单轨演示版，不是完整生产系统。
 
 当前没有：
 
@@ -378,20 +406,20 @@ CloudBase 单轨需要确认：
 - 完整 Run History 搜索
 - PDF 导出
 - Three.js Agent Flow
+- 部署自动化 / migration 自动化 / smoke test 自动化
 
 ---
 
 ## 后续规划
 
-- Admin UI
-- quota 重置任务
-- Run History 搜索
-- 模型网关配置后台
-- Token / Cost / Latency 面板
-- 文档上传与知识库管理
-- pgvector / hybrid search
-- 更完整的观测与监控
-- Three.js Agent Flow
+- 国内模型 Provider / OpenAI-compatible 接入
+- CloudBase 部署自动化 / migration 自动化 / smoke test 自动化
+- Planner 正规化 / Intent Router 收口
+- 代码结构优化 / 大文件拆分
+- 面试讲法和演示文档收口
+- Admin UI / quota 重置任务 / Run History 搜索
+- 文档上传、知识库管理和 hybrid search
+- Token / Cost / Latency 面板与更完整的观测监控
 
 ---
 
