@@ -180,13 +180,19 @@ export function Sidebar() {
     void loadDemoConversations();
   }, [loadDemoConversations, loadDemoTasks]);
 
-  const handleSessionClick = (sessionId: string) => {
-    const session = sessions.find((item) => item.id === sessionId);
-    switchSession(sessionId);
+  const replaceUrlForSession = (sessionId: string, taskId?: string) => {
+    const state = useWorkbenchStore.getState();
+    const session = state.sessions.find((item) => item.id === sessionId);
+
     replaceWorkbenchUrl({
       sessionId,
-      taskId: session?.taskId ?? currentTaskId,
+      taskId: state.isPersistentMode ? undefined : taskId ?? session?.taskId ?? state.currentTaskId,
     });
+  };
+
+  const handleSessionClick = (sessionId: string) => {
+    switchSession(sessionId);
+    replaceUrlForSession(sessionId);
   };
 
   const handleTaskClick = async (taskId: string) => {
@@ -201,10 +207,7 @@ export function Sidebar() {
       return;
     }
 
-    replaceWorkbenchUrl({
-      sessionId,
-      taskId,
-    });
+    replaceUrlForSession(sessionId, taskId);
   };
 
   const handleDemoConversationClick = async (templateId: string) => {
@@ -219,10 +222,7 @@ export function Sidebar() {
       return;
     }
 
-    replaceWorkbenchUrl({
-      sessionId,
-      taskId: currentTaskId,
-    });
+    replaceUrlForSession(sessionId, currentTaskId);
   };
 
   const handleCreateSession = async () => {
@@ -232,10 +232,7 @@ export function Sidebar() {
       return;
     }
 
-    replaceWorkbenchUrl({
-      sessionId,
-      taskId: currentTaskId,
-    });
+    replaceUrlForSession(sessionId, currentTaskId);
   };
 
   const handleRetryConversations = () => {
@@ -269,10 +266,7 @@ export function Sidebar() {
       return;
     }
 
-    replaceWorkbenchUrl({
-      sessionId,
-      taskId,
-    });
+    replaceUrlForSession(sessionId, taskId);
   };
 
   const handleUseMockForDemoTask = async () => {
@@ -287,10 +281,7 @@ export function Sidebar() {
       return;
     }
 
-    replaceWorkbenchUrl({
-      sessionId,
-      taskId,
-    });
+    replaceUrlForSession(sessionId, taskId);
   };
 
   const handleLoginForDemoTask = () => {

@@ -17,8 +17,8 @@ import { parseWorkbenchUrl, replaceWorkbenchUrl } from './utils/urlState';
 function App() {
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
   const authStatus = useAuthStore((state) => state.status);
-  const authUserId = useAuthStore((state) => state.user?.id ?? null);
-  const authAccessToken = useAuthStore((state) => state.session?.access_token ?? null);
+  const authUserId = useAuthStore((state) => state.currentUser?.userId ?? state.user?.id ?? null);
+  const authAccessToken = useAuthStore((state) => state.accessToken ?? state.session?.access_token ?? null);
   const isAuthInitialized = useAuthStore((state) => state.isInitialized);
   const hydrateFromUrl = useWorkbenchStore((state) => state.hydrateFromUrl);
   const hydratePersistentWorkbench = useWorkbenchStore((state) => state.hydratePersistentWorkbench);
@@ -32,13 +32,12 @@ function App() {
 
   useEffect(() => {
     const urlState = parseWorkbenchUrl(window.location.search);
-    const nextState = {
-      sessionId: urlState.sessionId ?? 's_001',
-      taskId: urlState.taskId ?? 't_month_analytics',
-    };
 
-    hydrateFromUrl(nextState);
-    replaceWorkbenchUrl(nextState);
+    hydrateFromUrl(urlState);
+
+    if (urlState.sessionId || urlState.taskId) {
+      replaceWorkbenchUrl(urlState);
+    }
   }, [hydrateFromUrl]);
 
   useEffect(() => {
@@ -48,9 +47,17 @@ function App() {
 
     if (authStatus === 'authenticated' && authUserId && authAccessToken) {
       const urlState = parseWorkbenchUrl(window.location.search);
-      void hydratePersistentWorkbench({
-        preferredSessionId: urlState.sessionId ?? undefined,
-      });
+      void (async () => {
+        const restoredConversationId = await hydratePersistentWorkbench({
+          preferredSessionId: urlState.sessionId ?? undefined,
+        });
+
+        if (restoredConversationId) {
+          replaceWorkbenchUrl({
+            sessionId: restoredConversationId,
+          });
+        }
+      })();
       void loadRecentTools();
       return;
     }

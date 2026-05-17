@@ -120,8 +120,14 @@ function createAnonymousSessionFromTemplate(template: DemoConversationTemplateRe
   };
 }
 
-function createDemoTaskConversationMetadata(task: DemoTaskTemplateRecord, executionMode: 'agent' | 'mock') {
+function createDemoTaskConversationMetadata(
+  task: DemoTaskTemplateRecord,
+  executionMode: 'agent' | 'mock',
+  runtimeSessionId?: string,
+) {
   return {
+    runtimeSessionId: runtimeSessionId ?? null,
+    taskId: task.id,
     copiedFromDemoTaskId: task.id,
     copiedFromDemoTaskTitle: task.title,
     demoTaskCategory: task.category,
@@ -304,7 +310,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
         title: task.title,
         mode: 'agent',
         summary: task.description,
-        metadata: createDemoTaskConversationMetadata(task, 'agent'),
+        metadata: createDemoTaskConversationMetadata(task, 'agent', get().currentSessionId),
       },
       accessToken,
     );
@@ -369,7 +375,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
           title: task.title,
           mode: 'mock',
           summary: task.description,
-          metadata: createDemoTaskConversationMetadata(task, 'mock'),
+          metadata: createDemoTaskConversationMetadata(task, 'mock', get().currentSessionId),
         },
         accessToken,
       );

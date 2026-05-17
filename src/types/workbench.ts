@@ -367,7 +367,7 @@ export interface SessionSlice {
       kind?: WorkbenchMessageKind;
     },
   ) => WorkbenchMessage | null;
-  hydratePersistentWorkbench: (params?: { preferredSessionId?: string }) => Promise<void>;
+  hydratePersistentWorkbench: (params?: { preferredSessionId?: string }) => Promise<string | null>;
   resetPersistentWorkbench: () => void;
   loadPersistentMessagesForSession: (sessionId: string) => Promise<void>;
   loadOlderMessagesForCurrentSession: () => Promise<void>;

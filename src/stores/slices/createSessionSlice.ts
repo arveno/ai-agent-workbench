@@ -3,7 +3,7 @@ import { mockTasks } from '../../mocks/tasks';
 import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
 import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
 import { createConversationMessage, fetchConversationMessages } from '../../services/messageApi';
-import type { ConversationMode } from '../../types/persistence';
+import type { ConversationMode, ConversationRecord } from '../../types/persistence';
 import type { SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { conversationRecordToSession } from '../../utils/conversationMapper';
 import { messageRecordToWorkbenchMessage, workbenchMessageToMessageCreateInput } from '../../utils/messageMapper';
@@ -137,6 +137,69 @@ function shouldSkipCloudBaseAgentAssistantPersist(
 
 function getConversationModeForProvider(provider: WorkbenchStore['currentModelProvider']): ConversationMode {
   return provider === 'groq' ? 'agent' : 'mock';
+}
+
+function readConversationMetadataString(record: ConversationRecord, key: string): string | null {
+  const value = record.metadata[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function getConversationTaskId(record: ConversationRecord): string | undefined {
+  return (
+    readConversationMetadataString(record, 'taskId') ??
+    readConversationMetadataString(record, 'copiedFromDemoTaskId') ??
+    undefined
+  );
+}
+
+function getConversationRuntimeSessionId(record: ConversationRecord): string | null {
+  return (
+    readConversationMetadataString(record, 'runtimeSessionId') ??
+    readConversationMetadataString(record, 'localSessionId')
+  );
+}
+
+function conversationRecordToWorkbenchSession(
+  record: ConversationRecord,
+  messages: WorkbenchMessage[] = [],
+): WorkbenchSession {
+  const session = conversationRecordToSession(record, messages);
+  const taskId = getConversationTaskId(record);
+
+  return taskId
+    ? {
+        ...session,
+        taskId,
+      }
+    : session;
+}
+
+function findTargetConversation(
+  conversations: ConversationRecord[],
+  preferredSessionId: string | null | undefined,
+): ConversationRecord | null {
+  const normalizedPreferredSessionId = preferredSessionId?.trim();
+
+  if (!normalizedPreferredSessionId) {
+    return conversations[0] ?? null;
+  }
+
+  return (
+    conversations.find((conversation) => conversation.id === normalizedPreferredSessionId) ??
+    conversations.find((conversation) => getConversationRuntimeSessionId(conversation) === normalizedPreferredSessionId) ??
+    conversations[0] ??
+    null
+  );
+}
+
+function createConversationMetadataForSession(
+  session: WorkbenchSession | undefined,
+  fallbackTaskId: string,
+): Record<string, unknown> {
+  return {
+    runtimeSessionId: session?.id ?? null,
+    taskId: session?.taskId ?? fallbackTaskId,
+  };
 }
 
 function createEmptyUiState() {
@@ -275,12 +338,15 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         {
           title: '新会话',
           mode: getConversationModeForProvider(get().currentModelProvider),
+          metadata: {
+            taskId: get().currentTaskId,
+          },
         },
         authContext.accessToken,
       );
 
       if (result.ok) {
-        const newSession = conversationRecordToSession(result.data);
+        const newSession = conversationRecordToWorkbenchSession(result.data);
 
         set((state) => {
           const nextSessions = sortSessionsByUpdatedAt([newSession, ...state.sessions]);
@@ -525,7 +591,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const authContext = getPersistenceAuthContext();
 
     if (!authContext) {
-      return;
+      return null;
     }
 
     const requestId = persistenceRequestId + 1;
@@ -548,13 +614,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const conversationResult = await fetchConversations(
       {
         limit: 20,
-        status: 'active',
       },
       authContext.accessToken,
     );
 
     if (requestId !== persistenceRequestId) {
-      return;
+      return null;
     }
 
     if (!conversationResult.ok) {
@@ -569,12 +634,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         oldestMessageCursor: null,
         persistenceError: conversationResult.message,
       });
-      return;
+      return null;
     }
 
     const conversations = conversationResult.data.conversations;
-    const targetConversation =
-      conversations.find((conversation) => conversation.id === params?.preferredSessionId) ?? conversations[0] ?? null;
+    const targetConversation = findTargetConversation(conversations, params?.preferredSessionId);
 
     if (!targetConversation) {
       set({
@@ -594,7 +658,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         lastRestoredConversationId: null,
         ...createEmptyUiState(),
       });
-      return;
+      return null;
     }
 
     const messageResult = await fetchConversationMessages(
@@ -606,7 +670,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     );
 
     if (requestId !== persistenceRequestId) {
-      return;
+      return null;
     }
 
     if (!messageResult.ok) {
@@ -621,13 +685,13 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         oldestMessageCursor: null,
         persistenceError: messageResult.message,
       });
-      return;
+      return null;
     }
 
     const restoredMessages = messageResult.data.messages.map((message) => messageRecordToWorkbenchMessage(message));
     const sessions = sortSessionsByUpdatedAt(
       conversations.map((conversation) =>
-        conversationRecordToSession(conversation, conversation.id === targetConversation.id ? restoredMessages : []),
+        conversationRecordToWorkbenchSession(conversation, conversation.id === targetConversation.id ? restoredMessages : []),
       ),
     );
     const activeSession = sessions.find((session) => session.id === targetConversation.id) ?? sessions[0];
@@ -654,6 +718,8 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       void get().loadLatestRunForConversation(activeSession.id);
       void get().loadReportArtifacts(activeSession.id);
     }
+
+    return activeSession?.id ?? null;
   },
   resetPersistentWorkbench: () => {
     if (!get().isPersistentMode && !get().persistentUserId) {
@@ -855,6 +921,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       {
         title: conversationTitle,
         mode: getConversationModeForProvider(currentState.currentModelProvider),
+        metadata: createConversationMetadataForSession(currentSession, currentState.currentTaskId),
       },
       authContext.accessToken,
     );
@@ -867,7 +934,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return null;
     }
 
-    const nextSession = conversationRecordToSession(result.data, currentSession?.messages ?? []);
+    const nextSession = conversationRecordToWorkbenchSession(result.data, currentSession?.messages ?? []);
 
     set((state) => ({
       sessions: sortSessionsByUpdatedAt([nextSession, ...state.sessions.filter((session) => session.id !== nextSession.id)]),
