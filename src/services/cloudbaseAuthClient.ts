@@ -22,6 +22,14 @@ function getCloudBaseRegion(): string {
   return getPublicEnvValue(import.meta.env.VITE_CLOUDBASE_REGION) || DEFAULT_CLOUDBASE_REGION;
 }
 
+export function isCloudBaseAuthConfigured(): boolean {
+  return Boolean(getCloudBaseEnvId());
+}
+
+export function initCloudBaseAuth(): CloudBaseAuth {
+  return getCloudBaseAuth();
+}
+
 function getCloudBaseApp(): CloudBaseApp {
   if (cloudBaseApp) {
     return cloudBaseApp;
@@ -107,4 +115,8 @@ export async function ensureCloudBaseAccessToken(): Promise<string> {
   }
 
   return nextToken;
+}
+
+export async function signOutCloudBase(): Promise<void> {
+  await getCloudBaseAuth().signOut();
 }

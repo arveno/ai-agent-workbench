@@ -28,23 +28,20 @@ import {
 let demoTasksRequestId = 0;
 let demoConversationsRequestId = 0;
 
-const CLOUDBASE_PREVIEW_ACCESS_TOKEN = 'cloudbase-preview';
-const CLOUDBASE_PREVIEW_USER_ID = 'cloudbase-preview';
-
 function getAccessToken(): string | null {
-  const session = useAuthStore.getState().session;
-  const accessToken = session?.access_token?.trim();
+  const authState = useAuthStore.getState();
+  const accessToken = authState.accessToken?.trim() || authState.session?.access_token?.trim();
   return accessToken || null;
 }
 
 function getAuthenticatedUserId(): string | null {
   const authState = useAuthStore.getState();
-  return authState.user?.id ?? authState.session?.user.id ?? null;
+  return authState.currentUser?.userId ?? authState.user?.id ?? authState.session?.user.id ?? null;
 }
 
 function getPersistenceAccessToken(): string | null {
   if (isCloudBasePrivateApiEnabled()) {
-    return CLOUDBASE_PREVIEW_ACCESS_TOKEN;
+    return getAccessToken();
   }
 
   return getAccessToken();
@@ -52,7 +49,7 @@ function getPersistenceAccessToken(): string | null {
 
 function getPersistenceUserId(): string | null {
   if (isCloudBasePrivateApiEnabled()) {
-    return CLOUDBASE_PREVIEW_USER_ID;
+    return getAuthenticatedUserId();
   }
 
   return getAuthenticatedUserId();

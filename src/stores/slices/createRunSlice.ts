@@ -16,21 +16,16 @@ const MAX_RUN_EVENT_LOG_LENGTH = 200;
 const initialCurrentRun = getSessionLatestRun(
   initialWorkbenchState.sessions.find((session) => session.id === initialWorkbenchState.currentSessionId),
 );
-const CLOUDBASE_PREVIEW_ACCESS_TOKEN = 'cloudbase-preview';
 let latestRunRequestId = 0;
 let reportArtifactsRequestId = 0;
 
 function getAccessToken(): string | null {
-  const session = useAuthStore.getState().session;
-  const accessToken = session?.access_token?.trim();
+  const authState = useAuthStore.getState();
+  const accessToken = authState.accessToken?.trim() || authState.session?.access_token?.trim();
   return accessToken || null;
 }
 
 function getReportArtifactAccessToken(): string | null {
-  if (isCloudBasePrivateApiEnabled()) {
-    return CLOUDBASE_PREVIEW_ACCESS_TOKEN;
-  }
-
   return getAccessToken();
 }
 
@@ -107,6 +102,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadLatestRunForConversation: async (conversationId) => {
+    if (isCloudBasePrivateApiEnabled()) {
+      return;
+    }
+
     const accessToken = getAccessToken();
 
     if (!accessToken || !get().isPersistentMode) {
@@ -229,6 +228,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadRunEvents: async (runId) => {
+    if (isCloudBasePrivateApiEnabled()) {
+      return;
+    }
+
     const accessToken = getAccessToken();
 
     if (!accessToken) {
@@ -258,6 +261,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadToolInvocations: async (runId) => {
+    if (isCloudBasePrivateApiEnabled()) {
+      return;
+    }
+
     const accessToken = getAccessToken();
 
     if (!accessToken) {
@@ -363,6 +370,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadRagRetrievals: async (runId) => {
+    if (isCloudBasePrivateApiEnabled()) {
+      return;
+    }
+
     const accessToken = getAccessToken();
 
     if (!accessToken || !get().isPersistentMode) {

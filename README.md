@@ -37,7 +37,7 @@ Run Trace 与持久化数据资产
 ## 当前核心能力
 
 - 公开演示模式 / Mock：匿名用户可直接体验完整工作台流程。
-- Supabase Auth：支持登录、退出和 session 恢复。
+- CloudBase Auth：默认使用 CloudBase session / 匿名登录恢复身份，Supabase Auth 仅保留为迁移期回滚路径。
 - AgentAccessView / role / quota：展示用户角色和真实 Agent Run 额度。
 - 真实 Agent 服务端保护：`/api/agent/run/stream` 由服务端鉴权、校验 conversation 归属并扣减 quota。
 - 会话与消息持久化：`conversations` / `messages` 支持刷新恢复。
@@ -64,13 +64,13 @@ Run Trace 与持久化数据资产
 
 ### 真实 Agent 模式
 
-真实 Agent 模式使用服务端受控链路：
+真实 Agent 模式使用 CloudBase 服务端受控链路：
 
-- 需要 Supabase Auth 登录
-- 需要服务端校验 Supabase access token
+- 需要 CloudBase Auth 身份
+- 需要服务端校验 CloudBase access token
 - 需要 `agent_run` quota
 - 真实 Agent Run 开始后扣减 1 次额度
-- 模型调用统一走服务端 `GROQ_API_KEY`
+- 模型调用统一走 CloudBase 函数环境变量中的 `MODEL_GATEWAY_*`，未配置时兼容 `GROQ_API_KEY`
 - 前端不接收、不保存、不传递模型调用密钥
 - 服务端校验 conversation 属于当前用户
 - 失败后不会自动静默 fallback 到 Mock
@@ -155,9 +155,10 @@ rag_retrieval_logs
 - Vite
 - TypeScript
 - Zustand
-- Supabase Auth
-- Supabase / PostgreSQL
-- Vercel Serverless Functions
+- CloudBase Auth
+- CloudBase MySQL
+- CloudBase HTTP Functions / EdgeOne Pages
+- Supabase Auth / Supabase PostgreSQL / Vercel Serverless Functions legacy rollback
 - Groq
 - ECharts
 - react-markdown / remark-gfm
@@ -205,8 +206,9 @@ conversation / messages / runs / tools / reports 持久化
 - 前端不使用 service role
 - 前端不直接连接数据库
 - 真实 Agent API 由服务端保护
-- 模型调用只使用服务端 `GROQ_API_KEY`
-- Supabase service role 只用于服务端 API
+- 模型调用只使用 CloudBase 函数端 `MODEL_GATEWAY_*` 或兼容 `GROQ_API_KEY`
+- CloudBase access token 只用于 CloudBase private APIs
+- Supabase service role 只用于 legacy 服务端 API
 - Tool 调用由服务端受控执行
 - 模型不能直接执行 SQL
 - API 不返回 service role、模型调用密钥或数据库连接串
@@ -222,20 +224,22 @@ conversation / messages / runs / tools / reports 持久化
 
 ```env
 # Frontend public env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_PUBLISHABLE_KEY=
 VITE_API_BASE_URL=
 VITE_CLOUDBASE_ENV_ID=
 VITE_CLOUDBASE_REGION=ap-shanghai
-VITE_ENABLE_CLOUDBASE_PRIVATE_API=false
 
 # Local dev proxy env
 CLOUDBASE_PROXY_TARGET=
 
+# Optional legacy rollback
+# Set to false only when temporarily forcing the old Vercel/Supabase path.
+VITE_ENABLE_CLOUDBASE_PRIVATE_API=
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+
 # Server-only env
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-GROQ_API_KEY=
 SUPABASE_DB_CONNECTION_STRING=
 POSTGRES_CONNECTION_STRING=
 ```
@@ -245,27 +249,22 @@ POSTGRES_CONNECTION_STRING=
 - `.env.local` 不提交。
 - `VITE_` 开头的变量会进入浏览器，只能放前端公开变量。
 - `VITE_API_BASE_URL` 可选；EdgeOne Pages 调 CloudBase HTTP Functions 时填写 CloudBase 默认域名，留空时继续使用同域相对路径。
-- 本地 CloudBase preview 推荐保持 `VITE_API_BASE_URL=` 为空，并用 `CLOUDBASE_PROXY_TARGET` 让 Vite dev server 代理 `/api`，避免 localhost CORS。
+- 本地 CloudBase 开发推荐保持 `VITE_API_BASE_URL=` 为空，并用 `CLOUDBASE_PROXY_TARGET` 让 Vite dev server 代理 `/api`，避免 localhost CORS。
 - `CLOUDBASE_PROXY_TARGET` 不是 `VITE_` 变量，只供本地 Vite dev server 读取，不会暴露给浏览器。
 - 公开 CloudBase API，例如 demo templates，可直接使用 `VITE_API_BASE_URL`，不需要 token。
-- 私有 CloudBase API 仍在迁移验证阶段，必须显式开启 `VITE_ENABLE_CLOUDBASE_PRIVATE_API=true`，并使用 CloudBase Auth 产生的 `access_token`。
-- 当前私有 API 开关会让 CloudBase preview 路径的 conversations、messages、reports、demo-copy 和 Agent Run stream 使用 CloudBase private APIs。
-- CloudBase Agent Run preview 会调用 CloudBase `/api/agent/run/stream`，使用 CloudBase Auth `access_token`，不使用 Supabase token。
-- Run persistence 查询、recent tools 和非 preview 默认路径仍保持 legacy 链路；Vercel / Supabase 代码未删除，正式切换前仍需要完整回归测试。
-- legacy Vercel API 仍使用 Supabase `session.access_token`，当前正式页面默认继续走这条链路。
-- CloudBase Auth helper 只用于迁移测试，不替换当前 Supabase `authStore`。
-- `VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时，`/api/agent/run/stream` 主链路仍保持现状。
-- service role、`GROQ_API_KEY` 和数据库连接串不能加 `VITE_`。
-- Vercel 线上需要在 Environment Variables 中配置这些变量。
-- 修改 Vercel 环境变量后需要重新部署。
+- 私有 CloudBase API 默认使用 CloudBase Auth 产生的 `access_token`，不使用 Supabase token。
+- conversations、messages、reports、demo-copy、quota 和 Agent Run stream 默认走 CloudBase private APIs。
+- `VITE_ENABLE_CLOUDBASE_PRIVATE_API` 只保留为临时回滚 / 调试开关；默认不配置或留空时走 CloudBase，设置为 `false` 才强制旧 Vercel/Supabase 链路。
+- Supabase / Vercel legacy 代码仍保留，但不再是默认正式主链路。
+- Run persistence 查询、recent tools 等尚未迁入 CloudBase 的旧查询保持 legacy-only，不影响主 Agent Run SSE、messages 和 reports 闭环。
+- service role、模型 Key 和数据库连接串不能加 `VITE_`。
 
-本地 CloudBase preview 推荐 `.env.local`：
+本地 CloudBase 默认链路推荐 `.env.local`：
 
 ```env
 VITE_API_BASE_URL=
 VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 VITE_CLOUDBASE_REGION=ap-shanghai
-VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
 CLOUDBASE_PROXY_TARGET=https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com
 ```
 
@@ -275,26 +274,34 @@ EdgeOne 生产环境推荐：
 VITE_API_BASE_URL=https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com
 VITE_CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 VITE_CLOUDBASE_REGION=ap-shanghai
-VITE_ENABLE_CLOUDBASE_PRIVATE_API=true
 ```
 
-## CloudBase Preview 状态
+CloudBase 函数侧模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端：
 
-当前 CloudBase Preview 已覆盖：
+```env
+MODEL_GATEWAY_PROVIDER=openai-compatible
+MODEL_GATEWAY_BASE_URL=
+MODEL_GATEWAY_API_KEY=
+MODEL_GATEWAY_MODEL=
+```
+
+## CloudBase 默认链路状态
+
+当前 CloudBase 默认链路已覆盖：
 
 - Public demo templates
-- CloudBase Auth helper
+- CloudBase Auth helper / 前端 authStore 默认身份来源
 - Conversations / messages
 - Reports
 - Demo copy
-- Quota 基础闭环
+- Quota 原子扣减基础闭环
 - Agent Run SSE / fallback
-- 正式页面 CloudBase Preview 分支
+- 正式页面 CloudBase 默认分支
 - 本地 Vite proxy
 
-这仍是 Preview，不是生产默认单轨。`VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时，前端继续走 legacy Vercel / Supabase 链路；`authStore` 仍是 Supabase Auth；Vercel / Supabase 旧代码仍保留。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
+`authStore` 默认恢复或创建 CloudBase session，业务 private API 使用 CloudBase access token。`VITE_ENABLE_CLOUDBASE_PRIVATE_API=false` 时才进入 legacy Vercel / Supabase 回滚路径；旧代码保留用于迁移期回滚，不再作为默认正式路径。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
 
-正式切换前需要完成 EdgeOne Preview 线上回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次，并保留旧 Vercel / Supabase 回滚窗口。
+正式删除旧链路前仍需要完成 EdgeOne Preview / Production 回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次，并保留旧 Vercel / Supabase 回滚窗口。
 
 ---
 

@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { isCloudBasePrivateApiEnabled } from '../../services/cloudbaseApiClient';
 import { fetchRecentTools } from '../../services/recentToolsApi';
 import type { RecentToolsSlice, WorkbenchStore } from '../../types/workbench';
 import { useAuthStore } from '../authStore';
@@ -6,8 +7,8 @@ import { useAuthStore } from '../authStore';
 let recentToolsRequestId = 0;
 
 function getAccessToken(): string | null {
-  const session = useAuthStore.getState().session;
-  const accessToken = session?.access_token?.trim();
+  const authState = useAuthStore.getState();
+  const accessToken = authState.accessToken?.trim() || authState.session?.access_token?.trim();
   return accessToken || null;
 }
 
@@ -17,6 +18,11 @@ export const createRecentToolsSlice: StateCreator<WorkbenchStore, [], [], Recent
   recentToolsError: null,
 
   loadRecentTools: async () => {
+    if (isCloudBasePrivateApiEnabled()) {
+      get().clearRecentTools();
+      return;
+    }
+
     const accessToken = getAccessToken();
 
     if (!accessToken) {

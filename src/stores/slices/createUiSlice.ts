@@ -199,7 +199,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     }
 
     try {
-      const accessToken = useAuthStore.getState().session?.access_token;
+      const authState = useAuthStore.getState();
+      const accessToken = authState.accessToken ?? authState.session?.access_token;
 
       await streamAgentRunAnalysis({
         prompt,

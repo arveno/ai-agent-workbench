@@ -159,10 +159,10 @@ export async function streamAgentRunAnalysis(params: {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  const useCloudBasePreview = isCloudBasePrivateApiEnabled();
+  const useCloudBasePrivateApi = isCloudBasePrivateApiEnabled();
   let response: Response;
 
-  if (useCloudBasePreview) {
+  if (useCloudBasePrivateApi) {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
 
     response = await requestCloudBasePrivateApi(buildApiPath('/api/agent/run/stream'), {
@@ -209,7 +209,7 @@ export async function streamAgentRunAnalysis(params: {
     buffer += decoder.decode(value, { stream: true });
     buffer = consumeSseBlocks(buffer, (event) => {
       params.onEvent(
-        useCloudBasePreview
+        useCloudBasePrivateApi
           ? normalizeRunEventForClient(event, params.clientRunId)
           : event,
       );
@@ -219,7 +219,7 @@ export async function streamAgentRunAnalysis(params: {
   buffer += decoder.decode();
   consumeSseBlocks(`${buffer}\n\n`, (event) => {
     params.onEvent(
-      useCloudBasePreview
+      useCloudBasePrivateApi
         ? normalizeRunEventForClient(event, params.clientRunId)
         : event,
     );

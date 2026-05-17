@@ -25,14 +25,11 @@ import {
 } from './shared';
 
 const DEFAULT_MESSAGE_PAGE_SIZE = 30;
-const CLOUDBASE_PREVIEW_ACCESS_TOKEN = 'cloudbase-preview';
-const CLOUDBASE_PREVIEW_USER_ID = 'cloudbase-preview';
-
 let persistenceRequestId = 0;
 let messageLoadRequestId = 0;
 let olderMessageLoadRequestId = 0;
 
-type PersistenceAuthSource = 'legacy' | 'cloudbase-preview';
+type PersistenceAuthSource = 'legacy' | 'cloudbase';
 
 interface PersistenceAuthContext {
   accessToken: string;
@@ -41,23 +38,40 @@ interface PersistenceAuthContext {
 }
 
 interface PersistenceAuthOptions {
-  allowCloudBasePreview?: boolean;
+  allowCloudBasePersistence?: boolean;
 }
 
-function getCloudBasePreviewAuthContext(): PersistenceAuthContext | null {
+function getCloudBaseAuthContext(): PersistenceAuthContext | null {
   if (!isCloudBasePrivateApiEnabled()) {
     return null;
   }
 
+  const authState = useAuthStore.getState();
+  const accessToken = authState.accessToken?.trim() || authState.session?.access_token?.trim();
+  const userId = authState.currentUser?.userId ?? authState.user?.id ?? authState.session?.user.id ?? null;
+
+  if (authState.status !== 'authenticated' || !accessToken || !userId) {
+    return null;
+  }
+
   return {
-    accessToken: CLOUDBASE_PREVIEW_ACCESS_TOKEN,
-    userId: CLOUDBASE_PREVIEW_USER_ID,
-    source: 'cloudbase-preview',
+    accessToken,
+    userId,
+    source: 'cloudbase',
   };
 }
 
 function getLegacyPersistenceAuthContext(): PersistenceAuthContext | null {
+  if (isCloudBasePrivateApiEnabled()) {
+    return null;
+  }
+
   const authState = useAuthStore.getState();
+
+  if (authState.authProvider !== 'supabase') {
+    return null;
+  }
+
   const accessToken = authState.session?.access_token?.trim();
   const userId = authState.user?.id ?? authState.session?.user.id ?? null;
 
@@ -73,26 +87,28 @@ function getLegacyPersistenceAuthContext(): PersistenceAuthContext | null {
 }
 
 function getPersistenceAuthContext(options: PersistenceAuthOptions = {}): PersistenceAuthContext | null {
-  if (options.allowCloudBasePreview !== false) {
-    const cloudBasePreviewContext = getCloudBasePreviewAuthContext();
+  if (options.allowCloudBasePersistence !== false) {
+    const cloudBaseContext = getCloudBaseAuthContext();
 
-    if (cloudBasePreviewContext) {
-      return cloudBasePreviewContext;
+    if (cloudBaseContext) {
+      return cloudBaseContext;
     }
   }
 
   return getLegacyPersistenceAuthContext();
 }
 
-function isCloudBasePreviewAuthContext(authContext: PersistenceAuthContext): boolean {
-  return authContext.source === 'cloudbase-preview';
+function isCloudBaseAuthContext(authContext: PersistenceAuthContext): boolean {
+  return authContext.source === 'cloudbase';
 }
 
-function shouldUseCloudBasePreviewForPersistentState(persistentUserId: string | null): boolean {
-  return persistentUserId === CLOUDBASE_PREVIEW_USER_ID;
+function shouldUseCloudBaseForPersistentState(persistentUserId: string | null): boolean {
+  const authState = useAuthStore.getState();
+  const userId = authState.currentUser?.userId ?? authState.user?.id ?? authState.session?.user.id ?? null;
+  return Boolean(userId && persistentUserId === userId);
 }
 
-function shouldAllowCloudBasePreviewForProvider(provider: WorkbenchStore['currentModelProvider']): boolean {
+function shouldAllowCloudBaseForProvider(provider: WorkbenchStore['currentModelProvider']): boolean {
   return isCloudBasePrivateApiEnabled() || provider !== 'groq';
 }
 
@@ -100,8 +116,8 @@ function isPersistentStateCompatibleWithAuthContext(
   authContext: PersistenceAuthContext,
   persistentUserId: string | null,
 ): boolean {
-  if (isCloudBasePreviewAuthContext(authContext)) {
-    return shouldUseCloudBasePreviewForPersistentState(persistentUserId);
+  if (isCloudBaseAuthContext(authContext)) {
+    return shouldUseCloudBaseForPersistentState(persistentUserId);
   }
 
   return persistentUserId === authContext.userId;
@@ -112,7 +128,7 @@ function shouldSkipCloudBaseAgentAssistantPersist(
   message: WorkbenchMessage,
 ): boolean {
   return (
-    isCloudBasePreviewAuthContext(authContext) &&
+    isCloudBaseAuthContext(authContext) &&
     message.role === 'assistant' &&
     message.kind === 'normal' &&
     Boolean(message.runId?.startsWith('agent_run_'))
@@ -245,7 +261,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     const currentProvider = get().currentModelProvider;
     const authContext = getPersistenceAuthContext({
-      allowCloudBasePreview: shouldAllowCloudBasePreviewForProvider(currentProvider),
+      allowCloudBasePersistence: shouldAllowCloudBaseForProvider(currentProvider),
     });
 
     if (authContext) {
@@ -635,7 +651,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     }));
 
     if (activeSession?.id) {
-      if (!isCloudBasePreviewAuthContext(authContext)) {
+      if (!isCloudBaseAuthContext(authContext)) {
         void get().loadLatestRunForConversation(activeSession.id);
       }
       void get().loadReportArtifacts(activeSession.id);
@@ -677,7 +693,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   },
   loadPersistentMessagesForSession: async (sessionId) => {
     const authContext = getPersistenceAuthContext({
-      allowCloudBasePreview: shouldUseCloudBasePreviewForPersistentState(get().persistentUserId),
+      allowCloudBasePersistence: shouldUseCloudBaseForPersistentState(get().persistentUserId),
     });
 
     if (!authContext || !get().isPersistentMode) {
@@ -743,7 +759,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     });
 
     if (get().currentSessionId === sessionId) {
-      if (!isCloudBasePreviewAuthContext(authContext)) {
+      if (!isCloudBaseAuthContext(authContext)) {
         void get().loadLatestRunForConversation(sessionId);
       }
       void get().loadReportArtifacts(sessionId);
@@ -752,7 +768,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   loadOlderMessagesForCurrentSession: async () => {
     const currentState = get();
     const authContext = getPersistenceAuthContext({
-      allowCloudBasePreview: shouldUseCloudBasePreviewForPersistentState(currentState.persistentUserId),
+      allowCloudBasePersistence: shouldUseCloudBaseForPersistentState(currentState.persistentUserId),
     });
     const sessionId = currentState.currentSessionId;
     const before = currentState.oldestMessageCursor;
@@ -817,7 +833,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   ensureCurrentPersistentConversation: async () => {
     const currentState = get();
     const authContext = getPersistenceAuthContext({
-      allowCloudBasePreview: shouldAllowCloudBasePreviewForProvider(currentState.currentModelProvider),
+      allowCloudBasePersistence: shouldAllowCloudBaseForProvider(currentState.currentModelProvider),
     });
 
     if (!authContext) {
@@ -825,6 +841,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     }
 
     const currentSession = currentState.sessions.find((session) => session.id === currentState.currentSessionId);
+    const firstUserMessage = currentSession?.messages.find((message) => message.role === 'user')?.content ?? '';
+    const conversationTitle =
+      currentSession?.title && currentSession.title !== '新会话'
+        ? currentSession.title
+        : createSessionTitle(currentState.chatDraft || currentState.currentPrompt || firstUserMessage);
 
     if (
       currentState.isPersistentMode &&
@@ -836,7 +857,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     const result = await createConversation(
       {
-        title: currentSession?.title ?? '新会话',
+        title: conversationTitle,
         mode: getConversationModeForProvider(currentState.currentModelProvider),
       },
       authContext.accessToken,
@@ -865,7 +886,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   },
   persistMessageToConversation: async (conversationId, message) => {
     const authContext = getPersistenceAuthContext({
-      allowCloudBasePreview: shouldUseCloudBasePreviewForPersistentState(get().persistentUserId),
+      allowCloudBasePersistence: shouldUseCloudBaseForPersistentState(get().persistentUserId),
     });
 
     if (!authContext || !get().isPersistentMode) {
@@ -901,7 +922,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         currentSession.title.trim() !== '新会话' &&
         currentSession.messages.filter((sessionMessage) => sessionMessage.role === 'user').length === 1;
 
-      if (shouldUpdateTitle && !isCloudBasePreviewAuthContext(authContext)) {
+      if (shouldUpdateTitle && !isCloudBaseAuthContext(authContext)) {
         void updateConversation(
           conversationId,
           {

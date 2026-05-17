@@ -1,10 +1,10 @@
-import type { Session, User } from '@supabase/supabase-js';
-
 export type AuthStatus = 'loading' | 'anonymous' | 'authenticated' | 'error';
 
 export type UserRole = 'anonymous' | 'demo_user' | 'admin';
 
-export type AuthRole = Extract<UserRole, 'anonymous' | 'demo_user'>;
+export type AuthRole = UserRole;
+
+export type AuthProvider = 'cloudbase' | 'supabase' | 'none';
 
 export type AgentAccessStatus =
   | 'anonymous'
@@ -37,10 +37,39 @@ export interface AuthSessionView {
   isAuthConfigured: boolean;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  isAnonymous: boolean;
+  provider: Exclude<AuthProvider, 'none'>;
+  role: UserRole;
+}
+
+export interface AuthSession {
+  access_token: string;
+  user: AuthUser;
+  provider: Exclude<AuthProvider, 'none'>;
+}
+
+export interface CloudBaseCurrentUser {
+  userId: string;
+  openid: string | null;
+  email: string | null;
+  displayName: string | null;
+  role: UserRole;
+  isAnonymous: boolean;
+}
+
 export interface AuthStoreState {
   status: AuthStatus;
-  session: Session | null;
-  user: User | null;
+  session: AuthSession | null;
+  user: AuthUser | null;
+  currentUser: CloudBaseCurrentUser | null;
+  accessToken: string | null;
+  isAuthenticated: boolean;
+  isAnonymous: boolean;
+  authProvider: AuthProvider;
   error: string | null;
   isInitialized: boolean;
   agentAccess: AgentAccessView;
