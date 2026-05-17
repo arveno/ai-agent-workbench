@@ -7,39 +7,23 @@ import type {
 export async function testDataSourceConnection(
   provider: DataSourceTestableProviderId
 ): Promise<DataSourceTestResponse> {
-  const response = await fetch('/api/datasources/test', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ provider }),
-  });
-
-  const data = (await response.json()) as DataSourceTestResponse;
-
-  if (!response.ok) {
-    return data;
-  }
-
-  return data;
+  return {
+    ok: false,
+    provider,
+    status: 'error',
+    errorMessage: '旧 Vercel 数据源连接测试已删除；当前正式数据链路由 CloudBase MySQL 和受控工具提供。',
+    elapsedMs: 0,
+  };
 }
 
 export async function readDataSourceSchema(
   provider: DataSourceTestableProviderId
 ): Promise<DataSourceSchemaResponse> {
-  const response = await fetch('/api/datasources/schema', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ provider }),
-  });
-
-  const data = (await response.json()) as DataSourceSchemaResponse;
-
-  if (!response.ok) {
-    return data;
-  }
-
-  return data;
+  return {
+    ok: false,
+    provider,
+    status: 'error',
+    errorMessage: '旧 Vercel 数据源 schema 接口已删除；当前正式数据链路由 CloudBase MySQL 和受控工具提供。',
+    elapsedMs: 0,
+  };
 }

@@ -2,6 +2,8 @@
 
 生成日期：2026-05-13
 
+> 历史设计文档：本文记录腾讯云迁移前的 Vercel / Supabase 依赖审计和迁移方案。Tencent-29B 后旧 `api/`、`src/server/`、`supabase/` 主体代码和对应 package 依赖已删除；当前运行主线以 README 和 `docs/TENCENT_MIGRATION_STATUS.md` 为准。
+
 本轮目标只生成迁移设计文档，不修改主项目代码、不生成 SQL、不生成 TS/TSX、不提交 Git。
 
 ## 1. 当前结论

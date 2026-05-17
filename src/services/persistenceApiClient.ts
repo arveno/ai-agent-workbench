@@ -32,24 +32,6 @@ function normalizePersistenceErrorCode(value: unknown): WorkbenchPersistenceErro
   return 'db_error';
 }
 
-export function normalizeLegacyAccessToken(accessToken: string | null | undefined): string | null {
-  const token = accessToken?.trim();
-  return token ? token : null;
-}
-
-export function createLegacyJsonAuthHeaders(accessToken: string): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken}`,
-  };
-}
-
-export function createLegacyAuthHeaders(accessToken: string): HeadersInit {
-  return {
-    Authorization: `Bearer ${accessToken}`,
-  };
-}
-
 export function createAuthRequiredPersistenceResponse<TData>(
   message: string,
 ): WorkbenchPersistenceResponse<TData> {
