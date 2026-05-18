@@ -34,25 +34,25 @@
 .datasource-modal-title {
   margin: 0;
   color: #0f172a;
-  font-size: 20px;
-  line-height: 1.3;
-  font-weight: 750;
+  font-size: var(--aw-type-page-title-size);
+  line-height: var(--aw-type-page-title-line);
+  font-weight: var(--aw-type-page-title-weight);
 }
 
 .datasource-modal-description {
   margin: 10px 0 0;
   max-width: 720px;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .datasource-modal-relation-note {
   margin: 8px 0 0;
   max-width: 760px;
   color: #94a3b8;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .datasource-modal-close {
@@ -80,8 +80,8 @@
   display: grid;
   gap: 4px;
   color: #1e3a8a;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .datasource-modal-info-content p {
@@ -119,16 +119,16 @@
 .datasource-tab-title {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  line-height: 1.4;
-  font-weight: 750;
+  font-size: var(--aw-type-section-title-size);
+  line-height: var(--aw-type-section-title-line);
+  font-weight: var(--aw-type-section-title-weight);
 }
 
 .datasource-tab-description {
   margin: 4px 0 0;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .datasource-tab-count {
@@ -140,8 +140,9 @@
   border-radius: 999px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--aw-type-badge-size);
+  line-height: var(--aw-type-badge-line);
+  font-weight: var(--aw-type-badge-weight);
 }
 
 .datasource-scroll {
@@ -165,8 +166,8 @@
   border-radius: 14px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .datasource-provider-card {
@@ -210,23 +211,23 @@
 .datasource-provider-name {
   margin: 0;
   color: #0f172a;
-  font-size: 15px;
-  line-height: 1.35;
-  font-weight: 750;
+  font-size: var(--aw-type-card-title-size);
+  line-height: var(--aw-type-card-title-line);
+  font-weight: var(--aw-type-card-title-weight);
 }
 
 .datasource-provider-description {
   margin: 5px 0 0;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .datasource-provider-relation-hint {
   margin: 5px 0 0;
   color: #94a3b8;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .datasource-provider-badge-group {
@@ -245,8 +246,9 @@
 
 .datasource-badge {
   border: 0;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--aw-type-badge-size);
+  line-height: var(--aw-type-badge-line);
+  font-weight: var(--aw-type-badge-weight);
 }
 
 .datasource-demo-badge {
@@ -291,17 +293,17 @@
 .datasource-provider-meta-label {
   display: block;
   color: #94a3b8;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: var(--aw-type-label-size);
+  line-height: var(--aw-type-label-line);
 }
 
 .datasource-provider-meta-value {
   display: block;
   margin-top: 3px;
   color: #334155;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.4;
+  font-size: var(--aw-type-value-size);
+  font-weight: var(--aw-type-value-weight);
+  line-height: var(--aw-type-value-line);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -323,14 +325,14 @@
   align-items: center;
   min-width: 0;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .datasource-provider-status-row strong {
   min-width: 0;
   color: #334155;
-  font-weight: 750;
+  font-weight: var(--aw-type-value-weight);
   word-break: break-word;
 }
 
@@ -354,8 +356,8 @@
   border-radius: 10px;
   background: #fffbeb;
   color: #b45309;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -382,9 +384,9 @@
 
 .datasource-provider-table-summary-title {
   color: #64748b;
-  font-size: 11px;
-  line-height: 1.4;
-  font-weight: 700;
+  font-size: var(--aw-type-label-size);
+  line-height: var(--aw-type-label-line);
+  font-weight: var(--aw-type-label-weight);
 }
 
 .datasource-provider-table-list {
@@ -402,8 +404,8 @@
   border-radius: 999px;
   background: #f1f5f9;
   color: #334155;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
   word-break: break-word;
 }
 

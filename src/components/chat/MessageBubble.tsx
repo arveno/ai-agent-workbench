@@ -6,6 +6,7 @@ import { MarkdownMessage } from './MarkdownMessage';
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: ReactNode;
+  bubbleClassName?: string;
   previewText?: string;
   renderMode?: MessageRenderMode;
   shouldCollapseByDefault?: boolean;
@@ -24,6 +25,7 @@ function renderTextContent(content: string, renderMode: MessageRenderMode): Reac
 export function MessageBubble({
   role,
   content,
+  bubbleClassName,
   previewText,
   renderMode,
   shouldCollapseByDefault = false,
@@ -48,7 +50,7 @@ export function MessageBubble({
 
   return (
     <div className="message-content-wrap">
-      <div className={`message-bubble ${roleClass}`}>
+      <div className={['message-bubble', roleClass, bubbleClassName].filter(Boolean).join(' ')}>
         {renderedContent}
         {afterContent}
       </div>

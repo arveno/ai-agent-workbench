@@ -1,6 +1,4 @@
 import type { DemoConversationTemplateView } from '../../utils/demoTemplateViewModel';
-import { AppIcon } from '../common/AppIcon';
-import { icons } from '../common/iconMap';
 import { Badge } from '../ui/badge';
 
 interface DemoConversationCardProps {
@@ -9,13 +7,6 @@ interface DemoConversationCardProps {
   disabled?: boolean;
   onOpen: (id: string) => void;
   onCopy: (id: string) => void;
-}
-
-function getCategoryIcon(category: DemoConversationTemplateView['category']) {
-  if (category === 'rag') return icons.knowledge;
-  if (category === 'long_context') return icons.document;
-  if (category === 'report') return icons.report;
-  return icons.chart;
 }
 
 function getCategoryLabel(category: DemoConversationTemplateView['category']): string {
@@ -44,31 +35,22 @@ export function DemoConversationCard({
       >
         <span className="demo-task-card-head">
           <span className="demo-task-title-wrap">
-            <AppIcon icon={getCategoryIcon(item.category)} size={14} />
             <span className="demo-task-title">{item.title}</span>
           </span>
           <Badge variant="outline" className="demo-task-category">
             {getCategoryLabel(item.category)}
           </Badge>
         </span>
-        <span className="demo-task-mode">公开只读</span>
         <span className="demo-task-description">{item.description}</span>
-        <span className="demo-task-showcase">{item.showcaseValue}</span>
-        <span className="demo-task-tags">
-          {item.tagLabels.slice(0, 3).map((tag) => (
-            <span key={tag} className="demo-task-tag">
-              {tag}
-            </span>
-          ))}
-        </span>
       </button>
       <button
         type="button"
         className="demo-conversation-copy"
         disabled={disabled}
         onClick={() => onCopy(item.id)}
+        aria-label={`复制示例会话：${item.title}`}
       >
-        复制到我的会话
+        复制
       </button>
     </article>
   );

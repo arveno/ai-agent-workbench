@@ -34,17 +34,17 @@
 .workflow-modal-title {
   margin: 0;
   color: #0f172a;
-  font-size: 20px;
-  line-height: 1.3;
-  font-weight: 750;
+  font-size: var(--aw-type-page-title-size);
+  line-height: var(--aw-type-page-title-line);
+  font-weight: var(--aw-type-page-title-weight);
 }
 
 .workflow-modal-description {
   margin: 10px 0 0;
   max-width: 760px;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .workflow-modal-close {
@@ -109,9 +109,9 @@
 .prompt-template-panel-title {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  line-height: 1.4;
-  font-weight: 750;
+  font-size: var(--aw-type-section-title-size);
+  line-height: var(--aw-type-section-title-line);
+  font-weight: var(--aw-type-section-title-weight);
 }
 
 .workflow-panel-description,
@@ -119,8 +119,8 @@
   margin: 5px 0 0;
   max-width: 680px;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .workflow-flow-scroll {
@@ -155,8 +155,8 @@
   border: 1px solid #bfdbfe;
   background: #eff6ff;
   color: #1d4ed8;
-  font-size: 11px;
-  font-weight: 750;
+  font-size: var(--aw-type-badge-size);
+  font-weight: var(--aw-type-badge-weight);
   display: grid;
   place-items: center;
 }
@@ -193,16 +193,16 @@
 .workflow-step-title {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  line-height: 1.35;
-  font-weight: 750;
+  font-size: var(--aw-type-card-title-size);
+  line-height: var(--aw-type-card-title-line);
+  font-weight: var(--aw-type-card-title-weight);
 }
 
 .workflow-step-description {
   margin-top: 6px;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .workflow-step-card-content {
@@ -225,17 +225,17 @@
 .workflow-step-meta-item span {
   display: block;
   color: #94a3b8;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: var(--aw-type-label-size);
+  line-height: var(--aw-type-label-line);
 }
 
 .workflow-step-meta-item strong {
   display: block;
   margin-top: 3px;
   color: #334155;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.4;
+  font-size: var(--aw-type-value-size);
+  font-weight: var(--aw-type-value-weight);
+  line-height: var(--aw-type-value-line);
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -244,8 +244,9 @@
 .prompt-template-status-badge,
 .prompt-template-local-badge {
   border: 0;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--aw-type-badge-size);
+  line-height: var(--aw-type-badge-line);
+  font-weight: var(--aw-type-badge-weight);
 }
 
 .workflow-badge-ready,
@@ -299,8 +300,8 @@
   justify-content: space-between;
   gap: 12px;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .prompt-template-layout {
@@ -326,17 +327,17 @@
 .prompt-template-editor-title {
   margin: 0;
   color: #0f172a;
-  font-size: 15px;
-  line-height: 1.35;
-  font-weight: 750;
+  font-size: var(--aw-type-card-title-size);
+  line-height: var(--aw-type-card-title-line);
+  font-weight: var(--aw-type-card-title-weight);
 }
 
 .prompt-template-list-subtitle,
 .prompt-template-editor-description {
   margin-top: 5px;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .prompt-template-separator {
@@ -386,14 +387,15 @@
 
 .prompt-template-list-name {
   color: #0f172a;
-  font-size: 13px;
-  font-weight: 750;
+  font-size: var(--aw-type-card-title-size);
+  line-height: var(--aw-type-card-title-line);
+  font-weight: var(--aw-type-card-title-weight);
 }
 
 .prompt-template-list-description {
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .prompt-template-list-meta {
@@ -442,8 +444,8 @@
   color: #0f172a;
   background: #fbfdff;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.65;
+  font-size: var(--aw-type-code-size);
+  line-height: var(--aw-type-code-line);
   white-space: pre-wrap;
   word-break: normal;
   overflow-wrap: break-word;
@@ -461,8 +463,8 @@
   flex-wrap: wrap;
   gap: 8px;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .prompt-template-editor-actions {
@@ -477,8 +479,8 @@
   border-radius: 12px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .workflow-modal-footer {

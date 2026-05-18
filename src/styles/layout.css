@@ -5,6 +5,7 @@
   height: 100vh;
   overflow: hidden;
   display: flex;
+  min-width: 0;
   background: var(--aw-bg-app);
   color: var(--aw-text-primary);
 }
@@ -32,16 +33,20 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  border-left: 1px solid var(--aw-border);
 }
 
 .workspace-content {
+  --aw-main-chat-width: calc(100% - 48px);
+  --aw-inspector-width: var(--aw-right-panel-width);
   width: 100%;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--aw-right-panel-width);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, var(--aw-inspector-width));
   overflow: hidden;
+  background: var(--aw-bg-app);
 }
 
 .workspace-main {
@@ -50,6 +55,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: var(--aw-bg-app);
+  border-right: 1px solid color-mix(in srgb, var(--aw-border) 74%, transparent);
 }
 
 .workspace-inspector {
@@ -58,7 +65,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--aw-surface);
-  border-left: 1px solid var(--aw-border);
+  border-left: 0;
 }
 
 .chat-panel {
@@ -70,34 +77,56 @@
   min-height: 0;
   overflow: hidden;
   overflow-x: hidden;
-  padding: 0 20px 16px;
+  padding: 0 0 16px;
 }
 
-.right-panel {
-  width: 100%;
-  min-width: 0;
-  min-height: 100%;
-  padding: 16px;
-  box-sizing: border-box;
-  background: var(--aw-surface);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.right-panel-content {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-@media (max-width: 1180px) {
+@media (max-width: 1279px) {
   .workspace-content {
+    --aw-main-chat-width: calc(100% - 32px);
+    --aw-inspector-width: 320px;
+    grid-template-columns: minmax(0, 1fr) var(--aw-inspector-width);
+  }
+}
+
+@media (max-width: 1023px) {
+  .app-body {
+    --aw-sidebar-width: 248px;
+  }
+
+  .workspace-content {
+    --aw-main-chat-width: calc(100% - 24px);
     grid-template-columns: minmax(0, 1fr);
   }
 
   .workspace-inspector {
     display: none;
+  }
+
+  .chat-panel {
+    padding-right: 0;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-root,
+  .app-shell {
+    display: block;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .workspace,
+  .main-panel,
+  .main-workspace {
+    width: 100%;
+    height: 100vh;
+    border-left: 0;
+  }
+
+  .workspace-content {
+    --aw-main-chat-width: calc(100% - 20px);
   }
 }

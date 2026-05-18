@@ -34,25 +34,25 @@
 .tool-library-modal-title {
   margin: 0;
   color: #0f172a;
-  font-size: 20px;
-  line-height: 1.3;
-  font-weight: 750;
+  font-size: var(--aw-type-page-title-size);
+  line-height: var(--aw-type-page-title-line);
+  font-weight: var(--aw-type-page-title-weight);
 }
 
 .tool-library-modal-description {
   margin: 10px 0 0;
   max-width: 680px;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .tool-library-modal-note {
   margin: 6px 0 0;
   max-width: 700px;
   color: #1e40af;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .tool-library-modal-close {
@@ -101,16 +101,16 @@
 .tool-library-tab-title {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  line-height: 1.4;
-  font-weight: 750;
+  font-size: var(--aw-type-section-title-size);
+  line-height: var(--aw-type-section-title-line);
+  font-weight: var(--aw-type-section-title-weight);
 }
 
 .tool-library-tab-description {
   margin: 4px 0 0;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
 }
 
 .tool-library-count {
@@ -122,8 +122,9 @@
   border-radius: 999px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--aw-type-badge-size);
+  line-height: var(--aw-type-badge-line);
+  font-weight: var(--aw-type-badge-weight);
 }
 
 .tool-library-scroll {
@@ -147,8 +148,8 @@
   border-radius: 14px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .tool-library-card {
@@ -179,16 +180,16 @@
 .tool-library-name {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  line-height: 1.35;
-  font-weight: 750;
+  font-size: var(--aw-type-card-title-size);
+  line-height: var(--aw-type-card-title-line);
+  font-weight: var(--aw-type-card-title-weight);
 }
 
 .tool-library-id {
   margin-top: 3px;
   color: #64748b;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--aw-type-code-size);
+  line-height: var(--aw-type-code-line);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   word-break: break-word;
 }
@@ -200,8 +201,8 @@
 .tool-library-description {
   margin: 0;
   color: #475569;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--aw-type-body-sm-size);
+  line-height: var(--aw-type-body-sm-line);
 }
 
 .tool-library-tag-row {
@@ -214,8 +215,9 @@
 
 .tool-library-badge {
   border: 0;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--aw-type-badge-size);
+  line-height: var(--aw-type-badge-line);
+  font-weight: var(--aw-type-badge-weight);
 }
 
 .tool-library-badge-status-connected {
@@ -293,16 +295,16 @@
 
 .tool-library-meta-item dt {
   color: #94a3b8;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-label-size);
+  line-height: var(--aw-type-label-line);
 }
 
 .tool-library-meta-item dd {
   min-width: 0;
   margin: 0;
   color: #334155;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--aw-type-caption-size);
+  line-height: var(--aw-type-caption-line);
   word-break: break-word;
   overflow-wrap: break-word;
 }
