@@ -1,12 +1,12 @@
 .sidebar {
-  width: 280px;
-  flex: 0 0 280px;
+  width: var(--aw-sidebar-width);
+  flex: 0 0 var(--aw-sidebar-width);
   flex-shrink: 0;
   height: 100%;
   padding: 20px;
   box-sizing: border-box;
-  background: #ffffff;
-  border-right: 1px solid #e5e7eb;
+  background: var(--aw-surface);
+  border-right: 1px solid var(--aw-border);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -33,22 +33,22 @@
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: #eff6ff;
-  color: #2563eb;
+  border-radius: var(--aw-radius-md);
+  background: var(--aw-primary-subtle);
+  color: var(--aw-primary);
 }
 
 .brand-copy h1 {
   margin: 0;
   font-size: 16px;
   line-height: 1.25;
-  color: #111827;
+  color: var(--aw-text-primary);
 }
 
 .brand-copy p {
   margin: 4px 0 0;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--aw-text-muted);
 }
 
 .new-chat-btn {
@@ -58,8 +58,8 @@
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 8px;
-  background: #2563eb;
+  border-radius: var(--aw-radius-md);
+  background: var(--aw-primary);
   color: #ffffff;
   font-size: 14px;
   font-weight: 600;
@@ -79,7 +79,7 @@
   margin: 0 0 10px;
   font-size: 13px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--aw-primary);
 }
 
 .sidebar-demo-tip {

@@ -22,8 +22,8 @@ body,
 
 body {
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #f5f7fb;
-  color: #111827;
+  background: var(--aw-bg-app);
+  color: var(--aw-text-primary);
 }
 
 @theme inline {
@@ -70,38 +70,94 @@ body {
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --aw-bg-app: #f5f7fb;
+  --aw-surface: #ffffff;
+  --aw-surface-subtle: #f8fafc;
+  --aw-surface-raised: #fbfdff;
+  --aw-border: #e2e8f0;
+  --aw-border-strong: #cbd5e1;
+  --aw-text-primary: #0f172a;
+  --aw-text-secondary: #475569;
+  --aw-text-muted: #64748b;
+  --aw-text-faint: #94a3b8;
+  --aw-primary: #2563eb;
+  --aw-primary-strong: #1d4ed8;
+  --aw-primary-subtle: #eff6ff;
+  --aw-primary-border: #bfdbfe;
+  --aw-success: #15803d;
+  --aw-success-subtle: #f0fdf4;
+  --aw-success-border: #bbf7d0;
+  --aw-warning: #c2410c;
+  --aw-warning-subtle: #fff7ed;
+  --aw-warning-border: #fed7aa;
+  --aw-danger: #b91c1c;
+  --aw-danger-subtle: #fef2f2;
+  --aw-danger-border: #fecaca;
+  --aw-neutral: #64748b;
+  --aw-neutral-subtle: #f1f5f9;
+  --aw-overlay-bg: rgb(15 23 42 / 0.34);
+
+  --aw-radius-sm: 8px;
+  --aw-radius-md: 10px;
+  --aw-radius-lg: 12px;
+  --aw-radius-xl: 16px;
+  --aw-radius-2xl: 18px;
+  --aw-radius-pill: 999px;
+
+  --aw-shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --aw-shadow-md: 0 8px 24px rgb(15 23 42 / 0.06);
+  --aw-shadow-overlay: 0 24px 80px rgb(15 23 42 / 0.18);
+
+  --aw-sidebar-width: 280px;
+  --aw-right-panel-width: 420px;
+  --aw-chat-content-max-width: 760px;
+  --aw-chat-user-max-width: 680px;
+  --aw-drawer-width-sm: 480px;
+  --aw-drawer-width-md: 560px;
+  --aw-drawer-width-lg: 640px;
+
+  --aw-font-size-app-title: 16px;
+  --aw-font-size-page-title: 22px;
+  --aw-font-size-section-title: 13px;
+  --aw-font-size-card-title: 14px;
+  --aw-font-size-body: 14px;
+  --aw-font-size-small: 12px;
+  --aw-font-size-label: 11px;
+  --aw-font-size-badge: 11px;
+  --aw-font-size-button: 12px;
+
+  --background: var(--aw-surface);
+  --foreground: var(--aw-text-primary);
+  --card: var(--aw-surface);
+  --card-foreground: var(--aw-text-primary);
+  --popover: var(--aw-surface);
+  --popover-foreground: var(--aw-text-primary);
+  --primary: var(--aw-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--aw-surface-subtle);
+  --secondary-foreground: var(--aw-text-secondary);
+  --muted: var(--aw-neutral-subtle);
+  --muted-foreground: var(--aw-text-muted);
+  --accent: var(--aw-primary-subtle);
+  --accent-foreground: var(--aw-primary-strong);
+  --destructive: var(--aw-danger);
+  --border: var(--aw-border);
+  --input: var(--aw-border);
+  --ring: var(--aw-primary);
+  --chart-1: var(--aw-primary);
+  --chart-2: var(--aw-success);
+  --chart-3: var(--aw-warning);
+  --chart-4: var(--aw-neutral);
+  --chart-5: var(--aw-danger);
+  --radius: var(--aw-radius-md);
+  --sidebar: var(--aw-surface);
+  --sidebar-foreground: var(--aw-text-primary);
+  --sidebar-primary: var(--aw-primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--aw-primary-subtle);
+  --sidebar-accent-foreground: var(--aw-primary-strong);
+  --sidebar-border: var(--aw-border);
+  --sidebar-ring: var(--aw-primary);
 }
 
 .dark {

@@ -5,8 +5,8 @@
   height: 100vh;
   overflow: hidden;
   display: flex;
-  background: #f5f7fb;
-  color: #111827;
+  background: var(--aw-bg-app);
+  color: var(--aw-text-primary);
 }
 
 .app-body {
@@ -18,7 +18,7 @@
   display: flex;
   overflow: hidden;
   overflow-x: hidden;
-  background: #f5f7fb;
+  background: var(--aw-bg-app);
 }
 
 .workspace,
@@ -27,7 +27,7 @@
   flex: 1;
   min-width: 0;
   height: 100%;
-  background: #f5f7fb;
+  background: var(--aw-bg-app);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -40,7 +40,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
+  grid-template-columns: minmax(0, 1fr) var(--aw-right-panel-width);
   overflow: hidden;
 }
 
@@ -57,8 +57,8 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #ffffff;
-  border-left: 1px solid #e5e7eb;
+  background: var(--aw-surface);
+  border-left: 1px solid var(--aw-border);
 }
 
 .chat-panel {
@@ -79,7 +79,7 @@
   min-height: 100%;
   padding: 16px;
   box-sizing: border-box;
-  background: #ffffff;
+  background: var(--aw-surface);
   display: flex;
   flex-direction: column;
   gap: 12px;
