@@ -1,4 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import type { WorkbenchMessage } from '../../../types/workbench';
 import {
   formatRunElapsed,
   getConclusionSourceLabel,
@@ -18,12 +19,47 @@ function getRunStatusBadgeClass(tone: ReturnType<typeof getRunStatusTone>): stri
   return `run-status-badge run-status-badge-${tone}`;
 }
 
+function getRunPromptText(prompt: string): string {
+  const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim();
+  return normalizedPrompt || '历史 Run 未记录本轮问题';
+}
+
+function getAssistantRunIds(messages: WorkbenchMessage[]): string[] {
+  const runIds: string[] = [];
+
+  for (const message of messages) {
+    if (message.role !== 'assistant' || message.kind !== 'normal' || !message.runId) {
+      continue;
+    }
+
+    if (!runIds.includes(message.runId)) {
+      runIds.push(message.runId);
+    }
+  }
+
+  return runIds;
+}
+
+function getRunRoundLabel(runId: string, messages: WorkbenchMessage[]): string {
+  const runIds = getAssistantRunIds(messages);
+  const runIndex = runIds.indexOf(runId);
+
+  if (runIndex < 0) {
+    return runIds.length > 0 ? `未匹配消息 / 共 ${runIds.length} 轮` : '未匹配消息';
+  }
+
+  return `第 ${runIndex + 1} 轮 / 共 ${runIds.length} 轮`;
+}
+
 export function RunOverviewCard() {
+  const sessions = useWorkbenchStore((state) => state.sessions);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
+  const selectedRunId = useWorkbenchStore((state) => state.selectedRunId);
   const isLatestRunLoading = useWorkbenchStore((state) => state.isLatestRunLoading);
   const latestRunError = useWorkbenchStore((state) => state.latestRunError);
   const loadLatestRunForConversation = useWorkbenchStore((state) => state.loadLatestRunForConversation);
+  const selectRunForCurrentSession = useWorkbenchStore((state) => state.selectRunForCurrentSession);
 
   if (!currentRun) {
     return (
@@ -50,7 +86,9 @@ export function RunOverviewCard() {
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  if (currentSessionId) {
+                  if (selectedRunId) {
+                    void selectRunForCurrentSession(selectedRunId);
+                  } else if (currentSessionId) {
                     void loadLatestRunForConversation(currentSessionId);
                   }
                 }}
@@ -70,8 +108,12 @@ export function RunOverviewCard() {
   }
 
   const statusTone = getRunStatusTone(currentRun.status);
+  const currentSession = sessions.find((session) => session.id === currentSessionId);
+  const runPrompt = getRunPromptText(currentRun.prompt);
   const overviewItems = [
+    { label: '本轮问题', value: runPrompt, wide: true },
     { label: 'Run ID', value: currentRun.id },
+    { label: '轮次', value: getRunRoundLabel(currentRun.id, currentSession?.messages ?? []) },
     { label: '模式', value: getRunModeLabel(currentRun.mode) },
     { label: '任务类型', value: getRunIntentLabel(currentRun.intent) },
     { label: '耗时', value: formatRunElapsed(currentRun) },
@@ -96,7 +138,10 @@ export function RunOverviewCard() {
       <CardContent className="right-card-content">
         <div className="run-overview-grid">
           {overviewItems.map((item) => (
-            <div key={item.label} className="run-overview-item">
+            <div
+              key={item.label}
+              className={['run-overview-item', item.wide ? 'run-overview-item-wide' : ''].filter(Boolean).join(' ')}
+            >
               <span>{item.label}</span>
               <strong>{item.value}</strong>
             </div>

@@ -155,6 +155,12 @@ export async function fetchRun(
   };
 }
 
+export async function fetchRunBundle(
+  runId: string,
+): Promise<WorkbenchPersistenceResponse<RunPersistenceBundleResult>> {
+  return fetchCloudBaseRunBundle({ runId }, '读取 Run 失败。');
+}
+
 export async function fetchRunEvents(
   runId: string,
   _accessToken: string | null | undefined,

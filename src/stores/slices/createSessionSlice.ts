@@ -1,9 +1,15 @@
 import type { StateCreator } from 'zustand';
+import {
+  MOCK_RUN_STEP_IDS,
+  createMockChartData,
+  createMockRunStartedEvent,
+  createMockToolInvocation,
+} from '../../utils/mockRun';
 import { mockTasks } from '../../mocks/tasks';
 import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
 import { createConversationMessage, fetchConversationMessages } from '../../services/messageApi';
 import type { ConversationMode, ConversationRecord } from '../../types/persistence';
-import type { SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
+import type { RunSnapshot, SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { conversationRecordToSession } from '../../utils/conversationMapper';
 import { messageRecordToWorkbenchMessage, workbenchMessageToMessageCreateInput } from '../../utils/messageMapper';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
@@ -108,6 +114,220 @@ function getConversationRuntimeSessionId(record: ConversationRecord): string | n
   );
 }
 
+interface MockRunSeed {
+  runId: string;
+  prompt: string;
+  conclusion: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+function isMockRunId(runId: string | undefined): runId is string {
+  return Boolean(runId?.startsWith('mock_run_'));
+}
+
+function toIso(timestamp: number): string {
+  return new Date(timestamp).toISOString();
+}
+
+function summarizeMockPrompt(prompt: string, fallback = '历史 Mock 问题'): string {
+  const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim();
+
+  if (!normalizedPrompt) {
+    return fallback;
+  }
+
+  return normalizedPrompt.length > 72 ? `${normalizedPrompt.slice(0, 71)}...` : normalizedPrompt;
+}
+
+function getRecoveredMockStepDescription(stepId: string, promptSummary: string): string {
+  if (stepId === MOCK_RUN_STEP_IDS.understandPrompt) {
+    return `解析本轮问题：${promptSummary}`;
+  }
+
+  if (stepId === MOCK_RUN_STEP_IDS.knowledgeSearch) {
+    return `围绕「${promptSummary}」检索教学质量指标口径和分析规则。`;
+  }
+
+  if (stepId === MOCK_RUN_STEP_IDS.queryData) {
+    return '使用公开演示数据生成本轮分析所需的指标样本。';
+  }
+
+  if (stepId === MOCK_RUN_STEP_IDS.generateChart) {
+    return '将演示指标整理为右侧可视化图表数据。';
+  }
+
+  if (stepId === MOCK_RUN_STEP_IDS.waitConfirmation) {
+    return '本轮 Mock Run 已产出结论，可继续生成报告。';
+  }
+
+  return '恢复本轮 Mock Run 的最终回复。';
+}
+
+function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunSnapshot {
+  const createdAt = toIso(seed.createdAt);
+  const updatedAt = toIso(seed.updatedAt);
+  const promptSummary = summarizeMockPrompt(seed.prompt || seed.conclusion);
+  const conclusion =
+    seed.conclusion || `历史 Mock Run 未记录完整助手回复，已根据本轮问题恢复执行轨迹：${promptSummary}`;
+  const startedRun = createMockRunStartedEvent({
+    runId: seed.runId,
+    prompt: seed.prompt || promptSummary,
+    sessionId,
+  }).run;
+  const stepElapsedById: Partial<Record<keyof typeof MOCK_RUN_STEP_IDS, number>> = {
+    understandPrompt: 160,
+    knowledgeSearch: 260,
+    queryData: 260,
+    generateChart: 220,
+    waitConfirmation: 0,
+    generateConclusion: 0,
+  };
+  const toolOutputs = [
+    {
+      tool: createMockToolInvocation('knowledgeSearch'),
+      inputSummary: `检索与「${promptSummary}」相关的教学质量知识条目`,
+      outputSummary: `找到 3 条与「${promptSummary}」相关的知识资料`,
+      elapsedMs: 260,
+    },
+    {
+      tool: createMockToolInvocation('queryData'),
+      inputSummary: `查询「${promptSummary}」所需的公开演示指标`,
+      outputSummary: `返回用于回答「${promptSummary}」的 6 个年级统计结果`,
+      elapsedMs: 260,
+    },
+    {
+      tool: createMockToolInvocation('chartRender'),
+      inputSummary: `为「${promptSummary}」整理图表数据`,
+      outputSummary: `生成 1 个用于解释「${promptSummary}」的柱状图数据`,
+      elapsedMs: 220,
+    },
+  ];
+  const chartData = createMockChartData();
+
+  return {
+    ...startedRun,
+    status: seed.conclusion ? 'success' : 'stopped',
+    plan: startedRun.plan
+      ? {
+          ...startedRun.plan,
+          reason: `公开演示模式（Mock）根据本轮问题恢复执行轨迹：${promptSummary}`,
+        }
+      : startedRun.plan,
+    steps: startedRun.steps.map((step) => ({
+      ...step,
+      status: 'success',
+      description: getRecoveredMockStepDescription(step.id, promptSummary),
+      startedAt: createdAt,
+      completedAt: updatedAt,
+      elapsedMs:
+        step.id === MOCK_RUN_STEP_IDS.understandPrompt
+          ? stepElapsedById.understandPrompt
+          : step.id === MOCK_RUN_STEP_IDS.knowledgeSearch
+            ? stepElapsedById.knowledgeSearch
+            : step.id === MOCK_RUN_STEP_IDS.queryData
+              ? stepElapsedById.queryData
+              : step.id === MOCK_RUN_STEP_IDS.generateChart
+                ? stepElapsedById.generateChart
+                : 0,
+    })),
+    toolInvocations: toolOutputs.map(({ tool, inputSummary, outputSummary, elapsedMs }) => ({
+      ...tool,
+      status: 'success',
+      inputSummary,
+      outputSummary,
+      startedAt: createdAt,
+      completedAt: updatedAt,
+      elapsedMs,
+    })),
+    chartData: {
+      ...chartData,
+      title: `Mock 分析结果：${promptSummary}`,
+      summary: `围绕「${promptSummary}」恢复的公开演示图表摘要。`,
+    },
+    conclusion,
+    conclusionSource: 'mock',
+    reportState: seed.conclusion ? 'pending' : 'hidden',
+    createdAt,
+    updatedAt,
+    startedAt: createdAt,
+    completedAt: seed.conclusion ? updatedAt : undefined,
+    elapsedMs: seed.conclusion ? 1200 : undefined,
+  };
+}
+
+function collectMockRunSeeds(messages: WorkbenchMessage[]): MockRunSeed[] {
+  const seeds = new Map<string, MockRunSeed>();
+
+  for (const message of messages) {
+    if (!isMockRunId(message.runId)) {
+      continue;
+    }
+
+    const currentSeed =
+      seeds.get(message.runId) ??
+      ({
+        runId: message.runId,
+        prompt: '',
+        conclusion: '',
+        createdAt: message.createdAt,
+        updatedAt: message.createdAt,
+      } satisfies MockRunSeed);
+
+    if (message.role === 'user' && !currentSeed.prompt) {
+      currentSeed.prompt = message.content;
+    }
+
+    if (message.role === 'assistant' && message.content.trim()) {
+      currentSeed.conclusion = message.content;
+    }
+
+    currentSeed.createdAt = Math.min(currentSeed.createdAt, message.createdAt);
+    currentSeed.updatedAt = Math.max(currentSeed.updatedAt, message.createdAt);
+    seeds.set(message.runId, currentSeed);
+  }
+
+  return [...seeds.values()];
+}
+
+function getRunUpdatedAt(run: RunSnapshot | undefined): number {
+  if (!run) {
+    return 0;
+  }
+
+  const timestamp = Date.parse(run.updatedAt);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getLatestRunId(runsById: Record<string, RunSnapshot>): string | undefined {
+  return Object.values(runsById).reduce<string | undefined>((latestRunId, run) => {
+    const latestRun = latestRunId ? runsById[latestRunId] : undefined;
+    return getRunUpdatedAt(run) >= getRunUpdatedAt(latestRun) ? run.id : latestRunId;
+  }, undefined);
+}
+
+function hydrateMockRunsForSession(session: WorkbenchSession): WorkbenchSession {
+  const mockRunSeeds = collectMockRunSeeds(session.messages);
+
+  if (mockRunSeeds.length === 0) {
+    return session;
+  }
+
+  const runsById = { ...session.runsById };
+
+  for (const seed of mockRunSeeds) {
+    if (!runsById[seed.runId]) {
+      runsById[seed.runId] = createCompletedMockRun(seed, session.id);
+    }
+  }
+
+  return {
+    ...session,
+    runsById,
+    latestRunId: getLatestRunId(runsById),
+  };
+}
+
 function conversationRecordToWorkbenchSession(
   record: ConversationRecord,
   messages: WorkbenchMessage[] = [],
@@ -115,12 +335,14 @@ function conversationRecordToWorkbenchSession(
   const session = conversationRecordToSession(record, messages);
   const taskId = getConversationTaskId(record);
 
-  return taskId
+  const sessionWithTask = taskId
     ? {
         ...session,
         taskId,
       }
     : session;
+
+  return hydrateMockRunsForSession(sessionWithTask);
 }
 
 function findTargetConversation(
@@ -184,6 +406,7 @@ function createEmptyUiState() {
     errorMessage: undefined,
     confirmStatus: 'waiting' as const,
     currentRun: null,
+    selectedRunId: null,
     runEventLog: [],
     agentRunStatus: 'idle' as const,
     agentRunErrorMessage: null,
@@ -197,14 +420,16 @@ function createEmptyUiState() {
 }
 
 function createSessionUiState(session: WorkbenchSession | undefined, fallbackTaskId: string) {
-  const userMessage = session ? getSessionLatestPrompt(session) : '';
-  const assistantReply = session ? getSessionLatestAssistantReply(session) : '';
+  const hydratedSession = session ? hydrateMockRunsForSession(session) : undefined;
+  const userMessage = hydratedSession ? getSessionLatestPrompt(hydratedSession) : '';
+  const assistantReply = hydratedSession ? getSessionLatestAssistantReply(hydratedSession) : '';
   const assistantMessage =
-    [...(session?.messages ?? [])].reverse().find((message) => message.role === 'assistant') ?? null;
+    [...(hydratedSession?.messages ?? [])].reverse().find((message) => message.role === 'assistant') ?? null;
+  const latestRun = getSessionLatestRun(hydratedSession);
   const hasAssistantReply = Boolean(assistantReply.trim());
 
   return {
-    currentTaskId: session?.taskId ?? fallbackTaskId,
+    currentTaskId: hydratedSession?.taskId ?? fallbackTaskId,
     currentPrompt: userMessage,
     chatDraft: '',
     activeAssistantMessageId: assistantMessage?.id ?? '',
@@ -216,7 +441,8 @@ function createSessionUiState(session: WorkbenchSession | undefined, fallbackTas
     realModelNotice: '',
     errorMessage: undefined,
     confirmStatus: 'waiting' as const,
-    currentRun: getSessionLatestRun(session),
+    currentRun: latestRun,
+    selectedRunId: latestRun?.id ?? null,
     runEventLog: [],
     agentRunStatus: 'idle' as const,
     agentRunErrorMessage: null,
@@ -235,16 +461,18 @@ function upsertSessionMessages(
   messages: WorkbenchMessage[],
 ): WorkbenchSession[] {
   return sortSessionsByUpdatedAt(
-    sessions.map((session) =>
-      session.id === sessionId
-        ? {
-            ...session,
-            messages,
-            messageCount: Math.max(session.messageCount ?? messages.length, messages.length),
-            updatedAt: Date.now(),
-          }
-        : session,
-    ),
+    sessions.map((session) => {
+      if (session.id !== sessionId) {
+        return session;
+      }
+
+      return hydrateMockRunsForSession({
+        ...session,
+        messages,
+        messageCount: Math.max(session.messageCount ?? messages.length, messages.length),
+        updatedAt: Date.now(),
+      });
+    }),
   );
 }
 
@@ -322,17 +550,23 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         return state;
       }
 
+      const hydratedNextSession = hydrateMockRunsForSession(nextSession);
+      const nextSessions = state.sessions.map((session) =>
+        session.id === hydratedNextSession.id ? hydratedNextSession : session,
+      );
+
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(getPersistableSessions(state.sessions), nextSession.id);
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), hydratedNextSession.id);
       }
 
       return {
-        currentSessionId: nextSession.id,
+        sessions: nextSessions,
+        currentSessionId: hydratedNextSession.id,
         isOlderMessagesLoading: false,
         olderMessagesError: null,
         hasMoreMessages: false,
         oldestMessageCursor: null,
-        ...createSessionUiState(nextSession, state.currentTaskId),
+        ...createSessionUiState(hydratedNextSession, state.currentTaskId),
       };
     });
 
@@ -344,20 +578,25 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
   },
   setCurrentSessionId: (sessionId) => {
     const nextSession = get().sessions.find((session) => session.id === sessionId);
+    const hydratedNextSession = nextSession ? hydrateMockRunsForSession(nextSession) : undefined;
 
     if (!get().isPersistentMode) {
       persistWorkbenchSessions(getPersistableSessions(get().sessions), sessionId);
     }
 
-    set({
+    set((state) => ({
+      sessions: hydratedNextSession
+        ? state.sessions.map((session) => (session.id === hydratedNextSession.id ? hydratedNextSession : session))
+        : state.sessions,
       currentSessionId: sessionId,
-      currentRun: getSessionLatestRun(nextSession),
+      currentRun: getSessionLatestRun(hydratedNextSession),
+      selectedRunId: getSessionLatestRun(hydratedNextSession)?.id ?? null,
       runEventLog: [],
       isOlderMessagesLoading: false,
       olderMessagesError: null,
       hasMoreMessages: false,
       oldestMessageCursor: null,
-    });
+    }));
   },
   setCurrentTaskId: (taskId) => {
     set({ currentTaskId: taskId });
@@ -369,17 +608,19 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     set((state) => {
       const now = Date.now();
       const nextSessions = sortSessionsByUpdatedAt(
-        state.sessions.map((session) =>
-          session.id === state.currentSessionId
-            ? {
-                ...session,
-                messages,
-                messageCount: messages.length,
-                updatedAt: now,
-                taskId: state.currentTaskId,
-              }
-            : session,
-        ),
+        state.sessions.map((session) => {
+          if (session.id !== state.currentSessionId) {
+            return session;
+          }
+
+          return hydrateMockRunsForSession({
+            ...session,
+            messages,
+            messageCount: messages.length,
+            updatedAt: now,
+            taskId: state.currentTaskId,
+          });
+        }),
       );
 
       if (!state.isPersistentMode) {
@@ -693,12 +934,13 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     clearPersistedWorkbenchState();
 
     const anonymousState = getInitialWorkbenchSessionState();
+    const anonymousSessions = anonymousState.sessions.map((session) => hydrateMockRunsForSession(session));
     const currentSession = anonymousState.activeSessionId
-      ? anonymousState.sessions.find((session) => session.id === anonymousState.activeSessionId)
+      ? anonymousSessions.find((session) => session.id === anonymousState.activeSessionId)
       : undefined;
 
     set({
-      sessions: anonymousState.sessions,
+      sessions: anonymousSessions,
       currentSessionId: currentSession?.id ?? '',
       isConversationListLoading: false,
       isCreatingConversation: false,
@@ -834,18 +1076,20 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const olderMessages = result.data.messages.map((message) => messageRecordToWorkbenchMessage(message));
 
     set((state) => ({
-      sessions: state.sessions.map((session) =>
-        session.id === sessionId
-          ? {
-              ...session,
-              messages: mergeSessionMessages(session.messages, olderMessages),
-              messageCount: Math.max(
-                session.messageCount ?? 0,
-                session.messages.length + olderMessages.length,
-              ),
-            }
-          : session,
-      ),
+      sessions: state.sessions.map((session) => {
+        if (session.id !== sessionId) {
+          return session;
+        }
+
+        return hydrateMockRunsForSession({
+          ...session,
+          messages: mergeSessionMessages(session.messages, olderMessages),
+          messageCount: Math.max(
+            session.messageCount ?? 0,
+            session.messages.length + olderMessages.length,
+          ),
+        });
+      }),
       isOlderMessagesLoading: false,
       olderMessagesError: null,
       hasMoreMessages: Boolean(result.data.nextCursor),
@@ -1037,18 +1281,23 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       const nextSession = state.sessionId
         ? currentState.sessions.find((session) => session.id === state.sessionId && !isReadonlySession(session))
         : undefined;
-      const nextTaskId = state.taskId ?? nextSession?.taskId ?? '';
+      const hydratedNextSession = nextSession ? hydrateMockRunsForSession(nextSession) : undefined;
+      const nextSessions = hydratedNextSession
+        ? currentState.sessions.map((session) => (session.id === hydratedNextSession.id ? hydratedNextSession : session))
+        : currentState.sessions;
+      const nextTaskId = state.taskId ?? hydratedNextSession?.taskId ?? '';
       const matchedTask = mockTasks.find((task) => task.id === nextTaskId);
 
-      if (nextSession) {
-        persistWorkbenchSessions(getPersistableSessions(currentState.sessions), nextSession.id);
+      if (hydratedNextSession) {
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), hydratedNextSession.id);
       } else {
-        persistWorkbenchSessions(getPersistableSessions(currentState.sessions), '');
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), '');
       }
 
       return {
-        currentSessionId: nextSession?.id ?? '',
-        ...createSessionUiState(nextSession, matchedTask?.id ?? nextTaskId),
+        sessions: nextSessions,
+        currentSessionId: hydratedNextSession?.id ?? '',
+        ...createSessionUiState(hydratedNextSession, matchedTask?.id ?? nextTaskId),
       };
     });
   },

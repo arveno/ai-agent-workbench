@@ -38,10 +38,6 @@ function hasErrorMessage(messages: WorkbenchMessage[], runId: string): boolean {
   );
 }
 
-function shouldInsertToolSummary(run: RunSnapshot): boolean {
-  return run.intent === 'data_analysis' && run.toolInvocations.length > 0;
-}
-
 function createRunFollowUpBlocks(params: {
   run: RunSnapshot;
   currentRun: RunSnapshot | null;
@@ -97,7 +93,6 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
   }
 
   const blocks: ChatBlock[] = [];
-  const insertedToolSummaryRunIds = new Set<string>();
   const insertedStreamingRunIds = new Set<string>();
   const insertedReportConfirmRunIds = new Set<string>();
   const insertedErrorRunIds = new Set<string>();
@@ -117,15 +112,6 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
     }
 
     if (message.role === 'user') {
-      if (shouldInsertToolSummary(run) && !insertedToolSummaryRunIds.has(run.id)) {
-        blocks.push({
-          type: 'tool_summary',
-          id: `tool_summary:${run.id}`,
-          run,
-        });
-        insertedToolSummaryRunIds.add(run.id);
-      }
-
       blocks.push(
         ...createRunFollowUpBlocks({
           run,

@@ -3,7 +3,6 @@ import type { WorkbenchMessage } from './workbench';
 
 export type ChatBlockType =
   | 'message'
-  | 'tool_summary'
   | 'streaming_assistant'
   | 'report_confirm'
   | 'run_error'
@@ -13,12 +12,6 @@ export interface MessageChatBlock {
   type: 'message';
   id: string;
   message: WorkbenchMessage;
-}
-
-export interface ToolSummaryChatBlock {
-  type: 'tool_summary';
-  id: string;
-  run: RunSnapshot;
 }
 
 export interface StreamingAssistantChatBlock {
@@ -47,7 +40,6 @@ export interface RunStoppedChatBlock {
 
 export type ChatBlock =
   | MessageChatBlock
-  | ToolSummaryChatBlock
   | StreamingAssistantChatBlock
   | ReportConfirmChatBlock
   | RunErrorChatBlock

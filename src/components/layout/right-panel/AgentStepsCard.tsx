@@ -58,7 +58,9 @@ export function AgentStepsCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const isRunEventsLoading = useWorkbenchStore((state) => state.isRunEventsLoading);
   const runEventsError = useWorkbenchStore((state) => state.runEventsError);
+  const selectedRunId = useWorkbenchStore((state) => state.selectedRunId);
   const loadLatestRunForConversation = useWorkbenchStore((state) => state.loadLatestRunForConversation);
+  const selectRunForCurrentSession = useWorkbenchStore((state) => state.selectRunForCurrentSession);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const displayedSteps = currentRun?.steps ?? [];
   const [expandedStepIds, setExpandedStepIds] = useState<Set<string>>(() => new Set());
@@ -101,7 +103,9 @@ export function AgentStepsCard() {
               size="sm"
               variant="outline"
               onClick={() => {
-                if (currentSessionId) {
+                if (selectedRunId) {
+                  void selectRunForCurrentSession(selectedRunId);
+                } else if (currentSessionId) {
                   void loadLatestRunForConversation(currentSessionId);
                 }
               }}

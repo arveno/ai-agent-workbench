@@ -54,8 +54,8 @@ export function messageRecordToWorkbenchMessage(record: MessageRecord): Workbenc
     createdAt: toTimestamp(record.created_at),
   };
 
-  if (record.run_id || runtimeRunId) {
-    message.runId = record.run_id ?? runtimeRunId ?? undefined;
+  if (runtimeRunId || record.run_id) {
+    message.runId = runtimeRunId ?? record.run_id ?? undefined;
   }
 
   return message;

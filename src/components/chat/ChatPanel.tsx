@@ -10,6 +10,7 @@ export function ChatPanel() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
+  const selectedRunId = useWorkbenchStore((state) => state.selectedRunId);
   const activeAssistantMessageId = useWorkbenchStore((state) => state.activeAssistantMessageId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const errorMessage = useWorkbenchStore((state) => state.errorMessage);
@@ -24,6 +25,7 @@ export function ChatPanel() {
   const reportArtifactsError = useWorkbenchStore((state) => state.reportArtifactsError);
   const currentPrompt = useWorkbenchStore((state) => state.currentPrompt);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
+  const selectRunForCurrentSession = useWorkbenchStore((state) => state.selectRunForCurrentSession);
   const loadPersistentMessagesForSession = useWorkbenchStore((state) => state.loadPersistentMessagesForSession);
   const loadOlderMessagesForCurrentSession = useWorkbenchStore((state) => state.loadOlderMessagesForCurrentSession);
   const loadReportArtifacts = useWorkbenchStore((state) => state.loadReportArtifacts);
@@ -112,7 +114,7 @@ export function ChatPanel() {
     currentRun?.reportState,
     currentRun?.status,
     currentRun?.conclusion,
-    currentRun?.toolInvocations.length,
+    currentRun?.id,
     realModelNotice,
     errorMessage,
   ]);
@@ -165,6 +167,10 @@ export function ChatPanel() {
             block={block}
             activeAssistantMessageId={activeAssistantMessageId}
             generationStatus={generationStatus}
+            selectedRunId={selectedRunId}
+            onSelectAssistantRun={(runId) => {
+              void selectRunForCurrentSession(runId);
+            }}
           />
         ))}
 

@@ -1,5 +1,5 @@
 import type { ChatBlock } from '../../types/chatBlocks';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { AppIcon } from '../common/AppIcon';
@@ -11,12 +11,13 @@ import { MessageBubble } from './MessageBubble';
 import { RunErrorBlock } from './RunErrorBlock';
 import { RunStoppedBlock } from './RunStoppedBlock';
 import { StreamingAssistantBlock } from './StreamingAssistantBlock';
-import { ToolSummaryBlock } from './ToolSummaryBlock';
 
 interface ChatBlockRendererProps {
   block: ChatBlock;
   activeAssistantMessageId: string;
   generationStatus: string;
+  selectedRunId: string | null;
+  onSelectAssistantRun: (runId: string) => void;
 }
 
 type MessageChatBlock = Extract<ChatBlock, { type: 'message' }>;
@@ -25,6 +26,8 @@ interface MessageBlockRendererProps {
   block: MessageChatBlock;
   activeAssistantMessageId: string;
   generationStatus: string;
+  selectedRunId: string | null;
+  onSelectAssistantRun: (runId: string) => void;
 }
 
 function assertNever(value: never): never {
@@ -41,7 +44,13 @@ function getChatBlockClassName(block: ChatBlock): string {
   return classNames.join(' ');
 }
 
-function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatus }: MessageBlockRendererProps) {
+function MessageBlockRenderer({
+  block,
+  activeAssistantMessageId,
+  generationStatus,
+  selectedRunId,
+  onSelectAssistantRun,
+}: MessageBlockRendererProps) {
   const { copied, copy } = useCopyFeedback();
   const { message } = block;
   const shouldShowCopy = message.content.trim().length > 0;
@@ -53,7 +62,8 @@ function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatu
       className={`message-copy-button${copied ? ' message-copy-button-copied' : ''}`}
       aria-label={copyLabel}
       title={copyLabel}
-      onClick={() => {
+      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
         void copy(message.content);
       }}
     >
@@ -78,9 +88,45 @@ function MessageBlockRenderer({ block, activeAssistantMessageId, generationStatu
   const isReportMessage = message.kind === 'report';
   const isErrorMessage = message.kind === 'error';
   const messageView = createMessageView(message);
+  const canSelectRun = Boolean(message.runId && message.kind !== 'report');
+  const isSelectedRunMessage = Boolean(message.runId && message.runId === selectedRunId);
+  const selectRun = () => {
+    if (!message.runId || !canSelectRun) {
+      return;
+    }
+
+    onSelectAssistantRun(message.runId);
+  };
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (!canSelectRun || (event.key !== 'Enter' && event.key !== ' ')) {
+      return;
+    }
+
+    event.preventDefault();
+    selectRun();
+  };
 
   return (
-    <div className="message-row message-row-assistant">
+    <div
+      className={[
+        'message-row',
+        'message-row-assistant',
+        canSelectRun ? 'message-row-run-selectable' : '',
+        isSelectedRunMessage ? 'message-row-run-selected' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      role={canSelectRun ? 'button' : undefined}
+      tabIndex={canSelectRun ? 0 : undefined}
+      title={canSelectRun ? '查看这条回复对应的 Run Trace' : undefined}
+      aria-pressed={canSelectRun ? isSelectedRunMessage : undefined}
+      onClick={selectRun}
+      onKeyDown={handleKeyDown}
+    >
       <div className="message-avatar message-avatar-assistant" aria-hidden="true">
         <AppIcon icon={icons.brand} size={16} />
       </div>
@@ -118,11 +164,10 @@ export function ChatBlockRenderer(props: ChatBlockRendererProps) {
           block={props.block}
           activeAssistantMessageId={props.activeAssistantMessageId}
           generationStatus={props.generationStatus}
+          selectedRunId={props.selectedRunId}
+          onSelectAssistantRun={props.onSelectAssistantRun}
         />
       );
-      break;
-    case 'tool_summary':
-      content = <ToolSummaryBlock run={props.block.run} />;
       break;
     case 'streaming_assistant':
       content = <StreamingAssistantBlock run={props.block.run} />;

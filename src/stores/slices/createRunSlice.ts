@@ -1,6 +1,11 @@
 import type { StateCreator } from 'zustand';
 import { createRunReportArtifact, fetchConversationReportArtifacts } from '../../services/reportArtifactApi';
-import { fetchLatestRunBundleForConversation, fetchRunEvents, fetchToolInvocations } from '../../services/runPersistenceApi';
+import {
+  fetchLatestRunBundleForConversation,
+  fetchRunBundle,
+  fetchRunEvents,
+  fetchToolInvocations,
+} from '../../services/runPersistenceApi';
 import type { ReportArtifactRecord } from '../../types/persistence';
 import type { RunEvent, RunSlice, RunSnapshot, WorkbenchStore } from '../../types/workbench';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
@@ -15,6 +20,7 @@ const initialCurrentRun = getSessionLatestRun(
   initialWorkbenchState.sessions.find((session) => session.id === initialWorkbenchState.currentSessionId),
 );
 let latestRunRequestId = 0;
+let selectedRunRequestId = 0;
 let reportArtifactsRequestId = 0;
 
 function getAccessToken(): string | null {
@@ -86,8 +92,72 @@ function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId
   };
 }
 
+function cacheRunInSession(
+  sessions: WorkbenchStore['sessions'],
+  conversationId: string,
+  run: RunSnapshot,
+): WorkbenchStore['sessions'] {
+  return sessions.map((session) => {
+    if (session.id !== conversationId) {
+      return session;
+    }
+
+    const runWithSession: RunSnapshot = {
+      ...run,
+      sessionId: run.sessionId ?? conversationId,
+    };
+
+    return {
+      ...session,
+      runsById: {
+        ...session.runsById,
+        [runWithSession.id]: runWithSession,
+      },
+    };
+  });
+}
+
+function getRunUpdatedAt(run: RunSnapshot | null | undefined): number {
+  if (!run) {
+    return 0;
+  }
+
+  const timestamp = Date.parse(run.updatedAt);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getLatestRunByUpdatedAt(session: WorkbenchStore['sessions'][number] | undefined): RunSnapshot | null {
+  if (!session) {
+    return null;
+  }
+
+  return Object.values(session.runsById).reduce<RunSnapshot | null>((latestRun, run) => {
+    return getRunUpdatedAt(run) >= getRunUpdatedAt(latestRun) ? run : latestRun;
+  }, null);
+}
+
+function setSessionLatestRunId(
+  sessions: WorkbenchStore['sessions'],
+  conversationId: string,
+  latestRunId: string | undefined,
+): WorkbenchStore['sessions'] {
+  if (!latestRunId) {
+    return sessions;
+  }
+
+  return sessions.map((session) =>
+    session.id === conversationId
+      ? {
+          ...session,
+          latestRunId,
+        }
+      : session,
+  );
+}
+
 export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (set, get) => ({
   currentRun: initialCurrentRun,
+  selectedRunId: initialCurrentRun?.id ?? null,
   runEventLog: [],
   isLatestRunLoading: false,
   latestRunError: null,
@@ -101,7 +171,10 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   setCurrentRun: (run: RunSnapshot | null) => {
     set((state) => {
       if (!run) {
-        return { currentRun: null };
+        return {
+          currentRun: null,
+          selectedRunId: null,
+        };
       }
 
       const runWithSession: RunSnapshot = {
@@ -116,6 +189,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
 
       return {
         currentRun: runWithSession,
+        selectedRunId: runWithSession.id,
         sessions: nextSessions,
       };
     });
@@ -124,6 +198,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   clearCurrentRun: () => {
     set({
       currentRun: null,
+      selectedRunId: null,
       runEventLog: [],
     });
   },
@@ -136,6 +211,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       if (!nextRun) {
         return {
           currentRun: null,
+          selectedRunId: null,
           runEventLog: nextLog,
         };
       }
@@ -152,6 +228,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
 
       return {
         currentRun: runWithSession,
+        selectedRunId: runWithSession.id,
         runEventLog: nextLog,
         sessions: nextSessions,
       };
@@ -197,8 +274,11 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     const runRecord = latestRunResult.data.run;
 
     if (!runRecord) {
+      const localRun = getSessionLatestRun(get().sessions.find((session) => session.id === conversationId));
+
       set({
-        currentRun: null,
+        currentRun: localRun,
+        selectedRunId: localRun?.id ?? null,
         runEventLog: [],
         isLatestRunLoading: false,
         isRunEventsLoading: false,
@@ -222,12 +302,17 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     const runEvents = runEventsRecordToRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((state) => {
-      const nextSessions = upsertRunIntoSessions(state.sessions, conversationId, runSnapshot);
+      const sessionsWithCloudRun = upsertRunIntoSessions(state.sessions, conversationId, runSnapshot);
+      const latestRun = getLatestRunByUpdatedAt(
+        sessionsWithCloudRun.find((session) => session.id === conversationId),
+      ) ?? runSnapshot;
+      const nextSessions = setSessionLatestRunId(sessionsWithCloudRun, conversationId, latestRun.id);
 
       return {
         sessions: nextSessions,
-        currentRun: runSnapshot,
-        runEventLog: runEvents,
+        currentRun: latestRun,
+        selectedRunId: latestRun.id,
+        runEventLog: latestRun.id === runSnapshot.id ? runEvents : [],
         isLatestRunLoading: false,
         isRunEventsLoading: false,
         isRagSourcesLoading: false,
@@ -236,6 +321,141 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         ragSourcesError: null,
       };
     });
+  },
+
+  selectRunForCurrentSession: async (runId) => {
+    const normalizedRunId = runId.trim();
+
+    if (!normalizedRunId) {
+      return;
+    }
+
+    const state = get();
+    const conversationId = state.currentSessionId;
+    const activeSession = state.sessions.find((session) => session.id === conversationId);
+
+    if (!conversationId || !activeSession) {
+      return;
+    }
+
+    const cachedRun = activeSession.runsById[normalizedRunId];
+    const hasActiveRunRequest =
+      state.generationStatus === 'streaming' ||
+      state.agentRunStatus === 'running' ||
+      Boolean(state.activeAgentRunRequestId);
+
+    if (hasActiveRunRequest && state.currentRun?.id !== normalizedRunId) {
+      return;
+    }
+
+    if (cachedRun) {
+      set({
+        currentRun: {
+          ...cachedRun,
+          sessionId: cachedRun.sessionId ?? conversationId,
+        },
+        selectedRunId: normalizedRunId,
+        runEventLog: [],
+        latestRunError: null,
+        runEventsError: null,
+        isLatestRunLoading: false,
+        isRunEventsLoading: false,
+        isRagSourcesLoading: false,
+        ragSourcesError: null,
+      });
+      return;
+    }
+
+    if (!state.isPersistentMode || activeSession.isReadOnly || activeSession.visibility === 'demo') {
+      return;
+    }
+
+    const accessToken = getAccessToken();
+
+    if (!accessToken) {
+      return;
+    }
+
+    const requestId = selectedRunRequestId + 1;
+    selectedRunRequestId = requestId;
+    set({
+      selectedRunId: normalizedRunId,
+      isLatestRunLoading: true,
+      isRunEventsLoading: true,
+      isRagSourcesLoading: true,
+      latestRunError: null,
+      runEventsError: null,
+      ragSourcesError: null,
+    });
+
+    const result = await fetchRunBundle(normalizedRunId);
+
+    if (
+      requestId !== selectedRunRequestId ||
+      get().currentSessionId !== conversationId ||
+      get().selectedRunId !== normalizedRunId
+    ) {
+      return;
+    }
+
+    if (!result.ok) {
+      set({
+        isLatestRunLoading: false,
+        isRunEventsLoading: false,
+        isRagSourcesLoading: false,
+        latestRunError: result.message,
+        runEventsError: result.message,
+        ragSourcesError: null,
+      });
+      return;
+    }
+
+    if (!result.data.run) {
+      const message = '未找到这条回复对应的 Run。';
+      set({
+        isLatestRunLoading: false,
+        isRunEventsLoading: false,
+        isRagSourcesLoading: false,
+        latestRunError: message,
+        runEventsError: message,
+        ragSourcesError: null,
+      });
+      return;
+    }
+
+    const runSnapshot = runPersistenceRecordsToSnapshot({
+      run: result.data.run,
+      events: result.data.events,
+      tools: result.data.toolInvocations,
+    });
+
+    if (runSnapshot.sessionId && runSnapshot.sessionId !== conversationId) {
+      const message = '这条 Run 不属于当前会话。';
+      set({
+        isLatestRunLoading: false,
+        isRunEventsLoading: false,
+        isRagSourcesLoading: false,
+        latestRunError: message,
+        runEventsError: message,
+        ragSourcesError: null,
+      });
+      return;
+    }
+
+    const runEvents = runEventsRecordToRunEvents(result.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
+
+    set((currentState) => ({
+      sessions: cacheRunInSession(currentState.sessions, conversationId, runSnapshot),
+      currentRun: runSnapshot,
+      selectedRunId: normalizedRunId,
+      runEventLog: runEvents,
+      isLatestRunLoading: false,
+      isRunEventsLoading: false,
+      isRagSourcesLoading: false,
+      latestRunError: null,
+      runEventsError: null,
+      ragSourcesError: null,
+    }));
   },
 
   loadRunEvents: async (runId) => {

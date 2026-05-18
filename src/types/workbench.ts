@@ -16,7 +16,6 @@ export type {
   RunErrorChatBlock,
   RunStoppedChatBlock,
   StreamingAssistantChatBlock,
-  ToolSummaryChatBlock,
 } from './chatBlocks';
 
 export type {
@@ -439,6 +438,7 @@ export interface UiSlice {
 
 export interface RunSlice {
   currentRun: RunSnapshot | null;
+  selectedRunId: string | null;
   runEventLog: RunEvent[];
   isLatestRunLoading: boolean;
   latestRunError: string | null;
@@ -451,6 +451,7 @@ export interface RunSlice {
   setCurrentRun: (run: RunSnapshot | null) => void;
   clearCurrentRun: () => void;
   applyRunEvent: (event: RunEvent) => void;
+  selectRunForCurrentSession: (runId: string) => Promise<void>;
   loadLatestRunForConversation: (conversationId: string) => Promise<void>;
   loadRunEvents: (runId: string) => Promise<void>;
   loadToolInvocations: (runId: string) => Promise<void>;
