@@ -57,6 +57,9 @@ export interface CloudBaseCurrentUser {
   openid: string | null;
   email: string | null;
   displayName: string | null;
+  nickname: string | null;
+  username: string | null;
+  metadata: Record<string, unknown>;
   role: UserRole;
   isAnonymous: boolean;
 }

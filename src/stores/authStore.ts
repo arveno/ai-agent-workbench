@@ -45,6 +45,37 @@ function readNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function readMetadataName(metadata: Record<string, unknown> | null): string | null {
+  if (!metadata) {
+    return null;
+  }
+
+  return (
+    readNullableString(metadata.displayName) ??
+    readNullableString(metadata.display_name) ??
+    readNullableString(metadata.nickname) ??
+    readNullableString(metadata.username)
+  );
+}
+
+function formatShortUserId(userId: string | null | undefined): string | null {
+  if (!userId) {
+    return null;
+  }
+
+  const normalized = userId.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length <= 16) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
+}
+
 function normalizeRole(value: unknown): UserRole {
   return value === 'admin' || value === 'demo_user' ? value : 'demo_user';
 }
@@ -64,6 +95,7 @@ function normalizeCloudBaseCurrentUser(value: unknown): CloudBaseCurrentUser {
     throw new Error('CloudBase currentUser is missing userId.');
   }
 
+  const metadata = isRecord(value.metadata) ? value.metadata : {};
   const displayName =
     readNullableString(value.displayName) ??
     readNullableString(value.display_name) ??
@@ -75,6 +107,9 @@ function normalizeCloudBaseCurrentUser(value: unknown): CloudBaseCurrentUser {
     openid: readNullableString(value.openid) ?? readNullableString(value._openid),
     email: readNullableString(value.email),
     displayName,
+    nickname: readNullableString(value.nickname),
+    username: readNullableString(value.username),
+    metadata,
     role: normalizeRole(value.role),
     isAnonymous: value.isAnonymous === true || value.is_anonymous === true,
   };
@@ -120,13 +155,31 @@ function createAuthSession(accessToken: string, user: AuthUser): AuthSession {
   };
 }
 
-function getDisplayName(user: AuthUser | null, status: AuthStatus): string {
+function getDisplayName(
+  user: AuthUser | null,
+  status: AuthStatus,
+  currentUser: CloudBaseCurrentUser | null,
+): string {
   if (user?.displayName) {
     return user.displayName;
   }
 
+  if (currentUser?.nickname) {
+    return currentUser.nickname;
+  }
+
   if (user?.email) {
     return user.email;
+  }
+
+  if (currentUser?.username) {
+    return currentUser.username;
+  }
+
+  const metadataName = readMetadataName(currentUser?.metadata ?? null);
+
+  if (metadataName) {
+    return metadataName;
   }
 
   if (status === 'loading') {
@@ -138,6 +191,16 @@ function getDisplayName(user: AuthUser | null, status: AuthStatus): string {
   }
 
   if (status === 'authenticated') {
+    if ((currentUser?.role ?? user?.role) === 'demo_user') {
+      return 'demo_user';
+    }
+
+    const shortUserId = formatShortUserId(currentUser?.userId ?? user?.id);
+
+    if (shortUserId) {
+      return shortUserId;
+    }
+
     return 'CloudBase 用户';
   }
 
@@ -155,7 +218,7 @@ function createAuthSessionView(
     status: state.status,
     userId: user?.id ?? null,
     email: user?.email ?? null,
-    displayName: getDisplayName(user, state.status),
+    displayName: getDisplayName(user, state.status, state.currentUser),
     role: isAuthenticated ? role : 'anonymous',
     canUseRealAgent: isAuthenticated,
     isAuthConfigured: isCloudBaseAuthConfigured(),

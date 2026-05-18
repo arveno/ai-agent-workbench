@@ -53,33 +53,6 @@
   white-space: nowrap;
 }
 
-.workspace-mode-badge {
-  flex: 0 0 auto;
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-weight: var(--aw-type-badge-weight);
-}
-
-.title-star-button {
-  flex: 0 0 auto;
-  color: var(--aw-text-faint);
-}
-
-.title-star-button:hover {
-  color: var(--aw-text-secondary);
-}
-
-.title-star-button:disabled {
-  color: var(--aw-border-strong);
-  cursor: not-allowed;
-  opacity: 1;
-}
-
-.title-star-button:disabled:hover {
-  color: var(--aw-border-strong);
-}
-
 .workspace-status-row {
   min-width: 0;
   display: flex;
@@ -158,28 +131,6 @@
   color: #1e40af;
   font-size: var(--aw-type-caption-size);
   line-height: var(--aw-type-caption-line);
-}
-
-.workspace-agent-access-hint {
-  margin: 4px 0 0;
-  color: #475569;
-  font-size: var(--aw-type-caption-size);
-  line-height: var(--aw-type-caption-line);
-}
-
-.workspace-agent-access-hint-available {
-  color: #15803d;
-}
-
-.workspace-agent-access-hint-login_required,
-.workspace-agent-access-hint-checking {
-  color: #1e40af;
-}
-
-.workspace-agent-access-hint-quota_exceeded,
-.workspace-agent-access-hint-auth_unavailable,
-.workspace-agent-access-hint-forbidden {
-  color: #c2410c;
 }
 
 .workspace-actions {
@@ -554,8 +505,6 @@
     max-width: 100%;
   }
 
-  .workspace-mode-badge,
-  .workspace-agent-access-hint,
   .workspace-capability-status {
     display: none;
   }

@@ -19,7 +19,7 @@ function getAuthDisplayName(authView: AuthSessionView): string {
   }
 
   if (authView.status === 'authenticated') {
-    return authView.email ?? authView.displayName;
+    return authView.displayName || authView.email || 'CloudBase 用户';
   }
 
   return '访客用户';

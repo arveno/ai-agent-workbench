@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { buildRealAgentAvailabilityView, getRealAgentBlockedMessage } from '@/services/agentAccessViewModel';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
@@ -7,9 +7,16 @@ import type { ModelProviderId } from '../../types/workbench';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { Button } from '../ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import { Textarea } from '../ui/textarea';
 
 const MAX_PROMPT_LENGTH = 2000;
+const COMPOSER_TEXTAREA_MAX_HEIGHT = 180;
 type ChatModeProviderId = Extract<ModelProviderId, 'mock' | 'groq'>;
 
 interface ChatModeOption {
@@ -47,6 +54,7 @@ export function ChatInput() {
   const [isComposing, setIsComposing] = useState(false);
   const [realAgentNotice, setRealAgentNotice] = useState('');
   const isComposingRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const authView = useAuthSessionView();
   const agentAccess = useAuthStore((state) => state.agentAccess);
   const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
@@ -59,6 +67,7 @@ export function ChatInput() {
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const setCurrentModelProvider = useWorkbenchStore((state) => state.setCurrentModelProvider);
+  const openWorkflowModal = useWorkbenchStore((state) => state.openWorkflowModal);
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
@@ -80,13 +89,25 @@ export function ChatInput() {
     agentAccess,
     isAgentAccessLoading,
   });
+  const activeModeOption = CHAT_MODE_OPTIONS.find((option) => option.id === activeChatMode) ?? CHAT_MODE_OPTIONS[0];
+  const ActiveModeIcon = activeModeOption.icon;
+  const activeModeStatusLabel =
+    activeChatMode === 'groq' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
   const shouldShowRealAgentNotice =
     currentModelProvider === 'groq' && !realAgentAvailability.canEnterRealAgent && realAgentNotice;
-  const modeHelpText = isReadOnlySession
-    ? '示例会话为公开只读。点击左侧“新聊天”后再发送消息。'
-    : activeChatMode === 'mock'
-      ? 'Mock 是主动选择的公开演示模式，不会伪装成真实 Agent。'
-      : '真实 Agent 通过 CloudBase 后端受控工具链运行；不可用时会显示明确 fallback。';
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = 'auto';
+    const nextHeight = Math.min(textarea.scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [chatDraft]);
 
   const handleSend = () => {
     if (isGenerating || sendDisabled) {
@@ -136,96 +157,147 @@ export function ChatInput() {
 
   return (
     <div className="composer">
-      <Textarea
-        className="composer-input chat-input-textarea"
-        placeholder={
-          isReadOnlySession
-            ? '示例会话为公开只读，不能在这里发送新消息。'
-            : isPublicDemoMode
-            ? '开始一条新聊天，或打开左侧示例会话查看完整流程。'
-            : '继续输入问题，或让 AI 生成报告...'
-        }
-        value={chatDraft}
-        onChange={(event) => setChatDraft(event.target.value)}
-        onCompositionStart={() => {
-          isComposingRef.current = true;
-          setIsComposing(true);
-        }}
-        onCompositionEnd={() => {
-          window.setTimeout(() => {
-            isComposingRef.current = false;
-            setIsComposing(false);
-          }, 0);
-        }}
-        onKeyDown={handleKeyDown}
-        maxLength={MAX_PROMPT_LENGTH}
-        disabled={isReadOnlySession}
-      />
       {shouldShowRealAgentNotice ? <p className="composer-agent-access-notice">{realAgentNotice}</p> : null}
-      <div className={isReadOnlySession ? 'composer-mode-row composer-mode-row-disabled' : 'composer-mode-row'}>
-        <div className="composer-mode-switch" aria-label="模型或模式选择">
-          {CHAT_MODE_OPTIONS.map((option) => {
-            const isActive = activeChatMode === option.id;
-            const Icon = option.icon;
-            const statusLabel = option.id === 'groq' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
+      <div className={isReadOnlySession ? 'composer-input-shell composer-input-shell-disabled' : 'composer-input-shell'}>
+        <div className="composer-input-area">
+          <Textarea
+            ref={textareaRef}
+            rows={1}
+            className="composer-input chat-input-textarea"
+            placeholder={
+              isReadOnlySession
+                ? '示例会话为公开只读，不能在这里发送新消息。'
+                : isPublicDemoMode
+                ? '开始一条新聊天，或打开左侧示例会话查看完整流程。'
+                : '继续输入问题，或让 AI 生成报告...'
+            }
+            value={chatDraft}
+            onChange={(event) => setChatDraft(event.target.value)}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+              setIsComposing(true);
+            }}
+            onCompositionEnd={() => {
+              window.setTimeout(() => {
+                isComposingRef.current = false;
+                setIsComposing(false);
+              }, 0);
+            }}
+            onKeyDown={handleKeyDown}
+            maxLength={MAX_PROMPT_LENGTH}
+            disabled={isReadOnlySession}
+          />
+        </div>
 
-            return (
-              <button
-                key={option.id}
-                type="button"
-                className={isActive ? 'composer-mode-option active' : 'composer-mode-option'}
-                disabled={isGenerating || isReadOnlySession}
-                title={option.id === 'groq' ? realAgentAvailability.description : option.description}
-                onClick={() => {
-                  setRealAgentNotice('');
-                  setCurrentModelProvider(option.id);
-                }}
-              >
-                <Icon size={14} aria-hidden="true" />
-                <span className="composer-mode-label">{option.label}</span>
-                <span className={`composer-mode-status composer-mode-status-${option.id === 'groq' ? realAgentAvailability.status : 'available'}`}>
-                  {statusLabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <span className="composer-mode-help">{modeHelpText}</span>
-      </div>
-      <div className="composer-footer">
-        <div className="composer-tools">
-          <Button type="button" className="composer-tool-btn input-tool-button" variant="outline" size="sm">
-            <span className="icon-text-inline">
-              <AppIcon icon={icons.attachment} size={14} />
-              <span>附件</span>
+        <div className="composer-footer">
+          <div className="composer-left-actions">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  className="composer-plus-button"
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={isReadOnlySession}
+                  aria-label="打开输入工具"
+                  title={isReadOnlySession ? '示例会话只读，工具不可用' : '输入工具'}
+                >
+                  <AppIcon icon={icons.plus} size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={8} className="composer-tool-menu">
+                <DropdownMenuItem className="composer-menu-item" disabled>
+                  <AppIcon icon={icons.attachment} size={15} />
+                  <span className="composer-menu-copy">
+                    <span className="composer-menu-title">附件</span>
+                    <span className="composer-menu-description">暂未开放</span>
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="composer-menu-item"
+                  onSelect={() => {
+                    openWorkflowModal();
+                  }}
+                >
+                  <AppIcon icon={icons.template} size={15} />
+                  <span className="composer-menu-copy">
+                    <span className="composer-menu-title">模板</span>
+                    <span className="composer-menu-description">打开 Prompt 模板</span>
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="composer-footer-spacer" aria-hidden="true"></div>
+
+          <div className="composer-right-actions">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  className="composer-model-trigger"
+                  variant="outline"
+                  size="sm"
+                  disabled={isGenerating || isReadOnlySession}
+                  aria-label={`模型或模式选择：${activeModeOption.label}`}
+                  title={activeModeOption.description}
+                >
+                  <ActiveModeIcon size={14} aria-hidden="true" />
+                  <span className="composer-mode-label">{activeModeOption.label}</span>
+                  <span className={`composer-mode-status composer-mode-status-${activeChatMode === 'groq' ? realAgentAvailability.status : 'available'}`}>
+                    {activeModeStatusLabel}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="composer-model-menu">
+                {CHAT_MODE_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const isActive = activeChatMode === option.id;
+                  const statusLabel =
+                    option.id === 'groq' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
+
+                  return (
+                    <DropdownMenuItem
+                      key={option.id}
+                      className={isActive ? 'composer-menu-item composer-menu-item-active' : 'composer-menu-item'}
+                      onSelect={() => {
+                        setRealAgentNotice('');
+                        setCurrentModelProvider(option.id);
+                      }}
+                    >
+                      <Icon size={15} aria-hidden="true" />
+                      <span className="composer-menu-copy">
+                        <span className="composer-menu-title">{option.label}</span>
+                        <span className="composer-menu-description">{option.description}</span>
+                      </span>
+                      <span className={`composer-mode-status composer-mode-status-${option.id === 'groq' ? realAgentAvailability.status : 'available'}`}>
+                        {statusLabel}
+                      </span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span className="composer-count">
+              {chatDraft.length} / {MAX_PROMPT_LENGTH}
             </span>
-          </Button>
-          <Button type="button" className="composer-tool-btn input-tool-button" variant="outline" size="sm">
-            <span className="icon-text-inline">
-              <AppIcon icon={icons.template} size={14} />
-              <span>模板</span>
-            </span>
-          </Button>
-        </div>
-        <div className="composer-actions">
-          <span className="composer-count">
-            {chatDraft.length} / {MAX_PROMPT_LENGTH}
-          </span>
-          <Button
-            type="button"
-            className={[
-              'composer-action-button',
-              isGenerating ? 'composer-stop-button' : 'composer-send-button',
-            ].join(' ')}
-            onClick={handlePrimaryAction}
-            disabled={!isGenerating && sendDisabled}
-            aria-label={isGenerating ? '停止生成' : '发送'}
-            title={isGenerating ? '停止生成' : '发送'}
-            variant={isGenerating ? 'destructive' : 'default'}
-            size="icon"
-          >
-            <AppIcon icon={isGenerating ? icons.stop : icons.send} size={16} />
-          </Button>
+            <Button
+              type="button"
+              className={[
+                'composer-action-button',
+                isGenerating ? 'composer-stop-button' : 'composer-send-button',
+              ].join(' ')}
+              onClick={handlePrimaryAction}
+              disabled={!isGenerating && sendDisabled}
+              aria-label={isGenerating ? '停止生成' : '发送'}
+              title={isGenerating ? '停止生成' : '发送'}
+              variant={isGenerating ? 'destructive' : 'default'}
+              size="icon"
+            >
+              <AppIcon icon={isGenerating ? icons.stop : icons.send} size={16} />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
