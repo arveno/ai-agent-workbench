@@ -47,9 +47,9 @@ export function RagSourcesCard() {
           </CardTitle>
           <CardDescription>{view.description}</CardDescription>
         </div>
-        {view.items.length > 0 ? (
+        {view.retrievedChunkCount > 0 ? (
           <Badge variant="outline" className="right-card-count-badge">
-            {view.items.length} 条来源
+            retrievedChunkCount {view.retrievedChunkCount}
           </Badge>
         ) : null}
       </CardHeader>

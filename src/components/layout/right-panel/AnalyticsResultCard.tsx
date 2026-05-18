@@ -86,7 +86,7 @@ export function AnalyticsResultCard() {
           <AppIcon icon={icons.chart} size={16} />
           <span>数据分析结果</span>
         </CardTitle>
-        <CardDescription>{isValidChartData ? '基于 currentRun.chartData 渲染' : '等待可视化数据'}</CardDescription>
+        <CardDescription>{isValidChartData ? '当前 Run 的图表和指标摘要' : '等待可视化数据'}</CardDescription>
       </CardHeader>
       <CardContent className="right-card-content">
         {isValidChartData ? (

@@ -18,14 +18,14 @@ export function DataSourceCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.database} size={16} />
-            <span>当前数据源</span>
+            <span>数据源使用</span>
           </CardTitle>
-          <CardDescription>本轮使用的数据源上下文</CardDescription>
+          <CardDescription>当前 Run 是否访问受控数据上下文</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
             <strong>尚未访问数据源</strong>
-            发送数据分析类请求后，这里会展示本轮使用的数据源。
+            数据源是 Agent 可用的服务端上下文，不是聊天输入框；发送数据分析类请求后这里会展示使用情况。
           </div>
         </CardContent>
       </Card>
@@ -41,14 +41,14 @@ export function DataSourceCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.database} size={16} />
-            <span>当前数据源</span>
+            <span>数据源使用</span>
           </CardTitle>
           <CardDescription>本轮是否访问数据源</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
             <strong>{currentRun.status === 'running' ? '等待数据源决策' : '本次未访问数据源'}</strong>
-            {currentRun.status === 'running' ? 'Planner 正在判断是否需要进入数据分析流程。' : '该请求无需进入数据分析流程。'}
+            {currentRun.status === 'running' ? 'Planner 正在判断是否需要进入数据分析流程。' : '该请求没有使用服务端数据源上下文。'}
           </div>
         </CardContent>
       </Card>
@@ -70,7 +70,7 @@ export function DataSourceCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.database} size={16} />
-            <span>当前数据源</span>
+            <span>数据源使用</span>
           </CardTitle>
           <CardDescription>{dataSource?.typeLabel ?? '当前 Run 使用的数据源上下文'}</CardDescription>
         </div>

@@ -56,9 +56,9 @@ export function CurrentConclusionCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.alert} size={16} />
-            <span>当前结论</span>
+            <span>结论摘要</span>
           </CardTitle>
-          <CardDescription>最终结论或运行中输出</CardDescription>
+          <CardDescription>选中 Run 的最终回复摘要</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
@@ -84,9 +84,9 @@ export function CurrentConclusionCard() {
       <CardHeader className="right-card-header">
         <CardTitle className="panel-section-title">
           <AppIcon icon={icons.alert} size={16} />
-          <span>当前结论</span>
+          <span>结论摘要</span>
         </CardTitle>
-        <CardDescription>当前 Run 的最终回复</CardDescription>
+        <CardDescription>作为右侧证据链的结论备份，完整对话仍在聊天区</CardDescription>
       </CardHeader>
 
       <CardContent className="right-card-content">

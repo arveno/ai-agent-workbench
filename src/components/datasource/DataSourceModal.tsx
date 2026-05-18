@@ -21,7 +21,7 @@ const DATA_SOURCE_PROVIDERS: DataSourceProvider[] = [
   {
     id: 'mysql',
     name: 'CloudBase MySQL',
-    description: '当前正式数据链路，由 CloudBase HTTP Functions 受控访问。',
+    description: '当前正式数据上下文，由 CloudBase HTTP Functions 受控访问。',
     relationHint: 'Agent Run 的 teaching_metrics 数据工具和 knowledge_search 均读取 CloudBase MySQL。',
     demoBadgeText: '当前主线数据源',
     status: 'connected',
@@ -38,7 +38,7 @@ const DATA_SOURCE_PROVIDERS: DataSourceProvider[] = [
   {
     id: 'postgresql',
     name: '外部关系型数据库（历史占位）',
-    description: '旧外部数据源测试入口已下线；当前正式数据能力已收敛到 CloudBase MySQL。',
+    description: '外部数据库接入暂不开放；当前正式数据能力已收敛到 CloudBase MySQL。',
     status: 'idle',
     enabled: false,
     comingSoon: true,
@@ -66,7 +66,7 @@ const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
   {
     id: 'all',
     label: '全部数据源',
-    description: '查看当前工作台展示的数据源能力和历史占位。',
+    description: '查看 Agent 可用的数据上下文和后续预留项。',
   },
   {
     id: 'connected',
@@ -76,7 +76,7 @@ const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
   {
     id: 'testable',
     label: '可测试',
-    description: '旧外部数据源测试入口已下线，当前没有可测试项。',
+    description: '当前不提供前端直接测试外部数据库连接。',
   },
   {
     id: 'planned',
@@ -277,7 +277,7 @@ export function DataSourceModal() {
       className="datasource-modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="数据源配置"
+      aria-label="数据源管理"
       onClick={closeDataSourceModal}
     >
       <div
@@ -288,12 +288,12 @@ export function DataSourceModal() {
       >
         <header className="datasource-modal-header">
           <div>
-            <h3 className="datasource-modal-title">数据源配置</h3>
+            <h3 className="datasource-modal-title">数据源管理</h3>
             <p className="datasource-modal-description">
-              配置 Agent 可访问的数据源。第一版仅支持服务端受控连接，前端不保存数据库连接串。
+              查看 Agent 可用的数据上下文。当前版本只展示服务端受控数据源，前端不保存数据库连接串。
             </p>
             <p className="datasource-modal-relation-note">
-              说明：当前正式链路使用 CloudBase MySQL，数据访问由 CloudBase HTTP Functions 控制。
+              说明：数据分析和知识检索都通过 CloudBase HTTP Functions 访问 CloudBase MySQL。
             </p>
           </div>
           <Button
@@ -313,7 +313,7 @@ export function DataSourceModal() {
             <CardContent className="datasource-modal-info-content">
               <p>当前主线使用 CloudBase MySQL，Agent Run 的数据分析和 RAG 检索均通过受控函数读取。</p>
               <p>前端不保存数据库连接串，也不直接连接数据库。</p>
-              <p>线上部署时仅在 CloudBase 函数环境变量中配置服务端需要的密钥。</p>
+              <p>模型只提出工具意图，实际查询由服务端白名单工具和权限校验控制。</p>
             </CardContent>
           </Card>
 

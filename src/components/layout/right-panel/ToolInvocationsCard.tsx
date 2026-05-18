@@ -40,12 +40,12 @@ export function ToolInvocationsCard() {
             <AppIcon icon={icons.settings} size={16} />
             <span>工具调用</span>
           </CardTitle>
-          <CardDescription>本轮工具调用记录</CardDescription>
+          <CardDescription>服务端白名单工具的本轮执行记录</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
             <strong>暂无工具调用</strong>
-            发送数据分析类请求后，这里会展示本轮工具调用记录。
+            发送数据分析或知识问答请求后，这里会展示受控工具调用记录。
           </div>
         </CardContent>
       </Card>
@@ -60,7 +60,7 @@ export function ToolInvocationsCard() {
             <AppIcon icon={icons.settings} size={16} />
             <span>工具调用</span>
           </CardTitle>
-          <CardDescription>受控工具执行记录</CardDescription>
+          <CardDescription>模型只选择工具意图，执行由服务端白名单控制</CardDescription>
         </div>
         {runtimeTools.length > 0 ? (
           <Badge variant="outline" className="right-card-count-badge">
@@ -73,7 +73,7 @@ export function ToolInvocationsCard() {
         {runtimeTools.length === 0 ? (
           <div className="right-panel-empty-state">
             <strong>本次未调用工具</strong>
-            当前请求未进入数据分析流程，或工具尚未开始执行。
+            当前请求未进入工具链，或服务端工具尚未开始执行。
           </div>
         ) : (
           <div className="tool-invocation-list">

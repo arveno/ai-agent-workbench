@@ -17,6 +17,7 @@ export interface RagSourcesView {
   title: string;
   description: string;
   items: RagSourceView[];
+  retrievedChunkCount: number;
   isLoading: boolean;
   isEmpty: boolean;
   errorMessage: string | null;
@@ -61,17 +62,18 @@ export function createRagSourcesView(params: {
   const isMock = params.run?.mode === 'mock';
 
   return {
-    title: isMock ? '公开演示来源' : '检索来源',
-    description: isMock ? 'Mock RAG 来源，仅用于公开演示' : '真实 RAG 来源、引用与证据链',
+    title: isMock ? '公开演示来源' : 'RAG 来源',
+    description: isMock ? 'Mock RAG 来源，仅用于公开演示' : 'CloudBase knowledge_search 返回的来源、引用与证据链',
     items,
+    retrievedChunkCount: items.length,
     isLoading: params.isLoading,
     isEmpty,
     errorMessage: params.errorMessage,
     canRetry: Boolean(params.errorMessage && params.run),
-    emptyTitle: '暂无检索来源',
+    emptyTitle: '本轮没有检索来源',
     emptyDescription: params.run
-      ? '当前 Run 暂无检索来源。'
-      : '发送涉及知识检索的问题后，这里会展示来源片段和引用信息。',
+      ? '当前 Run 没有返回 citation/source，这不是执行错误。'
+      : '发送涉及知识检索的问题后，这里会展示 retrievedChunkCount、来源片段和引用信息。',
     loadingMessage: '正在读取 RAG 检索来源...',
     retryLabel: '重试',
   };

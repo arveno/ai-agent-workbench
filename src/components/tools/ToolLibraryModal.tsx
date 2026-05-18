@@ -19,17 +19,17 @@ const TOOL_TABS: ToolTabDefinition[] = [
   {
     id: 'all',
     label: '全部工具',
-    description: '当前工作台可展示的服务端工具、前端模拟工具与规划中工具。',
+    description: '当前工作台展示的服务端白名单工具、本地演示能力与规划中工具。',
   },
   {
     id: 'connected',
     label: '已接入',
-    description: '已经接入服务端或当前执行链路的工具。',
+    description: '已经接入 CloudBase 函数或当前执行链路的受控工具。',
   },
   {
     id: 'mock',
-    label: '前端模拟',
-    description: '用于演示 RAG 来源、报告生成等前端能力的模拟工具。',
+    label: '本地演示',
+    description: '仅用于公开演示或本地生成的能力，不伪装成真实 Agent 工具。',
   },
   {
     id: 'planned',
@@ -77,7 +77,7 @@ export function ToolLibraryModal() {
       className="tool-library-modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="工具库配置"
+      aria-label="工具库"
       onClick={closeToolLibraryModal}
     >
       <div
@@ -88,9 +88,9 @@ export function ToolLibraryModal() {
       >
         <header className="tool-library-modal-header">
           <div>
-            <h3 className="tool-library-modal-title">工具库配置</h3>
+            <h3 className="tool-library-modal-title">工具库</h3>
             <p className="tool-library-modal-description">
-              查看当前 Agent 可使用的受控工具、执行位置与风险等级。模型不能直接执行任意 SQL。
+              查看当前 Agent 可使用的服务端白名单工具、执行位置与风险等级。模型不能直接执行任意 SQL，前端也不直接执行工具。
             </p>
           </div>
           <Button

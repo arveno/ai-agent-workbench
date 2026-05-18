@@ -58,32 +58,18 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     outputSummary: 'chartData, summary',
   },
   {
-    id: 'rag_search',
-    name: 'rag_search',
-    displayName: '教学评价知识检索',
+    id: 'knowledge_search',
+    name: 'knowledge_search',
+    displayName: 'CloudBase 知识检索',
     category: 'knowledge',
     status: 'connected',
     runtime: 'server',
     riskLevel: 'low',
     enabled: true,
     usedInRunTrace: true,
-    description: '检索教学评价制度示例知识库，返回可引用的来源片段。',
+    description: '通过 CloudBase MySQL 的 knowledge_documents / knowledge_chunks 做受控检索，返回可引用来源片段。',
     inputSummary: 'query, topK',
-    outputSummary: 'sources, citations, score',
-  },
-  {
-    id: 'knowledge_search',
-    name: 'knowledge_search',
-    displayName: '知识检索',
-    category: 'knowledge',
-    status: 'mock',
-    runtime: 'mock',
-    riskLevel: 'medium',
-    enabled: true,
-    usedInRunTrace: true,
-    description: '展示 RAG 来源与引用能力，目前使用模拟来源展示证据链 UI。',
-    inputSummary: 'query, topK',
-    outputSummary: 'sources, citations, score',
+    outputSummary: 'retrievedChunkCount, sources, citations, score',
   },
   {
     id: 'report_generate',
@@ -102,7 +88,8 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
 ];
 
 export function getWorkbenchToolDefinition(toolId: string): WorkbenchToolDefinition | null {
-  return WORKBENCH_TOOL_DEFINITIONS.find((tool) => tool.id === toolId || tool.name === toolId) ?? null;
+  const normalizedToolId = toolId === 'rag_search' ? 'knowledge_search' : toolId;
+  return WORKBENCH_TOOL_DEFINITIONS.find((tool) => tool.id === normalizedToolId || tool.name === normalizedToolId) ?? null;
 }
 
 export function getWorkbenchToolDisplayName(toolId: string): string {
@@ -115,7 +102,7 @@ export function getToolStatusLabel(status: WorkbenchToolDefinition['status']): s
   }
 
   if (status === 'mock') {
-    return '前端模拟';
+    return '本地演示';
   }
 
   return '规划中';
@@ -127,7 +114,7 @@ export function getToolRuntimeLabel(runtime: WorkbenchToolDefinition['runtime'])
   }
 
   if (runtime === 'mock') {
-    return '前端模拟';
+    return '本地执行';
   }
 
   return '待接入';

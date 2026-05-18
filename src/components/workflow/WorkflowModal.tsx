@@ -64,7 +64,7 @@ const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
     id: 'workflow-answer',
     kind: 'answer',
     title: '生成最终回复',
-    description: '将工具结果拼接为上下文，调用 Groq 流式生成最终分析结论。',
+    description: '将工具结果拼接为上下文，通过服务端受控模型网关生成最终分析结论。',
     status: 'ready',
     outputSummary: 'assistantMessage',
   },
@@ -223,7 +223,7 @@ export function WorkflowModal() {
       className="workflow-modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="工作流配置"
+      aria-label="Workflow / Prompt 模板"
       onClick={closeWorkflowModal}
     >
       <div
@@ -234,9 +234,9 @@ export function WorkflowModal() {
       >
         <header className="workflow-modal-header">
           <div>
-            <h3 className="workflow-modal-title">工作流配置</h3>
+            <h3 className="workflow-modal-title">Workflow / Prompt 模板</h3>
             <p className="workflow-modal-description">
-              查看 Agent 固定执行流程，并配置当前浏览器会话中的 Prompt 模板。
+              查看当前任务流程模板，并维护仅本地会话生效的 Prompt 模板。
             </p>
           </div>
           <Button
@@ -266,9 +266,9 @@ export function WorkflowModal() {
               <div className="workflow-flow-panel">
                 <div className="workflow-panel-heading">
                   <div>
-                    <h4 className="workflow-panel-title">Agent Workflow Template</h4>
+                    <h4 className="workflow-panel-title">任务流程模板</h4>
                     <p className="workflow-panel-description">
-                      当前版本使用固定编排，模型负责判断任务类型，实际工具执行仍由服务端受控流程完成。
+                      当前版本使用固定流程模板，不提供可视化编排；模型负责判断任务类型，实际工具执行由服务端受控流程完成。
                     </p>
                   </div>
                   <Badge variant="outline" className="workflow-badge workflow-badge-ready">

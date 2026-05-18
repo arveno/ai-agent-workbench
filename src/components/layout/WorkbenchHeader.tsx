@@ -173,10 +173,11 @@ export function WorkbenchHeader() {
 
       <div className="workspace-actions">
         <EnvironmentStatus />
+        <span className="workspace-actions-label">全局配置</span>
 
         <Button className="workspace-action-button" type="button" onClick={openDataSourceModal} variant="outline" size="sm">
           <AppIcon icon={icons.database} size={15} />
-          <span>数据源</span>
+          <span>数据源管理</span>
         </Button>
 
         <Button className="workspace-action-button" type="button" onClick={openToolLibraryModal} variant="outline" size="sm">
@@ -186,7 +187,7 @@ export function WorkbenchHeader() {
 
         <Button className="workspace-action-button" type="button" onClick={openWorkflowModal} variant="outline" size="sm">
           <AppIcon icon={icons.agent} size={15} />
-          <span>工作流</span>
+          <span>Workflow / Prompt</span>
         </Button>
 
         <Button className="header-icon-button icon-button" type="button" aria-label="更多" variant="outline" size="icon-sm">

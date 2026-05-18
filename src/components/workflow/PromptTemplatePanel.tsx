@@ -45,9 +45,9 @@ export function PromptTemplatePanel() {
       <Card size="sm" className="prompt-template-panel-head">
         <CardHeader className="prompt-template-panel-header">
           <div>
-            <CardTitle className="prompt-template-panel-title">Prompt Configuration Panel</CardTitle>
+            <CardTitle className="prompt-template-panel-title">Prompt 模板</CardTitle>
             <CardDescription className="prompt-template-panel-description">
-              管理 Planner、分析、报告和 fallback 摘要模板。当前配置只保存在浏览器会话中，不影响后端真实执行逻辑。
+              作为输入辅助和任务模板参考。当前配置只保存在浏览器会话中，不改变 CloudBase 后端真实执行逻辑。
             </CardDescription>
           </div>
           <Badge variant="outline" className="prompt-template-local-badge">

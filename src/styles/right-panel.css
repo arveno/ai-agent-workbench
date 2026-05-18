@@ -22,8 +22,39 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   padding-right: 2px;
+}
+
+.right-panel-group {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.right-panel-group-heading {
+  min-width: 0;
+}
+
+.right-panel-group-heading h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.right-panel-group-heading p {
+  margin: 3px 0 0;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.right-panel-group-body {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
 }
 
 .right-card,
@@ -795,4 +826,56 @@
   margin-top: 8px;
   color: #94a3b8;
   font-size: 11px;
+}
+
+.report-status-badge {
+  flex: 0 0 auto;
+  border: 0;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.report-status-badge-pending {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.report-status-badge-generated {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.report-status-badge-skipped {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.report-status-badge-hidden {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.report-status-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.report-status-card p {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.55;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.report-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

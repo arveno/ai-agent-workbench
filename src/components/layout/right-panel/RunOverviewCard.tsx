@@ -60,8 +60,18 @@ export function RunOverviewCard() {
   const latestRunError = useWorkbenchStore((state) => state.latestRunError);
   const loadLatestRunForConversation = useWorkbenchStore((state) => state.loadLatestRunForConversation);
   const selectRunForCurrentSession = useWorkbenchStore((state) => state.selectRunForCurrentSession);
+  const currentSession = sessions.find((session) => session.id === currentSessionId);
 
   if (!currentRun) {
+    const isDraftNewChat = !currentSession;
+    const isDemoSession = currentSession?.visibility === 'demo';
+    const emptyTitle = isDraftNewChat ? '新聊天尚未运行' : isDemoSession ? '示例会话暂无 Run Trace' : '暂无 Run';
+    const emptyDescription = isDraftNewChat
+      ? '发送第一条消息后，这里会展示当前 Run 的状态、步骤和证据。'
+      : isDemoSession
+        ? '该示例会话没有提供预置 Run 信息时，右侧保持只读空态。'
+        : '完成一次 Agent Run 后，这里会展示执行过程。';
+
     return (
       <Card size="sm" className="right-card right-section">
         <CardHeader className="right-card-header">
@@ -98,8 +108,8 @@ export function RunOverviewCard() {
             </div>
           ) : (
             <div className="right-panel-empty-state">
-              <strong>暂无 Run</strong>
-              完成一次 Agent Run 后，这里会展示执行过程。
+              <strong>{emptyTitle}</strong>
+              {emptyDescription}
             </div>
           )}
         </CardContent>
@@ -108,7 +118,6 @@ export function RunOverviewCard() {
   }
 
   const statusTone = getRunStatusTone(currentRun.status);
-  const currentSession = sessions.find((session) => session.id === currentSessionId);
   const runPrompt = getRunPromptText(currentRun.prompt);
   const overviewItems = [
     { label: '本轮问题', value: runPrompt, wide: true },
