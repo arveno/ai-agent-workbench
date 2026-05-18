@@ -7,7 +7,15 @@ import {
   fetchToolInvocations,
 } from '../../services/runPersistenceApi';
 import type { ReportArtifactRecord } from '../../types/persistence';
-import type { RunEvent, RunSlice, RunSnapshot, WorkbenchStore } from '../../types/workbench';
+import type {
+  RunEvent,
+  RunReportState,
+  RunSlice,
+  RunSnapshot,
+  WorkbenchMessage,
+  WorkbenchSession,
+  WorkbenchStore,
+} from '../../types/workbench';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
 import { runEventsRecordToRunEvents, runPersistenceRecordsToSnapshot } from '../../utils/runPersistenceMapper';
 import { applyRunEventToSnapshot } from '../../utils/runReducer';
@@ -33,21 +41,105 @@ function getReportArtifactAccessToken(): string | null {
   return getAccessToken();
 }
 
+function getMetadataString(metadata: Record<string, unknown>, key: string): string {
+  const value = metadata[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getReportArtifactRunId(report: ReportArtifactRecord): string | null {
+  return getMetadataString(report.metadata, 'runtimeRunId') || report.run_id || null;
+}
+
+function getReportArtifactState(report: ReportArtifactRecord): RunReportState | null {
+  const reportState = getMetadataString(report.metadata, 'reportState');
+
+  if (reportState === 'skipped' || reportState === 'generated' || reportState === 'failed') {
+    return reportState;
+  }
+
+  return null;
+}
+
+function hasReportMessageForRun(messages: WorkbenchMessage[], runId: string): boolean {
+  return messages.some(
+    (message) => message.role === 'assistant' && message.kind === 'report' && message.runId === runId,
+  );
+}
+
+function withGeneratedReportState(run: RunSnapshot): RunSnapshot {
+  if (run.reportState === 'generated') {
+    return run;
+  }
+
+  return {
+    ...run,
+    reportState: 'generated',
+  };
+}
+
+function withSkippedReportState(run: RunSnapshot): RunSnapshot {
+  if (run.reportState === 'generated' || run.reportState === 'skipped') {
+    return run;
+  }
+
+  return {
+    ...run,
+    reportState: 'skipped',
+  };
+}
+
+function withReportStateFromSessionMessages(run: RunSnapshot, session: WorkbenchSession): RunSnapshot {
+  return hasReportMessageForRun(session.messages, run.id) ? withGeneratedReportState(run) : run;
+}
+
+function getReportActionState(reportState: RunReportState): WorkbenchStore['reportActionState'] {
+  if (
+    reportState === 'pending' ||
+    reportState === 'generating' ||
+    reportState === 'generated' ||
+    reportState === 'failed'
+  ) {
+    return reportState;
+  }
+
+  return 'skipped';
+}
+
+function getReportRunId(run: RunSnapshot | null): string | null {
+  return run && run.reportState !== 'hidden' ? run.id : null;
+}
+
+function isReportDecisionState(reportState: RunReportState): boolean {
+  return reportState === 'generated' || reportState === 'skipped' || reportState === 'failed';
+}
+
 function upsertReportArtifactsIntoSessions(
   sessions: WorkbenchStore['sessions'],
   conversationId: string,
   reports: ReportArtifactRecord[],
 ): WorkbenchStore['sessions'] {
-  const reportMessages = reports.map((report) => {
-    const message = reportArtifactToMessage(report);
+  const reportMessages = reports
+    .filter((report) => getReportArtifactState(report) !== 'skipped')
+    .map((report) => {
+      const message = reportArtifactToMessage(report);
+      const reportRunId = getReportArtifactRunId(report);
 
-    return !message.runId && report.run_id
-      ? {
-          ...message,
-          runId: report.run_id,
-        }
-      : message;
-  });
+      return !message.runId && reportRunId
+        ? {
+            ...message,
+            runId: reportRunId,
+          }
+        : message;
+    });
+  const generatedRunIds = new Set(
+    reportMessages.map((message) => message.runId).filter((runId): runId is string => Boolean(runId)),
+  );
+  const skippedRunIds = new Set(
+    reports
+      .filter((report) => getReportArtifactState(report) === 'skipped')
+      .map((report) => getReportArtifactRunId(report))
+      .filter((runId): runId is string => Boolean(runId)),
+  );
 
   return sessions.map((session) => {
     if (session.id !== conversationId) {
@@ -56,6 +148,7 @@ function upsertReportArtifactsIntoSessions(
 
     const existingMessageIds = new Set(session.messages.map((message) => message.id));
     const nextMessages = [...session.messages];
+    let didUpdateMessages = false;
 
     for (const message of reportMessages) {
       const hasRunReport =
@@ -67,15 +160,49 @@ function upsertReportArtifactsIntoSessions(
 
       if (!existingMessageIds.has(message.id) && !hasRunReport) {
         nextMessages.push(message);
+        existingMessageIds.add(message.id);
+        didUpdateMessages = true;
       }
     }
 
-    nextMessages.sort((left, right) => left.createdAt - right.createdAt);
+    if (didUpdateMessages) {
+      nextMessages.sort((left, right) => left.createdAt - right.createdAt);
+    }
+
+    const runsById = { ...session.runsById };
+    let didUpdateRuns = false;
+
+    for (const runId of skippedRunIds) {
+      const run = runsById[runId];
+
+      if (!run || run.reportState === 'generated' || run.reportState === 'skipped') {
+        continue;
+      }
+
+      runsById[runId] = withSkippedReportState(run);
+      didUpdateRuns = true;
+    }
+
+    for (const runId of generatedRunIds) {
+      const run = runsById[runId];
+
+      if (!run || run.reportState === 'generated') {
+        continue;
+      }
+
+      runsById[runId] = withGeneratedReportState(run);
+      didUpdateRuns = true;
+    }
+
+    if (!didUpdateMessages && !didUpdateRuns) {
+      return session;
+    }
 
     return {
       ...session,
       messages: nextMessages,
       messageCount: nextMessages.length,
+      runsById: didUpdateRuns ? runsById : session.runsById,
     };
   });
 }
@@ -106,12 +233,13 @@ function cacheRunInSession(
       ...run,
       sessionId: run.sessionId ?? conversationId,
     };
+    const syncedRun = withReportStateFromSessionMessages(runWithSession, session);
 
     return {
       ...session,
       runsById: {
         ...session.runsById,
-        [runWithSession.id]: runWithSession,
+        [syncedRun.id]: syncedRun,
       },
     };
   });
@@ -181,16 +309,20 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         ...run,
         sessionId: run.sessionId ?? state.currentSessionId,
       };
-      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, runWithSession);
+      const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
+      const syncedRun = activeSession ? withReportStateFromSessionMessages(runWithSession, activeSession) : runWithSession;
+      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, syncedRun);
 
       if (!state.isPersistentMode) {
         persistWorkbenchSessions(nextSessions, state.currentSessionId);
       }
 
       return {
-        currentRun: runWithSession,
-        selectedRunId: runWithSession.id,
+        currentRun: syncedRun,
+        selectedRunId: syncedRun.id,
         sessions: nextSessions,
+        currentReportRunId: getReportRunId(syncedRun),
+        reportActionState: getReportActionState(syncedRun.reportState),
       };
     });
   },
@@ -200,6 +332,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       currentRun: null,
       selectedRunId: null,
       runEventLog: [],
+      currentReportRunId: null,
+      reportActionState: 'skipped',
     });
   },
 
@@ -216,21 +350,34 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         };
       }
 
+      const protectedRun =
+        event.type === 'report_pending' &&
+        state.currentRun?.id === nextRun.id &&
+        isReportDecisionState(state.currentRun.reportState)
+          ? {
+              ...nextRun,
+              reportState: state.currentRun.reportState,
+            }
+          : nextRun;
       const runWithSession: RunSnapshot = {
-        ...nextRun,
-        sessionId: nextRun.sessionId ?? state.currentSessionId,
+        ...protectedRun,
+        sessionId: protectedRun.sessionId ?? state.currentSessionId,
       };
-      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, runWithSession);
+      const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
+      const syncedRun = activeSession ? withReportStateFromSessionMessages(runWithSession, activeSession) : runWithSession;
+      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, syncedRun);
 
       if (!state.isPersistentMode) {
         persistWorkbenchSessions(nextSessions, state.currentSessionId);
       }
 
       return {
-        currentRun: runWithSession,
-        selectedRunId: runWithSession.id,
+        currentRun: syncedRun,
+        selectedRunId: syncedRun.id,
         runEventLog: nextLog,
         sessions: nextSessions,
+        currentReportRunId: getReportRunId(syncedRun),
+        reportActionState: getReportActionState(syncedRun.reportState),
       };
     });
   },
@@ -286,6 +433,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         latestRunError: null,
         runEventsError: null,
         ragSourcesError: null,
+        currentReportRunId: getReportRunId(localRun),
+        reportActionState: localRun ? getReportActionState(localRun.reportState) : 'skipped',
       });
       return;
     }
@@ -302,23 +451,29 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     const runEvents = runEventsRecordToRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((state) => {
-      const sessionsWithCloudRun = upsertRunIntoSessions(state.sessions, conversationId, runSnapshot);
+      const activeSession = state.sessions.find((session) => session.id === conversationId);
+      const syncedRunSnapshot = activeSession
+        ? withReportStateFromSessionMessages(runSnapshot, activeSession)
+        : runSnapshot;
+      const sessionsWithCloudRun = upsertRunIntoSessions(state.sessions, conversationId, syncedRunSnapshot);
       const latestRun = getLatestRunByUpdatedAt(
         sessionsWithCloudRun.find((session) => session.id === conversationId),
-      ) ?? runSnapshot;
+      ) ?? syncedRunSnapshot;
       const nextSessions = setSessionLatestRunId(sessionsWithCloudRun, conversationId, latestRun.id);
 
       return {
         sessions: nextSessions,
         currentRun: latestRun,
         selectedRunId: latestRun.id,
-        runEventLog: latestRun.id === runSnapshot.id ? runEvents : [],
+        runEventLog: latestRun.id === syncedRunSnapshot.id ? runEvents : [],
         isLatestRunLoading: false,
         isRunEventsLoading: false,
         isRagSourcesLoading: false,
         latestRunError: null,
         runEventsError: null,
         ragSourcesError: null,
+        currentReportRunId: getReportRunId(latestRun),
+        reportActionState: getReportActionState(latestRun.reportState),
       };
     });
   },
@@ -349,11 +504,20 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     }
 
     if (cachedRun) {
+      const runWithSession = {
+        ...cachedRun,
+        sessionId: cachedRun.sessionId ?? conversationId,
+      };
+      const syncedRun = withReportStateFromSessionMessages(runWithSession, activeSession);
+      const nextSessions = cacheRunInSession(state.sessions, conversationId, syncedRun);
+
+      if (!state.isPersistentMode) {
+        persistWorkbenchSessions(nextSessions, conversationId);
+      }
+
       set({
-        currentRun: {
-          ...cachedRun,
-          sessionId: cachedRun.sessionId ?? conversationId,
-        },
+        sessions: nextSessions,
+        currentRun: syncedRun,
         selectedRunId: normalizedRunId,
         runEventLog: [],
         latestRunError: null,
@@ -362,6 +526,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         isRunEventsLoading: false,
         isRagSourcesLoading: false,
         ragSourcesError: null,
+        currentReportRunId: getReportRunId(syncedRun),
+        reportActionState: getReportActionState(syncedRun.reportState),
       });
       return;
     }
@@ -444,18 +610,27 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
 
     const runEvents = runEventsRecordToRunEvents(result.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
-    set((currentState) => ({
-      sessions: cacheRunInSession(currentState.sessions, conversationId, runSnapshot),
-      currentRun: runSnapshot,
-      selectedRunId: normalizedRunId,
-      runEventLog: runEvents,
-      isLatestRunLoading: false,
-      isRunEventsLoading: false,
-      isRagSourcesLoading: false,
-      latestRunError: null,
-      runEventsError: null,
-      ragSourcesError: null,
-    }));
+    set((currentState) => {
+      const currentActiveSession = currentState.sessions.find((session) => session.id === conversationId);
+      const syncedRun = currentActiveSession
+        ? withReportStateFromSessionMessages(runSnapshot, currentActiveSession)
+        : runSnapshot;
+
+      return {
+        sessions: cacheRunInSession(currentState.sessions, conversationId, syncedRun),
+        currentRun: syncedRun,
+        selectedRunId: normalizedRunId,
+        runEventLog: runEvents,
+        isLatestRunLoading: false,
+        isRunEventsLoading: false,
+        isRagSourcesLoading: false,
+        latestRunError: null,
+        runEventsError: null,
+        ragSourcesError: null,
+        currentReportRunId: getReportRunId(syncedRun),
+        reportActionState: getReportActionState(syncedRun.reportState),
+      };
+    });
   },
 
   loadRunEvents: async (runId) => {
@@ -555,11 +730,24 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    set((state) => ({
-      sessions: upsertReportArtifactsIntoSessions(state.sessions, conversationId, result.data.reports),
-      isReportArtifactsLoading: false,
-      reportArtifactsError: null,
-    }));
+    set((state) => {
+      const nextSessions = upsertReportArtifactsIntoSessions(state.sessions, conversationId, result.data.reports);
+      const activeSession = nextSessions.find((session) => session.id === conversationId);
+      const nextCurrentRun =
+        state.currentRun && activeSession?.runsById[state.currentRun.id]
+          ? activeSession.runsById[state.currentRun.id]
+          : state.currentRun;
+
+      return {
+        sessions: nextSessions,
+        currentRun: nextCurrentRun,
+        selectedRunId: nextCurrentRun?.id ?? state.selectedRunId,
+        isReportArtifactsLoading: false,
+        reportArtifactsError: null,
+        currentReportRunId: getReportRunId(nextCurrentRun),
+        reportActionState: nextCurrentRun ? getReportActionState(nextCurrentRun.reportState) : 'skipped',
+      };
+    });
   },
 
   loadRagRetrievals: async (runId) => {
@@ -603,9 +791,23 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    set((currentState) => ({
-      sessions: upsertReportArtifactsIntoSessions(currentState.sessions, params.conversationId, [result.data.report]),
-      reportArtifactsError: null,
-    }));
+    set((currentState) => {
+      const nextSessions = upsertReportArtifactsIntoSessions(currentState.sessions, params.conversationId, [
+        result.data.report,
+      ]);
+      const activeSession = nextSessions.find((session) => session.id === params.conversationId);
+      const nextCurrentRun =
+        currentState.currentRun && activeSession?.runsById[currentState.currentRun.id]
+          ? activeSession.runsById[currentState.currentRun.id]
+          : currentState.currentRun;
+
+      return {
+        sessions: nextSessions,
+        currentRun: nextCurrentRun,
+        reportArtifactsError: null,
+        currentReportRunId: getReportRunId(nextCurrentRun),
+        reportActionState: nextCurrentRun ? getReportActionState(nextCurrentRun.reportState) : 'skipped',
+      };
+    });
   },
 });

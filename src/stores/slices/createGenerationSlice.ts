@@ -7,6 +7,7 @@ import type {
   WorkbenchSession,
   WorkbenchStore,
 } from '../../types/workbench';
+import { updateRunReportState as persistRunReportState } from '../../services/reportArtifactApi';
 import {
   MOCK_RUN_STEP_IDS,
   MOCK_RUN_TOOL_IDS,
@@ -86,12 +87,43 @@ function insertReportMessageAfterRunAssistant(
   return [...messages, reportMessage];
 }
 
+function settleReportDecisionSteps(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
+  if (reportState !== 'generated' && reportState !== 'skipped') {
+    return run;
+  }
+
+  const completedAt = new Date().toISOString();
+  let didUpdateStep = false;
+  const steps = run.steps.map((step) => {
+    if (
+      step.id !== MOCK_RUN_STEP_IDS.waitConfirmation ||
+      (step.status !== 'pending' && step.status !== 'running')
+    ) {
+      return step;
+    }
+
+    didUpdateStep = true;
+
+    return {
+      ...step,
+      status: 'success' as const,
+      completedAt: step.completedAt ?? completedAt,
+      elapsedMs: step.elapsedMs ?? 0,
+    };
+  });
+
+  return didUpdateStep ? { ...run, steps } : run;
+}
+
 function updateRunReportState(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
-  return {
-    ...run,
+  return settleReportDecisionSteps(
+    {
+      ...run,
+      reportState,
+      updatedAt: new Date().toISOString(),
+    },
     reportState,
-    updatedAt: new Date().toISOString(),
-  };
+  );
 }
 
 function updateSessionRunReportState(params: {
@@ -372,6 +404,26 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       const nextRun = get().currentRun;
 
       if (nextRun?.mode === 'mock' && nextRun.status === 'running') {
+        const completeMockStepIfIncomplete = (stepId: string, title: string, elapsedMs?: number) => {
+          const currentStep = get().currentRun?.steps.find((step) => step.id === stepId);
+
+          if (!currentStep || currentStep.status === 'success') {
+            return;
+          }
+
+          if (currentStep.status === 'pending') {
+            get().applyRunEvent(createMockStepStartedEvent(nextRun.id, stepId, title));
+          }
+
+          get().applyRunEvent(createMockStepCompletedEvent(nextRun.id, stepId, elapsedMs));
+        };
+
+        completeMockStepIfIncomplete(MOCK_RUN_STEP_IDS.understandPrompt, '理解用户问题', 160);
+        completeMockStepIfIncomplete(MOCK_RUN_STEP_IDS.knowledgeSearch, '检索知识资料', 260);
+        completeMockStepIfIncomplete(MOCK_RUN_STEP_IDS.queryData, '查询业务数据', 260);
+        completeMockStepIfIncomplete(MOCK_RUN_STEP_IDS.generateChart, '生成分析图表', 220);
+        completeMockStepIfIncomplete(MOCK_RUN_STEP_IDS.waitConfirmation, '等待用户确认', 0);
+        completeMockStepIfIncomplete(MOCK_RUN_STEP_IDS.generateConclusion, '生成最终结论', 0);
         get().applyRunEvent(createMockConclusionCompletedEvent(nextRun.id, current.assistantStream.content));
         get().applyRunEvent(createMockReportPendingEvent(nextRun.id));
         get().applyRunEvent(createMockRunCompletedEvent(nextRun.id, 1200));
@@ -395,8 +447,8 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       const current = get();
       return (
         current.streamRunId === runId &&
-        current.generationStatus !== 'stopped' &&
-        current.generationStatus !== 'error'
+        current.generationStatus === 'streaming' &&
+        current.currentRun?.status === 'running'
       );
     };
 
@@ -467,6 +519,8 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     }
 
     startMockStep(MOCK_RUN_STEP_IDS.waitConfirmation, '等待用户确认');
+    completeMockStep(MOCK_RUN_STEP_IDS.waitConfirmation, 0);
+    startMockStep(MOCK_RUN_STEP_IDS.generateConclusion, '生成最终结论');
   },
   triggerMockError: () => {
     const currentRun = get().currentRun;
@@ -585,6 +639,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
+    let reportConversationId = '';
+    let shouldPersistReportState = false;
+
     set((state) => {
       const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
       const run = activeSession?.runsById[normalizedRunId];
@@ -593,6 +650,8 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         return state;
       }
 
+      reportConversationId = activeSession.id;
+      shouldPersistReportState = state.isPersistentMode;
       const nextRun = updateRunReportState(run, 'skipped');
       const nextSessions = sortSessionsByUpdatedAt(
         state.sessions.map((session) =>
@@ -619,6 +678,20 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
         reportActionState: 'skipped',
       };
     });
+
+    if (shouldPersistReportState && reportConversationId) {
+      void persistRunReportState(reportConversationId, normalizedRunId, 'skipped', null).then(
+        (result) => {
+          if (result.ok) {
+            return;
+          }
+
+          set({
+            reportArtifactsError: result.message,
+          });
+        },
+      );
+    }
   },
   stopGenerating: () => {
     const currentRun = get().currentRun;

@@ -74,11 +74,30 @@ function mapConclusionSource(value: string | null): RunConclusionSource {
 }
 
 function mapReportState(value: string | null): RunReportState {
-  if (value === 'hidden' || value === 'pending' || value === 'generated' || value === 'skipped') {
+  if (value === 'not_applicable') {
+    return 'hidden';
+  }
+
+  if (value === 'available') {
+    return 'pending';
+  }
+
+  if (
+    value === 'hidden' ||
+    value === 'pending' ||
+    value === 'generating' ||
+    value === 'generated' ||
+    value === 'skipped' ||
+    value === 'failed'
+  ) {
     return value;
   }
 
   return 'hidden';
+}
+
+function shouldPreferPersistedReportState(reportState: RunReportState): boolean {
+  return reportState !== 'hidden';
 }
 
 function getMetadataString(metadata: Record<string, unknown>, key: string): string {
@@ -152,12 +171,13 @@ export function runPersistenceRecordsToSnapshot(params: {
   const baseSnapshot = agentRunRecordToBaseSnapshot(params.run);
   const snapshot = eventSnapshot ? { ...baseSnapshot, ...eventSnapshot } : baseSnapshot;
   const persistedTools = params.tools.map((tool) => toolInvocationRecordToRunTool(tool));
+  const persistedReportState = mapReportState(params.run.report_state);
 
   return {
     ...snapshot,
     id: params.run.runtime_run_id ?? snapshot.id,
     sessionId: params.run.conversation_id,
     toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
-    reportState: mapReportState(params.run.report_state) === 'generated' ? 'generated' : snapshot.reportState,
+    reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : snapshot.reportState,
   };
 }

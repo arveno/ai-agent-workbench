@@ -38,6 +38,12 @@ function hasErrorMessage(messages: WorkbenchMessage[], runId: string): boolean {
   );
 }
 
+function hasReportMessage(messages: WorkbenchMessage[], runId: string): boolean {
+  return messages.some(
+    (message) => message.role === 'assistant' && message.runId === runId && message.kind === 'report',
+  );
+}
+
 function createRunFollowUpBlocks(params: {
   run: RunSnapshot;
   currentRun: RunSnapshot | null;
@@ -129,6 +135,7 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
       message.kind === 'normal' &&
       message.runId === run.id &&
       shouldShowReportConfirm(run) &&
+      !hasReportMessage(session.messages, run.id) &&
       !insertedReportConfirmRunIds.has(run.id)
     ) {
       blocks.push({

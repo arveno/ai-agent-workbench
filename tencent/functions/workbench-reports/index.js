@@ -24,6 +24,7 @@ const REPORT_COLUMNS = [
 ].join(',');
 
 const VALID_STATUSES = new Set(['draft', 'generated', 'archived']);
+const VALID_RUN_REPORT_STATES = new Set(['hidden', 'pending', 'generating', 'generated', 'skipped', 'failed']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function loadSharedModule(name) {
@@ -143,6 +144,7 @@ function readGetParams(req) {
   return {
     id: readQueryString(url.searchParams.get('id')),
     conversationId: readQueryString(url.searchParams.get('conversationId')),
+    action: readQueryString(url.searchParams.get('action')),
   };
 }
 
@@ -228,6 +230,18 @@ function readContentMarkdown(value) {
 
 function readMetadata(value) {
   return isRecord(value) ? value : {};
+}
+
+function readRunReportState(value) {
+  if (typeof value === 'string' && VALID_RUN_REPORT_STATES.has(value)) {
+    return value;
+  }
+
+  throw new RequestError(400, 'validation_error', 'Invalid report state.');
+}
+
+function readRuntimeRunId(body, metadata) {
+  return readQueryString(body.runtimeRunId) || readQueryString(metadata.runtimeRunId) || readQueryString(body.runId);
 }
 
 function toUuidOrNull(value) {
@@ -333,6 +347,108 @@ async function fetchReportsByConversation(currentUser, conversationId) {
   };
 }
 
+async function markAgentRunReportState(db, currentUser, conversationId, params, reportState, options = {}) {
+  const runId = toUuidOrNull(params.runId);
+  const runtimeRunId = readRuntimeRunId(params, params.metadata || {});
+
+  if (!runId && !runtimeRunId) {
+    if (options.required) {
+      throw new RequestError(400, 'validation_error', 'Missing run id.');
+    }
+
+    return;
+  }
+
+  if (runId) {
+    const updateByIdResult = await db
+      .from('agent_runs')
+      .update({
+        report_state: reportState,
+      })
+      .eq('id', runId)
+      .eq('conversation_id', conversationId)
+      .eq('_openid', currentUser.openid)
+      .eq('user_id', currentUser.userId);
+
+    assertNoQueryError(updateByIdResult);
+  }
+
+  if (runtimeRunId && runtimeRunId !== runId) {
+    const updateByRuntimeResult = await db
+      .from('agent_runs')
+      .update({
+        report_state: reportState,
+      })
+      .eq('runtime_run_id', runtimeRunId)
+      .eq('conversation_id', conversationId)
+      .eq('_openid', currentUser.openid)
+      .eq('user_id', currentUser.userId);
+
+    assertNoQueryError(updateByRuntimeResult);
+  }
+}
+
+async function createReportStateMarker(db, currentUser, conversationId, params, reportState) {
+  if (reportState !== 'skipped') {
+    return null;
+  }
+
+  const metadata = {
+    source: 'agent-run-report-state',
+    reportState,
+    runtimeRunId: readRuntimeRunId(params, params.metadata || {}),
+  };
+
+  if (!metadata.runtimeRunId) {
+    return null;
+  }
+
+  const reportId = randomUUID();
+  const insertResult = await db.from('report_artifacts').insert({
+    id: reportId,
+    _openid: currentUser.openid,
+    user_id: currentUser.userId,
+    conversation_id: conversationId,
+    run_id: toUuidOrNull(params.runId),
+    title: '报告状态',
+    content_markdown: '用户已选择暂不生成报告。',
+    status: 'archived',
+    version: 1,
+    metadata: JSON.stringify(metadata),
+  });
+
+  assertNoQueryError(insertResult);
+
+  return reportId;
+}
+
+async function updateRunReportState(currentUser, body) {
+  const db = getDb();
+  const conversationId = readConversationIdFromBody(body);
+
+  if (!conversationId) {
+    throw new RequestError(400, 'validation_error', 'Missing conversation id.');
+  }
+
+  await assertConversationOwner(db, currentUser, conversationId);
+
+  const metadata = readMetadata(body.metadata);
+  const reportState = readRunReportState(body.reportState);
+  const params = {
+    runId: body.runId,
+    runtimeRunId: body.runtimeRunId,
+    metadata,
+  };
+
+  await markAgentRunReportState(db, currentUser, conversationId, params, reportState, { required: true });
+  await createReportStateMarker(db, currentUser, conversationId, params, reportState);
+
+  return {
+    runId: readRuntimeRunId(params, metadata) || String(body.runId || ''),
+    reportState,
+  };
+}
+
 async function createReport(currentUser, body) {
   const db = getDb();
   const conversationId = readConversationIdFromBody(body);
@@ -344,6 +460,7 @@ async function createReport(currentUser, body) {
   await assertConversationOwner(db, currentUser, conversationId);
 
   const reportId = randomUUID();
+  const metadata = readMetadata(body.metadata);
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,
@@ -354,11 +471,22 @@ async function createReport(currentUser, body) {
     content_markdown: readContentMarkdown(body.contentMarkdown),
     status: readStatus(body.status),
     version: 1,
-    metadata: JSON.stringify(readMetadata(body.metadata)),
+    metadata: JSON.stringify(metadata),
   };
 
   const insertResult = await db.from('report_artifacts').insert(insertPayload);
   assertNoQueryError(insertResult);
+  await markAgentRunReportState(
+    db,
+    currentUser,
+    conversationId,
+    {
+      runId: body.runId,
+      runtimeRunId: body.runtimeRunId,
+      metadata,
+    },
+    'generated',
+  );
 
   const report = await fetchReportById(db, currentUser, reportId);
 
@@ -406,9 +534,21 @@ const server = http.createServer(async (req, res) => {
 
   try {
     const currentUser = await authenticateRequest(req);
+    const params = readGetParams(req);
 
     if (req.method === 'POST') {
       const body = await readRequestBody(req);
+
+      if (params.action === 'run-report-state') {
+        const data = await updateRunReportState(currentUser, body);
+
+        sendJson(res, 200, {
+          ok: true,
+          data,
+        });
+        return;
+      }
+
       const report = await createReport(currentUser, body);
 
       sendJson(res, 200, {
@@ -417,8 +557,6 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
-
-    const params = readGetParams(req);
 
     if (params.id) {
       const db = getDb();

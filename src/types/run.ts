@@ -12,7 +12,7 @@ export type RunToolStatus = 'pending' | 'running' | 'success' | 'error' | 'skipp
 
 export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
 
-export type RunReportState = 'hidden' | 'pending' | 'generated' | 'skipped';
+export type RunReportState = 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
 
 export interface RunStep {
   id: string;

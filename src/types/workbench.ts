@@ -233,7 +233,7 @@ export interface WorkflowStepDefinition {
 
 export type AgentRunStatus = 'running' | 'success' | 'error';
 export type AgentRunPlanIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported';
-export type ReportActionState = 'pending' | 'generated' | 'skipped';
+export type ReportActionState = 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
 
 export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
 

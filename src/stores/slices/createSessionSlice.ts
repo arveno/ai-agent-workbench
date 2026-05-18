@@ -118,6 +118,7 @@ interface MockRunSeed {
   runId: string;
   prompt: string;
   conclusion: string;
+  hasReport: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -170,6 +171,7 @@ function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunSnapsh
   const promptSummary = summarizeMockPrompt(seed.prompt || seed.conclusion);
   const conclusion =
     seed.conclusion || `历史 Mock Run 未记录完整助手回复，已根据本轮问题恢复执行轨迹：${promptSummary}`;
+  const hasCompletedReply = Boolean(seed.conclusion || seed.hasReport);
   const startedRun = createMockRunStartedEvent({
     runId: seed.runId,
     prompt: seed.prompt || promptSummary,
@@ -207,7 +209,7 @@ function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunSnapsh
 
   return {
     ...startedRun,
-    status: seed.conclusion ? 'success' : 'stopped',
+    status: hasCompletedReply ? 'success' : 'stopped',
     plan: startedRun.plan
       ? {
           ...startedRun.plan,
@@ -247,12 +249,12 @@ function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunSnapsh
     },
     conclusion,
     conclusionSource: 'mock',
-    reportState: seed.conclusion ? 'pending' : 'hidden',
+    reportState: seed.hasReport ? 'generated' : seed.conclusion ? 'pending' : 'hidden',
     createdAt,
     updatedAt,
     startedAt: createdAt,
-    completedAt: seed.conclusion ? updatedAt : undefined,
-    elapsedMs: seed.conclusion ? 1200 : undefined,
+    completedAt: hasCompletedReply ? updatedAt : undefined,
+    elapsedMs: hasCompletedReply ? 1200 : undefined,
   };
 }
 
@@ -270,6 +272,7 @@ function collectMockRunSeeds(messages: WorkbenchMessage[]): MockRunSeed[] {
         runId: message.runId,
         prompt: '',
         conclusion: '',
+        hasReport: false,
         createdAt: message.createdAt,
         updatedAt: message.createdAt,
       } satisfies MockRunSeed);
@@ -278,7 +281,9 @@ function collectMockRunSeeds(messages: WorkbenchMessage[]): MockRunSeed[] {
       currentSeed.prompt = message.content;
     }
 
-    if (message.role === 'assistant' && message.content.trim()) {
+    if (message.role === 'assistant' && message.kind === 'report') {
+      currentSeed.hasReport = true;
+    } else if (message.role === 'assistant' && message.kind === 'normal' && message.content.trim()) {
       currentSeed.conclusion = message.content;
     }
 
@@ -318,6 +323,14 @@ function hydrateMockRunsForSession(session: WorkbenchSession): WorkbenchSession 
   for (const seed of mockRunSeeds) {
     if (!runsById[seed.runId]) {
       runsById[seed.runId] = createCompletedMockRun(seed, session.id);
+      continue;
+    }
+
+    if (seed.hasReport && runsById[seed.runId].reportState !== 'generated') {
+      runsById[seed.runId] = {
+        ...runsById[seed.runId],
+        reportState: 'generated',
+      };
     }
   }
 
@@ -419,6 +432,19 @@ function createEmptyUiState() {
   };
 }
 
+function getReportActionStateFromRun(run: RunSnapshot | null | undefined): WorkbenchStore['reportActionState'] {
+  if (
+    run?.reportState === 'pending' ||
+    run?.reportState === 'generating' ||
+    run?.reportState === 'generated' ||
+    run?.reportState === 'failed'
+  ) {
+    return run.reportState;
+  }
+
+  return 'skipped';
+}
+
 function createSessionUiState(session: WorkbenchSession | undefined, fallbackTaskId: string) {
   const hydratedSession = session ? hydrateMockRunsForSession(session) : undefined;
   const userMessage = hydratedSession ? getSessionLatestPrompt(hydratedSession) : '';
@@ -448,8 +474,8 @@ function createSessionUiState(session: WorkbenchSession | undefined, fallbackTas
     agentRunErrorMessage: null,
     activeAgentRunRequestId: null,
     activeAgentRunAbortController: null,
-    currentReportRunId: null,
-    reportActionState: 'skipped' as const,
+    currentReportRunId: latestRun && latestRun.reportState !== 'hidden' ? latestRun.id : null,
+    reportActionState: getReportActionStateFromRun(latestRun),
     isRagSourcesLoading: false,
     ragSourcesError: null,
   };

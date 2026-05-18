@@ -12,6 +12,10 @@ function getReportStateLabel(reportState: RunReportState): string {
     return '可生成';
   }
 
+  if (reportState === 'generating') {
+    return '生成中';
+  }
+
   if (reportState === 'generated') {
     return '已生成';
   }
@@ -25,6 +29,10 @@ function getReportStateLabel(reportState: RunReportState): string {
 
 function getReportStateClass(reportState: RunReportState): string {
   if (reportState === 'pending') {
+    return 'report-status-badge report-status-badge-pending';
+  }
+
+  if (reportState === 'generating') {
     return 'report-status-badge report-status-badge-pending';
   }
 
@@ -44,8 +52,16 @@ function getReportDescription(run: RunSnapshot): string {
     return '当前选中 Run 已生成报告，可在聊天记录中查看和恢复。';
   }
 
+  if (run.reportState === 'generating') {
+    return '当前选中 Run 的报告正在生成。';
+  }
+
   if (run.reportState === 'skipped') {
     return '当前选中 Run 已选择暂不生成报告。';
+  }
+
+  if (run.reportState === 'failed') {
+    return '当前选中 Run 的报告生成失败，暂未开放重试入口。';
   }
 
   if (shouldShowReportConfirm(run)) {

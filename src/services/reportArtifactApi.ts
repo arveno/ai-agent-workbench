@@ -5,6 +5,7 @@ import type {
   ReportArtifactListResult,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
+import type { RunReportState } from '@/types/run';
 import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 import {
@@ -82,6 +83,7 @@ export async function createRunReportArtifact(
       body: JSON.stringify({
         conversationId: input.conversationId,
         runId,
+        runtimeRunId: input.runtimeRunId ?? runId,
         title: input.title,
         contentMarkdown: input.contentMarkdown,
         status: 'generated',
@@ -103,5 +105,39 @@ export async function createRunReportArtifact(
     };
   } catch {
     return createNetworkErrorResponse('网络异常，暂不能保存报告 Artifact。');
+  }
+}
+
+export async function updateRunReportState(
+  conversationId: string,
+  runId: string,
+  reportState: Extract<RunReportState, 'generated' | 'skipped' | 'failed'>,
+  _accessToken: string | null | undefined,
+): Promise<WorkbenchPersistenceResponse<{ runId: string; reportState: RunReportState }>> {
+  try {
+    const cloudBaseToken = await ensureCloudBaseAccessToken();
+    const response = await requestCloudBasePrivateApi(
+      buildApiPath('/api/workbench/reports', { action: 'run-report-state' }),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId,
+          runId,
+          runtimeRunId: runId,
+          reportState,
+        }),
+        accessToken: cloudBaseToken,
+      },
+    );
+
+    return await readPersistenceResponse<{ runId: string; reportState: RunReportState }>(
+      response,
+      '更新报告状态失败。',
+    );
+  } catch {
+    return createNetworkErrorResponse('网络异常，暂不能更新报告状态。');
   }
 }
