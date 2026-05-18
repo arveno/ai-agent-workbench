@@ -854,6 +854,98 @@
   line-height: 1.5;
 }
 
+.composer-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.composer-mode-row-disabled {
+  opacity: 0.78;
+}
+
+.composer-mode-switch {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.composer-mode-option {
+  min-width: 0;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.composer-mode-option.active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.composer-mode-option:disabled {
+  cursor: not-allowed;
+}
+
+.composer-mode-label {
+  white-space: nowrap;
+}
+
+.composer-mode-status {
+  min-height: 18px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.composer-mode-status-available {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.composer-mode-status-login_required,
+.composer-mode-status-checking {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.composer-mode-status-quota_exceeded,
+.composer-mode-status-auth_unavailable,
+.composer-mode-status-forbidden {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.composer-mode-help {
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+
 .composer-footer {
   display: flex;
   align-items: center;
@@ -959,6 +1051,25 @@
 }
 
 @media (max-width: 900px) {
+  .composer-mode-row,
+  .composer-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .composer-mode-switch {
+    width: 100%;
+  }
+
+  .composer-mode-option {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .composer-mode-help {
+    text-align: left;
+  }
+
   .message-row-assistant,
   .message-row-user {
     padding-left: 0;

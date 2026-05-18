@@ -184,7 +184,6 @@
 }
 
 .workspace-action-button,
-.model-status-pill,
 .header-action-button {
   height: 32px;
   gap: 7px;
@@ -197,31 +196,10 @@
 }
 
 .workspace-action-button:hover,
-.model-status-pill:hover,
 .header-action-button:hover {
   border-color: #cbd5e1;
   background: #f8fafc;
   color: #0f172a;
-}
-
-.model-status-pill {
-  border-color: #bfdbfe;
-  background: #f8fbff;
-  color: #1e40af;
-}
-
-.model-dot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
-  border-radius: 999px;
-  background: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-.model-arrow {
-  color: #64748b;
-  font-size: 12px;
 }
 
 .header-icon-button {

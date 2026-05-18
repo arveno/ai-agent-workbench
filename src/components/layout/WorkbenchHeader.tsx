@@ -102,7 +102,6 @@ export function WorkbenchHeader() {
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
-  const openModelModal = useWorkbenchStore((state) => state.openModelModal);
   const openDataSourceModal = useWorkbenchStore((state) => state.openDataSourceModal);
   const openToolLibraryModal = useWorkbenchStore((state) => state.openToolLibraryModal);
   const openWorkflowModal = useWorkbenchStore((state) => state.openWorkflowModal);
@@ -174,19 +173,6 @@ export function WorkbenchHeader() {
 
       <div className="workspace-actions">
         <EnvironmentStatus />
-
-        <Button
-          className="workspace-action-button model-status-pill"
-          onClick={openModelModal}
-          type="button"
-          variant="outline"
-          size="sm"
-          title={`真实 Agent：${realAgentAvailability.title}。${realAgentAvailability.description}`}
-        >
-          <span className="model-dot" aria-hidden="true"></span>
-          <span>模型：{modelLabel}</span>
-          <span className="model-arrow">⌄</span>
-        </Button>
 
         <Button className="workspace-action-button" type="button" onClick={openDataSourceModal} variant="outline" size="sm">
           <AppIcon icon={icons.database} size={15} />
