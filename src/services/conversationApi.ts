@@ -23,14 +23,6 @@ function createNetworkErrorResponse<TData>(): WorkbenchPersistenceResponse<TData
   return createNetworkPersistenceResponse('网络异常，暂不能同步 Workbench 会话。');
 }
 
-function createUnsupportedCloudBaseResponse<TData>(message: string): WorkbenchPersistenceResponse<TData> {
-  return {
-    ok: false,
-    errorCode: 'invalid_request',
-    message,
-  };
-}
-
 async function readPersistenceResponse<TData>(response: Response): Promise<WorkbenchPersistenceResponse<TData>> {
   return readWorkbenchPersistenceResponse(response, 'Workbench 会话请求失败。');
 }
@@ -110,7 +102,19 @@ export async function updateConversation(
   input: ConversationUpdateInput,
   _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
-  void id;
-  void input;
-  return createUnsupportedCloudBaseResponse('CloudBase 会话更新接口尚未接入，当前仅支持列表和创建。');
+  try {
+    const cloudBaseToken = await ensureCloudBaseAccessToken();
+    const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/conversations', { id }), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+      accessToken: cloudBaseToken,
+    });
+
+    return await readPersistenceResponse<ConversationRecord>(response);
+  } catch {
+    return createNetworkErrorResponse();
+  }
 }

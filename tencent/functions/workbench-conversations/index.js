@@ -51,7 +51,7 @@ class RequestError extends Error {
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 }
 
@@ -183,6 +183,16 @@ function readCreateMode(value) {
 
 function readCreateMetadata(value) {
   return isRecord(value) ? value : {};
+}
+
+function readUpdateTitle(value) {
+  const title = typeof value === 'string' ? value.trim() : '';
+
+  if (!title) {
+    throw new RequestError(400, 'validation_error', 'Conversation title is required.');
+  }
+
+  return title;
 }
 
 function normalizeNumber(value) {
@@ -359,6 +369,39 @@ async function createConversation(currentUser, body) {
   return conversation;
 }
 
+async function updateConversation(currentUser, conversationId, body) {
+  if (!conversationId) {
+    throw new RequestError(400, 'validation_error', 'Missing conversation id.');
+  }
+
+  const db = getDb();
+  const existingConversation = await fetchConversationById(db, currentUser, conversationId);
+
+  if (!existingConversation) {
+    throw new RequestError(404, 'not_found', 'Workbench conversation was not found.');
+  }
+
+  const updateResult = await db
+    .from('conversations')
+    .update({
+      title: readUpdateTitle(body.title),
+    })
+    .eq('id', conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId)
+    .eq('visibility', 'private');
+
+  assertNoQueryError(updateResult);
+
+  const conversation = await fetchConversationById(db, currentUser, conversationId);
+
+  if (!conversation) {
+    throw new Error('Updated conversation was not found.');
+  }
+
+  return conversation;
+}
+
 function readListParams(req) {
   const url = new URL(req.url || '/', 'http://localhost');
 
@@ -399,7 +442,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method !== 'GET' && req.method !== 'POST') {
+  if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'PATCH') {
     sendError(res, 405, 'method_not_allowed', 'Method not allowed');
     return;
   }
@@ -410,6 +453,19 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST') {
       const body = await readRequestBody(req);
       const conversation = await createConversation(currentUser, body);
+
+      sendJson(res, 200, {
+        ok: true,
+        data: conversation,
+      });
+      return;
+    }
+
+    if (req.method === 'PATCH') {
+      const url = new URL(req.url || '/', 'http://localhost');
+      const body = await readRequestBody(req);
+      const conversationId = readQueryString(url.searchParams.get('id')) || readQueryString(body.id);
+      const conversation = await updateConversation(currentUser, conversationId, body);
 
       sendJson(res, 200, {
         ok: true,

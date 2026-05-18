@@ -226,13 +226,8 @@ export function Sidebar() {
   };
 
   const handleCreateSession = async () => {
-    const sessionId = await createSession();
-
-    if (!sessionId) {
-      return;
-    }
-
-    replaceUrlForSession(sessionId, currentTaskId);
+    await createSession();
+    replaceWorkbenchUrl({});
   };
 
   const handleRetryConversations = () => {
@@ -313,7 +308,7 @@ export function Sidebar() {
         >
           <span className="icon-text-inline">
             <AppIcon icon={icons.plus} size={16} />
-            <span>{isCreatingConversation ? '正在新建...' : '新建会话'}</span>
+            <span>{isCreatingConversation ? '正在新建...' : '新聊天'}</span>
           </span>
         </button>
 

@@ -1,4 +1,3 @@
-import { mockSessions } from '../../mocks/sessions';
 import type {
   AssistantStreamState,
   GenerationStatus,
@@ -276,16 +275,6 @@ export function sortSessionsByUpdatedAt(sessions: WorkbenchSession[]): Workbench
   return [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-function createDefaultSessions(): WorkbenchSession[] {
-  return sortSessionsByUpdatedAt(
-    mockSessions.map((session) => ({
-      ...session,
-      messages: session.messages.map((message) => ({ ...message })),
-      runsById: { ...session.runsById },
-    })),
-  );
-}
-
 function normalizeWorkbenchMessage(rawValue: unknown): WorkbenchMessage | null {
   if (!rawValue || typeof rawValue !== 'object') {
     return null;
@@ -377,10 +366,9 @@ export function persistWorkbenchSessions(sessions: WorkbenchSession[], activeSes
 }
 
 export function getInitialWorkbenchSessionState(): WorkbenchSessionStorageState {
-  const defaultSessions = createDefaultSessions();
   const defaultState: WorkbenchSessionStorageState = {
-    sessions: defaultSessions,
-    activeSessionId: defaultSessions[0]?.id ?? 's_001',
+    sessions: [],
+    activeSessionId: '',
   };
 
   if (typeof window === 'undefined') {
@@ -415,18 +403,16 @@ export function getInitialWorkbenchSessionState(): WorkbenchSessionStorageState 
   const sessions = sortSessionsByUpdatedAt(
     normalizedSessions.filter((session): session is WorkbenchSession => session !== null),
   );
-  const hasActiveSession = sessions.some((session) => session.id === persistedState.activeSessionId);
+  const hasActiveSession =
+    !persistedState.activeSessionId ||
+    sessions.some((session) => session.id === persistedState.activeSessionId);
+  const activeSessionId = hasActiveSession ? persistedState.activeSessionId : '';
 
-  if (!hasActiveSession) {
-    clearPersistedWorkbenchState();
-    return defaultState;
-  }
-
-  persistWorkbenchSessions(sessions, persistedState.activeSessionId);
+  persistWorkbenchSessions(sessions, activeSessionId);
 
   return {
     sessions,
-    activeSessionId: persistedState.activeSessionId,
+    activeSessionId,
   };
 }
 
@@ -506,8 +492,10 @@ const initialModelProvider = getInitialModelProvider();
 const initialSessionState = getInitialWorkbenchSessionState();
 const initialSessions = initialSessionState.sessions;
 const initialCurrentSession =
-  initialSessions.find((session) => session.id === initialSessionState.activeSessionId) ?? initialSessions[0];
-const initialCurrentTaskId = initialCurrentSession?.taskId ?? DEFAULT_TASK_ID;
+  initialSessionState.activeSessionId
+    ? initialSessions.find((session) => session.id === initialSessionState.activeSessionId)
+    : undefined;
+const initialCurrentTaskId = initialCurrentSession?.taskId ?? '';
 const initialPromptFromSession = initialCurrentSession ? getSessionLatestPrompt(initialCurrentSession) : '';
 const initialAssistantReplyFromSession = initialCurrentSession
   ? getSessionLatestAssistantReply(initialCurrentSession)
@@ -529,7 +517,7 @@ interface InitialWorkbenchState {
 
 export const initialWorkbenchState: InitialWorkbenchState = {
   sessions: initialSessions,
-  currentSessionId: initialCurrentSession?.id ?? 's_001',
+  currentSessionId: initialCurrentSession?.id ?? '',
   currentTaskId: initialCurrentTaskId,
   currentPrompt: initialPromptFromSession,
   activeAssistantMessageId: initialActiveAssistantMessageId,

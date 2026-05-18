@@ -19,7 +19,7 @@ import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { EnvironmentStatus } from './EnvironmentStatus';
 
-const DEFAULT_HEADER_TITLE = '新会话';
+const DEFAULT_HEADER_TITLE = '新聊天';
 
 function getGenerationLabel(status: GenerationStatus): string {
   if (status === 'streaming') {

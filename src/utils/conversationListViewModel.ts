@@ -61,7 +61,9 @@ function getMessageCount(session: WorkbenchSession): number {
 }
 
 export function createConversationListView(params: CreateConversationListViewParams): ConversationListView {
-  const sortedSessions = [...params.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+  const sortedSessions = params.sessions
+    .filter((session) => session.id.trim())
+    .sort((a, b) => b.updatedAt - a.updatedAt);
   const items = sortedSessions.map((session) => ({
     id: session.id,
     title: getTitle(session),
@@ -82,7 +84,7 @@ export function createConversationListView(params: CreateConversationListViewPar
     errorMessage: params.errorMessage,
     canRetry: Boolean(params.errorMessage),
     emptyTitle: params.isPersistentMode ? '暂无会话' : '暂无演示会话',
-    emptyDescription: params.isPersistentMode ? '开始一个新会话。' : '公开演示会话暂不可用。',
+    emptyDescription: params.isPersistentMode ? '开始一条新聊天。' : '公开演示会话暂不可用。',
     loadingMessage: params.isPersistentMode ? '正在加载我的会话...' : '正在加载公开演示会话...',
     retryLabel: '重试',
   };

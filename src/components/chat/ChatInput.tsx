@@ -20,6 +20,7 @@ export function ChatInput() {
   const openLoginModal = useAuthStore((state) => state.openLoginModal);
   const chatDraft = useWorkbenchStore((state) => state.chatDraft);
   const setChatDraft = useWorkbenchStore((state) => state.setChatDraft);
+  const setCurrentPrompt = useWorkbenchStore((state) => state.setCurrentPrompt);
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
@@ -59,6 +60,7 @@ export function ChatInput() {
     }
 
     setRealAgentNotice('');
+    setCurrentPrompt(trimmedValue);
     sendPrompt(trimmedValue);
   };
 
@@ -94,7 +96,7 @@ export function ChatInput() {
         className="composer-input chat-input-textarea"
         placeholder={
           isPublicDemoMode
-            ? '公开演示模式已就绪：可直接输入问题，或点击左侧示例任务一键体验完整流程。'
+            ? '开始一条新聊天，或点击左侧示例任务一键体验完整流程。'
             : '继续输入问题，或让 AI 生成报告...'
         }
         value={chatDraft}

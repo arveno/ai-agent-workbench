@@ -51,6 +51,7 @@ export function ChatPanel() {
   const lastMessageContent =
     lastBlock?.type === 'message' ? lastBlock.message.content : currentRun?.conclusion ?? '';
   const hasRunErrorBlock = chatBlocks.some((block) => block.type === 'run_error');
+  const isDraftNewChat = !currentSession && !isMessagesLoading && !messagesError;
 
   const loadOlderMessages = async () => {
     const element = chatScrollRef.current;
@@ -192,7 +193,14 @@ export function ChatPanel() {
 
         {isReportArtifactsLoading ? <div className="real-model-notice">正在恢复报告 Artifact...</div> : null}
 
-        {timelineView.isEmpty ? (
+        {isDraftNewChat ? (
+          <div className="chat-empty-state">
+            <strong>新聊天</strong>
+            <span>发送第一条消息后，会话才会创建并出现在左侧列表。</span>
+          </div>
+        ) : null}
+
+        {!isDraftNewChat && timelineView.isEmpty ? (
           <div className="chat-empty-state">
             <strong>{timelineView.emptyTitle}</strong>
             <span>{timelineView.emptyDescription}</span>

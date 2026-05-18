@@ -28,6 +28,10 @@ export function buildWorkbenchSearch(state: WorkbenchUrlState): string {
 }
 
 export function replaceWorkbenchUrl(state: WorkbenchUrlState): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   const search = buildWorkbenchSearch(state);
   const nextUrl = `${window.location.pathname}${search}`;
   window.history.replaceState(null, '', nextUrl);
