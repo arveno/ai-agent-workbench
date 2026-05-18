@@ -23,7 +23,6 @@ export function DemoConversationCard({
   isActive = false,
   disabled = false,
   onOpen,
-  onCopy,
 }: DemoConversationCardProps) {
   return (
     <article className={isActive ? 'demo-conversation-card active' : 'demo-conversation-card'}>
@@ -42,15 +41,6 @@ export function DemoConversationCard({
           </Badge>
         </span>
         <span className="demo-task-description">{item.description}</span>
-      </button>
-      <button
-        type="button"
-        className="demo-conversation-copy"
-        disabled={disabled}
-        onClick={() => onCopy(item.id)}
-        aria-label={`复制示例会话：${item.title}`}
-      >
-        复制
       </button>
     </article>
   );

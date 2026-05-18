@@ -182,7 +182,6 @@
 [data-slot="button"][data-variant="outline"],
 [data-slot="button"][data-variant="secondary"],
 .user-auth-action,
-.workspace-action-button,
 .header-action-button {
   border-color: var(--aw-border);
   background: var(--aw-surface);
@@ -193,7 +192,6 @@
 [data-slot="button"][data-variant="outline"]:hover:not(:disabled),
 [data-slot="button"][data-variant="secondary"]:hover:not(:disabled),
 .user-auth-action:hover:not(:disabled),
-.workspace-action-button:hover:not(:disabled),
 .header-action-button:hover:not(:disabled) {
   border-color: var(--aw-border-strong);
   background: var(--aw-surface-subtle);
@@ -646,7 +644,6 @@
   box-shadow: none;
 }
 
-.workspace-capability-button,
 .environment-status-trigger,
 .header-icon-button {
   border-color: transparent;
@@ -654,10 +651,46 @@
   box-shadow: none;
 }
 
-.workspace-capability-button:hover:not(:disabled),
 .environment-status-trigger:hover,
 .header-icon-button:hover:not(:disabled) {
   border-color: var(--aw-border);
   background: var(--aw-surface-subtle);
   box-shadow: none;
+}
+
+[data-slot="button"].header-capability-button {
+  border-color: var(--aw-border);
+  background: var(--aw-surface);
+  color: var(--aw-text-secondary);
+  box-shadow: none;
+}
+
+[data-slot="button"].header-capability-button:hover:not(:disabled) {
+  border-color: var(--aw-border-strong);
+  background: var(--aw-surface-subtle);
+  color: var(--aw-text-secondary);
+  box-shadow: none;
+}
+
+[data-slot="button"].header-capability-button-static:hover:not(:disabled) {
+  border-color: var(--aw-border);
+  background: var(--aw-surface);
+}
+
+[data-slot="button"].header-capability-button-success {
+  border-color: var(--aw-success-border);
+  background: color-mix(in srgb, var(--aw-success-subtle) 76%, var(--aw-surface));
+  color: var(--aw-success);
+}
+
+[data-slot="button"].header-capability-button-success:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--aw-success-border) 64%, var(--aw-success));
+  background: color-mix(in srgb, var(--aw-success-subtle) 86%, var(--aw-surface));
+  color: var(--aw-success);
+}
+
+[data-slot="button"].header-capability-button-success.header-capability-button-static:hover:not(:disabled) {
+  border-color: var(--aw-success-border);
+  background: color-mix(in srgb, var(--aw-success-subtle) 76%, var(--aw-surface));
+  color: var(--aw-success);
 }

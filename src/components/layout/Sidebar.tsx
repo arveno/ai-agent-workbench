@@ -138,6 +138,8 @@ export function Sidebar() {
     isAgentAccessLoading,
     agentAccessError,
   });
+  const authDisplayName = getAuthDisplayName(authView);
+  const visibleAuthStatusLines = authStatusLines.filter((line) => line !== authDisplayName);
 
   useEffect(() => {
     void loadDemoConversations();
@@ -223,7 +225,7 @@ export function Sidebar() {
         <section className="sidebar-section">
           <h2 className="section-title">示例会话</h2>
           <p className="sidebar-demo-tip">
-            公开只读示例，不会写入我的会话；登录后可复制为私有会话。
+            公开只读示例，打开后不会写入我的会话。
           </p>
           <DemoConversationList
             view={demoConversationTemplateListView}
@@ -257,11 +259,11 @@ export function Sidebar() {
             <AppIcon icon={icons.user} size={16} />
           </div>
           <div className="user-copy">
-            <p className="user-name" title={authView.email ?? getAuthDisplayName(authView)}>
-              {getAuthDisplayName(authView)}
+            <p className="user-name" title={authView.email ?? authDisplayName}>
+              {authDisplayName}
             </p>
             <div className="user-status-list" aria-label="登录状态">
-              {authStatusLines.map((line, index) => (
+              {visibleAuthStatusLines.map((line, index) => (
                 <p key={`${line}-${index}`} className="user-status">
                   {line}
                 </p>

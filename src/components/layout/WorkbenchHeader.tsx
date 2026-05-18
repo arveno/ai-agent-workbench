@@ -1,8 +1,7 @@
 import { Fragment } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { CapabilityStatus, GenerationStatus, RunSnapshot } from '../../types/workbench';
+import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
 import {
   formatRunElapsed,
   getRunStatusLabel,
@@ -15,49 +14,10 @@ import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
-import { EnvironmentStatus } from './EnvironmentStatus';
+import { HeaderCapabilityButton } from './HeaderCapabilityButton';
 
 const DEFAULT_HEADER_TITLE = '新聊天';
 const DATA_SOURCE_TABLES = 'teaching_metrics、knowledge_documents、knowledge_chunks';
-
-interface CapabilityActionButtonProps {
-  icon: LucideIcon;
-  label: string;
-  statusLabel: string;
-  status: CapabilityStatus;
-  title: string;
-  onClick: () => void;
-}
-
-function CapabilityActionButton({
-  icon,
-  label,
-  statusLabel,
-  status,
-  title,
-  onClick,
-}: CapabilityActionButtonProps) {
-  return (
-    <Button
-      className={`workspace-action-button workspace-capability-button capability-tone-${status}`}
-      type="button"
-      onClick={onClick}
-      variant="outline"
-      size="sm"
-      title={title}
-      aria-label={`${label}：${statusLabel}`}
-    >
-      <AppIcon icon={icon} size={15} />
-      <span className="workspace-capability-copy">
-        <span className="workspace-capability-label">{label}</span>
-        <span className="workspace-capability-status">
-          <span className="workspace-capability-status-dot" aria-hidden="true"></span>
-          {statusLabel}
-        </span>
-      </span>
-    </Button>
-  );
-}
 
 function getGenerationLabel(status: GenerationStatus): string {
   if (status === 'streaming') {
@@ -161,33 +121,75 @@ export function WorkbenchHeader() {
       </div>
 
       <div className="workspace-actions">
-        <EnvironmentStatus />
         <span className="workspace-actions-label">能力入口</span>
 
-        <CapabilityActionButton
+        <HeaderCapabilityButton
+          icon={icons.stepDone}
+          label="公开演示可用"
+          tone="success"
+          title="当前可完整体验公开演示流程。"
+          ariaLabel="公开演示可用"
+          tooltip={{
+            title: '公开演示可用',
+            description: '当前可完整体验 Mock Run、Run Trace、RAG 来源和报告生成流程。',
+            items: [
+              { label: '公开演示模式', status: '可用', variant: 'success' },
+              { label: 'Mock Run', status: '已接入', variant: 'success' },
+              { label: 'Run Trace', status: '已接入', variant: 'success' },
+              { label: 'RAG 来源展示', status: '已接入', variant: 'success' },
+              { label: '报告生成', status: '已接入', variant: 'success' },
+              { label: '真实 Agent', status: '需登录 / 需模型 Provider', variant: 'warning' },
+            ],
+          }}
+        />
+
+        <HeaderCapabilityButton
           icon={icons.database}
           label="数据源"
-          statusLabel="受控访问"
-          status="connected"
+          tone="success"
           title={`CloudBase MySQL 已作为主数据源接入；可用表：${DATA_SOURCE_TABLES}。用于数据分析、RAG 检索和报告生成。`}
+          ariaLabel="数据源：受控访问"
+          tooltip={{
+            title: 'CloudBase MySQL 受控访问',
+            description: '数据读取通过 CloudBase HTTP Functions 和服务端工具执行，前端不保存数据库连接串。',
+            items: [
+              { label: 'CloudBase MySQL', status: '已连接', variant: 'success' },
+              { label: 'teaching_metrics', status: '已接入', variant: 'success' },
+              { label: 'knowledge_documents', status: '已接入', variant: 'success' },
+              { label: 'knowledge_chunks', status: '已接入', variant: 'success' },
+              { label: '外部关系型数据库', status: '规划中', variant: 'neutral' },
+            ],
+          }}
           onClick={openDataSourceModal}
         />
 
-        <CapabilityActionButton
+        <HeaderCapabilityButton
           icon={icons.settings}
           label="工具库"
-          statusLabel={`${serverToolCount} 个服务端`}
-          status="available"
+          tone="success"
           title={`服务端白名单工具链已启用 ${enabledToolCount} 个工具；模型不能直接执行 SQL，工具调用进入 Run Trace。`}
+          ariaLabel={`工具库：${serverToolCount} 个服务端工具`}
+          tooltip={{
+            title: '服务端工具库',
+            description: '模型只能选择服务端白名单工具，不能直接执行 SQL。',
+            items: [
+              { label: '数据源结构读取', status: '已接入', variant: 'success' },
+              { label: '受控数据查询', status: '已接入', variant: 'success' },
+              { label: '数据聚合分析', status: '已接入', variant: 'success' },
+              { label: '图表数据生成', status: '已接入', variant: 'success' },
+              { label: '知识库检索', status: '已接入', variant: 'success' },
+              { label: '报告生成', status: '本地辅助', variant: 'info' },
+            ],
+          }}
           onClick={openToolLibraryModal}
         />
 
-        <CapabilityActionButton
+        <HeaderCapabilityButton
           icon={icons.agent}
           label="Workflow / Prompt"
-          statusLabel="固定流程"
-          status="readonly"
-          title="当前是固定任务流程模板；Prompt 模板仅作为本地输入辅助，不直接改变 CloudBase 后端执行逻辑。"
+          tone="neutral"
+          title="查看固定执行流程和本地 Prompt 模板。"
+          ariaLabel="Workflow / Prompt：固定流程"
           onClick={openWorkflowModal}
         />
 

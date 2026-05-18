@@ -45,17 +45,20 @@ function readNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function readMetadataName(metadata: Record<string, unknown> | null): string | null {
+function readMetadataString(metadata: Record<string, unknown> | null, keys: string[]): string | null {
   if (!metadata) {
     return null;
   }
 
-  return (
-    readNullableString(metadata.displayName) ??
-    readNullableString(metadata.display_name) ??
-    readNullableString(metadata.nickname) ??
-    readNullableString(metadata.username)
-  );
+  for (const key of keys) {
+    const value = readNullableString(metadata[key]);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function formatShortUserId(userId: string | null | undefined): string | null {
@@ -160,23 +163,27 @@ function getDisplayName(
   status: AuthStatus,
   currentUser: CloudBaseCurrentUser | null,
 ): string {
-  if (user?.displayName) {
-    return user.displayName;
-  }
-
-  if (currentUser?.nickname) {
-    return currentUser.nickname;
-  }
-
-  if (user?.email) {
-    return user.email;
+  if (user?.email || currentUser?.email) {
+    return user?.email ?? currentUser?.email ?? '';
   }
 
   if (currentUser?.username) {
     return currentUser.username;
   }
 
-  const metadataName = readMetadataName(currentUser?.metadata ?? null);
+  if (user?.displayName || currentUser?.displayName) {
+    return user?.displayName ?? currentUser?.displayName ?? '';
+  }
+
+  if (currentUser?.nickname) {
+    return currentUser.nickname;
+  }
+
+  const metadata = currentUser?.metadata ?? null;
+  const metadataName =
+    readMetadataString(metadata, ['email']) ??
+    readMetadataString(metadata, ['username']) ??
+    readMetadataString(metadata, ['displayName', 'display_name']);
 
   if (metadataName) {
     return metadataName;

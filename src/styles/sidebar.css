@@ -317,58 +317,9 @@
   text-align: left;
 }
 
-.demo-conversation-open:disabled,
-.demo-conversation-copy:disabled {
+.demo-conversation-open:disabled {
   cursor: not-allowed;
   opacity: 0.68;
-}
-
-.demo-conversation-copy {
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  width: fit-content;
-  min-height: 24px;
-  margin: 0;
-  padding: 0 6px;
-  border: 0;
-  border-radius: var(--aw-radius-sm);
-  background: transparent;
-  color: var(--aw-text-faint);
-  font-size: var(--aw-type-caption-size);
-  line-height: var(--aw-type-caption-line);
-  font-weight: var(--aw-type-label-weight);
-  cursor: pointer;
-  opacity: 0;
-  transform: translateY(-50%);
-  transition:
-    opacity 0.14s ease,
-    background-color 0.14s ease,
-    color 0.14s ease;
-}
-
-.demo-conversation-card:hover .demo-conversation-open,
-.demo-conversation-card:focus-within .demo-conversation-open {
-  padding-right: 46px;
-}
-
-.demo-conversation-card:hover .demo-conversation-copy,
-.demo-conversation-card:focus-within .demo-conversation-copy {
-  opacity: 1;
-}
-
-.demo-conversation-copy:disabled {
-  opacity: 0;
-}
-
-.demo-conversation-card:hover .demo-conversation-copy:disabled,
-.demo-conversation-card:focus-within .demo-conversation-copy:disabled {
-  opacity: 0.45;
-}
-
-.demo-conversation-copy:hover:not(:disabled) {
-  background: var(--aw-surface-subtle);
-  color: var(--aw-primary-strong);
 }
 
 .demo-task-card {
