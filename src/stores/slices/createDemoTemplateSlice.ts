@@ -1,30 +1,17 @@
 import type { StateCreator } from 'zustand';
-import { createConversation } from '../../services/conversationApi';
-import {
-  copyDemoConversationTemplate as copyDemoConversationTemplateApi,
-  fetchDemoConversations,
-  fetchDemoTasks,
-} from '../../services/demoTemplateApi';
-import type { DemoConversationTemplateRecord, DemoSeedMessage, DemoTaskTemplateRecord } from '../../types/persistence';
-import type { DemoTemplateSlice, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
-import { conversationRecordToSession } from '../../utils/conversationMapper';
-import {
-  demoConversationCopyToSession,
-  findConversationTemplateForTask,
-  getDemoTemplateStringArrayMetadata,
-  getDemoTemplateStringMetadata,
-} from '../../utils/demoTemplateMapper';
+import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
+import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
+import type { DemoTemplateSlice, RunSnapshot, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
+import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
 import { useAuthStore } from '../authStore';
 import {
   createEmptySession,
   getSessionLatestAssistantReply,
   getSessionLatestPrompt,
   getSessionLatestRun,
-  persistWorkbenchSessions,
   sortSessionsByUpdatedAt,
 } from './shared';
 
-let demoTasksRequestId = 0;
 let demoConversationsRequestId = 0;
 
 function getAccessToken(): string | null {
@@ -38,12 +25,16 @@ function getAuthenticatedUserId(): string | null {
   return authState.currentUser?.userId ?? authState.user?.id ?? authState.session?.user.id ?? null;
 }
 
-function getPersistenceAccessToken(): string | null {
-  return getAccessToken();
+function createDemoSessionId(templateId: string): string {
+  return `demo_${templateId}`;
 }
 
-function getPersistenceUserId(): string | null {
-  return getAuthenticatedUserId();
+function isReadonlyDemoSession(session: WorkbenchSession): boolean {
+  return session.isReadOnly === true || session.visibility === 'demo';
+}
+
+function getUserSessions(sessions: WorkbenchSession[]): WorkbenchSession[] {
+  return sessions.filter((session) => !isReadonlyDemoSession(session));
 }
 
 function createSessionUiState(session: WorkbenchSession | undefined, fallbackTaskId: string) {
@@ -51,6 +42,7 @@ function createSessionUiState(session: WorkbenchSession | undefined, fallbackTas
   const assistantReply = session ? getSessionLatestAssistantReply(session) : '';
   const assistantMessage =
     [...(session?.messages ?? [])].reverse().find((message) => message.role === 'assistant') ?? null;
+  const latestRun = getSessionLatestRun(session);
   const hasAssistantReply = Boolean(assistantReply.trim());
 
   return {
@@ -66,19 +58,33 @@ function createSessionUiState(session: WorkbenchSession | undefined, fallbackTas
     realModelNotice: '',
     errorMessage: undefined,
     confirmStatus: 'waiting' as const,
-    currentRun: getSessionLatestRun(session),
+    currentRun: latestRun,
     runEventLog: [],
     agentRunStatus: 'idle' as const,
     agentRunErrorMessage: null,
     activeAgentRunRequestId: null,
     activeAgentRunAbortController: null,
-    currentReportRunId: null,
-    reportActionState: 'skipped' as const,
+    currentReportRunId:
+      latestRun && (latestRun.reportState === 'pending' || latestRun.reportState === 'generated') ? latestRun.id : null,
+    reportActionState:
+      latestRun?.reportState === 'generated' ? ('generated' as const) : latestRun?.reportState === 'pending' ? ('pending' as const) : ('skipped' as const),
+    isLatestRunLoading: false,
+    latestRunError: null,
+    isRunEventsLoading: false,
+    runEventsError: null,
+    isReportArtifactsLoading: false,
+    reportArtifactsError: null,
+    isRagSourcesLoading: false,
+    ragSourcesError: null,
   };
 }
 
 function upsertSession(sessions: WorkbenchSession[], session: WorkbenchSession): WorkbenchSession[] {
   return sortSessionsByUpdatedAt([session, ...sessions.filter((item) => item.id !== session.id)]);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function getWorkbenchMessageKind(kind: DemoSeedMessage['kind']) {
@@ -87,109 +93,97 @@ function getWorkbenchMessageKind(kind: DemoSeedMessage['kind']) {
   return 'normal' as const;
 }
 
-function createAnonymousSessionFromTemplate(template: DemoConversationTemplateRecord): WorkbenchSession {
-  const now = Date.now();
-  const messages = template.seed_messages.map((message, index) => ({
-    id: `demo_seed_${template.id}_${index + 1}`,
-    role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
-    kind: getWorkbenchMessageKind(message.kind),
-    content: message.content,
-    createdAt: now + index,
-  }));
+function getSeedMessageRunId(message: DemoSeedMessage): string | undefined {
+  const metadata = message.metadata;
+
+  if (!isRecord(metadata)) {
+    return undefined;
+  }
+
+  const runId = metadata.runId;
+  return typeof runId === 'string' && runId.trim() ? runId : undefined;
+}
+
+function createDemoMessages(template: DemoConversationTemplateRecord, createdAt: number): WorkbenchMessage[] {
+  return template.seed_messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message, index) => ({
+      id: `demo_seed_${template.id}_${index + 1}`,
+      role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
+      kind: getWorkbenchMessageKind(message.kind),
+      content: message.content,
+      createdAt: createdAt + index,
+      runId: getSeedMessageRunId(message),
+    }));
+}
+
+function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunSnapshot | null {
+  const rawRun = template.seed_runs[0] as Partial<RunSnapshot> | undefined;
+
+  if (!rawRun?.id) {
+    return null;
+  }
+
+  return {
+    id: rawRun.id,
+    sessionId,
+    mode: rawRun.mode ?? 'mock',
+    status: rawRun.status ?? 'success',
+    intent: rawRun.intent ?? 'unknown',
+    prompt: rawRun.prompt ?? template.title,
+    plan: rawRun.plan,
+    dataSource: rawRun.dataSource,
+    steps: rawRun.steps ?? [],
+    toolInvocations: rawRun.toolInvocations ?? [],
+    sources: rawRun.sources,
+    chartData: rawRun.chartData,
+    conclusion: rawRun.conclusion ?? '',
+    conclusionSource: rawRun.conclusionSource ?? 'mock',
+    conclusionNotice: rawRun.conclusionNotice,
+    reportState: rawRun.reportState ?? 'skipped',
+    createdAt: rawRun.createdAt ?? template.created_at,
+    updatedAt: rawRun.updatedAt ?? template.updated_at,
+    startedAt: rawRun.startedAt,
+    completedAt: rawRun.completedAt,
+    elapsedMs: rawRun.elapsedMs,
+    errorMessage: rawRun.errorMessage,
+  };
+}
+
+function createReadonlyDemoSessionFromTemplate(template: DemoConversationTemplateRecord): WorkbenchSession {
+  const createdAt = Date.parse(template.updated_at);
+  const updatedAt = Number.isFinite(createdAt) ? createdAt : Date.now();
+  const sessionId = createDemoSessionId(template.id);
+  const messages = createDemoMessages(template, updatedAt);
+  const run = createDemoRun(template, sessionId);
+  const runsById = run ? { [run.id]: run } : {};
 
   return {
     ...createEmptySession({
       title: template.title,
       taskId: template.id,
     }),
-    updatedAt: now,
+    id: sessionId,
+    updatedAt,
     messages,
+    runsById,
+    latestRunId: run?.id,
     summary: template.description,
-    mode: 'mock',
-    status: 'active',
+    mode: run?.mode ?? 'mock',
+    status: 'completed',
+    visibility: 'demo',
+    sourceTemplateId: template.id,
+    isReadOnly: true,
     messageCount: messages.length,
   };
 }
 
-function createDemoTaskConversationMetadata(
-  task: DemoTaskTemplateRecord,
-  executionMode: 'agent' | 'mock',
-  runtimeSessionId?: string,
-) {
-  return {
-    runtimeSessionId: runtimeSessionId ?? null,
-    taskId: task.id,
-    copiedFromDemoTaskId: task.id,
-    copiedFromDemoTaskTitle: task.title,
-    demoTaskCategory: task.category,
-    recommendedMode: task.recommended_mode,
-    executionMode,
-    showcaseValue: getDemoTemplateStringMetadata(task.metadata, 'showcaseValue'),
-    tags: getDemoTemplateStringArrayMetadata(task.metadata, 'tags'),
-  };
-}
-
-function createAnonymousSessionFromTask(task: DemoTaskTemplateRecord): WorkbenchSession {
-  return {
-    ...createEmptySession({
-      title: task.title,
-      taskId: task.id,
-    }),
-    summary: task.description,
-    mode: 'mock',
-    status: 'active',
-  };
-}
-
-function findDemoTask(tasks: DemoTaskTemplateRecord[], taskId: string): DemoTaskTemplateRecord | null {
-  return tasks.find((item) => item.id === taskId) ?? null;
-}
-
 export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoTemplateSlice> = (set, get) => ({
-  demoTasks: [],
   demoConversations: [],
-  isDemoTasksLoading: false,
-  demoTasksError: null,
   isDemoConversationsLoading: false,
   demoConversationsError: null,
   isCopyingDemoTemplate: false,
   copyDemoTemplateError: null,
-  pendingDemoTaskId: null,
-  isDemoTaskChoiceOpen: false,
-  demoTaskChoiceError: null,
-
-  loadDemoTasks: async () => {
-    if (get().isDemoTasksLoading) {
-      return;
-    }
-
-    const requestId = demoTasksRequestId + 1;
-    demoTasksRequestId = requestId;
-    set({
-      isDemoTasksLoading: true,
-      demoTasksError: null,
-    });
-
-    const result = await fetchDemoTasks();
-
-    if (requestId !== demoTasksRequestId) {
-      return;
-    }
-
-    if (!result.ok) {
-      set({
-        isDemoTasksLoading: false,
-        demoTasksError: result.message,
-      });
-      return;
-    }
-
-    set({
-      demoTasks: result.data.tasks,
-      isDemoTasksLoading: false,
-      demoTasksError: null,
-    });
-  },
 
   loadDemoConversations: async () => {
     if (get().isDemoConversationsLoading) {
@@ -224,216 +218,38 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
     });
   },
 
-  retryLoadDemoTasks: async () => {
-    await get().loadDemoTasks();
-  },
-
   retryLoadDemoConversations: async () => {
     await get().loadDemoConversations();
   },
 
-  startDemoTask: async (taskId) => {
-    if (get().isCopyingDemoTemplate) {
-      return null;
-    }
+  openDemoConversationTemplate: (templateId) => {
+    const template = get().demoConversations.find((item) => item.id === templateId);
 
-    const task = findDemoTask(get().demoTasks, taskId);
-
-    if (!task) {
+    if (!template) {
       set({
-        demoTaskChoiceError: '未找到示例任务。',
-        copyDemoTemplateError: '未找到示例任务。',
+        copyDemoTemplateError: '未找到示例会话。',
       });
       return null;
     }
 
-    if (task.recommended_mode === 'agent') {
-      set({
-        pendingDemoTaskId: task.id,
-        isDemoTaskChoiceOpen: true,
-        demoTaskChoiceError: null,
-        copyDemoTemplateError: null,
-      });
-      return null;
-    }
+    get().activeAgentRunAbortController?.abort();
 
-    const conversationTemplate = findConversationTemplateForTask(task, get().demoConversations);
-
-    if (conversationTemplate) {
-      return get().copyDemoConversationTemplate(conversationTemplate.id);
-    }
-
-    return get().runDemoTaskAsMock(task.id);
-  },
-
-  confirmRunDemoTaskWithAgent: async (taskId) => {
-    if (get().isCopyingDemoTemplate) {
-      return null;
-    }
-
-    const task = findDemoTask(get().demoTasks, taskId);
-
-    if (!task) {
-      set({
-        demoTaskChoiceError: '未找到示例任务。',
-        copyDemoTemplateError: '未找到示例任务。',
-      });
-      return null;
-    }
-
-    const accessToken = getPersistenceAccessToken();
-
-    if (!accessToken) {
-      set({
-        demoTaskChoiceError: '请先登录后使用真实 Agent。',
-      });
-      return null;
-    }
-
-    set({
-      isCopyingDemoTemplate: true,
-      copyDemoTemplateError: null,
-      demoTaskChoiceError: null,
-    });
-
-    const result = await createConversation(
-      {
-        title: task.title,
-        mode: 'agent',
-        summary: task.description,
-        metadata: createDemoTaskConversationMetadata(task, 'agent', get().currentSessionId),
-      },
-      accessToken,
-    );
-
-    if (!result.ok) {
-      set({
-        isCopyingDemoTemplate: false,
-        demoTaskChoiceError: result.message,
-      });
-      return null;
-    }
-
-    const session: WorkbenchSession = {
-      ...conversationRecordToSession(result.data),
-      taskId: task.id,
-    };
+    const session = createReadonlyDemoSessionFromTemplate(template);
 
     set((state) => ({
-      sessions: upsertSession(state.sessions, session),
+      sessions: upsertSession([...getUserSessions(state.sessions)], session),
       currentSessionId: session.id,
-      isPersistentMode: true,
-      persistentUserId: getPersistenceUserId(),
-      isCopyingDemoTemplate: false,
-      isDemoTaskChoiceOpen: false,
-      pendingDemoTaskId: null,
-      demoTaskChoiceError: null,
+      isMessagesLoading: false,
+      messagesError: null,
+      isOlderMessagesLoading: false,
+      olderMessagesError: null,
+      hasMoreMessages: false,
+      oldestMessageCursor: null,
       copyDemoTemplateError: null,
-      ...createSessionUiState(session, state.currentTaskId),
+      ...createSessionUiState(session, ''),
     }));
 
-    get().setCurrentModelProvider('groq');
-    get().sendPrompt(task.prompt);
-
     return session.id;
-  },
-
-  runDemoTaskAsMock: async (taskId) => {
-    if (get().isCopyingDemoTemplate) {
-      return null;
-    }
-
-    const task = findDemoTask(get().demoTasks, taskId);
-
-    if (!task) {
-      set({
-        demoTaskChoiceError: '未找到示例任务。',
-      });
-      return null;
-    }
-
-    const accessToken = getPersistenceAccessToken();
-
-    set({
-      isCopyingDemoTemplate: true,
-      copyDemoTemplateError: null,
-      demoTaskChoiceError: null,
-    });
-
-    if (accessToken) {
-      const result = await createConversation(
-        {
-          title: task.title,
-          mode: 'mock',
-          summary: task.description,
-          metadata: createDemoTaskConversationMetadata(task, 'mock', get().currentSessionId),
-        },
-        accessToken,
-      );
-
-      if (!result.ok) {
-        set({
-          isCopyingDemoTemplate: false,
-          demoTaskChoiceError: result.message,
-          copyDemoTemplateError: result.message,
-        });
-        return null;
-      }
-
-      const session: WorkbenchSession = {
-        ...conversationRecordToSession(result.data),
-        taskId: task.id,
-      };
-
-      set((state) => ({
-        sessions: upsertSession(state.sessions, session),
-        currentSessionId: session.id,
-        isPersistentMode: true,
-        persistentUserId: getPersistenceUserId(),
-        isCopyingDemoTemplate: false,
-        isDemoTaskChoiceOpen: false,
-        pendingDemoTaskId: null,
-        demoTaskChoiceError: null,
-        copyDemoTemplateError: null,
-        ...createSessionUiState(session, state.currentTaskId),
-      }));
-
-      get().setCurrentModelProvider('mock');
-      get().sendPrompt(task.prompt);
-      return session.id;
-    }
-
-    const session = createAnonymousSessionFromTask(task);
-
-    set((state) => {
-      const sessions = upsertSession(state.sessions, session);
-      persistWorkbenchSessions(sessions, session.id);
-
-      return {
-        sessions,
-        currentSessionId: session.id,
-        isPersistentMode: false,
-        persistentUserId: null,
-        isCopyingDemoTemplate: false,
-        isDemoTaskChoiceOpen: false,
-        pendingDemoTaskId: null,
-        demoTaskChoiceError: null,
-        copyDemoTemplateError: null,
-        ...createSessionUiState(session, state.currentTaskId),
-      };
-    });
-
-    get().setCurrentModelProvider('mock');
-    get().sendPrompt(task.prompt);
-    return session.id;
-  },
-
-  cancelDemoTaskChoice: () => {
-    set({
-      pendingDemoTaskId: null,
-      isDemoTaskChoiceOpen: false,
-      demoTaskChoiceError: null,
-    });
   },
 
   copyDemoConversationTemplate: async (templateId) => {
@@ -441,35 +257,13 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       return null;
     }
 
-    const accessToken = getPersistenceAccessToken();
+    const accessToken = getAccessToken();
 
     if (!accessToken) {
-      const template = get().demoConversations.find((item) => item.id === templateId);
-
-      if (!template) {
-        set({
-          copyDemoTemplateError: '未找到示例会话。',
-        });
-        return null;
-      }
-
-      const session = createAnonymousSessionFromTemplate(template);
-
-      set((state) => {
-        const sessions = upsertSession(state.sessions, session);
-        persistWorkbenchSessions(sessions, session.id);
-
-        return {
-          sessions,
-          currentSessionId: session.id,
-          isPersistentMode: false,
-          persistentUserId: null,
-          copyDemoTemplateError: null,
-          ...createSessionUiState(session, state.currentTaskId),
-        };
+      set({
+        copyDemoTemplateError: '请先登录后再复制示例会话到我的会话。',
       });
-
-      return session.id;
+      return null;
     }
 
     set({
@@ -490,10 +284,10 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
     const session = demoConversationCopyToSession(result.data);
 
     set((state) => ({
-      sessions: upsertSession(state.sessions, session),
+      sessions: upsertSession(getUserSessions(state.sessions), session),
       currentSessionId: session.id,
       isPersistentMode: true,
-      persistentUserId: getPersistenceUserId(),
+      persistentUserId: getAuthenticatedUserId(),
       isCopyingDemoTemplate: false,
       copyDemoTemplateError: null,
       ...createSessionUiState(session, state.currentTaskId),

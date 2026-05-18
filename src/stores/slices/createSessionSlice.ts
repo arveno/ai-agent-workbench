@@ -162,6 +162,14 @@ function replaceUrlForActiveSession(sessionId: string, taskId: string | undefine
   });
 }
 
+function isReadonlySession(session: WorkbenchSession): boolean {
+  return session.isReadOnly === true || session.visibility === 'demo';
+}
+
+function getPersistableSessions(sessions: WorkbenchSession[]): WorkbenchSession[] {
+  return sessions.filter((session) => !isReadonlySession(session));
+}
+
 function createEmptyUiState() {
   return {
     currentPrompt: '',
@@ -277,14 +285,14 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return;
     }
 
-    persistWorkbenchSessions(sortSessionsByUpdatedAt(sessions), activeSessionId ?? get().currentSessionId);
+    persistWorkbenchSessions(sortSessionsByUpdatedAt(getPersistableSessions(sessions)), activeSessionId ?? get().currentSessionId);
   },
   createSession: async () => {
     get().activeAgentRunAbortController?.abort();
 
     set((state) => {
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(state.sessions, '');
+        persistWorkbenchSessions(getPersistableSessions(state.sessions), '');
       }
 
       return {
@@ -310,12 +318,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     set((state) => {
       const nextSession = state.sessions.find((session) => session.id === sessionId);
 
-      if (!nextSession) {
+      if (!nextSession || isReadonlySession(nextSession)) {
         return state;
       }
 
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(state.sessions, nextSession.id);
+        persistWorkbenchSessions(getPersistableSessions(state.sessions), nextSession.id);
       }
 
       return {
@@ -328,7 +336,9 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       };
     });
 
-    if (get().isPersistentMode) {
+    const activeSession = get().sessions.find((session) => session.id === sessionId);
+
+    if (get().isPersistentMode && activeSession && !isReadonlySession(activeSession)) {
       void get().loadPersistentMessagesForSession(sessionId);
     }
   },
@@ -336,7 +346,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const nextSession = get().sessions.find((session) => session.id === sessionId);
 
     if (!get().isPersistentMode) {
-      persistWorkbenchSessions(get().sessions, sessionId);
+      persistWorkbenchSessions(getPersistableSessions(get().sessions), sessionId);
     }
 
     set({
@@ -373,7 +383,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       );
 
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), state.currentSessionId);
       }
 
       return {
@@ -391,7 +401,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       );
 
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), state.currentSessionId);
       }
 
       return {
@@ -443,7 +453,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       );
 
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), state.currentSessionId);
       }
 
       return {
@@ -517,7 +527,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       );
 
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), state.currentSessionId);
       }
 
       return {
@@ -847,14 +857,15 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const currentState = get();
     const authContext = getPersistenceAuthContext();
     const currentSession = currentState.sessions.find((session) => session.id === currentState.currentSessionId);
+    const writableCurrentSession = currentSession && !isReadonlySession(currentSession) ? currentSession : undefined;
     const conversationTitle =
-      currentSession?.title && currentSession.title !== '新会话'
-        ? currentSession.title
-        : getDraftTitleFromState(currentState, currentSession);
+      writableCurrentSession?.title && writableCurrentSession.title !== '新会话'
+        ? writableCurrentSession.title
+        : getDraftTitleFromState(currentState, writableCurrentSession);
 
     if (!authContext) {
-      if (currentSession && currentState.currentSessionId) {
-        return currentSession.id;
+      if (writableCurrentSession && currentState.currentSessionId) {
+        return writableCurrentSession.id;
       }
 
       const newSession = createEmptySession({
@@ -863,7 +874,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       });
 
       set((state) => {
-        const nextSessions = sortSessionsByUpdatedAt([newSession, ...state.sessions]);
+        const nextSessions = sortSessionsByUpdatedAt([newSession, ...getPersistableSessions(state.sessions)]);
 
         persistWorkbenchSessions(nextSessions, newSession.id);
 
@@ -883,12 +894,12 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     if (
       currentState.isPersistentMode &&
-      currentSession &&
+      writableCurrentSession &&
       isPersistentStateCompatibleWithAuthContext(authContext, currentState.persistentUserId)
     ) {
-      if (currentSession.title === '新会话' && conversationTitle !== '新会话') {
-        void updateConversation(currentSession.id, { title: conversationTitle }, authContext.accessToken).then((result) => {
-          if (!result.ok || get().currentSessionId !== currentSession.id) {
+      if (writableCurrentSession.title === '新会话' && conversationTitle !== '新会话') {
+        void updateConversation(writableCurrentSession.id, { title: conversationTitle }, authContext.accessToken).then((result) => {
+          if (!result.ok || get().currentSessionId !== writableCurrentSession.id) {
             return;
           }
 
@@ -911,7 +922,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         });
       }
 
-      return currentSession.id;
+      return writableCurrentSession.id;
     }
 
     set({
@@ -924,7 +935,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       {
         title: conversationTitle,
         mode: getConversationModeForProvider(currentState.currentModelProvider),
-        metadata: createConversationMetadataForSession(currentSession, currentState.currentTaskId),
+        metadata: createConversationMetadataForSession(writableCurrentSession, currentState.currentTaskId),
       },
       authContext.accessToken,
     );
@@ -938,10 +949,13 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return null;
     }
 
-    const nextSession = conversationRecordToWorkbenchSession(result.data, currentSession?.messages ?? []);
+    const nextSession = conversationRecordToWorkbenchSession(result.data, writableCurrentSession?.messages ?? []);
 
     set((state) => ({
-      sessions: sortSessionsByUpdatedAt([nextSession, ...state.sessions.filter((session) => session.id !== nextSession.id)]),
+      sessions: sortSessionsByUpdatedAt([
+        nextSession,
+        ...getPersistableSessions(state.sessions).filter((session) => session.id !== nextSession.id),
+      ]),
       currentSessionId: nextSession.id,
       isPersistentMode: true,
       persistentUserId: authContext.userId,
@@ -1001,7 +1015,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       );
 
       if (!state.isPersistentMode) {
-        persistWorkbenchSessions(nextSessions, state.currentSessionId);
+        persistWorkbenchSessions(getPersistableSessions(nextSessions), state.currentSessionId);
       }
 
       return {
@@ -1021,15 +1035,15 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       }
 
       const nextSession = state.sessionId
-        ? currentState.sessions.find((session) => session.id === state.sessionId)
+        ? currentState.sessions.find((session) => session.id === state.sessionId && !isReadonlySession(session))
         : undefined;
       const nextTaskId = state.taskId ?? nextSession?.taskId ?? '';
       const matchedTask = mockTasks.find((task) => task.id === nextTaskId);
 
       if (nextSession) {
-        persistWorkbenchSessions(currentState.sessions, nextSession.id);
+        persistWorkbenchSessions(getPersistableSessions(currentState.sessions), nextSession.id);
       } else {
-        persistWorkbenchSessions(currentState.sessions, '');
+        persistWorkbenchSessions(getPersistableSessions(currentState.sessions), '');
       }
 
       return {

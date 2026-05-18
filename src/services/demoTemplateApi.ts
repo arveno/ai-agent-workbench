@@ -2,11 +2,11 @@ import type {
   ConversationRecord,
   DemoConversationCopyResult,
   DemoConversationTemplateListResult,
-  DemoTaskTemplateListResult,
   MessageListResult,
   MessageRecord,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
+import { demoConversationTemplates, PHASE4_DEMO_TEMPLATE_KEYS } from '@/mocks/demoConversations';
 import {
   buildApiPath,
   requestCloudBasePrivateApi,
@@ -28,23 +28,30 @@ function createNetworkErrorResponse<TData>(message: string): WorkbenchPersistenc
   return createNetworkPersistenceResponse(message);
 }
 
+function readTemplateKey(value: Record<string, unknown>): string {
+  const templateKey = value.templateKey;
+  return typeof templateKey === 'string' ? templateKey : '';
+}
+
+function hasPhase4DemoConversations(conversations: DemoConversationTemplateListResult['conversations']): boolean {
+  const templateKeys = new Set(conversations.map((conversation) => readTemplateKey(conversation.metadata)));
+  return PHASE4_DEMO_TEMPLATE_KEYS.every((templateKey) => templateKeys.has(templateKey));
+}
+
+function createLocalDemoConversationResponse(): WorkbenchPersistenceResponse<DemoConversationTemplateListResult> {
+  return {
+    ok: true,
+    data: {
+      conversations: demoConversationTemplates,
+    },
+  };
+}
+
 async function readPersistenceResponse<TData>(
   response: Response,
   fallbackMessage: string,
 ): Promise<WorkbenchPersistenceResponse<TData>> {
   return readWorkbenchPersistenceResponse(response, fallbackMessage);
-}
-
-export async function fetchDemoTasks(): Promise<WorkbenchPersistenceResponse<DemoTaskTemplateListResult>> {
-  try {
-    const response = await requestCloudBasePublicApi(buildApiPath('/api/workbench/demo-tasks'), {
-      method: 'GET',
-    });
-
-    return await readPersistenceResponse<DemoTaskTemplateListResult>(response, '示例任务加载失败。');
-  } catch {
-    return createNetworkErrorResponse('网络异常，暂不能加载示例任务。');
-  }
 }
 
 export async function fetchDemoConversations(): Promise<
@@ -55,9 +62,15 @@ export async function fetchDemoConversations(): Promise<
       method: 'GET',
     });
 
-    return await readPersistenceResponse<DemoConversationTemplateListResult>(response, '示例会话加载失败。');
+    const result = await readPersistenceResponse<DemoConversationTemplateListResult>(response, '示例会话加载失败。');
+
+    if (!result.ok) {
+      return createLocalDemoConversationResponse();
+    }
+
+    return hasPhase4DemoConversations(result.data.conversations) ? result : createLocalDemoConversationResponse();
   } catch {
-    return createNetworkErrorResponse('网络异常，暂不能加载示例会话。');
+    return createLocalDemoConversationResponse();
   }
 }
 

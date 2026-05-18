@@ -1,25 +1,11 @@
 import type {
   DemoConversationTemplateRecord,
-  DemoRecommendedMode,
-  DemoTaskTemplateRecord,
   DemoTemplateCategory,
 } from '@/types/persistence';
 import {
   getDemoTemplateStringArrayMetadata,
   getDemoTemplateStringMetadata,
 } from './demoTemplateMapper';
-
-export interface DemoTaskView {
-  id: string;
-  title: string;
-  description: string;
-  prompt: string;
-  category: DemoTemplateCategory;
-  recommendedMode: DemoRecommendedMode;
-  tagLabels: string[];
-  showcaseValue: string;
-  isConversationTemplateBacked: boolean;
-}
 
 export interface DemoConversationTemplateView {
   id: string;
@@ -28,18 +14,6 @@ export interface DemoConversationTemplateView {
   category: DemoTemplateCategory;
   tagLabels: string[];
   showcaseValue: string;
-}
-
-export interface DemoTaskListView {
-  items: DemoTaskView[];
-  isLoading: boolean;
-  isEmpty: boolean;
-  errorMessage: string | null;
-  canRetry: boolean;
-  loadingMessage: string;
-  emptyTitle: string;
-  emptyDescription: string;
-  retryLabel: string;
 }
 
 export interface DemoConversationTemplateListView {
@@ -72,24 +46,6 @@ function getTags(metadata: Record<string, unknown>, category: DemoTemplateCatego
   return tags.length > 0 ? tags : [getCategoryLabel(category)];
 }
 
-function isConversationTemplateCategory(category: DemoTemplateCategory): boolean {
-  return category === 'long_context' || category === 'rag' || category === 'fallback';
-}
-
-export function createDemoTaskView(task: DemoTaskTemplateRecord): DemoTaskView {
-  return {
-    id: task.id,
-    title: task.title.trim() || '示例任务',
-    description: task.description.trim() || '公开演示任务',
-    prompt: task.prompt,
-    category: task.category,
-    recommendedMode: task.recommended_mode,
-    tagLabels: getTags(task.metadata, task.category),
-    showcaseValue: getShowcaseValue(task.metadata, getCategoryLabel(task.category)),
-    isConversationTemplateBacked: isConversationTemplateCategory(task.category),
-  };
-}
-
 export function createDemoConversationTemplateView(
   template: DemoConversationTemplateRecord,
 ): DemoConversationTemplateView {
@@ -100,27 +56,6 @@ export function createDemoConversationTemplateView(
     category: template.category,
     tagLabels: getTags(template.metadata, template.category),
     showcaseValue: getShowcaseValue(template.metadata, getCategoryLabel(template.category)),
-  };
-}
-
-export function createDemoTaskListView(params: {
-  tasks: DemoTaskTemplateRecord[];
-  isLoading: boolean;
-  errorMessage: string | null;
-}): DemoTaskListView {
-  const items = params.tasks.map((task) => createDemoTaskView(task));
-  const isEmpty = !params.isLoading && !params.errorMessage && items.length === 0;
-
-  return {
-    items,
-    isLoading: params.isLoading,
-    isEmpty,
-    errorMessage: params.errorMessage,
-    canRetry: Boolean(params.errorMessage),
-    loadingMessage: '正在加载示例任务...',
-    emptyTitle: '暂无示例任务',
-    emptyDescription: '示例模板暂不可用，请稍后再试。',
-    retryLabel: '重试',
   };
 }
 

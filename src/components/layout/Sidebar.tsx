@@ -1,32 +1,17 @@
-﻿import { useEffect, useRef } from 'react';
-import { LoginModal } from '../auth/LoginModal';
+import { useEffect } from 'react';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { AgentAccessView, AuthSessionView } from '../../types/auth';
-import { buildRealAgentAvailabilityView } from '../../services/agentAccessViewModel';
 import { createConversationListView } from '../../utils/conversationListViewModel';
-import {
-  createDemoConversationTemplateListView,
-  createDemoTaskListView,
-} from '../../utils/demoTemplateViewModel';
+import { createDemoConversationTemplateListView } from '../../utils/demoTemplateViewModel';
 import { createRecentToolsView } from '../../utils/recentToolsViewModel';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
+import { LoginModal } from '../auth/LoginModal';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { ConversationList } from '../conversation/ConversationList';
-import { DemoTaskList } from '../demo/DemoTaskList';
-import { DemoTaskRunChoiceModal } from '../demo/DemoTaskRunChoiceModal';
+import { DemoConversationList } from '../demo/DemoConversationList';
 import { RecentToolsCard } from '../tools/RecentToolsCard';
-
-type LastDemoAction =
-  | {
-      kind: 'task';
-      id: string;
-    }
-  | {
-      kind: 'conversation';
-      id: string;
-    };
 
 function getAuthDisplayName(authView: AuthSessionView): string {
   if (authView.status === 'loading') {
@@ -92,7 +77,6 @@ function getAuthStatusLines(params: {
 }
 
 export function Sidebar() {
-  const lastDemoActionRef = useRef<LastDemoAction | null>(null);
   const authView = useAuthSessionView();
   const signOut = useAuthStore((state) => state.signOut);
   const isLoginModalOpen = useAuthStore((state) => state.isLoginModalOpen);
@@ -111,25 +95,14 @@ export function Sidebar() {
   const isConversationListLoading = useWorkbenchStore((state) => state.isConversationListLoading);
   const isCreatingConversation = useWorkbenchStore((state) => state.isCreatingConversation);
   const conversationListError = useWorkbenchStore((state) => state.conversationListError);
-  const demoTasks = useWorkbenchStore((state) => state.demoTasks);
   const demoConversations = useWorkbenchStore((state) => state.demoConversations);
-  const isDemoTasksLoading = useWorkbenchStore((state) => state.isDemoTasksLoading);
-  const demoTasksError = useWorkbenchStore((state) => state.demoTasksError);
   const isDemoConversationsLoading = useWorkbenchStore((state) => state.isDemoConversationsLoading);
   const demoConversationsError = useWorkbenchStore((state) => state.demoConversationsError);
   const isCopyingDemoTemplate = useWorkbenchStore((state) => state.isCopyingDemoTemplate);
   const copyDemoTemplateError = useWorkbenchStore((state) => state.copyDemoTemplateError);
-  const pendingDemoTaskId = useWorkbenchStore((state) => state.pendingDemoTaskId);
-  const isDemoTaskChoiceOpen = useWorkbenchStore((state) => state.isDemoTaskChoiceOpen);
-  const demoTaskChoiceError = useWorkbenchStore((state) => state.demoTaskChoiceError);
-  const loadDemoTasks = useWorkbenchStore((state) => state.loadDemoTasks);
   const loadDemoConversations = useWorkbenchStore((state) => state.loadDemoConversations);
-  const retryLoadDemoTasks = useWorkbenchStore((state) => state.retryLoadDemoTasks);
   const retryLoadDemoConversations = useWorkbenchStore((state) => state.retryLoadDemoConversations);
-  const startDemoTask = useWorkbenchStore((state) => state.startDemoTask);
-  const confirmRunDemoTaskWithAgent = useWorkbenchStore((state) => state.confirmRunDemoTaskWithAgent);
-  const runDemoTaskAsMock = useWorkbenchStore((state) => state.runDemoTaskAsMock);
-  const cancelDemoTaskChoice = useWorkbenchStore((state) => state.cancelDemoTaskChoice);
+  const openDemoConversationTemplate = useWorkbenchStore((state) => state.openDemoConversationTemplate);
   const copyDemoConversationTemplate = useWorkbenchStore((state) => state.copyDemoConversationTemplate);
   const recentTools = useWorkbenchStore((state) => state.recentTools);
   const isRecentToolsLoading = useWorkbenchStore((state) => state.isRecentToolsLoading);
@@ -138,17 +111,14 @@ export function Sidebar() {
   const isAuthenticated = authView.status === 'authenticated';
   const isAuthLoading = authView.status === 'loading';
   const canOpenLogin = authView.isAuthConfigured && !isAuthLoading;
+  const currentSession = sessions.find((session) => session.id === currentSessionId);
+  const activeDemoTemplateId = currentSession?.visibility === 'demo' ? currentSession.sourceTemplateId ?? null : null;
   const conversationListView = createConversationListView({
     sessions,
     currentSessionId,
     isPersistentMode: isPersistentMode || isAuthenticated,
     isLoading: isConversationListLoading || isAuthLoading,
     errorMessage: conversationListError,
-  });
-  const demoTaskListView = createDemoTaskListView({
-    tasks: demoTasks,
-    isLoading: isDemoTasksLoading,
-    errorMessage: demoTasksError,
   });
   const demoConversationTemplateListView = createDemoConversationTemplateListView({
     templates: demoConversations,
@@ -162,12 +132,6 @@ export function Sidebar() {
     isAuthenticated,
     isAuthLoading,
   });
-  const pendingDemoTask = demoTaskListView.items.find((task) => task.id === pendingDemoTaskId) ?? null;
-  const realAgentAvailability = buildRealAgentAvailabilityView({
-    authView,
-    agentAccess,
-    isAgentAccessLoading,
-  });
   const authStatusLines = getAuthStatusLines({
     authView,
     agentAccess,
@@ -176,9 +140,8 @@ export function Sidebar() {
   });
 
   useEffect(() => {
-    void loadDemoTasks();
     void loadDemoConversations();
-  }, [loadDemoConversations, loadDemoTasks]);
+  }, [loadDemoConversations]);
 
   const replaceUrlForSession = (sessionId: string, taskId?: string) => {
     const state = useWorkbenchStore.getState();
@@ -195,36 +158,6 @@ export function Sidebar() {
     replaceUrlForSession(sessionId);
   };
 
-  const handleTaskClick = async (taskId: string) => {
-    lastDemoActionRef.current = {
-      kind: 'task',
-      id: taskId,
-    };
-
-    const sessionId = await startDemoTask(taskId);
-
-    if (!sessionId) {
-      return;
-    }
-
-    replaceUrlForSession(sessionId, taskId);
-  };
-
-  const handleDemoConversationClick = async (templateId: string) => {
-    lastDemoActionRef.current = {
-      kind: 'conversation',
-      id: templateId,
-    };
-
-    const sessionId = await copyDemoConversationTemplate(templateId);
-
-    if (!sessionId) {
-      return;
-    }
-
-    replaceUrlForSession(sessionId, currentTaskId);
-  };
-
   const handleCreateSession = async () => {
     await createSession();
     replaceWorkbenchUrl({});
@@ -234,56 +167,19 @@ export function Sidebar() {
     void hydratePersistentWorkbench();
   };
 
-  const handleRetryDemoCopy = () => {
-    const lastAction = lastDemoActionRef.current;
+  const handleDemoConversationClick = (templateId: string) => {
+    const sessionId = openDemoConversationTemplate(templateId);
 
-    if (!lastAction) {
-      return;
+    if (sessionId) {
+      replaceWorkbenchUrl({});
     }
-
-    if (lastAction.kind === 'task') {
-      void handleTaskClick(lastAction.id);
-      return;
-    }
-
-    void handleDemoConversationClick(lastAction.id);
   };
 
-  const handleUseRealAgentForDemoTask = async () => {
-    if (!pendingDemoTaskId) {
-      return;
-    }
+  const handleCopyDemoConversation = async (templateId: string) => {
+    const sessionId = await copyDemoConversationTemplate(templateId);
 
-    const taskId = pendingDemoTaskId;
-    const sessionId = await confirmRunDemoTaskWithAgent(taskId);
-
-    if (!sessionId) {
-      return;
-    }
-
-    replaceUrlForSession(sessionId, taskId);
-  };
-
-  const handleUseMockForDemoTask = async () => {
-    if (!pendingDemoTaskId) {
-      return;
-    }
-
-    const taskId = pendingDemoTaskId;
-    const sessionId = await runDemoTaskAsMock(taskId);
-
-    if (!sessionId) {
-      return;
-    }
-
-    replaceUrlForSession(sessionId, taskId);
-  };
-
-  const handleLoginForDemoTask = () => {
-    cancelDemoTaskChoice();
-
-    if (canOpenLogin) {
-      openLoginModal();
+    if (sessionId) {
+      replaceUrlForSession(sessionId, currentTaskId);
     }
   };
 
@@ -313,7 +209,7 @@ export function Sidebar() {
         </button>
 
         <section className="sidebar-section">
-          <h2 className="section-title">{conversationListView.title}</h2>
+          <h2 className="section-title">我的会话</h2>
           <ConversationList
             view={conversationListView}
             onSelect={handleSessionClick}
@@ -325,28 +221,22 @@ export function Sidebar() {
         </section>
 
         <section className="sidebar-section">
-          <h2 className="section-title">示例任务</h2>
+          <h2 className="section-title">示例会话</h2>
           <p className="sidebar-demo-tip">
-            访客使用公开演示，登录后会将会话型示例复制为你的私有会话。
+            公开只读示例，不会写入我的会话；登录后可复制为私有会话。
           </p>
-          <DemoTaskList
-            taskView={demoTaskListView}
-            conversationView={demoConversationTemplateListView}
+          <DemoConversationList
+            view={demoConversationTemplateListView}
+            activeTemplateId={activeDemoTemplateId}
             isCopying={isCopyingDemoTemplate}
             copyErrorMessage={copyDemoTemplateError}
-            onStartTask={(taskId) => {
-              void handleTaskClick(taskId);
-            }}
+            onOpenConversation={handleDemoConversationClick}
             onCopyConversation={(templateId) => {
-              void handleDemoConversationClick(templateId);
-            }}
-            onRetryTasks={() => {
-              void retryLoadDemoTasks();
+              void handleCopyDemoConversation(templateId);
             }}
             onRetryConversations={() => {
               void retryLoadDemoConversations();
             }}
-            onRetryCopy={handleRetryDemoCopy}
           />
         </section>
 
@@ -403,21 +293,6 @@ export function Sidebar() {
         </button>
       </div>
       <LoginModal isOpen={isLoginModalOpen} onClose={closeLoginModal} />
-      <DemoTaskRunChoiceModal
-        isOpen={isDemoTaskChoiceOpen}
-        task={pendingDemoTask}
-        availability={realAgentAvailability}
-        isSubmitting={isCopyingDemoTemplate}
-        errorMessage={demoTaskChoiceError}
-        onUseAgent={() => {
-          void handleUseRealAgentForDemoTask();
-        }}
-        onUseMock={() => {
-          void handleUseMockForDemoTask();
-        }}
-        onLogin={handleLoginForDemoTask}
-        onCancel={cancelDemoTaskChoice}
-      />
     </aside>
   );
 }

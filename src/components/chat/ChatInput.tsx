@@ -96,7 +96,7 @@ export function ChatInput() {
         className="composer-input chat-input-textarea"
         placeholder={
           isPublicDemoMode
-            ? '开始一条新聊天，或点击左侧示例任务一键体验完整流程。'
+            ? '开始一条新聊天，或打开左侧示例会话查看完整流程。'
             : '继续输入问题，或让 AI 生成报告...'
         }
         value={chatDraft}

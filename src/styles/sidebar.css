@@ -250,6 +250,63 @@
   gap: 8px;
 }
 
+.demo-conversation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.demo-conversation-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.demo-conversation-card.active {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.demo-conversation-open {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+}
+
+.demo-conversation-open:disabled,
+.demo-conversation-copy:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.demo-conversation-copy {
+  width: fit-content;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.demo-conversation-copy:hover:not(:disabled) {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .demo-task-card {
   width: 100%;
   min-width: 0;

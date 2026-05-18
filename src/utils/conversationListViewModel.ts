@@ -62,7 +62,7 @@ function getMessageCount(session: WorkbenchSession): number {
 
 export function createConversationListView(params: CreateConversationListViewParams): ConversationListView {
   const sortedSessions = params.sessions
-    .filter((session) => session.id.trim())
+    .filter((session) => session.id.trim() && !session.isReadOnly && session.visibility !== 'demo')
     .sort((a, b) => b.updatedAt - a.updatedAt);
   const items = sortedSessions.map((session) => ({
     id: session.id,

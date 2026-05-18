@@ -3,7 +3,7 @@ import type {
   ConversationMode,
   ConversationStatus,
   DemoConversationTemplateRecord,
-  DemoTaskTemplateRecord,
+  ConversationVisibility,
   RecentToolRecord,
 } from './persistence';
 import type { RunEvent, RunSnapshot } from './run';
@@ -73,6 +73,9 @@ export interface WorkbenchSession {
   latestRunId?: string;
   mode?: ConversationMode;
   status?: ConversationStatus;
+  visibility?: ConversationVisibility;
+  sourceTemplateId?: string;
+  isReadOnly?: boolean;
   summary?: string | null;
   messageCount?: number;
 }
@@ -462,25 +465,14 @@ export interface RunSlice {
 }
 
 export interface DemoTemplateSlice {
-  demoTasks: DemoTaskTemplateRecord[];
   demoConversations: DemoConversationTemplateRecord[];
-  isDemoTasksLoading: boolean;
-  demoTasksError: string | null;
   isDemoConversationsLoading: boolean;
   demoConversationsError: string | null;
   isCopyingDemoTemplate: boolean;
   copyDemoTemplateError: string | null;
-  pendingDemoTaskId: string | null;
-  isDemoTaskChoiceOpen: boolean;
-  demoTaskChoiceError: string | null;
-  loadDemoTasks: () => Promise<void>;
   loadDemoConversations: () => Promise<void>;
-  retryLoadDemoTasks: () => Promise<void>;
   retryLoadDemoConversations: () => Promise<void>;
-  startDemoTask: (taskId: string) => Promise<string | null>;
-  confirmRunDemoTaskWithAgent: (taskId: string) => Promise<string | null>;
-  runDemoTaskAsMock: (taskId: string) => Promise<string | null>;
-  cancelDemoTaskChoice: () => void;
+  openDemoConversationTemplate: (templateId: string) => string | null;
   copyDemoConversationTemplate: (templateId: string) => Promise<string | null>;
 }
 
