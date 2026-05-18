@@ -236,7 +236,7 @@ export function WorkflowModal() {
           <div>
             <h3 className="workflow-modal-title">Workflow / Prompt 模板</h3>
             <p className="workflow-modal-description">
-              查看当前任务流程模板，并维护仅本地会话生效的 Prompt 模板。
+              查看固定任务流程模板，并维护仅本地会话生效的 Prompt 模板；这些模板不直接改变 CloudBase 后端执行逻辑。
             </p>
           </div>
           <Button
@@ -268,7 +268,7 @@ export function WorkflowModal() {
                   <div>
                     <h4 className="workflow-panel-title">任务流程模板</h4>
                     <p className="workflow-panel-description">
-                      当前版本使用固定流程模板，不提供可视化编排；模型负责判断任务类型，实际工具执行由服务端受控流程完成。
+                      当前版本使用固定流程模板，不伪装成完整可视化编排器；模型负责判断任务类型，实际工具执行由服务端受控流程完成。
                     </p>
                   </div>
                   <Badge variant="outline" className="workflow-badge workflow-badge-ready">

@@ -1,9 +1,10 @@
 import { Fragment } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { mockTasks } from '../../mocks/tasks';
 import { buildRealAgentAvailabilityView } from '../../services/agentAccessViewModel';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
+import type { CapabilityStatus, GenerationStatus, RunSnapshot } from '../../types/workbench';
 import { getModelProviderStatusView } from '../../utils/modelProviderStatus';
 import {
   formatRunElapsed,
@@ -12,6 +13,7 @@ import {
   getRunStatusTone,
   type RunStatusTone,
 } from '../../utils/runViewModel';
+import { WORKBENCH_TOOL_DEFINITIONS } from '../../utils/toolRegistryView';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
@@ -20,6 +22,46 @@ import { icons } from '../common/iconMap';
 import { EnvironmentStatus } from './EnvironmentStatus';
 
 const DEFAULT_HEADER_TITLE = '新聊天';
+const DATA_SOURCE_TABLES = 'teaching_metrics、knowledge_documents、knowledge_chunks';
+
+interface CapabilityActionButtonProps {
+  icon: LucideIcon;
+  label: string;
+  statusLabel: string;
+  status: CapabilityStatus;
+  title: string;
+  onClick: () => void;
+}
+
+function CapabilityActionButton({
+  icon,
+  label,
+  statusLabel,
+  status,
+  title,
+  onClick,
+}: CapabilityActionButtonProps) {
+  return (
+    <Button
+      className={`workspace-action-button workspace-capability-button capability-tone-${status}`}
+      type="button"
+      onClick={onClick}
+      variant="outline"
+      size="sm"
+      title={title}
+      aria-label={`${label}：${statusLabel}`}
+    >
+      <AppIcon icon={icon} size={15} />
+      <span className="workspace-capability-copy">
+        <span className="workspace-capability-label">{label}</span>
+        <span className="workspace-capability-status">
+          <span className="workspace-capability-status-dot" aria-hidden="true"></span>
+          {statusLabel}
+        </span>
+      </span>
+    </Button>
+  );
+}
 
 function getGenerationLabel(status: GenerationStatus): string {
   if (status === 'streaming') {
@@ -136,6 +178,10 @@ export function WorkbenchHeader() {
     title: realAgentAvailability.title,
     description: realAgentAvailability.description,
   });
+  const enabledToolCount = WORKBENCH_TOOL_DEFINITIONS.filter((tool) => tool.enabled).length;
+  const serverToolCount = WORKBENCH_TOOL_DEFINITIONS.filter(
+    (tool) => tool.enabled && tool.runtime === 'server' && tool.status === 'connected',
+  ).length;
 
   return (
     <header className="workspace-header workbench-header">
@@ -148,7 +194,15 @@ export function WorkbenchHeader() {
           <Badge variant="outline" className="workspace-mode-badge">
             {modeBadgeLabel}
           </Badge>
-          <Button type="button" variant="ghost" size="icon-sm" className="title-star-button" aria-label="收藏">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="title-star-button"
+            aria-label="收藏暂未开放"
+            title="收藏暂未开放"
+            disabled
+          >
             <AppIcon icon={icons.star} size={16} />
           </Button>
         </div>
@@ -173,24 +227,44 @@ export function WorkbenchHeader() {
 
       <div className="workspace-actions">
         <EnvironmentStatus />
-        <span className="workspace-actions-label">全局配置</span>
+        <span className="workspace-actions-label">能力入口</span>
 
-        <Button className="workspace-action-button" type="button" onClick={openDataSourceModal} variant="outline" size="sm">
-          <AppIcon icon={icons.database} size={15} />
-          <span>数据源管理</span>
-        </Button>
+        <CapabilityActionButton
+          icon={icons.database}
+          label="数据源"
+          statusLabel="受控访问"
+          status="connected"
+          title={`CloudBase MySQL 已作为主数据源接入；可用表：${DATA_SOURCE_TABLES}。用于数据分析、RAG 检索和报告生成。`}
+          onClick={openDataSourceModal}
+        />
 
-        <Button className="workspace-action-button" type="button" onClick={openToolLibraryModal} variant="outline" size="sm">
-          <AppIcon icon={icons.settings} size={15} />
-          <span>工具库</span>
-        </Button>
+        <CapabilityActionButton
+          icon={icons.settings}
+          label="工具库"
+          statusLabel={`${serverToolCount} 个服务端`}
+          status="available"
+          title={`服务端白名单工具链已启用 ${enabledToolCount} 个工具；模型不能直接执行 SQL，工具调用进入 Run Trace。`}
+          onClick={openToolLibraryModal}
+        />
 
-        <Button className="workspace-action-button" type="button" onClick={openWorkflowModal} variant="outline" size="sm">
-          <AppIcon icon={icons.agent} size={15} />
-          <span>Workflow / Prompt</span>
-        </Button>
+        <CapabilityActionButton
+          icon={icons.agent}
+          label="Workflow / Prompt"
+          statusLabel="固定流程"
+          status="readonly"
+          title="当前是固定任务流程模板；Prompt 模板仅作为本地输入辅助，不直接改变 CloudBase 后端执行逻辑。"
+          onClick={openWorkflowModal}
+        />
 
-        <Button className="header-icon-button icon-button" type="button" aria-label="更多" variant="outline" size="icon-sm">
+        <Button
+          className="header-icon-button icon-button workspace-disabled-icon-button"
+          type="button"
+          aria-label="更多能力暂未开放"
+          title="更多能力暂未开放"
+          variant="outline"
+          size="icon-sm"
+          disabled
+        >
           <AppIcon icon={icons.more} size={16} />
         </Button>
       </div>

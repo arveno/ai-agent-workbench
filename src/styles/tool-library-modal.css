@@ -47,6 +47,14 @@
   line-height: 1.6;
 }
 
+.tool-library-modal-note {
+  margin: 6px 0 0;
+  max-width: 700px;
+  color: #1e40af;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .tool-library-modal-close {
   flex: 0 0 auto;
   color: #64748b;

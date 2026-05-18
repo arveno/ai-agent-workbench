@@ -90,7 +90,10 @@ export function ToolLibraryModal() {
           <div>
             <h3 className="tool-library-modal-title">工具库</h3>
             <p className="tool-library-modal-description">
-              查看当前 Agent 可使用的服务端白名单工具、执行位置与风险等级。模型不能直接执行任意 SQL，前端也不直接执行工具。
+              查看当前 Agent 可使用的服务端白名单工具、执行位置与风险等级。模型不能直接执行任意 SQL，前端也不直接执行工具，工具调用会进入 Run Trace。
+            </p>
+            <p className="tool-library-modal-note">
+              knowledge_search 是 CloudBase MySQL 受控知识检索，不是 mock 工具。
             </p>
           </div>
           <Button

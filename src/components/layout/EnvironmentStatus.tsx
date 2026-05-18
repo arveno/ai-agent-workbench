@@ -1,30 +1,113 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuthSessionView } from '@/stores/authStore';
 import { useWorkbenchStore } from '@/stores/workbenchStore';
 import { requestHealthCheck } from '../../services/healthApi';
-import type { HealthCheckResponse, HealthServiceStatus } from '../../types/health';
+import type { AuthSessionView } from '@/types/auth';
+import type { HealthCheckResponse } from '../../types/health';
+import type { CapabilityStatus } from '../../types/workbench';
 import type { ModelProviderStatusView } from '@/types/modelStatus';
 import { getModelProviderStatusView } from '@/utils/modelProviderStatus';
+import { AppIcon } from '../common/AppIcon';
+import { icons } from '../common/iconMap';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { Skeleton } from '../ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 type HealthUiState = 'demo' | 'ready';
 
-function getServiceText(service: HealthServiceStatus): string {
-  if (service.status === 'connected') {
-    return '已连接';
+interface EnvironmentStatusBadgeView {
+  label: string;
+  status: CapabilityStatus;
+  message: string;
+}
+
+function getStatusClassName(status: CapabilityStatus): string {
+  return `environment-status-value environment-status-value-${status}`;
+}
+
+function getProviderCapabilityStatus(statusView: ModelProviderStatusView): CapabilityStatus {
+  if (statusView.availability === 'available') {
+    return 'available';
   }
 
-  if (service.status === 'configured') {
-    return '已配置';
+  if (statusView.availability === 'error') {
+    return 'error';
   }
 
-  if (service.status === 'error') {
-    return '连接失败';
+  if (statusView.availability === 'reserved') {
+    return 'planned';
   }
 
-  return '未配置';
+  return 'not_configured';
+}
+
+function getCloudBaseAuthStatusView(authView: AuthSessionView): EnvironmentStatusBadgeView {
+  if (authView.status === 'authenticated') {
+    return {
+      label: '已登录',
+      status: 'connected',
+      message: `当前用户：${authView.displayName}。真实 Agent 仍需要额度和已配置的模型 Provider。`,
+    };
+  }
+
+  if (authView.status === 'loading') {
+    return {
+      label: '未检测',
+      status: 'not_checked',
+      message: '正在恢复 CloudBase 登录态；公开演示 Mock 流程不依赖登录。',
+    };
+  }
+
+  if (authView.status === 'error') {
+    return {
+      label: '异常',
+      status: 'error',
+      message: 'CloudBase 登录态检查异常；可继续使用公开演示，真实 Agent 需要重新登录后再试。',
+    };
+  }
+
+  return {
+    label: '访客模式',
+    status: 'demo',
+    message: '当前可完整体验公开演示 Mock 流程；真实 Agent 需要登录、额度和模型 Provider。',
+  };
+}
+
+function getCloudBaseMysqlStatusView(params: {
+  health: HealthCheckResponse | null;
+  hasFailed: boolean;
+}): EnvironmentStatusBadgeView {
+  if (params.hasFailed) {
+    return {
+      label: '未检测',
+      status: 'not_checked',
+      message: '环境状态检查失败；数据访问仍由 CloudBase HTTP Functions 和服务端工具受控执行。',
+    };
+  }
+
+  if (!params.health) {
+    return {
+      label: '未检测',
+      status: 'not_checked',
+      message: '尚未执行独立健康检查；数据读取通过 CloudBase HTTP Functions 受控访问。',
+    };
+  }
+
+  const mysqlStatus = params.health.services.postgres;
+
+  if (mysqlStatus.status === 'error') {
+    return {
+      label: '异常',
+      status: 'error',
+      message: mysqlStatus.message,
+    };
+  }
+
+  return {
+    label: '受控访问',
+    status: 'connected',
+    message: mysqlStatus.message || 'CloudBase MySQL 由 CloudBase HTTP Functions 受控访问，前端不直连数据库。',
+  };
 }
 
 function getHealthUiState(params: {
@@ -85,11 +168,11 @@ function getSummaryText(params: {
 }
 
 export function EnvironmentStatus() {
+  const authView = useAuthSessionView();
   const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
   const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [hasFailed, setHasFailed] = useState(false);
-  const isLoadingHealth = !health && !hasFailed;
 
   const groqStatus = useMemo(
     () =>
@@ -122,12 +205,13 @@ export function EnvironmentStatus() {
     [activeProviderStatus, hasFailed],
   );
 
-  const cloudBaseAuthMessageFallback = hasFailed
-    ? '环境检查失败，暂未获取 CloudBase Auth 状态。'
-    : '正在检查 CloudBase Auth 状态。';
-  const cloudBaseMysqlMessageFallback = hasFailed
-    ? '环境检查失败，暂未获取 CloudBase MySQL 状态。'
-    : '正在检查 CloudBase MySQL 状态。';
+  const cloudBaseAuthStatus = useMemo(() => getCloudBaseAuthStatusView(authView), [authView]);
+  const cloudBaseMysqlStatus = useMemo(
+    () => getCloudBaseMysqlStatusView({ health, hasFailed }),
+    [hasFailed, health],
+  );
+  const activeModelStatus = getProviderCapabilityStatus(activeProviderStatus);
+  const groqCapabilityStatus = getProviderCapabilityStatus(groqStatus);
 
   useEffect(() => {
     let isMounted = true;
@@ -165,14 +249,13 @@ export function EnvironmentStatus() {
             className={`environment-status-trigger environment-status-trigger-${uiState}`}
             aria-label="环境状态"
           >
+            <AppIcon icon={icons.stepDone} size={14} />
             <span className="environment-status-dot" aria-hidden="true"></span>
             <span>{getBadgeText(uiState)}</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end" sideOffset={8} className="environment-status-detail">
-          <div
-            className="environment-status-detail-title"
-          >
+          <div className="environment-status-detail-title">
             {getSummaryText({
               hasFailed,
               uiState,
@@ -181,60 +264,58 @@ export function EnvironmentStatus() {
               health,
             })}
           </div>
-          {isLoadingHealth ? (
-            <div className="environment-status-skeleton-list">
-              <Skeleton className="environment-status-skeleton" />
-              <Skeleton className="environment-status-skeleton" />
-              <Skeleton className="environment-status-skeleton" />
-            </div>
-          ) : (
-            <>
-              <div className="environment-status-row">
-                <span>公开演示模式</span>
-                <Badge variant="outline" className="environment-status-value">
-                  可用
-                </Badge>
-              </div>
-              <div className="environment-status-row">
-                <span>运行环境</span>
-                <Badge variant="outline" className="environment-status-value">
-                  {health?.environment ?? '-'}
-                </Badge>
-              </div>
-              <div className="environment-status-row">
-                <span>当前模型</span>
-                <Badge variant="outline" className="environment-status-value">
-                  {activeProviderStatus.displayName}
-                </Badge>
-              </div>
-              <div className="environment-status-message">{activeProviderStatus.statusDescription}</div>
-              <div className="environment-status-row">
-                <span>Groq</span>
-                <Badge variant="outline" className="environment-status-value">
-                  {groqStatus.statusLabel}
-                </Badge>
-              </div>
-              <div className="environment-status-message">{groqStatus.statusDescription}</div>
-              <div className="environment-status-row">
-                <span>CloudBase Auth</span>
-                <Badge variant="outline" className="environment-status-value">
-                  {health ? getServiceText(health.services.supabase) : '-'}
-                </Badge>
-              </div>
-              <div className="environment-status-message">
-                {health?.services.supabase.message ?? cloudBaseAuthMessageFallback}
-              </div>
-              <div className="environment-status-row">
-                <span>CloudBase MySQL</span>
-                <Badge variant="outline" className="environment-status-value">
-                  {health ? getServiceText(health.services.postgres) : '-'}
-                </Badge>
-              </div>
-              <div className="environment-status-message">
-                {health?.services.postgres.message ?? cloudBaseMysqlMessageFallback}
-              </div>
-            </>
-          )}
+          <div className="environment-status-message environment-status-message-primary">
+            真实 Agent 需要登录、额度和模型 Provider；数据读取通过 CloudBase HTTP Functions 受控访问。
+          </div>
+
+          <div className="environment-status-row">
+            <span>公开演示模式</span>
+            <Badge variant="outline" className={getStatusClassName('available')}>
+              可用
+            </Badge>
+          </div>
+          <div className="environment-status-message">
+            当前可完整体验 Mock Run、Run Trace、RAG 来源和报告流程。
+          </div>
+
+          <div className="environment-status-row">
+            <span>CloudBase Auth</span>
+            <Badge variant="outline" className={getStatusClassName(cloudBaseAuthStatus.status)}>
+              {cloudBaseAuthStatus.label}
+            </Badge>
+          </div>
+          <div className="environment-status-message">{cloudBaseAuthStatus.message}</div>
+
+          <div className="environment-status-row">
+            <span>CloudBase MySQL</span>
+            <Badge variant="outline" className={getStatusClassName(cloudBaseMysqlStatus.status)}>
+              {cloudBaseMysqlStatus.label}
+            </Badge>
+          </div>
+          <div className="environment-status-message">{cloudBaseMysqlStatus.message}</div>
+
+          <div className="environment-status-row">
+            <span>当前模型</span>
+            <Badge variant="outline" className={getStatusClassName(activeModelStatus)}>
+              {activeProviderStatus.displayName}
+            </Badge>
+          </div>
+          <div className="environment-status-message">{activeProviderStatus.statusDescription}</div>
+
+          <div className="environment-status-row">
+            <span>Groq / 模型 Provider</span>
+            <Badge variant="outline" className={getStatusClassName(groqCapabilityStatus)}>
+              {groqStatus.statusLabel}
+            </Badge>
+          </div>
+          <div className="environment-status-message">{groqStatus.statusDescription}</div>
+
+          <div className="environment-status-row">
+            <span>运行环境</span>
+            <Badge variant="outline" className={getStatusClassName('not_checked')}>
+              {health?.environment ?? '未检测'}
+            </Badge>
+          </div>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

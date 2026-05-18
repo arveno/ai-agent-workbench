@@ -290,10 +290,10 @@ export function DataSourceModal() {
           <div>
             <h3 className="datasource-modal-title">数据源管理</h3>
             <p className="datasource-modal-description">
-              查看 Agent 可用的数据上下文。当前版本只展示服务端受控数据源，前端不保存数据库连接串。
+              查看 Agent 可用的数据上下文。当前不是完整数据源 CRUD，只展示服务端受控数据源，前端不保存数据库连接串。
             </p>
             <p className="datasource-modal-relation-note">
-              说明：数据分析和知识检索都通过 CloudBase HTTP Functions 访问 CloudBase MySQL。
+              说明：数据分析、RAG 检索和报告生成都通过 CloudBase HTTP Functions 与服务端工具访问 CloudBase MySQL。
             </p>
           </div>
           <Button
@@ -313,7 +313,7 @@ export function DataSourceModal() {
             <CardContent className="datasource-modal-info-content">
               <p>当前主线使用 CloudBase MySQL，Agent Run 的数据分析和 RAG 检索均通过受控函数读取。</p>
               <p>前端不保存数据库连接串，也不直接连接数据库。</p>
-              <p>模型只提出工具意图，实际查询由服务端白名单工具和权限校验控制。</p>
+              <p>模型只提出工具意图，实际查询由 CloudBase HTTP Functions、服务端白名单工具和权限校验控制。</p>
             </CardContent>
           </Card>
 

@@ -112,6 +112,18 @@ export type ChatMessage = WorkbenchMessage;
 export type MessageStatus = 'idle' | 'streaming' | 'done' | 'stopped';
 export type GenerationStatus = 'idle' | 'streaming' | 'done' | 'stopped' | 'error';
 export type ConfirmStatus = 'waiting' | 'confirmed' | 'cancelled';
+export type CapabilityStatus =
+  | 'available'
+  | 'connected'
+  | 'active'
+  | 'demo'
+  | 'readonly'
+  | 'not_checked'
+  | 'not_configured'
+  | 'planned'
+  | 'fallback'
+  | 'error'
+  | 'disabled';
 export type ModelProviderId =
   | 'mock'
   | 'groq'

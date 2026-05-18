@@ -71,6 +71,16 @@
   color: #475569;
 }
 
+.title-star-button:disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.title-star-button:disabled:hover {
+  color: #cbd5e1;
+}
+
 .workspace-status-row {
   min-width: 0;
   display: flex;
@@ -210,8 +220,128 @@
   color: #0f172a;
 }
 
+.workspace-capability-button {
+  height: 38px;
+  min-width: 118px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.workspace-capability-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.workspace-capability-label {
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.workspace-capability-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.1;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.workspace-capability-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.capability-tone-available,
+.capability-tone-connected {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.capability-tone-available .workspace-capability-status,
+.capability-tone-connected .workspace-capability-status {
+  color: #15803d;
+}
+
+.capability-tone-active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.capability-tone-active .workspace-capability-status {
+  color: #2563eb;
+}
+
+.capability-tone-fallback {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.capability-tone-fallback .workspace-capability-status {
+  color: #ea580c;
+}
+
+.capability-tone-error,
+.capability-tone-disabled {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.capability-tone-error .workspace-capability-status,
+.capability-tone-disabled .workspace-capability-status {
+  color: #dc2626;
+}
+
+.capability-tone-demo,
+.capability-tone-readonly,
+.capability-tone-not_checked,
+.capability-tone-not_configured,
+.capability-tone-planned {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.capability-tone-demo .workspace-capability-status,
+.capability-tone-readonly .workspace-capability-status,
+.capability-tone-not_checked .workspace-capability-status,
+.capability-tone-not_configured .workspace-capability-status,
+.capability-tone-planned .workspace-capability-status {
+  color: #64748b;
+}
+
+.workspace-capability-button:hover {
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+}
+
 .header-icon-button {
   flex: 0 0 32px;
+  color: #64748b;
+}
+
+.workspace-disabled-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.workspace-disabled-icon-button:disabled:hover {
+  background: #ffffff;
   color: #64748b;
 }
 
@@ -237,9 +367,9 @@
 }
 
 .environment-status-trigger-demo {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
 }
 
 .environment-status-dot {
@@ -283,6 +413,42 @@
   font-weight: 750;
 }
 
+.environment-status-value-available,
+.environment-status-value-connected {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.environment-status-value-active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.environment-status-value-fallback {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.environment-status-value-error,
+.environment-status-value-disabled {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.environment-status-value-demo,
+.environment-status-value-readonly,
+.environment-status-value-not_checked,
+.environment-status-value-not_configured,
+.environment-status-value-planned {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 .environment-status-message {
   margin: 0 0 6px;
   color: #64748b;
@@ -290,6 +456,10 @@
   line-height: 1.5;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+.environment-status-message-primary {
+  color: #334155;
 }
 
 .environment-status-skeleton-list {
