@@ -90,6 +90,7 @@ function MessageBlockRenderer({
   const messageView = createMessageView(message);
   const canSelectRun = Boolean(message.runId && message.kind !== 'report');
   const isSelectedRunMessage = Boolean(message.runId && message.runId === selectedRunId);
+  const shouldUseContentCard = Boolean(message.runId || isReportMessage);
   const selectRun = () => {
     if (!message.runId || !canSelectRun) {
       return;
@@ -115,6 +116,7 @@ function MessageBlockRenderer({
       className={[
         'message-row',
         'message-row-assistant',
+        shouldUseContentCard ? 'message-row-structured' : '',
         canSelectRun ? 'message-row-run-selectable' : '',
         isSelectedRunMessage ? 'message-row-run-selected' : '',
       ]
@@ -133,6 +135,7 @@ function MessageBlockRenderer({
       <MessageBubble
         role="assistant"
         content={message.content}
+        bubbleClassName={shouldUseContentCard ? 'ai-bubble-structured' : undefined}
         previewText={messageView.previewText}
         renderMode={messageView.renderMode}
         shouldCollapseByDefault={!isStreamingAssistant && messageView.shouldCollapseByDefault}
