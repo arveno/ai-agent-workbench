@@ -131,36 +131,38 @@ This mode uses a fixed mock tool result and fixed conclusion text. It remains us
 - `schema_inspect` returns a fixed schema description for `teaching_metrics`.
 - `aggregate_table` reads `teaching_metrics` through CloudBase MySQL and aggregates in JavaScript by month, grade, or subject.
 - `chart_render` converts aggregate results into chart config and series data; it does not render an image.
-- `conclusionSource = "groq"` means the Groq compatibility provider generated the final conclusion.
-- `conclusionSource = "openai-compatible"` means the generic OpenAI-compatible model gateway generated the final conclusion.
+- `conclusionSource = "model"` means `_shared/modelGateway.js` generated the final conclusion through the selected catalog model.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
+- `conclusionSource = "mock"` is used by fixed mock verification data.
 - `knowledge_qa` runs the controlled `knowledge_search` tool against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`. It uses keyword scoring in the function and never lets the model execute SQL directly.
-- The assistant message metadata records `source`, `conclusionSource`, `fallbackReason`, `modelProvider`, `modelName`, `modelErrorType`, `modelHttpStatus`, `modelErrorMessage`, `agentMode`, and `runtimeRunId`.
+- The assistant message metadata records `source`, `conclusionSource`, `fallbackReason`, `selectedModelId`, `modelProvider`, `modelName`, `tokenUsage`, `latencyMs`, `modelErrorType`, `modelHttpStatus`, `modelErrorMessage`, `agentMode`, and `runtimeRunId`.
 
 ## Environment Variables
 
 Do not hard-code keys or connection strings in source code.
 
-Preferred model gateway configuration:
+Model Gateway reads the selected model from `selectedModelId`, checks it against the catalog whitelist, and maps it to SiliconFlow / Zhipu OpenAI-compatible API settings. Required provider keys:
 
 ```txt
-MODEL_GATEWAY_PROVIDER=openai-compatible
-MODEL_GATEWAY_BASE_URL=https://provider.example.com/v1
-MODEL_GATEWAY_API_KEY=...
-MODEL_GATEWAY_MODEL=...
+SILICONFLOW_API_KEY=...
+ZHIPU_API_KEY=...
 ```
 
-Groq compatibility configuration remains supported when no `MODEL_GATEWAY_*` variables are set:
+Optional endpoint / model / timeout overrides:
 
 ```txt
-GROQ_API_KEY=...
-GROQ_MODEL=llama-3.1-8b-instant
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+SILICONFLOW_MODEL_QWEN=Qwen/Qwen2.5-7B-Instruct
+SILICONFLOW_MODEL_GLM=THUDM/GLM-4-9B-0414
+ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
+MODEL_GATEWAY_TIMEOUT_MS=30000
 CLOUDBASE_ENV_ID / TCB_ENV_ID Provided by CloudBase runtime or deployment config.
 ```
 
 Tencent-21 no longer needs `POSTGRES_CONNECTION_STRING` or `SUPABASE_DB_CONNECTION_STRING` for Agent Run data tools. CloudBase MySQL access comes from the CloudBase function runtime through `@cloudbase/node-sdk` and `app.rdb()`.
 
-Model keys must be CloudBase function environment variables only. Do not put `MODEL_GATEWAY_API_KEY` or `GROQ_API_KEY` in EdgeOne / frontend `VITE_*` variables.
+Model keys must be CloudBase function environment variables only. Do not put `SILICONFLOW_API_KEY` or `ZHIPU_API_KEY` in EdgeOne / frontend `VITE_*` variables.
 
 When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/modelGateway.js` is intentionally lightweight: it only wraps OpenAI-compatible chat completions and normalized diagnostics, not an enterprise model platform.
 
@@ -245,10 +247,17 @@ Example event:
   "clientRunId": "browser-agent-real-run-...",
   "conversationId": "...",
   "timestamp": "2026-05-15T00:00:00.000Z",
-  "conclusionSource": "fallback",
-  "fallbackReason": "model_not_configured",
-  "modelProvider": "groq",
-  "modelName": "llama-3.1-8b-instant"
+  "conclusionSource": "model",
+  "fallbackReason": null,
+  "selectedModelId": "siliconflow-qwen-free",
+  "modelProvider": "siliconflow",
+  "modelName": "Qwen/Qwen2.5-7B-Instruct",
+  "latencyMs": 1280,
+  "tokenUsage": {
+    "promptTokens": 320,
+    "completionTokens": 180,
+    "totalTokens": 500
+  }
 }
 ```
 
@@ -335,7 +344,7 @@ Expected result:
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
 - `mode = "basic"` streams the fixed Tencent-14 event sequence.
 - `mode = "real"` streams `schema_inspect` / `aggregate_table` / `chart_render` tool completions, chart, conclusion, and completion events where available.
-- If the model provider succeeds after data tools succeed, the real mode returns provider-specific `conclusionSource`, such as `openai-compatible` or `groq`.
+- If the model provider succeeds after data tools succeed, the real mode returns `conclusionSource = "model"` with `selectedModelId`, `modelProvider`, `modelName`, `tokenUsage`, and `latencyMs`.
 - If the model provider fails after data tools succeed, the real mode returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
 - `conclusion_completed` and `run_completed` include `modelProvider`, `modelName`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
 - `quotaUsed` increases for `demo_user`.

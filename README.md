@@ -82,7 +82,9 @@ Run Trace 与持久化数据资产
 - 需要服务端校验 CloudBase access token
 - 需要 `agent_run` quota
 - 真实 Agent Run 开始后扣减 1 次额度
-- 模型调用统一走 CloudBase 函数环境变量中的 `MODEL_GATEWAY_*`，未配置时兼容 `GROQ_API_KEY`
+- 模型调用统一走 CloudBase `workbench-agent-run-stream` 和 `_shared/modelGateway.js`
+- 前端只提交 `selectedModelId`，服务端通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API
+- 模型 Key 只读取 CloudBase 函数环境变量中的 `SILICONFLOW_API_KEY` / `ZHIPU_API_KEY`
 - 前端不接收、不保存、不传递模型调用密钥
 - 服务端校验 conversation 属于当前用户
 - 失败后不会自动静默 fallback 到 Mock
@@ -231,7 +233,7 @@ conversation / messages / runs / tools / reports 持久化
 - 前端不使用 service role
 - 前端不直接连接数据库
 - 真实 Agent API 由服务端保护
-- 模型调用只使用 CloudBase 函数端 `MODEL_GATEWAY_*` 或兼容 `GROQ_API_KEY`
+- 模型调用只使用 CloudBase 函数端 `SILICONFLOW_API_KEY` / `ZHIPU_API_KEY` 和 modelGateway catalog 白名单
 - CloudBase access token 只用于 CloudBase private APIs
 - Tool 调用由服务端受控执行
 - 模型不能直接执行 SQL
@@ -286,15 +288,19 @@ CloudBase 函数环境变量：
 CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 ```
 
-`workbench-agent-run-stream` 可选配置模型网关或 Groq 兼容变量。模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端：
+`workbench-agent-run-stream` 通过 `_shared/modelGateway.js` 调用国内 OpenAI-compatible provider。模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端：
 
 ```env
-MODEL_GATEWAY_PROVIDER=openai-compatible
-MODEL_GATEWAY_BASE_URL=
-MODEL_GATEWAY_API_KEY=
-MODEL_GATEWAY_MODEL=
-GROQ_API_KEY=
-GROQ_MODEL=
+SILICONFLOW_API_KEY=
+ZHIPU_API_KEY=
+
+# 可选：覆盖默认 endpoint / model / timeout。
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+SILICONFLOW_MODEL_QWEN=Qwen/Qwen2.5-7B-Instruct
+SILICONFLOW_MODEL_GLM=THUDM/GLM-4-9B-0414
+ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
+MODEL_GATEWAY_TIMEOUT_MS=30000
 ```
 
 ## CloudBase 默认链路状态
@@ -317,7 +323,7 @@ GROQ_MODEL=
 
 `authStore` 默认恢复 CloudBase 用户名密码登录 session；没有 session 时保持访客状态，公开演示仍可使用，私有会话和真实 Agent 需要登录。正式登录弹窗调用 CloudBase Auth，不再调用 Supabase `/auth/v1/token`。业务 private API 使用 CloudBase access token。Agent Run 运行走 `/api/agent/run/stream`，刷新页面或切换会话后的 Run Trace 恢复走 `/api/workbench/runs`。`VITE_ENABLE_CLOUDBASE_PRIVATE_API` 已退出正式前端运行分支；旧 Vercel / Supabase 主体代码已删除。匿名登录只保留给 `local-tools` 或明确 demo fallback，不作为正式页面登录主线。`local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品页面，也不应提交为正式能力。
 
-当前模型 Provider 问题暂时后置。Groq 或未配置模型时可能出现 `model_forbidden` / `model_not_configured` fallback；这不影响腾讯云迁移主链路判断，因为数据工具、SSE、持久化、quota、Run Trace 恢复和报告闭环仍应正常完成。后续会接入国内 OpenAI-compatible provider。
+当前模型主链路为：前端 `selectedModelId` -> CloudBase `workbench-agent-run-stream` -> `_shared/modelGateway.js` -> catalog 白名单 -> SiliconFlow / Zhipu OpenAI-compatible API -> `modelTrace` / `tokenUsage` / `latency` / `fallbackReason`。未配置模型 Key、模型不可用或 provider 返回错误时，真实 Agent 会通过明确 `fallbackReason` 完成 SSE、持久化、quota、Run Trace 恢复和报告闭环，不会伪装成真实模型输出。
 
 旧链路主体删除后仍需要完成 EdgeOne Preview / Production 回归，确认无 CORS、无 health 404、无重复 POST、Agent Run 不重复写 assistant message、quota 只 consume 一次。
 

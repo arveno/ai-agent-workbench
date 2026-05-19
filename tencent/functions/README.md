@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Agent Run 流式验证函数。Tencent-21 保留固定 `basic` 验证路径，并将 `workbench-agent-run-stream` 的 `real` data tools 改为直接读取 CloudBase MySQL `teaching_metrics`；Tencent-22 新增轻量 `_shared/modelGateway.js`，支持 OpenAI-compatible provider，并保留 Groq 兼容 fallback。现阶段不替换前端 Auth store，也不删除旧 Vercel / Supabase 代码。
+本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Agent Run 流式验证函数。Tencent-21 保留固定 `basic` 验证路径，并将 `workbench-agent-run-stream` 的 `real` data tools 改为直接读取 CloudBase MySQL `teaching_metrics`；Tencent-22 新增轻量 `_shared/modelGateway.js`，Phase 0 后当前模型链路通过 catalog 白名单调用 SiliconFlow / Zhipu OpenAI-compatible API。现阶段不替换前端 Auth store，也不删除旧 Vercel / Supabase 代码。
 
 ## 函数
 
@@ -45,7 +45,7 @@ CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 
 这是 CloudBase 函数运行时环境变量，用于 `@cloudbase/node-sdk` 初始化 `app.rdb()`。不要写入代码，不要写入前端，不要配置到 EdgeOne，也不要加 `VITE_` 前缀。EdgeOne 只配置前端公开的 `VITE_*` 变量；本地 Vite proxy 可继续使用 `CLOUDBASE_PROXY_TARGET`，但它不是 CloudBase 函数变量。
 
-`workbench-agent-run-stream` 的模型 Key 也只放 CloudBase 函数环境变量。`MODEL_GATEWAY_API_KEY` 或 `GROQ_API_KEY` 不放 EdgeOne / 前端 `VITE_*` 变量。
+`workbench-agent-run-stream` 的模型 Key 也只放 CloudBase 函数环境变量。`SILICONFLOW_API_KEY` / `ZHIPU_API_KEY` 不放 EdgeOne / 前端 `VITE_*` 变量。
 
 不迁移：
 
@@ -203,22 +203,24 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。推荐使用统一模型网关配置：
+`workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。当前模型链路由前端 `selectedModelId` 进入 `_shared/modelGateway.js`，通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
 所有依赖 `_shared/mysql.js` 的函数都需要先在 CloudBase 函数环境变量中配置 `CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d`；EdgeOne 不需要也不应配置该变量。
 
 ```txt
-MODEL_GATEWAY_PROVIDER=openai-compatible
-MODEL_GATEWAY_BASE_URL=https://provider.example.com/v1
-MODEL_GATEWAY_API_KEY=...
-MODEL_GATEWAY_MODEL=...
+SILICONFLOW_API_KEY=...
+ZHIPU_API_KEY=...
 ```
 
-如果没有任何 `MODEL_GATEWAY_*` 变量，函数继续兼容旧 Groq 配置：
+可选覆盖默认 endpoint / model / timeout：
 
 ```txt
-GROQ_API_KEY=...
-GROQ_MODEL=llama-3.1-8b-instant
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+SILICONFLOW_MODEL_QWEN=Qwen/Qwen2.5-7B-Instruct
+SILICONFLOW_MODEL_GLM=THUDM/GLM-4-9B-0414
+ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
+MODEL_GATEWAY_TIMEOUT_MS=30000
 ```
 
 模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
@@ -367,7 +369,7 @@ curl -N -i -X POST \
 - `workbench-demo-copy` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取公开 demo 模板并写入当前用户私有 `conversations` / `messages`，不写 reports、Agent Run、SSE 或 quota。
 - `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
 - `workbench-runs` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只读 `agent_runs` / `run_events` / `tool_invocations`，用于刷新页面或切换会话后的 Run Trace 恢复，不写 quota、messages 或 run 事件。
-- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js` 与 `_shared/modelGateway.js` 验证 CloudBase Agent Run 流式链路。`basic` 模式为固定 mock 基础闭环，`real` 模式接入本地 planner、受控 data tools、OpenAI-compatible model gateway / Groq 兼容和明确 fallback，但仍不切换前端正式调用。
+- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js` 与 `_shared/modelGateway.js` 验证 CloudBase Agent Run 流式链路。`basic` 模式为固定 mock 基础闭环，`real` 模式接入本地 planner、受控 data tools、SiliconFlow / Zhipu OpenAI-compatible model gateway 和明确 fallback，但仍不切换前端正式调用。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。

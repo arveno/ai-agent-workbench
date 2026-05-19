@@ -9,7 +9,7 @@ EdgeOne Pages
 + CloudBase MySQL
 ```
 
-当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；Tencent-09A 已验证 CloudBase Auth helper 与正式 `/api/auth/me`，Tencent-10C/Tencent-13 已新增 conversations / messages / reports / demo-copy / quota 基础闭环函数，Tencent-21 新增 `teaching_metrics` 演示数据源并将 Agent Run `real` data tools 改为直接读取 CloudBase MySQL，Tencent-22 新增轻量 OpenAI-compatible model gateway 并保留 Groq 兼容，Tencent-25B 已将正式前端身份主线切到 CloudBase 用户名密码登录，Tencent-26 新增 `workbench-runs` 用于 Run Trace 恢复，Tencent-28 新增 CloudBase MySQL `knowledge_search`，Tencent-29B 已删除旧 Vercel / Supabase 主体代码。后续仍需要 EdgeOne Preview / Production 线上回归。
+当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；Tencent-09A 已验证 CloudBase Auth helper 与正式 `/api/auth/me`，Tencent-10C/Tencent-13 已新增 conversations / messages / reports / demo-copy / quota 基础闭环函数，Tencent-21 新增 `teaching_metrics` 演示数据源并将 Agent Run `real` data tools 改为直接读取 CloudBase MySQL，Tencent-22 新增轻量 OpenAI-compatible model gateway，Phase 0 后当前模型链路收敛到 SiliconFlow / Zhipu 国内 provider，Tencent-25B 已将正式前端身份主线切到 CloudBase 用户名密码登录，Tencent-26 新增 `workbench-runs` 用于 Run Trace 恢复，Tencent-28 新增 CloudBase MySQL `knowledge_search`，Tencent-29B 已删除旧 Vercel / Supabase 主体代码。后续仍需要 EdgeOne Preview / Production 线上回归。
 
 ## 文件
 
@@ -124,20 +124,22 @@ CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 
 受影响函数包括 `auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs` 和 `workbench-agent-run-stream`。这是 CloudBase 函数运行时变量，不是前端变量；不要写入代码，不要放进 EdgeOne，也不要加 `VITE_` 前缀。
 
-Tencent-21 后，`workbench-agent-run-stream` 的 data tools 不再需要 PostgreSQL / Supabase 数据库连接串。Tencent-22 后推荐使用统一模型网关配置：
+Tencent-21 后，`workbench-agent-run-stream` 的 data tools 不再需要 PostgreSQL / Supabase 数据库连接串。当前模型链路由 `selectedModelId` 进入 `_shared/modelGateway.js`，再通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
 ```txt
-MODEL_GATEWAY_PROVIDER=openai-compatible
-MODEL_GATEWAY_BASE_URL=https://provider.example.com/v1
-MODEL_GATEWAY_API_KEY=...
-MODEL_GATEWAY_MODEL=...
+SILICONFLOW_API_KEY=...
+ZHIPU_API_KEY=...
 ```
 
-未配置 `MODEL_GATEWAY_*` 时仍兼容旧 Groq 配置：
+可选覆盖默认 endpoint / model / timeout：
 
 ```txt
-GROQ_API_KEY=...
-GROQ_MODEL=llama-3.1-8b-instant
+SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+SILICONFLOW_MODEL_QWEN=Qwen/Qwen2.5-7B-Instruct
+SILICONFLOW_MODEL_GLM=THUDM/GLM-4-9B-0414
+ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
+MODEL_GATEWAY_TIMEOUT_MS=30000
 ```
 
 模型 Key 只放 `workbench-agent-run-stream` 的 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。EdgeOne 只放 `VITE_API_BASE_URL`、`VITE_CLOUDBASE_ENV_ID`、`VITE_CLOUDBASE_REGION` 等前端公开变量。模型未配置时，`real` 模式应在受控工具成功后通过 `fallbackReason = "model_not_configured"` 返回结果。Agent Run data tools 通过 `@cloudbase/node-sdk` 的 `app.rdb()` 读取 CloudBase MySQL `teaching_metrics`，RAG `knowledge_qa` 通过受控 `knowledge_search` 读取 `knowledge_documents` / `knowledge_chunks`。当前 `_shared/modelGateway.js` 是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。

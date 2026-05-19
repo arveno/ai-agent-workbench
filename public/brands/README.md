@@ -3,7 +3,6 @@
 Please place the real brand logos (SVG) in this directory with the exact file names below:
 
 - `mock.svg`
-- `groq.svg`
 - `gemini.svg`
 - `openrouter.svg`
 - `openai.svg`
