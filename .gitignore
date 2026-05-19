@@ -109,6 +109,7 @@ dist
 
 # Serverless directories
 .serverless/
+.cloudbase-packages/
 
 # FuseBox cache
 .fusebox/

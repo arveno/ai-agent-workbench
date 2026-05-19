@@ -41,6 +41,22 @@ pnpm cloudbase:package -- --function all --clean --check
 ~/Desktop/cloudbase-workbench-agent-run-stream-package
 ```
 
+## 推荐项目内输出目录
+
+默认输出到桌面仍然保留，适合临时手动上传。后续 Windows / Mac 统一工作流推荐使用项目根目录下的本地临时目录：
+
+```txt
+./.cloudbase-packages/
+```
+
+推荐命令：
+
+```bash
+pnpm cloudbase:package -- --function all --out ./.cloudbase-packages --clean --check
+```
+
+`.cloudbase-packages/` 是本地打包产物目录，不提交 Git，已加入 `.gitignore`。使用该目录上传 CloudBase 时，仍然压缩具体函数 package 目录内的内容，不要压缩 `.cloudbase-packages/` 或 `cloudbase-<function>-package` 外层目录。
+
 ## 正确包结构
 
 每个 staging 根目录必须直接包含：
