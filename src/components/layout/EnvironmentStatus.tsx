@@ -6,7 +6,7 @@ import type { AuthSessionView } from '@/types/auth';
 import type { HealthCheckResponse } from '../../types/health';
 import type { CapabilityStatus } from '../../types/workbench';
 import type { ModelProviderStatusView } from '@/types/modelStatus';
-import { getModelProviderStatusView } from '@/utils/modelProviderStatus';
+import { getModelProviderStatusView } from '@/utils/modelSelectionStatus';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { Badge } from '../ui/badge';
@@ -118,11 +118,11 @@ function getHealthUiState(params: {
     return 'demo';
   }
 
-  if (params.activeStatus.providerId === 'mock') {
+  if (params.activeStatus.providerId === 'mock-agent') {
     return 'demo';
   }
 
-  if (params.activeStatus.providerId === 'groq' && params.activeStatus.isAvailable) {
+  if (params.activeStatus.isAvailable) {
     return 'ready';
   }
 
@@ -137,7 +137,6 @@ function getSummaryText(params: {
   hasFailed: boolean;
   uiState: HealthUiState;
   activeStatus: ModelProviderStatusView;
-  groqStatus: ModelProviderStatusView;
   health: HealthCheckResponse | null;
 }): string {
   if (params.hasFailed) {
@@ -148,16 +147,12 @@ function getSummaryText(params: {
     return '当前模型可用，可体验真实 Agent Run。';
   }
 
-  if (params.activeStatus.providerId === 'mock') {
+  if (params.activeStatus.providerId === 'mock-agent') {
     return '当前处于公开演示模式，可完整体验 Agent 工作台流程。';
   }
 
-  if (params.activeStatus.providerId === 'groq') {
-    if (params.groqStatus.isAvailable) {
-      return params.groqStatus.statusDescription;
-    }
-
-    return '服务端模型 Key 未配置，可继续使用公开演示模式。';
+  if (params.activeStatus.isAvailable) {
+    return params.activeStatus.statusDescription;
   }
 
   if (!params.health) {
@@ -169,31 +164,17 @@ function getSummaryText(params: {
 
 export function EnvironmentStatus() {
   const authView = useAuthSessionView();
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
-  const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
+  const selectedModelId = useWorkbenchStore((state) => state.selectedModelId);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [hasFailed, setHasFailed] = useState(false);
-
-  const groqStatus = useMemo(
-    () =>
-      getModelProviderStatusView({
-        providerId: 'groq',
-        currentModelProvider,
-        modelConfigs,
-        health,
-      }),
-    [currentModelProvider, health, modelConfigs],
-  );
 
   const activeProviderStatus = useMemo(
     () =>
       getModelProviderStatusView({
-        providerId: currentModelProvider,
-        currentModelProvider,
-        modelConfigs,
-        health,
+        providerId: selectedModelId,
+        selectedModelId,
       }),
-    [currentModelProvider, health, modelConfigs],
+    [selectedModelId],
   );
 
   const uiState = useMemo(
@@ -211,7 +192,6 @@ export function EnvironmentStatus() {
     [hasFailed, health],
   );
   const activeModelStatus = getProviderCapabilityStatus(activeProviderStatus);
-  const groqCapabilityStatus = getProviderCapabilityStatus(groqStatus);
 
   useEffect(() => {
     let isMounted = true;
@@ -260,7 +240,6 @@ export function EnvironmentStatus() {
               hasFailed,
               uiState,
               activeStatus: activeProviderStatus,
-              groqStatus,
               health,
             })}
           </div>
@@ -303,12 +282,12 @@ export function EnvironmentStatus() {
           <div className="environment-status-message">{activeProviderStatus.statusDescription}</div>
 
           <div className="environment-status-row">
-            <span>Groq / 模型 Provider</span>
-            <Badge variant="outline" className={getStatusClassName(groqCapabilityStatus)}>
-              {groqStatus.statusLabel}
+            <span>Model Gateway</span>
+            <Badge variant="outline" className={getStatusClassName(activeModelStatus)}>
+              {activeProviderStatus.statusLabel}
             </Badge>
           </div>
-          <div className="environment-status-message">{groqStatus.statusDescription}</div>
+          <div className="environment-status-message">{activeProviderStatus.statusDescription}</div>
 
           <div className="environment-status-row">
             <span>运行环境</span>

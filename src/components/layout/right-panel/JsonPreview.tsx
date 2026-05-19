@@ -6,7 +6,7 @@ interface JsonPreviewProps {
   value: string;
 }
 
-const SENSITIVE_KEY_PATTERN = /(authorization|access_token|refresh_token|api[_-]?key|apikey|secret|password|connection|string|groq)/i;
+const SENSITIVE_KEY_PATTERN = /(authorization|access_token|refresh_token|api[_-]?key|apikey|secret|password|connection|string)/i;
 const DETAIL_PREVIEW_LENGTH = 220;
 const DETAIL_MAX_LENGTH = 5000;
 

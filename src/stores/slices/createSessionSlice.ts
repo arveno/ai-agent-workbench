@@ -90,8 +90,8 @@ function shouldSkipCloudBaseAgentAssistantPersist(
   );
 }
 
-function getConversationModeForProvider(provider: WorkbenchStore['currentModelProvider']): ConversationMode {
-  return provider === 'groq' ? 'agent' : 'mock';
+function getConversationModeForSelectedModel(selectedModelId: WorkbenchStore['selectedModelId']): ConversationMode {
+  return selectedModelId === 'mock-agent' ? 'mock' : 'agent';
 }
 
 function readConversationMetadataString(record: ConversationRecord, key: string): string | null {
@@ -1204,7 +1204,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const result = await createConversation(
       {
         title: conversationTitle,
-        mode: getConversationModeForProvider(currentState.currentModelProvider),
+        mode: getConversationModeForSelectedModel(currentState.selectedModelId),
         metadata: createConversationMetadataForSession(writableCurrentSession, currentState.currentTaskId),
       },
       authContext.accessToken,

@@ -18,10 +18,10 @@ function createCloudBaseDefaultHealthCheck(): HealthCheckResponse {
     environment: 'development',
     checkedAt: new Date().toISOString(),
     services: {
-      groq: createCloudBaseHealthService({
-        configured: false,
-        status: 'not_configured',
-        message: '真实 Agent 模型 Provider 未配置时会显示明确状态，不影响公开演示 Mock 流程。',
+      modelGateway: createCloudBaseHealthService({
+        configured: true,
+        status: 'configured',
+        message: '真实模型由 CloudBase 函数端 Model Gateway 白名单控制，前端只提交 selectedModelId。',
       }),
       supabase: createCloudBaseHealthService({
         configured: true,

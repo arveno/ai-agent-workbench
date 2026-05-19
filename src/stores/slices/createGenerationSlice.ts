@@ -158,7 +158,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       return;
     }
 
-    if (get().currentModelProvider === 'groq') {
+    if (get().selectedModelId !== 'mock-agent') {
       void get().runCurrentAgentAnalysis(trimmedPrompt);
       return;
     }

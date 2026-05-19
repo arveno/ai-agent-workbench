@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { WorkbenchMessage } from '../../../types/workbench';
+import type { RunModelTrace, WorkbenchMessage } from '../../../types/workbench';
 import {
   formatRunElapsed,
   getConclusionSourceLabel,
@@ -14,6 +14,12 @@ import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
+
+type RunOverviewItem = {
+  label: string;
+  value: string;
+  wide?: boolean;
+};
 
 function getRunStatusBadgeClass(tone: ReturnType<typeof getRunStatusTone>): string {
   return `run-status-badge run-status-badge-${tone}`;
@@ -49,6 +55,35 @@ function getRunRoundLabel(runId: string, messages: WorkbenchMessage[]): string {
   }
 
   return `第 ${runIndex + 1} 轮 / 共 ${runIds.length} 轮`;
+}
+
+function formatNullableNumber(value: number | null | undefined, suffix = ''): string {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '未返回';
+}
+
+function getModelTraceItems(modelTrace: RunModelTrace | undefined): RunOverviewItem[] {
+  if (!modelTrace) {
+    return [];
+  }
+
+  const tokenUsage = modelTrace.tokenUsage;
+  const tokenUsageText = tokenUsage
+    ? [
+        `输入 ${formatNullableNumber(tokenUsage.promptTokens)}`,
+        `输出 ${formatNullableNumber(tokenUsage.completionTokens)}`,
+        `总计 ${formatNullableNumber(tokenUsage.totalTokens)}`,
+      ].join(' / ')
+    : '未返回';
+
+  return [
+    { label: '模型 ID', value: modelTrace.selectedModelId ?? '-' },
+    { label: 'Provider', value: modelTrace.provider ?? '-' },
+    { label: '模型', value: modelTrace.model ?? '-' },
+    { label: '模型耗时', value: formatNullableNumber(modelTrace.latencyMs, 'ms') },
+    { label: 'Token', value: tokenUsageText },
+    { label: 'Fallback', value: modelTrace.fallbackReason ?? '-' },
+    { label: '模型错误', value: modelTrace.modelErrorType ?? '-' },
+  ];
 }
 
 export function RunOverviewCard() {
@@ -119,7 +154,7 @@ export function RunOverviewCard() {
 
   const statusTone = getRunStatusTone(currentRun.status);
   const runPrompt = getRunPromptText(currentRun.prompt);
-  const overviewItems = [
+  const overviewItems: RunOverviewItem[] = [
     { label: '本轮问题', value: runPrompt, wide: true },
     { label: 'Run ID', value: currentRun.id },
     { label: '轮次', value: getRunRoundLabel(currentRun.id, currentSession?.messages ?? []) },
@@ -127,6 +162,7 @@ export function RunOverviewCard() {
     { label: '任务类型', value: getRunIntentLabel(currentRun.intent) },
     { label: '耗时', value: formatRunElapsed(currentRun) },
     { label: '结论来源', value: getConclusionSourceLabel(currentRun.conclusionSource) },
+    ...getModelTraceItems(currentRun.modelTrace),
   ];
 
   return (

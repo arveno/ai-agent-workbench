@@ -5,9 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildRealAgentAvailabilityView, type RealAgentAvailabilityView } from '@/services/agentAccessViewModel';
-import type { HealthCheckResponse } from '@/types/health';
 import type { ModelProviderStatusView } from '@/types/modelStatus';
-import { buildModelProviderStatusViews } from '@/utils/modelProviderStatus';
+import { buildModelProviderStatusViews } from '@/utils/modelSelectionStatus';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
@@ -21,30 +20,27 @@ interface ProviderOption {
 
 const PROVIDER_OPTIONS: ProviderOption[] = [
   {
-    id: 'mock',
+    id: 'mock-agent',
   },
   {
-    id: 'groq',
+    id: 'siliconflow-qwen-free',
+  },
+  {
+    id: 'siliconflow-glm-free',
+  },
+  {
+    id: 'zhipu-glm-flash-free',
   },
 ];
 
 const providerLogoMap: Partial<Record<ModelProviderId, string>> = {
-  groq: '/brands/groq.svg',
-  gemini: '/brands/gemini.svg',
-  openrouter: '/brands/openrouter.svg',
-  'openai-api-key': '/brands/openai.svg',
-  'codex-oauth': '/brands/openai.svg',
-  ollama: '/brands/ollama.svg',
 };
 
 const providerFallbackTextMap: Record<ModelProviderId, string> = {
-  mock: 'Mock',
-  groq: 'Groq',
-  gemini: 'Gemini',
-  openrouter: 'OR',
-  'openai-api-key': 'OpenAI',
-  'codex-oauth': 'OpenAI',
-  ollama: 'Ollama',
+  'mock-agent': 'Mock',
+  'siliconflow-qwen-free': 'Qwen',
+  'siliconflow-glm-free': 'GLM',
+  'zhipu-glm-flash-free': 'GLM',
 };
 
 type ModelTabId = 'all' | 'configured' | 'usable' | 'reserved';
@@ -64,7 +60,7 @@ const MODEL_TABS: ModelTabDefinition[] = [
   {
     id: 'configured',
     label: '已就绪',
-    description: '公开演示模式或服务端模型环境已配置的入口。',
+    description: '公开演示模式或服务端模型网关可用的入口。',
   },
   {
     id: 'usable',
@@ -86,7 +82,7 @@ interface ModelProviderLogoProps {
 function ModelProviderLogo({ providerId, alt }: ModelProviderLogoProps) {
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
 
-  if (providerId === 'mock') {
+  if (providerId === 'mock-agent') {
     return <AppIcon icon={icons.brand} size={20} />;
   }
 
@@ -125,8 +121,8 @@ function getCapabilityClassName(label: string): string {
 }
 
 function getKeySourceLabel(status: ModelProviderStatusView): string {
-  if (status.providerId === 'mock') {
-    return '不需要 Key';
+  if (status.providerId === 'mock-agent') {
+    return '本地模拟';
   }
 
   if (status.isReserved) {
@@ -134,10 +130,10 @@ function getKeySourceLabel(status: ModelProviderStatusView): string {
   }
 
   if (status.keySource === 'server_env') {
-    return '服务端 GROQ_API_KEY';
+    return '服务端托管';
   }
 
-  return status.providerId === 'groq' ? '服务端未配置' : '未配置';
+  return '服务端托管';
 }
 
 function getStreamingLabel(status: ModelProviderStatusView): string {
@@ -153,7 +149,7 @@ function getGatewayLabel(status: ModelProviderStatusView): string {
     return '已接入 Model Gateway';
   }
 
-  if (status.providerId === 'mock') {
+  if (status.providerId === 'mock-agent') {
     return '本地模拟，不走 Gateway';
   }
 
@@ -161,7 +157,7 @@ function getGatewayLabel(status: ModelProviderStatusView): string {
 }
 
 function isRealAgentEntryProvider(providerId: ModelProviderId): boolean {
-  return providerId === 'groq';
+  return providerId !== 'mock-agent';
 }
 
 function getRealAgentActionText(availability: RealAgentAvailabilityView): string {
@@ -193,12 +189,10 @@ function ModelConnectModalContent() {
   const agentAccess = useAuthStore((state) => state.agentAccess);
   const isAgentAccessLoading = useAuthStore((state) => state.isAgentAccessLoading);
   const openLoginModal = useAuthStore((state) => state.openLoginModal);
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
-  const modelConfigs = useWorkbenchStore((state) => state.modelConfigs);
+  const selectedModelId = useWorkbenchStore((state) => state.selectedModelId);
   const closeModelModal = useWorkbenchStore((state) => state.closeModelModal);
-  const setCurrentModelProvider = useWorkbenchStore((state) => state.setCurrentModelProvider);
+  const setSelectedModelId = useWorkbenchStore((state) => state.setSelectedModelId);
 
-  const [health, setHealth] = useState<HealthCheckResponse | null>(null);
   const [hasHealthFailed, setHasHealthFailed] = useState(false);
 
   useEffect(() => {
@@ -210,7 +204,7 @@ function ModelConnectModalContent() {
           return;
         }
 
-        setHealth(response);
+        void response;
         setHasHealthFailed(false);
       })
       .catch(() => {
@@ -229,11 +223,9 @@ function ModelConnectModalContent() {
   const providerStatusViews = useMemo(
     () =>
       buildModelProviderStatusViews({
-        currentModelProvider,
-        modelConfigs,
-        health,
+        selectedModelId,
       }),
-    [currentModelProvider, health, modelConfigs],
+    [selectedModelId],
   );
 
   const providerStatusMap = useMemo(
@@ -276,7 +268,7 @@ function ModelConnectModalContent() {
   };
 
   const canActivateProvider = (status: ModelProviderStatusView): boolean => {
-    if (status.providerId === 'mock') {
+    if (status.providerId === 'mock-agent') {
       return true;
     }
 
@@ -308,7 +300,7 @@ function ModelConnectModalContent() {
       return 'model-badge model-badge-green';
     }
 
-    if (status.providerId === 'mock') {
+    if (status.providerId === 'mock-agent') {
       return 'model-badge model-badge-blue';
     }
 
@@ -364,9 +356,9 @@ function ModelConnectModalContent() {
         <div className="model-modal-body">
           <Card className="model-modal-info-card" size="sm">
             <CardContent className="model-modal-info-content">
-              <p>当前线上 Demo 默认使用 Mock 模式，避免公开演示产生 API 成本。</p>
-              <p>模型调用由服务端受控转发，前端不接收、不保存、不传递模型 API Key。</p>
-              <p>真实 Agent 使用服务端 GROQ_API_KEY，并按 Agent Run 额度使用。</p>
+              <p>当前线上 Demo 可主动选择 Mock 模式，避免公开演示产生外部模型成本。</p>
+              <p>模型调用由服务端受控转发，前端只提交模型 ID。</p>
+              <p>真实 Agent 使用 CloudBase 函数端 Model Gateway，并按 Agent Run 额度使用。</p>
               {hasHealthFailed ? <p>服务端状态检查失败，当前仍可使用公开演示模式。</p> : null}
             </CardContent>
           </Card>
@@ -454,7 +446,7 @@ function ModelConnectModalContent() {
                                           return;
                                         }
 
-                                        setCurrentModelProvider(option.id);
+                                        setSelectedModelId(option.id);
                                       }}
                                     >
                                       {getProviderActionText(providerStatus)}
@@ -474,7 +466,7 @@ function ModelConnectModalContent() {
 
                                 <div className="model-provider-meta">
                                   <div className="model-provider-meta-item">
-                                    <span>Key 来源</span>
+                                    <span>配置来源</span>
                                     <strong>{getKeySourceLabel(providerStatus)}</strong>
                                   </div>
                                   <div className="model-provider-meta-item">

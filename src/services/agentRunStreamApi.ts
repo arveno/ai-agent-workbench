@@ -142,6 +142,7 @@ async function readAgentRunStreamError(response: Response): Promise<string> {
 export async function streamAgentRunAnalysis(params: {
   prompt: string;
   conversationId: string;
+  selectedModelId: string;
   clientRunId?: string;
   accessToken?: string | null;
   signal?: AbortSignal;
@@ -151,7 +152,7 @@ export async function streamAgentRunAnalysis(params: {
     prompt: params.prompt,
     provider: 'cloudbase_mysql',
     conversationId: params.conversationId,
-    modelProvider: 'groq',
+    selectedModelId: params.selectedModelId,
     clientRunId: params.clientRunId,
   });
 

@@ -17,26 +17,33 @@ import { Textarea } from '../ui/textarea';
 
 const MAX_PROMPT_LENGTH = 2000;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 180;
-type ChatModeProviderId = Extract<ModelProviderId, 'mock' | 'groq'>;
+type ChatModeProviderId = ModelProviderId;
 
 interface ChatModeOption {
   id: ChatModeProviderId;
   label: string;
-  description: string;
   icon: typeof icons.brand;
 }
 
 const CHAT_MODE_OPTIONS: ChatModeOption[] = [
   {
-    id: 'mock',
+    id: 'mock-agent',
     label: '公开演示 Mock',
-    description: 'Mock 模式，不消耗真实 Agent 额度。',
     icon: icons.brand,
   },
   {
-    id: 'groq',
-    label: '真实 Agent',
-    description: 'CloudBase 后端受控工具链。',
+    id: 'siliconflow-qwen-free',
+    label: 'Qwen Free',
+    icon: icons.agent,
+  },
+  {
+    id: 'siliconflow-glm-free',
+    label: 'SiliconFlow GLM',
+    icon: icons.agent,
+  },
+  {
+    id: 'zhipu-glm-flash-free',
+    label: 'Zhipu GLM Flash',
     icon: icons.agent,
   },
 ];
@@ -65,8 +72,8 @@ export function ChatInput() {
   const sendPrompt = useWorkbenchStore((state) => state.sendPrompt);
   const stopGenerating = useWorkbenchStore((state) => state.stopGenerating);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
-  const currentModelProvider = useWorkbenchStore((state) => state.currentModelProvider);
-  const setCurrentModelProvider = useWorkbenchStore((state) => state.setCurrentModelProvider);
+  const selectedModelId = useWorkbenchStore((state) => state.selectedModelId);
+  const setSelectedModelId = useWorkbenchStore((state) => state.setSelectedModelId);
   const openWorkflowModal = useWorkbenchStore((state) => state.openWorkflowModal);
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
@@ -74,11 +81,11 @@ export function ChatInput() {
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const isReadOnlySession = currentSession?.isReadOnly === true || currentSession?.visibility === 'demo';
-  const activeChatMode: ChatModeProviderId = currentModelProvider === 'groq' ? 'groq' : 'mock';
-  const isPublicDemoMode = activeChatMode === 'mock';
-  const isMockGenerating = currentModelProvider === 'mock' && generationStatus === 'streaming';
+  const activeChatMode: ChatModeProviderId = selectedModelId;
+  const isPublicDemoMode = activeChatMode === 'mock-agent';
+  const isMockGenerating = selectedModelId === 'mock-agent' && generationStatus === 'streaming';
   const isAgentRunning =
-    currentModelProvider === 'groq' &&
+    selectedModelId !== 'mock-agent' &&
     (agentRunStatus === 'running' || (currentRun?.mode === 'agent' && currentRun.status === 'running'));
   const isGenerating = isMockGenerating || isAgentRunning;
   const trimmedValue = chatDraft.trim();
@@ -92,9 +99,9 @@ export function ChatInput() {
   const activeModeOption = CHAT_MODE_OPTIONS.find((option) => option.id === activeChatMode) ?? CHAT_MODE_OPTIONS[0];
   const ActiveModeIcon = activeModeOption.icon;
   const activeModeStatusLabel =
-    activeChatMode === 'groq' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
+    activeChatMode !== 'mock-agent' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
   const shouldShowRealAgentNotice =
-    currentModelProvider === 'groq' && !realAgentAvailability.canEnterRealAgent && realAgentNotice;
+    selectedModelId !== 'mock-agent' && !realAgentAvailability.canEnterRealAgent && realAgentNotice;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -114,7 +121,7 @@ export function ChatInput() {
       return;
     }
 
-    if (currentModelProvider === 'groq' && !realAgentAvailability.canEnterRealAgent) {
+    if (selectedModelId !== 'mock-agent' && !realAgentAvailability.canEnterRealAgent) {
       setRealAgentNotice(getRealAgentBlockedMessage(realAgentAvailability));
 
       if (realAgentAvailability.status === 'login_required' && authView.isAuthConfigured) {
@@ -241,11 +248,11 @@ export function ChatInput() {
                   size="sm"
                   disabled={isGenerating || isReadOnlySession}
                   aria-label={`模型或模式选择：${activeModeOption.label}`}
-                  title={activeModeOption.description}
+                  title={activeModeOption.label}
                 >
                   <ActiveModeIcon size={14} aria-hidden="true" />
                   <span className="composer-mode-label">{activeModeOption.label}</span>
-                  <span className={`composer-mode-status composer-mode-status-${activeChatMode === 'groq' ? realAgentAvailability.status : 'available'}`}>
+                  <span className={`composer-mode-status composer-mode-status-${activeChatMode !== 'mock-agent' ? realAgentAvailability.status : 'available'}`}>
                     {activeModeStatusLabel}
                   </span>
                 </Button>
@@ -255,7 +262,7 @@ export function ChatInput() {
                   const Icon = option.icon;
                   const isActive = activeChatMode === option.id;
                   const statusLabel =
-                    option.id === 'groq' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
+                    option.id !== 'mock-agent' ? getRealAgentModeStatus(realAgentAvailability.status) : '可用';
 
                   return (
                     <DropdownMenuItem
@@ -263,15 +270,14 @@ export function ChatInput() {
                       className={isActive ? 'composer-menu-item composer-menu-item-active' : 'composer-menu-item'}
                       onSelect={() => {
                         setRealAgentNotice('');
-                        setCurrentModelProvider(option.id);
+                        setSelectedModelId(option.id);
                       }}
                     >
                       <Icon size={15} aria-hidden="true" />
                       <span className="composer-menu-copy">
                         <span className="composer-menu-title">{option.label}</span>
-                        <span className="composer-menu-description">{option.description}</span>
                       </span>
-                      <span className={`composer-mode-status composer-mode-status-${option.id === 'groq' ? realAgentAvailability.status : 'available'}`}>
+                      <span className={`composer-mode-status composer-mode-status-${option.id !== 'mock-agent' ? realAgentAvailability.status : 'available'}`}>
                         {statusLabel}
                       </span>
                     </DropdownMenuItem>

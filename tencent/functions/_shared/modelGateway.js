@@ -1,5 +1,9 @@
-const DEFAULT_GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
-const DEFAULT_GROQ_MODEL = 'llama-3.1-8b-instant';
+const DEFAULT_SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1';
+const DEFAULT_ZHIPU_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
+const DEFAULT_QWEN_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
+const DEFAULT_SILICONFLOW_GLM_MODEL = 'THUDM/GLM-4-9B-0414';
+const DEFAULT_ZHIPU_GLM_FLASH_MODEL = 'glm-4-flash-250414';
+const DEFAULT_REAL_MODEL_ID = 'siliconflow-qwen-free';
 const CHAT_COMPLETIONS_PATH = '/chat/completions';
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_TOKENS = 600;
@@ -11,10 +15,12 @@ class ModelGatewayError extends Error {
     this.name = 'ModelGatewayError';
     this.errorType = errorType;
     this.httpStatus = Number.isInteger(options.httpStatus) ? options.httpStatus : null;
+    this.selectedModelId = options.selectedModelId || null;
     this.provider = options.provider || null;
     this.model = options.model || null;
     this.hasApiKey = Boolean(options.hasApiKey);
     this.apiKeyLength = Number.isInteger(options.apiKeyLength) ? options.apiKeyLength : 0;
+    this.latencyMs = Number.isInteger(options.latencyMs) ? options.latencyMs : null;
   }
 }
 
@@ -22,67 +28,147 @@ function readEnv(name) {
   return typeof process.env[name] === 'string' ? process.env[name].trim() : '';
 }
 
-function hasModelGatewayEnv() {
-  return Boolean(
-    readEnv('MODEL_GATEWAY_PROVIDER') ||
-    readEnv('MODEL_GATEWAY_BASE_URL') ||
-    readEnv('MODEL_GATEWAY_API_KEY') ||
-    readEnv('MODEL_GATEWAY_MODEL'),
-  );
-}
-
 function stripTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
 }
 
-function createOpenAiCompatibleConfig() {
-  const provider = readEnv('MODEL_GATEWAY_PROVIDER') || 'openai-compatible';
-  const baseUrl = stripTrailingSlash(readEnv('MODEL_GATEWAY_BASE_URL'));
-  const apiKey = readEnv('MODEL_GATEWAY_API_KEY');
-  const model = readEnv('MODEL_GATEWAY_MODEL');
+function normalizeTimeoutMs(value, fallback) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? Math.trunc(numberValue) : fallback;
+}
+
+function getSharedTimeoutMs(fallback = DEFAULT_TIMEOUT_MS) {
+  return normalizeTimeoutMs(readEnv('MODEL_GATEWAY_TIMEOUT_MS'), fallback);
+}
+
+function createModelCatalog() {
+  const siliconflowBaseUrl = stripTrailingSlash(readEnv('SILICONFLOW_BASE_URL') || DEFAULT_SILICONFLOW_BASE_URL);
+  const zhipuBaseUrl = stripTrailingSlash(readEnv('ZHIPU_BASE_URL') || DEFAULT_ZHIPU_BASE_URL);
 
   return {
-    provider,
-    baseUrl,
-    apiKey,
-    model,
-    source: 'model_gateway',
-    compatibility: 'openai-compatible',
-    hasApiKey: Boolean(apiKey),
-    apiKeyLength: apiKey.length,
-    isConfigured: provider === 'openai-compatible' && Boolean(baseUrl && apiKey && model),
+    'siliconflow-qwen-free': {
+      id: 'siliconflow-qwen-free',
+      provider: 'siliconflow',
+      displayName: 'SiliconFlow Qwen Free',
+      apiKeyEnv: 'SILICONFLOW_API_KEY',
+      baseUrl: siliconflowBaseUrl,
+      model: readEnv('SILICONFLOW_MODEL_QWEN') || DEFAULT_QWEN_MODEL,
+      timeoutMs: getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+      enabled: true,
+      billingType: 'free',
+    },
+    'siliconflow-glm-free': {
+      id: 'siliconflow-glm-free',
+      provider: 'siliconflow',
+      displayName: 'SiliconFlow GLM Free',
+      apiKeyEnv: 'SILICONFLOW_API_KEY',
+      baseUrl: siliconflowBaseUrl,
+      model: readEnv('SILICONFLOW_MODEL_GLM') || DEFAULT_SILICONFLOW_GLM_MODEL,
+      timeoutMs: getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+      enabled: true,
+      billingType: 'free',
+    },
+    'zhipu-glm-flash-free': {
+      id: 'zhipu-glm-flash-free',
+      provider: 'zhipu',
+      displayName: 'Zhipu GLM Flash Free',
+      apiKeyEnv: 'ZHIPU_API_KEY',
+      baseUrl: zhipuBaseUrl,
+      model: readEnv('ZHIPU_MODEL_GLM_FLASH') || DEFAULT_ZHIPU_GLM_FLASH_MODEL,
+      timeoutMs: getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+      enabled: true,
+      billingType: 'free',
+    },
   };
 }
 
-function createGroqCompatibleConfig() {
-  const apiKey = readEnv('GROQ_API_KEY');
-  const model = readEnv('GROQ_MODEL') || DEFAULT_GROQ_MODEL;
+function getModelCatalog() {
+  return Object.values(createModelCatalog()).map((item) => ({ ...item }));
+}
 
+function normalizeSelectedModelId(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : DEFAULT_REAL_MODEL_ID;
+}
+
+function createUnconfiguredConfig(selectedModelId, errorType, message, base = {}) {
   return {
-    provider: 'groq',
-    baseUrl: DEFAULT_GROQ_BASE_URL,
-    apiKey,
-    model,
-    source: 'groq_compat',
-    compatibility: 'groq-openai-compatible',
-    hasApiKey: Boolean(apiKey),
-    apiKeyLength: apiKey.length,
-    isConfigured: Boolean(apiKey && model),
+    id: selectedModelId || null,
+    selectedModelId: selectedModelId || null,
+    provider: base.provider || null,
+    displayName: base.displayName || null,
+    apiKeyEnv: base.apiKeyEnv || null,
+    baseUrl: base.baseUrl || null,
+    model: base.model || null,
+    timeoutMs: base.timeoutMs || getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+    enabled: base.enabled !== false,
+    billingType: base.billingType || 'free',
+    hasApiKey: false,
+    apiKeyLength: 0,
+    isConfigured: false,
+    configErrorType: errorType,
+    configErrorMessage: message,
   };
 }
 
-function getModelGatewayConfig() {
-  return hasModelGatewayEnv() ? createOpenAiCompatibleConfig() : createGroqCompatibleConfig();
+function getModelGatewayConfig(selectedModelId) {
+  const normalizedModelId = normalizeSelectedModelId(selectedModelId);
+  const catalog = createModelCatalog();
+  const catalogItem = catalog[normalizedModelId];
+
+  if (!catalogItem) {
+    return createUnconfiguredConfig(
+      normalizedModelId,
+      'invalid_model',
+      `selectedModelId is not allowed: ${normalizedModelId}`,
+    );
+  }
+
+  const apiKey = readEnv(catalogItem.apiKeyEnv);
+  const baseConfig = {
+    ...catalogItem,
+    selectedModelId: catalogItem.id,
+    apiKey,
+    hasApiKey: Boolean(apiKey),
+    apiKeyLength: apiKey.length,
+  };
+
+  if (!catalogItem.enabled) {
+    return {
+      ...baseConfig,
+      isConfigured: false,
+      configErrorType: 'model_disabled',
+      configErrorMessage: `Model is disabled: ${catalogItem.id}`,
+    };
+  }
+
+  if (!apiKey || !catalogItem.baseUrl || !catalogItem.model) {
+    return {
+      ...baseConfig,
+      isConfigured: false,
+      configErrorType: 'model_not_configured',
+      configErrorMessage: `Model gateway env is not configured for ${catalogItem.id}.`,
+    };
+  }
+
+  return {
+    ...baseConfig,
+    isConfigured: true,
+    configErrorType: null,
+    configErrorMessage: null,
+  };
+}
+
+function getSensitiveValues() {
+  return [
+    readEnv('SILICONFLOW_API_KEY'),
+    readEnv('ZHIPU_API_KEY'),
+  ].filter(Boolean);
 }
 
 function sanitizeMessage(value) {
   let message = String(value || '');
-  const sensitiveValues = [
-    readEnv('MODEL_GATEWAY_API_KEY'),
-    readEnv('GROQ_API_KEY'),
-  ].filter(Boolean);
 
-  for (const sensitiveValue of sensitiveValues) {
+  for (const sensitiveValue of getSensitiveValues()) {
     message = message.split(sensitiveValue).join('[redacted]');
   }
 
@@ -95,14 +181,16 @@ function sanitizeMessage(value) {
 function createModelGatewayError(errorType, message, config, options = {}) {
   return new ModelGatewayError(errorType, sanitizeMessage(message || errorType), {
     httpStatus: options.httpStatus,
+    selectedModelId: config?.selectedModelId || config?.id || null,
     provider: config?.provider || null,
     model: config?.model || null,
     hasApiKey: Boolean(config?.hasApiKey),
     apiKeyLength: Number(config?.apiKeyLength) || 0,
+    latencyMs: options.latencyMs,
   });
 }
 
-function classifyModelError(params = {}) {
+function classifyProviderError(params = {}) {
   const status = Number(params.httpStatus);
   const message = String(params.message || '').toLowerCase();
   const errorName = String(params.errorName || '').toLowerCase();
@@ -115,13 +203,15 @@ function classifyModelError(params = {}) {
     return 'model_timeout';
   }
 
-  if (status === 401 || message.includes('invalid api key') || message.includes('unauthorized')) {
-    return 'model_unauthorized';
+  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
+    return 'rate_limited';
   }
 
   if (
+    status === 401 ||
     status === 403 ||
     message.includes('forbidden') ||
+    message.includes('unauthorized') ||
     message.includes('permission') ||
     message.includes('not allowed') ||
     message.includes('country') ||
@@ -144,15 +234,11 @@ function classifyModelError(params = {}) {
       )
     )
   ) {
-    return 'model_not_found';
-  }
-
-  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
-    return 'model_rate_limited';
+    return 'invalid_model';
   }
 
   if (params.parseFailed) {
-    return 'model_response_parse_failed';
+    return 'provider_bad_response';
   }
 
   if (
@@ -163,10 +249,14 @@ function classifyModelError(params = {}) {
     message.includes('enotfound') ||
     message.includes('etimedout')
   ) {
-    return 'model_network_error';
+    return 'provider_error';
   }
 
-  return 'model_failed';
+  if (status >= 500) {
+    return 'provider_error';
+  }
+
+  return 'provider_error';
 }
 
 async function readErrorResponse(response) {
@@ -215,22 +305,45 @@ function createRequestBody(params) {
   });
 }
 
+function normalizeUsageNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue >= 0 ? Math.trunc(numberValue) : null;
+}
+
+function normalizeTokenUsage(usage) {
+  if (!usage || typeof usage !== 'object') {
+    return null;
+  }
+
+  const promptTokens = normalizeUsageNumber(usage.prompt_tokens ?? usage.promptTokens);
+  const completionTokens = normalizeUsageNumber(usage.completion_tokens ?? usage.completionTokens);
+  const totalTokens = normalizeUsageNumber(usage.total_tokens ?? usage.totalTokens);
+
+  if (promptTokens === null && completionTokens === null && totalTokens === null) {
+    return null;
+  }
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  };
+}
+
 async function streamChatCompletion(params) {
-  const config = getModelGatewayConfig();
+  const config = getModelGatewayConfig(params.selectedModelId);
 
   if (!config.isConfigured) {
     throw createModelGatewayError(
-      'model_not_configured',
-      config.source === 'model_gateway'
-        ? 'MODEL_GATEWAY_BASE_URL, MODEL_GATEWAY_API_KEY, MODEL_GATEWAY_MODEL, and MODEL_GATEWAY_PROVIDER=openai-compatible are required.'
-        : 'GROQ_API_KEY is not configured.',
+      config.configErrorType || 'model_not_configured',
+      config.configErrorMessage || 'Model gateway is not configured.',
       config,
     );
   }
 
+  const startedAt = Date.now();
   const controller = new AbortController();
-  const timeoutMs = Number(process.env.MODEL_GATEWAY_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  const timeout = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) ? timeoutMs : DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   let response;
 
   try {
@@ -249,27 +362,32 @@ async function streamChatCompletion(params) {
       }),
     });
   } catch (error) {
-    throw createModelGatewayError(classifyModelError({
+    clearTimeout(timeout);
+    throw createModelGatewayError(classifyProviderError({
       errorName: error && error.name,
       message: error && error.message,
-    }), error && error.message ? error.message : 'Model gateway fetch failed.', config);
-  } finally {
-    clearTimeout(timeout);
+    }), error && error.message ? error.message : 'Model gateway fetch failed.', config, {
+      latencyMs: Math.max(Date.now() - startedAt, 1),
+    });
   }
 
   if (!response.ok) {
     const errorMessage = await readErrorResponse(response);
-    throw createModelGatewayError(classifyModelError({
+    clearTimeout(timeout);
+    throw createModelGatewayError(classifyProviderError({
       httpStatus: response.status,
       message: errorMessage,
     }), errorMessage || response.statusText || 'Model gateway stream request failed.', config, {
       httpStatus: response.status,
+      latencyMs: Math.max(Date.now() - startedAt, 1),
     });
   }
 
   if (!response.body) {
-    throw createModelGatewayError('model_response_parse_failed', 'Model gateway stream response did not include a body.', config, {
+    clearTimeout(timeout);
+    throw createModelGatewayError('provider_bad_response', 'Model gateway stream response did not include a body.', config, {
       httpStatus: response.status,
+      latencyMs: Math.max(Date.now() - startedAt, 1),
     });
   }
 
@@ -277,6 +395,7 @@ async function streamChatCompletion(params) {
   const decoder = new TextDecoder();
   let buffer = '';
   let text = '';
+  let tokenUsage = null;
   let parseFailedCount = 0;
 
   function flushLines(isFinal = false) {
@@ -303,7 +422,12 @@ async function streamChatCompletion(params) {
 
       try {
         const event = JSON.parse(dataText);
+        const usage = normalizeTokenUsage(event?.usage);
         const delta = event?.choices?.[0]?.delta?.content || event?.choices?.[0]?.text || '';
+
+        if (usage) {
+          tokenUsage = usage;
+        }
 
         if (delta) {
           text += delta;
@@ -317,71 +441,93 @@ async function streamChatCompletion(params) {
     }
   }
 
-  while (true) {
-    const { done, value } = await reader.read();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
 
-    if (done) {
-      break;
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      flushLines();
     }
 
-    buffer += decoder.decode(value, { stream: true });
-    flushLines();
+    buffer += decoder.decode();
+    flushLines(true);
+  } catch (error) {
+    throw createModelGatewayError(classifyProviderError({
+      errorName: error && error.name,
+      message: error && error.message,
+    }), error && error.message ? error.message : 'Model gateway stream read failed.', config, {
+      httpStatus: response.status,
+      latencyMs: Math.max(Date.now() - startedAt, 1),
+    });
+  } finally {
+    clearTimeout(timeout);
   }
 
-  buffer += decoder.decode();
-  flushLines(true);
+  const latencyMs = Math.max(Date.now() - startedAt, 1);
 
   if (!text.trim()) {
     throw createModelGatewayError(
-      parseFailedCount > 0 ? 'model_response_parse_failed' : 'model_failed',
+      'provider_bad_response',
       parseFailedCount > 0
         ? `Model gateway stream response parse failed ${parseFailedCount} time(s).`
         : 'Model gateway stream returned empty text.',
       config,
-      { httpStatus: response.status },
+      { httpStatus: response.status, latencyMs },
     );
   }
 
   return {
     text,
+    selectedModelId: config.selectedModelId,
     provider: config.provider,
     model: config.model,
-    source: config.source,
+    displayName: config.displayName,
+    billingType: config.billingType,
+    latencyMs,
+    tokenUsage,
   };
 }
 
 function normalizeModelError(error) {
-  const config = getModelGatewayConfig();
-
   if (error instanceof ModelGatewayError) {
     return {
+      selectedModelId: error.selectedModelId,
       errorType: error.errorType,
       httpStatus: error.httpStatus,
       message: sanitizeMessage(error.message),
-      provider: error.provider || config.provider,
-      model: error.model || config.model || null,
+      provider: error.provider || null,
+      model: error.model || null,
       hasApiKey: error.hasApiKey,
       apiKeyLength: error.apiKeyLength,
+      latencyMs: error.latencyMs,
     };
   }
 
   const message = error && error.message ? error.message : String(error || 'Unknown model gateway error.');
 
   return {
-    errorType: classifyModelError({
+    selectedModelId: null,
+    errorType: classifyProviderError({
       errorName: error && error.name,
       message,
     }),
     httpStatus: null,
     message: sanitizeMessage(message),
-    provider: config.provider,
-    model: config.model || null,
-    hasApiKey: config.hasApiKey,
-    apiKeyLength: config.apiKeyLength,
+    provider: null,
+    model: null,
+    hasApiKey: false,
+    apiKeyLength: 0,
+    latencyMs: null,
   };
 }
 
 module.exports = {
+  DEFAULT_REAL_MODEL_ID,
+  getModelCatalog,
   getModelGatewayConfig,
   normalizeModelError,
   streamChatCompletion,

@@ -211,6 +211,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       await streamAgentRunAnalysis({
         prompt,
         conversationId: sessionId,
+        selectedModelId: state.selectedModelId,
         clientRunId: runId,
         accessToken,
         signal: abortController.signal,

@@ -1,6 +1,7 @@
 import type { ChatBlock } from '@/types/chatBlocks';
 import type { RunSnapshot } from '@/types/run';
 import type { WorkbenchMessage, WorkbenchSession } from '@/types/workbench';
+import { createConclusionViewModel } from './runConclusionViewModel';
 import { shouldShowReportConfirm } from './run';
 
 export interface BuildChatBlocksParams {
@@ -105,13 +106,21 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
   const insertedStoppedRunIds = new Set<string>();
 
   for (const message of session.messages) {
+    const run = getRunForMessage(message, session, currentRun);
+    const canonicalConclusion = run ? createConclusionViewModel(run).fullMarkdownText : '';
+    const displayMessage =
+      message.role === 'assistant' && message.kind === 'normal' && canonicalConclusion.trim()
+        ? {
+            ...message,
+            content: canonicalConclusion,
+          }
+        : message;
+
     blocks.push({
       type: 'message',
       id: `message:${message.id}`,
-      message,
+      message: displayMessage,
     });
-
-    const run = getRunForMessage(message, session, currentRun);
 
     if (!run) {
       continue;

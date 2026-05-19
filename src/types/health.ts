@@ -14,7 +14,7 @@ export interface HealthCheckResponse {
   environment: HealthEnvironment;
   checkedAt: string;
   services: {
-    groq: HealthServiceStatus;
+    modelGateway: HealthServiceStatus;
     supabase: HealthServiceStatus;
     postgres: HealthServiceStatus;
   };

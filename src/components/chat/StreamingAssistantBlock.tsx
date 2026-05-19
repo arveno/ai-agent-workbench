@@ -8,7 +8,7 @@ interface StreamingAssistantBlockProps {
 }
 
 export function StreamingAssistantBlock({ run }: StreamingAssistantBlockProps) {
-  const content = run.conclusion.trim() || '正在分析问题并准备调用工具...';
+  const content = run.agentConclusion?.markdownText.trim() || run.conclusion.trim() || '正在分析问题并准备调用工具...';
 
   return (
     <div className="message-row message-row-assistant">

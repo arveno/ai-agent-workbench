@@ -94,7 +94,12 @@ function loadSharedModule(name) {
 }
 
 const { authenticateRequest } = loadSharedModule('auth');
-const { getModelGatewayConfig, normalizeModelError, streamChatCompletion } = loadSharedModule('modelGateway');
+const {
+  DEFAULT_REAL_MODEL_ID,
+  getModelGatewayConfig,
+  normalizeModelError,
+  streamChatCompletion,
+} = loadSharedModule('modelGateway');
 const {
   assertNoQueryError,
   extractMutationCount,
@@ -222,6 +227,10 @@ function readRequiredString(value, message) {
 
 function readOptionalString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function readSelectedModelId(value) {
+  return readOptionalString(value) || DEFAULT_REAL_MODEL_ID;
 }
 
 function normalizeNumber(value, fallback = 0) {
@@ -517,7 +526,7 @@ async function updateQuotaUsedAtomically(db, currentUser, quota) {
   };
 }
 
-async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'cloudbase-agent-run-basic-loop') {
+async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'cloudbase-agent-run-real') {
   let updatedQuota = await ensureMonthlyQuota(db, currentUser);
 
   if (!isAdmin(currentUser)) {
@@ -594,6 +603,22 @@ async function finishUsage(db, currentUser, usageId, status, errorCode, metadata
   assertNoQueryError(updateResult);
 }
 
+function createAgentRunMetadata(context, extra = {}) {
+  return {
+    source: 'cloudbase-agent-run-real',
+    clientRunId: context.clientRunId,
+    clientRunIdMissing: Boolean(context.clientRunIdMissing),
+    provider: context.provider || 'mock',
+    dataProvider: context.provider || 'mock',
+    selectedModelId: context.selectedModelId || null,
+    modelTrace: context.modelTrace || null,
+    conclusionSource: context.conclusionSource || null,
+    agentConclusion: context.agentConclusion || null,
+    fallbackReason: context.fallbackReason || null,
+    ...extra,
+  };
+}
+
 async function createAgentRun(db, currentUser, context, options = {}) {
   try {
     const insertResult = await db.from('agent_runs').insert({
@@ -613,12 +638,7 @@ async function createAgentRun(db, currentUser, context, options = {}) {
       conclusion: null,
       conclusion_source: null,
       report_state: context.reportState || 'hidden',
-      metadata: JSON.stringify({
-        source: context.agentMode === 'real' ? 'cloudbase-agent-run-real' : 'cloudbase-agent-run-basic-loop',
-        clientRunId: context.clientRunId,
-        clientRunIdMissing: Boolean(context.clientRunIdMissing),
-        provider: context.provider || 'mock',
-      }),
+      metadata: JSON.stringify(createAgentRunMetadata(context)),
     });
 
     assertNoQueryError(insertResult);
@@ -694,13 +714,9 @@ async function rejectAgentRunBeforeStart(db, currentUser, context, errorCode, er
       status: 'failed',
       completed_at: toMysqlDateTime(new Date()),
       error_message: errorMessage ? String(errorMessage).slice(0, 1000) : errorCode,
-      metadata: JSON.stringify({
-        source: context.agentMode === 'real' ? 'cloudbase-agent-run-real' : 'cloudbase-agent-run-basic-loop',
-        clientRunId: context.clientRunId,
-        clientRunIdMissing: Boolean(context.clientRunIdMissing),
-        provider: context.provider || 'mock',
+      metadata: JSON.stringify(createAgentRunMetadata(context, {
         errorCode,
-      }),
+      })),
     })
     .eq('id', context.runId)
     .eq('_openid', currentUser.openid)
@@ -727,6 +743,13 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
         type: 'mock_summary',
         assistantMessageId,
       }),
+      metadata: JSON.stringify(createAgentRunMetadata(context, {
+        assistantMessageId,
+        modelTrace: context.modelTrace || null,
+        conclusionSource: options.conclusionSource || context.conclusionSource || 'fallback',
+        agentConclusion: context.agentConclusion || null,
+        fallbackReason: context.fallbackReason || null,
+      })),
     })
     .eq('id', context.runId)
     .eq('_openid', currentUser.openid)
@@ -762,6 +785,9 @@ async function failAgentRun(db, currentUser, context, status, errorMessage) {
       plan: JSON.stringify(context.planSnapshot || {}),
       data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || {}),
       error_message: errorMessage ? String(errorMessage).slice(0, 1000) : null,
+      metadata: JSON.stringify(createAgentRunMetadata(context, {
+        errorMessage: errorMessage ? String(errorMessage).slice(0, 1000) : null,
+      })),
     })
     .eq('id', context.runId)
     .eq('_openid', currentUser.openid)
@@ -799,54 +825,6 @@ async function appendRunEvent(db, currentUser, context, event) {
   });
 
   assertNoQueryError(insertResult);
-}
-
-async function createToolInvocation(db, currentUser, context, toolInvocationId) {
-  const input = {
-    prompt: context.prompt,
-    mode: 'mock_basic_loop',
-  };
-
-  const insertResult = await db.from('tool_invocations').insert({
-    id: toolInvocationId,
-    _openid: currentUser.openid,
-    user_id: currentUser.userId,
-    run_id: context.runId,
-    conversation_id: context.conversationId,
-    tool_name: 'mock_analysis',
-    display_name: 'Mock Analysis',
-    status: 'running',
-    input: JSON.stringify(input),
-    input_summary: '固定 Agent Run 基础闭环 mock 工具输入',
-    output: JSON.stringify({}),
-    output_summary: null,
-    metadata: JSON.stringify({
-      source: 'cloudbase-agent-run-basic-loop',
-    }),
-  });
-
-  assertNoQueryError(insertResult);
-}
-
-async function completeToolInvocation(db, currentUser, context, toolInvocationId, startedAt, output) {
-  const updateResult = await db
-    .from('tool_invocations')
-    .update({
-      status: 'completed',
-      output: JSON.stringify(output),
-      output_summary: output.summary,
-      finished_at: toMysqlDateTime(new Date()),
-      elapsed_ms: Math.max(Date.now() - startedAt, 1),
-      metadata: JSON.stringify({
-        source: 'cloudbase-agent-run-basic-loop',
-        runId: context.runId,
-      }),
-    })
-    .eq('id', toolInvocationId)
-    .eq('_openid', currentUser.openid)
-    .eq('user_id', currentUser.userId);
-
-  assertNoQueryError(updateResult);
 }
 
 function mapMessage(row) {
@@ -920,12 +898,17 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
         sourceDocumentIds: Array.isArray(metadata.sourceDocumentIds) ? metadata.sourceDocumentIds : [],
         conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
         fallbackReason: metadata.fallbackReason || null,
-        modelProvider: metadata.modelProvider || context.modelDiagnostics?.modelProvider || null,
-        modelName: metadata.modelName || context.modelDiagnostics?.modelName || null,
+        selectedModelId: metadata.selectedModelId || context.modelTrace?.selectedModelId || context.selectedModelId || null,
+        provider: metadata.provider || context.modelTrace?.provider || null,
+        model: metadata.model || context.modelTrace?.model || null,
+        latencyMs: Number.isInteger(metadata.latencyMs) ? metadata.latencyMs : (context.modelTrace?.latencyMs ?? null),
+        tokenUsage: metadata.tokenUsage || context.modelTrace?.tokenUsage || null,
+        modelTrace: metadata.modelTrace || context.modelTrace || null,
+        agentConclusion: metadata.agentConclusion || context.agentConclusion || null,
         modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
         modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
         modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
-        agentMode: context.agentMode || 'basic',
+        agentMode: 'real',
         runtimeRunId: context.runtimeRunId,
       }),
     });
@@ -1035,7 +1018,9 @@ function createRunSnapshot(context, options = {}) {
     chartData: options.chartData || context.chartData,
     conclusion: options.conclusion || context.conclusion || '',
     conclusionSource: options.conclusionSource || context.conclusionSource || 'none',
+    agentConclusion: options.agentConclusion || context.agentConclusion,
     conclusionNotice: options.conclusionNotice || context.conclusionNotice,
+    modelTrace: options.modelTrace || context.modelTrace,
     reportState: options.reportState || context.reportState || 'hidden',
     createdAt,
     updatedAt: nowIso(),
@@ -1738,6 +1723,22 @@ function buildChartTitle(plan) {
   return `${timePrefix}${comparisonText}${getMetricLabel(plan.metric)}${suffix}` || `${getMetricLabel(plan.metric)}${suffix}`;
 }
 
+const MODEL_FALLBACK_REASONS = new Set([
+  'invalid_model',
+  'model_disabled',
+  'model_not_configured',
+  'model_timeout',
+  'rate_limited',
+  'model_forbidden',
+  'provider_error',
+  'provider_bad_response',
+  'model_failed',
+]);
+
+function isModelFallbackReason(fallbackReason) {
+  return MODEL_FALLBACK_REASONS.has(String(fallbackReason || ''));
+}
+
 function buildFallbackConclusion(plan, chartResult, fallbackReason) {
   const metricName = getMetricLabel(plan.metric);
   const groupByName = getGroupByLabel(plan.groupBy);
@@ -1779,7 +1780,7 @@ function buildFallbackConclusion(plan, chartResult, fallbackReason) {
     ].join('\n\n');
   }
 
-  if (String(fallbackReason || '').startsWith('model_')) {
+  if (isModelFallbackReason(fallbackReason)) {
     return [
       `数据工具已从 CloudBase MySQL 的 \`teaching_metrics\` 表读取并聚合教学质量数据${timeRangeLabel !== '未指定' ? `，时间范围为“${timeRangeLabel}”` : ''}。`,
       `模型结论生成失败，fallbackReason=${fallbackReason}。当前回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。`,
@@ -2120,7 +2121,7 @@ function buildKnowledgeFallbackAnswer(searchResult, fallbackReason) {
     `- ${chunk.citationLabel} ${chunk.title}：${chunk.contentPreview}`
   ));
 
-  if (String(fallbackReason || '').startsWith('model_')) {
+  if (isModelFallbackReason(fallbackReason)) {
     return [
       '已从 CloudBase MySQL 知识库检索到相关片段，但模型生成不可用，因此使用结构化 fallback 回答，不会伪装成模型输出。',
       '',
@@ -2194,12 +2195,336 @@ function buildConclusionMessages(context) {
   ];
 }
 
-function createConfiguredModelDiagnostics(errorType, errorMessage) {
-  const config = getModelGatewayConfig();
+function normalizeModelTraceNumber(value) {
+  return Number.isInteger(value) ? value : null;
+}
+
+const CONCLUSION_SECTION_FIELDS = [
+  { title: '关键发现', keys: ['keyFindings', 'key_findings', 'findings'] },
+  { title: '可能原因', keys: ['possibleCauses', 'possible_causes', 'causes'] },
+  { title: '下一步建议', keys: ['nextSteps', 'next_steps', 'recommendations', 'suggestions'] },
+  { title: '摘要', keys: ['summary'] },
+  { title: '结论', keys: ['conclusion'] },
+];
+const CONCLUSION_SECTION_TITLES = CONCLUSION_SECTION_FIELDS.map((field) => field.title);
+
+function toAgentConclusionSource(source) {
+  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
+}
+
+function stripConclusionJsonFence(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+}
+
+function cleanConclusionText(value) {
+  return String(value || '')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/^```(?:\w+)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+[.)、]\s*/gm, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function normalizeConclusionMarkdownText(value) {
+  return String(value || '')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+}
+
+function createPlainTextFromMarkdown(value) {
+  return cleanConclusionText(value);
+}
+
+function stringifyConclusionValue(value) {
+  if (typeof value === 'string') {
+    return cleanConclusionText(value);
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => stringifyConclusionValue(item)).filter(Boolean).join('；');
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).map((item) => stringifyConclusionValue(item)).filter(Boolean).join('；');
+  }
+
+  return '';
+}
+
+function stringifyConclusionMarkdownValue(value) {
+  if (typeof value === 'string') {
+    return normalizeConclusionMarkdownText(value);
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => stringifyConclusionMarkdownValue(item)).filter(Boolean).map((item) => (
+      item.startsWith('- ') ? item : `- ${item}`
+    )).join('\n');
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).map((item) => stringifyConclusionMarkdownValue(item)).filter(Boolean).join('\n\n');
+  }
+
+  return '';
+}
+
+function getConclusionFieldValue(record, keys) {
+  for (const key of keys) {
+    if (record[key] !== undefined && record[key] !== null) {
+      return record[key];
+    }
+  }
+
+  return undefined;
+}
+
+function parseConclusionJson(value) {
+  const candidate = stripConclusionJsonFence(value);
+  const looksLikeJson =
+    (candidate.startsWith('{') && candidate.endsWith('}')) ||
+    (candidate.startsWith('[') && candidate.endsWith(']')) ||
+    (candidate.startsWith('"') && candidate.endsWith('"'));
+
+  if (!looksLikeJson) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeConclusionSections(sections) {
+  const normalizedSections = sections
+    .map((section) => ({
+      title: cleanConclusionText(section.title),
+      content: cleanConclusionText(section.content),
+    }))
+    .filter((section) => section.title && section.content);
+
+  return normalizedSections.length > 0 ? normalizedSections : null;
+}
+
+function createConclusionPlainText(sections) {
+  return sections ? sections.map((section) => `${section.title}：${section.content}`).join('\n\n') : '';
+}
+
+function createConclusionMarkdownText(sections) {
+  return sections ? sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n') : '';
+}
+
+function extractConclusionSectionsFromMarkdown(value) {
+  const normalizedValue = normalizeConclusionMarkdownText(value);
+  const sections = [];
+  let currentSection = null;
+
+  for (const line of normalizedValue.split('\n')) {
+    const matchedSection = matchConclusionSectionLine(line);
+
+    if (matchedSection) {
+      if (currentSection && currentSection.content.trim()) {
+        sections.push(currentSection);
+      }
+
+      currentSection = matchedSection;
+      continue;
+    }
+
+    if (currentSection && line.trim()) {
+      currentSection = {
+        ...currentSection,
+        content: [currentSection.content, cleanConclusionText(line)].filter(Boolean).join(' '),
+      };
+    }
+  }
+
+  if (currentSection && currentSection.content.trim()) {
+    sections.push(currentSection);
+  }
+
+  return normalizeConclusionSections(sections);
+}
+
+function normalizeParsedConclusion(value) {
+  if (typeof value === 'string') {
+    return normalizeConclusionText(value);
+  }
+
+  if (Array.isArray(value)) {
+    const markdownText = stringifyConclusionMarkdownValue(value);
+
+    return {
+      markdownText,
+      plainText: createPlainTextFromMarkdown(markdownText),
+    };
+  }
+
+  if (!isRecord(value)) {
+    return {
+      markdownText: '',
+      plainText: '',
+    };
+  }
+
+  const primaryValue = getConclusionFieldValue(value, ['content', 'markdownText', 'markdown', 'conclusion', 'summary']);
+
+  if (primaryValue !== undefined) {
+    const markdownText = stringifyConclusionMarkdownValue(primaryValue);
+
+    return {
+      markdownText,
+      plainText: createPlainTextFromMarkdown(markdownText),
+      sections: extractConclusionSectionsFromMarkdown(markdownText),
+    };
+  }
+
+  const sections = normalizeConclusionSections(
+    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => ({
+      title,
+      content: stringifyConclusionValue(getConclusionFieldValue(value, keys)),
+    })),
+  );
+
+  if (sections) {
+    const markdownText = createConclusionMarkdownText(sections);
+
+    return {
+      markdownText,
+      plainText: createConclusionPlainText(sections),
+      sections,
+    };
+  }
 
   return {
-    modelProvider: config.provider || null,
-    modelName: config.model || null,
+    markdownText: '',
+    plainText: '',
+  };
+}
+
+function matchConclusionSectionLine(line) {
+  const titleAlternatives = CONCLUSION_SECTION_TITLES.join('|');
+  const labelPattern = new RegExp(
+    `^\\s*(?:\\d+[.)、]\\s*)?(?:[-*+]\\s*)?(?:#{1,6}\\s*)?(?:\\*\\*)?\\s*(${titleAlternatives})\\s*(?:\\*\\*)?\\s*[：:]\\s*(.*)$`,
+  );
+  const headingPattern = new RegExp(
+    `^\\s*(?:\\d+[.)、]\\s*)?(?:[-*+]\\s*)?(?:#{1,6}\\s*)?(?:\\*\\*)?\\s*(${titleAlternatives})\\s*(?:\\*\\*)?\\s*$`,
+  );
+  const labelMatch = line.match(labelPattern);
+
+  if (labelMatch) {
+    return {
+      title: labelMatch[1],
+      content: labelMatch[2] || '',
+    };
+  }
+
+  const headingMatch = line.match(headingPattern);
+
+  if (headingMatch) {
+    return {
+      title: headingMatch[1],
+      content: '',
+    };
+  }
+
+  return null;
+}
+
+function normalizeConclusionText(value) {
+  const markdownText = normalizeConclusionMarkdownText(value);
+  const sections = extractConclusionSectionsFromMarkdown(markdownText);
+
+  return {
+    markdownText,
+    plainText: sections ? createConclusionPlainText(sections) : createPlainTextFromMarkdown(markdownText),
+    ...(sections ? { sections } : {}),
+  };
+}
+
+function normalizeAgentConclusion(source, rawText) {
+  const rawValue = typeof rawText === 'string' ? rawText.trim() : '';
+  const parsedJson = rawValue ? parseConclusionJson(rawValue) : null;
+  const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
+  const markdownText = normalized.markdownText || normalizeConclusionMarkdownText(rawValue);
+  const plainText = normalized.plainText || createPlainTextFromMarkdown(markdownText);
+
+  return {
+    source: toAgentConclusionSource(source),
+    markdownText,
+    plainText,
+    ...(normalized.sections ? { sections: normalized.sections } : {}),
+    ...(rawValue && rawValue !== markdownText ? { rawText: rawValue } : {}),
+  };
+}
+
+function setCanonicalConclusion(context, rawText, source) {
+  const agentConclusion = normalizeAgentConclusion(source, rawText);
+
+  context.agentConclusion = agentConclusion;
+  context.conclusion = agentConclusion.markdownText;
+  context.conclusionSource = source;
+
+  return agentConclusion;
+}
+
+function createModelTrace(params = {}) {
+  return {
+    selectedModelId: params.selectedModelId || null,
+    provider: params.provider || null,
+    model: params.model || null,
+    latencyMs: normalizeModelTraceNumber(params.latencyMs),
+    tokenUsage: params.tokenUsage || null,
+    fallbackReason: params.fallbackReason || null,
+    modelErrorType: params.modelErrorType || null,
+    conclusionSource: params.conclusionSource || 'none',
+  };
+}
+
+function createInitialModelTrace(selectedModelId) {
+  const config = getModelGatewayConfig(selectedModelId);
+
+  return createModelTrace({
+    selectedModelId: config.selectedModelId || selectedModelId || null,
+    provider: config.provider || null,
+    model: config.model || null,
+    conclusionSource: 'none',
+  });
+}
+
+function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessage) {
+  const config = getModelGatewayConfig(selectedModelId);
+
+  return {
+    selectedModelId: config.selectedModelId || selectedModelId || null,
+    provider: config.provider || null,
+    model: config.model || null,
     modelErrorType: errorType || null,
     modelHttpStatus: null,
     modelErrorMessage: errorMessage || null,
@@ -2210,21 +2535,48 @@ function createFailedModelDiagnostics(error) {
   const modelError = normalizeModelError(error);
 
   return {
-    modelProvider: modelError.provider || null,
-    modelName: modelError.model || null,
+    selectedModelId: modelError.selectedModelId || null,
+    provider: modelError.provider || null,
+    model: modelError.model || null,
     modelErrorType: modelError.errorType || 'model_failed',
     modelHttpStatus: modelError.httpStatus,
     modelErrorMessage: modelError.message || null,
+    latencyMs: normalizeModelTraceNumber(modelError.latencyMs),
+    tokenUsage: null,
     hasModelApiKey: Boolean(modelError.hasApiKey),
     modelApiKeyLength: Number(modelError.apiKeyLength) || 0,
   };
 }
 
-function createModelEventMetadata(diagnostics = {}) {
+function createModelEventMetadata(context, diagnostics = {}) {
+  const existingTrace = context?.modelTrace || {};
+  const fallbackReason = diagnostics.fallbackReason ?? context?.fallbackReason ?? existingTrace.fallbackReason ?? null;
+  const modelErrorType = diagnostics.modelErrorType ?? existingTrace.modelErrorType ?? null;
+  const conclusionSource = diagnostics.conclusionSource || context?.conclusionSource || existingTrace.conclusionSource || 'none';
+  const modelTrace = createModelTrace({
+    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || null,
+    provider: diagnostics.provider || existingTrace.provider || null,
+    model: diagnostics.model || existingTrace.model || null,
+    latencyMs: normalizeModelTraceNumber(diagnostics.latencyMs) ?? existingTrace.latencyMs ?? null,
+    tokenUsage: diagnostics.tokenUsage || existingTrace.tokenUsage || null,
+    fallbackReason,
+    modelErrorType,
+    conclusionSource,
+  });
+
+  if (context) {
+    context.modelTrace = modelTrace;
+  }
+
   return {
-    modelProvider: diagnostics.modelProvider || null,
-    modelName: diagnostics.modelName || null,
-    modelErrorType: diagnostics.modelErrorType || null,
+    modelTrace,
+    selectedModelId: modelTrace.selectedModelId,
+    provider: modelTrace.provider,
+    model: modelTrace.model,
+    latencyMs: modelTrace.latencyMs,
+    tokenUsage: modelTrace.tokenUsage,
+    fallbackReason: modelTrace.fallbackReason,
+    modelErrorType: modelTrace.modelErrorType,
     modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus) ? diagnostics.modelHttpStatus : null,
     modelErrorMessage: diagnostics.modelErrorMessage || null,
   };
@@ -2351,22 +2703,6 @@ function writeSseEvent(res, event) {
   return true;
 }
 
-async function persistAndWriteEvent(db, currentUser, context, res, disconnect, type, extra = {}) {
-  if (disconnect.isClosed()) {
-    return false;
-  }
-
-  const event = createRunEvent(type, context, extra);
-  await appendRunEvent(db, currentUser, context, event);
-
-  if (!writeSseEvent(res, event)) {
-    return false;
-  }
-
-  await sleep(EVENT_DELAY_MS);
-  return !disconnect.isClosed();
-}
-
 function toPublicError(error) {
   const statusCode = Number(error && error.statusCode);
 
@@ -2381,7 +2717,7 @@ function toPublicError(error) {
   return {
     statusCode: 500,
     errorCode: 'db_error',
-    message: 'Agent Run basic loop request failed.',
+    message: 'Agent Run stream request failed.',
   };
 }
 
@@ -2389,257 +2725,6 @@ function sanitizeLogMessage(value) {
   return String(value || '')
     .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
     .replace(/(token|secret|password|connection|string)=([^&\s]+)/gi, '$1=[redacted]');
-}
-
-async function runBasicAgentFlow(req, res, currentUser, body) {
-  const db = getDb();
-  const conversationId = readRequiredString(body.conversationId, 'Missing conversation id.');
-  const conversation = await fetchConversationRecord(db, currentUser, conversationId);
-
-  if (!conversation) {
-    throw new RequestError(404, 'not_found', 'Workbench conversation was not found.');
-  }
-
-  const runId = randomUUID();
-  const providedClientRunId = readOptionalString(body.clientRunId);
-  const clientRunId = providedClientRunId || runId;
-  const runtimeRunId = clientRunId;
-  const context = {
-    runId,
-    clientRunId,
-    runtimeRunId,
-    clientRunIdMissing: !providedClientRunId,
-    conversationId,
-    prompt: readOptionalString(body.prompt) || 'CloudBase Agent Run 基础闭环测试',
-    usageId: null,
-    usageFinished: false,
-    eventSeq: 0,
-    agentMode: 'basic',
-    intent: 'mock_basic_loop',
-    planSnapshot: {
-      source: 'cloudbase-basic-loop',
-      steps: ['validate_conversation', 'create_pending_run', 'consume_quota', 'mock_tool', 'fixed_conclusion', 'assistant_message'],
-    },
-    dataSourceSnapshot: { source: 'mock' },
-    conclusionSource: 'mock_fixed',
-    reportState: 'hidden',
-  };
-  const idempotencyKey = providedClientRunId ? createIdempotencyKey(currentUser, clientRunId) : null;
-
-  if (!providedClientRunId) {
-    console.warn('[workbench-agent-run-stream] clientRunId_missing', currentUser.userId, runId);
-  }
-
-  if (idempotencyKey) {
-    const existingRun = await fetchAgentRunByClientRunId(db, currentUser, clientRunId);
-
-    if (existingRun) {
-      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
-      await respondWithReusedRun(res, context, existingRun, 'existing_run');
-      return;
-    }
-
-    if (!tryAcquireIdempotencyGuard(idempotencyKey)) {
-      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
-      const guardedRun = await waitForAgentRunByClientRunId(db, currentUser, clientRunId);
-      await respondWithReusedRun(res, context, guardedRun, 'in_flight');
-      return;
-    }
-  }
-
-  try {
-    const startedAt = Date.now();
-    const createResult = await createAgentRun(db, currentUser, context, {
-      status: 'pending',
-      updateConversation: false,
-    });
-
-    if (!createResult.created) {
-      console.warn('[workbench-agent-run-stream] duplicate_run', currentUser.userId, clientRunId);
-      await respondWithReusedRun(res, context, createResult.existingRun, 'duplicate_key');
-      return;
-    }
-
-    let quotaResult;
-
-    try {
-      quotaResult = await consumeQuota(db, currentUser, runId, runtimeRunId);
-      context.usageId = quotaResult.usageId;
-      await startAgentRunAfterQuota(db, currentUser, context);
-    } catch (error) {
-      try {
-        await rejectAgentRunBeforeStart(db, currentUser, context, error?.errorCode || 'quota_consume_failed', error?.message);
-      } catch (rejectError) {
-        console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(rejectError.message));
-      }
-
-      throw error;
-    }
-
-    const disconnect = createDisconnectTracker(req, res, context.runId);
-    let assistantMessageId = null;
-    let didComplete = false;
-
-    startSseResponse(res);
-
-    try {
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'run_started', {
-        status: 'running',
-        prompt: context.prompt,
-        quota: toPublicQuota(quotaResult.quota),
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'step_started', {
-        stepId: 'mock_agent_basic_loop',
-        title: 'CloudBase Agent Run 基础闭环',
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    const toolInvocationId = randomUUID();
-    const toolStartedAt = Date.now();
-    await createToolInvocation(db, currentUser, context, toolInvocationId);
-
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'tool_started', {
-        toolInvocationId,
-        toolName: 'mock_analysis',
-        displayName: 'Mock Analysis',
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    const mockToolOutput = {
-      summary: 'mock 工具已完成固定分析流程。',
-      facts: ['conversation_owner_verified', 'quota_consumed', 'agent_run_created'],
-    };
-    await completeToolInvocation(db, currentUser, context, toolInvocationId, toolStartedAt, mockToolOutput);
-
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'tool_completed', {
-        toolInvocationId,
-        toolName: 'mock_analysis',
-        outputSummary: mockToolOutput.summary,
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    const conclusion =
-      'CloudBase Agent Run 基础闭环已完成：已校验会话归属、消耗 quota、创建 agent_runs、写入 run_events、记录 mock tool_invocations，并持久化 assistant message。';
-
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'conclusion_delta', {
-        delta: conclusion,
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'conclusion_completed', {
-        conclusion,
-        source: 'mock_fixed',
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion);
-    const elapsedMs = Math.max(Date.now() - startedAt, 1);
-    await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId);
-
-    if (
-      !(await persistAndWriteEvent(db, currentUser, context, res, disconnect, 'run_completed', {
-        status: 'completed',
-        elapsedMs,
-        assistantMessageId,
-      }))
-    ) {
-      throw new RequestError(499, 'client_disconnected', 'Client disconnected.');
-    }
-
-    try {
-      await finishUsage(db, currentUser, context.usageId, 'completed', null, {
-        source: 'cloudbase-agent-run-basic-loop',
-        runId: context.runId,
-        assistantMessageId,
-      });
-      context.usageFinished = true;
-    } catch (finishError) {
-      console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
-    }
-
-    didComplete = true;
-    disconnect.finish();
-
-    if (!res.writableEnded && !res.destroyed) {
-      res.end();
-    }
-    } catch (error) {
-      const disconnected = error && error.errorCode === 'client_disconnected';
-      const finalStatus = disconnected ? 'stopped' : 'failed';
-
-      try {
-        await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
-      } catch (cleanupError) {
-        console.error('[workbench-agent-run-stream] run cleanup failed', sanitizeLogMessage(cleanupError.message));
-      }
-
-      try {
-        await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
-        source: 'cloudbase-agent-run-basic-loop',
-        runId: context.runId,
-      });
-        context.usageFinished = true;
-      } catch (cleanupError) {
-        console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
-      }
-
-      if (!disconnected && !res.writableEnded && !res.destroyed) {
-        const failEvent = createRunEvent('run_failed', context, {
-          status: 'failed',
-          errorCode: 'run_failed',
-        });
-
-        try {
-          await appendRunEvent(db, currentUser, context, failEvent);
-        } catch (eventError) {
-          console.error('[workbench-agent-run-stream] failure event persist failed', sanitizeLogMessage(eventError.message));
-        }
-
-        writeSseEvent(res, failEvent);
-        res.end();
-      }
-
-      if (!didComplete && !disconnected) {
-        throw error;
-      }
-    }
-  } catch (error) {
-    if (context.usageId && !context.usageFinished) {
-      try {
-        await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
-          source: 'cloudbase-agent-run-basic-loop',
-          runId: context.runId,
-        });
-        context.usageFinished = true;
-      } catch (finishError) {
-        console.error('[workbench-agent-run-stream] usage_finish_failed', sanitizeLogMessage(finishError.message));
-      }
-    }
-
-    throw error;
-  } finally {
-    releaseIdempotencyGuard(idempotencyKey);
-  }
 }
 
 async function emitConclusionDeltas(db, currentUser, context, res, disconnect, text) {
@@ -2663,7 +2748,13 @@ async function emitConclusionDeltas(db, currentUser, context, res, disconnect, t
 }
 
 async function streamStaticConclusion(db, currentUser, context, res, disconnect, params) {
-  const ok = await emitConclusionDeltas(db, currentUser, context, res, disconnect, params.conclusion);
+  const conclusionSource = params.conclusionSource || context.conclusionSource || 'fallback';
+  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource);
+  const conclusion = agentConclusion.markdownText;
+
+  context.conclusionNotice = params.conclusionNotice || context.conclusionNotice || null;
+
+  const ok = await emitConclusionDeltas(db, currentUser, context, res, disconnect, conclusion);
 
   if (!ok) {
     return false;
@@ -2676,12 +2767,17 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
     res,
     disconnect,
     createRunEvent('conclusion_completed', context, {
-      conclusion: params.conclusion,
-      conclusionSource: params.conclusionSource,
+      conclusion,
+      conclusionSource,
+      agentConclusion,
       conclusionNotice: params.conclusionNotice,
       fallbackReason: params.fallbackReason,
-      modelProvider: params.modelProvider,
-      modelName: params.modelName,
+      modelTrace: params.modelTrace,
+      selectedModelId: params.selectedModelId,
+      provider: params.provider,
+      model: params.model,
+      latencyMs: params.latencyMs,
+      tokenUsage: params.tokenUsage,
       modelErrorType: params.modelErrorType,
       modelHttpStatus: params.modelHttpStatus,
       modelErrorMessage: params.modelErrorMessage,
@@ -2976,7 +3072,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   let conclusionSource = 'fallback';
   let fallbackReason = toolContext.fallbackReason;
   let conclusionNotice = null;
-  const modelConfig = getModelGatewayConfig();
+  const modelConfig = getModelGatewayConfig(context.selectedModelId);
 
   if (fallbackReason) {
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
@@ -2986,6 +3082,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       conclusionSource,
       conclusionNotice,
       fallbackReason,
+      ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
   } else if (!toolContext.aggregateResult || toolContext.aggregateResult.totalRecords === 0) {
     fallbackReason = 'data_empty';
@@ -2996,14 +3093,14 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       conclusionSource,
       conclusionNotice,
       fallbackReason,
+      ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
   } else if (!modelConfig.isConfigured) {
-    fallbackReason = 'model_not_configured';
+    fallbackReason = modelConfig.configErrorType || 'model_not_configured';
     context.modelDiagnostics = createConfiguredModelDiagnostics(
+      context.selectedModelId,
       fallbackReason,
-      modelConfig.source === 'model_gateway'
-        ? 'MODEL_GATEWAY_* is not fully configured.'
-        : 'GROQ_API_KEY is not configured.',
+      modelConfig.configErrorMessage || 'Model gateway is not configured.',
     );
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
     conclusionNotice = '未配置模型网关，当前结论由本地工具结果摘要生成。';
@@ -3012,12 +3109,16 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       conclusionSource,
       conclusionNotice,
       fallbackReason,
-      ...createModelEventMetadata(context.modelDiagnostics),
+      ...createModelEventMetadata(context, {
+        ...context.modelDiagnostics,
+        conclusionSource,
+        fallbackReason,
+      }),
     });
   } else {
     try {
-      let deltaQueue = Promise.resolve();
       const modelResult = await streamChatCompletion({
+        selectedModelId: context.selectedModelId,
         messages: buildConclusionMessages({
           prompt: context.prompt,
           plan: context.plan,
@@ -3025,50 +3126,43 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
           aggregateResult: toolContext.aggregateResult,
           chartResult: toolContext.chartResult,
         }),
-        onDelta: (delta) => {
-          deltaQueue = deltaQueue.then(() => (
-            persistAndWriteRawEvent(
-              db,
-              currentUser,
-              context,
-              res,
-              disconnect,
-              createRunEvent('conclusion_delta', context, { delta }),
-              0,
-            )
-          ));
-        },
       });
-      await deltaQueue;
 
       conclusion = modelResult.text;
-      conclusionSource = modelResult.provider || 'model';
+      conclusionSource = 'model';
+      fallbackReason = null;
       context.modelDiagnostics = {
-        modelProvider: modelResult.provider || modelConfig.provider || null,
-        modelName: modelResult.model || modelConfig.model || null,
+        selectedModelId: modelResult.selectedModelId || context.selectedModelId,
+        provider: modelResult.provider || modelConfig.provider || null,
+        model: modelResult.model || modelConfig.model || null,
+        latencyMs: modelResult.latencyMs,
+        tokenUsage: modelResult.tokenUsage,
+        conclusionSource,
+        fallbackReason,
         modelErrorType: null,
         modelHttpStatus: null,
         modelErrorMessage: null,
       };
-      await persistAndWriteRawEvent(
-        db,
-        currentUser,
-        context,
-        res,
-        disconnect,
-        createRunEvent('conclusion_completed', context, {
-          conclusion,
-          conclusionSource,
-          ...createModelEventMetadata(context.modelDiagnostics),
-        }),
-      );
+      const agentConclusion = setCanonicalConclusion(context, conclusion, conclusionSource);
+      conclusion = agentConclusion.markdownText;
+      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+        conclusion,
+        conclusionSource,
+        agentConclusion,
+        ...createModelEventMetadata(context, context.modelDiagnostics),
+      });
     } catch (error) {
       const modelDiagnostics = createFailedModelDiagnostics(error);
-      fallbackReason = modelDiagnostics.modelErrorType || 'model_failed';
-      context.modelDiagnostics = modelDiagnostics;
+      fallbackReason = modelDiagnostics.modelErrorType || 'provider_error';
+      conclusionSource = 'fallback';
+      context.modelDiagnostics = {
+        ...modelDiagnostics,
+        conclusionSource,
+        fallbackReason,
+      };
       console.error('[workbench-agent-run-stream] model conclusion failed', JSON.stringify({
-        modelProvider: modelDiagnostics.modelProvider,
-        modelName: modelDiagnostics.modelName,
+        provider: modelDiagnostics.provider,
+        model: modelDiagnostics.model,
         modelErrorType: modelDiagnostics.modelErrorType,
         modelHttpStatus: modelDiagnostics.modelHttpStatus,
         modelErrorMessage: modelDiagnostics.modelErrorMessage,
@@ -3082,11 +3176,13 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         conclusionSource,
         conclusionNotice,
         fallbackReason,
-        ...createModelEventMetadata(modelDiagnostics),
+        ...createModelEventMetadata(context, context.modelDiagnostics),
       });
     }
   }
 
+  const finalAgentConclusion = context.agentConclusion || setCanonicalConclusion(context, conclusion, conclusionSource);
+  conclusion = finalAgentConclusion.markdownText;
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
@@ -3217,7 +3313,7 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   let conclusionSource = 'fallback';
   let fallbackReason = ragContext.fallbackReason;
   let conclusionNotice = null;
-  const modelConfig = getModelGatewayConfig();
+  const modelConfig = getModelGatewayConfig(context.selectedModelId);
   const hasMatches = Boolean(ragContext.searchResult && ragContext.searchResult.retrievedChunkCount > 0);
 
   if (!hasMatches) {
@@ -3229,14 +3325,14 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
       conclusionSource,
       conclusionNotice,
       fallbackReason,
+      ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
   } else if (!modelConfig.isConfigured) {
-    fallbackReason = 'model_not_configured';
+    fallbackReason = modelConfig.configErrorType || 'model_not_configured';
     context.modelDiagnostics = createConfiguredModelDiagnostics(
+      context.selectedModelId,
       fallbackReason,
-      modelConfig.source === 'model_gateway'
-        ? 'MODEL_GATEWAY_* is not fully configured.'
-        : 'GROQ_API_KEY is not configured.',
+      modelConfig.configErrorMessage || 'Model gateway is not configured.',
     );
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
     conclusionNotice = '未配置模型网关，当前知识回答由检索片段结构化生成。';
@@ -3245,58 +3341,55 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
       conclusionSource,
       conclusionNotice,
       fallbackReason,
-      ...createModelEventMetadata(context.modelDiagnostics),
+      ...createModelEventMetadata(context, {
+        ...context.modelDiagnostics,
+        conclusionSource,
+        fallbackReason,
+      }),
     });
   } else {
     try {
-      let deltaQueue = Promise.resolve();
       const modelResult = await streamChatCompletion({
+        selectedModelId: context.selectedModelId,
         messages: buildKnowledgeAnswerMessages(context, ragContext.searchResult),
         temperature: 0.2,
-        onDelta: (delta) => {
-          deltaQueue = deltaQueue.then(() => (
-            persistAndWriteRawEvent(
-              db,
-              currentUser,
-              context,
-              res,
-              disconnect,
-              createRunEvent('conclusion_delta', context, { delta }),
-              0,
-            )
-          ));
-        },
       });
-      await deltaQueue;
 
       conclusion = modelResult.text;
-      conclusionSource = modelResult.provider || 'model';
+      conclusionSource = 'model';
+      fallbackReason = null;
       context.modelDiagnostics = {
-        modelProvider: modelResult.provider || modelConfig.provider || null,
-        modelName: modelResult.model || modelConfig.model || null,
+        selectedModelId: modelResult.selectedModelId || context.selectedModelId,
+        provider: modelResult.provider || modelConfig.provider || null,
+        model: modelResult.model || modelConfig.model || null,
+        latencyMs: modelResult.latencyMs,
+        tokenUsage: modelResult.tokenUsage,
+        conclusionSource,
+        fallbackReason,
         modelErrorType: null,
         modelHttpStatus: null,
         modelErrorMessage: null,
       };
-      await persistAndWriteRawEvent(
-        db,
-        currentUser,
-        context,
-        res,
-        disconnect,
-        createRunEvent('conclusion_completed', context, {
-          conclusion,
-          conclusionSource,
-          ...createModelEventMetadata(context.modelDiagnostics),
-        }),
-      );
+      const agentConclusion = setCanonicalConclusion(context, conclusion, conclusionSource);
+      conclusion = agentConclusion.markdownText;
+      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+        conclusion,
+        conclusionSource,
+        agentConclusion,
+        ...createModelEventMetadata(context, context.modelDiagnostics),
+      });
     } catch (error) {
       const modelDiagnostics = createFailedModelDiagnostics(error);
-      fallbackReason = modelDiagnostics.modelErrorType || 'model_failed';
-      context.modelDiagnostics = modelDiagnostics;
+      fallbackReason = modelDiagnostics.modelErrorType || 'provider_error';
+      conclusionSource = 'fallback';
+      context.modelDiagnostics = {
+        ...modelDiagnostics,
+        conclusionSource,
+        fallbackReason,
+      };
       console.error('[workbench-agent-run-stream] knowledge model conclusion failed', JSON.stringify({
-        modelProvider: modelDiagnostics.modelProvider,
-        modelName: modelDiagnostics.modelName,
+        provider: modelDiagnostics.provider,
+        model: modelDiagnostics.model,
         modelErrorType: modelDiagnostics.modelErrorType,
         modelHttpStatus: modelDiagnostics.modelHttpStatus,
         modelErrorMessage: modelDiagnostics.modelErrorMessage,
@@ -3310,7 +3403,7 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         conclusionSource,
         conclusionNotice,
         fallbackReason,
-        ...createModelEventMetadata(modelDiagnostics),
+        ...createModelEventMetadata(context, context.modelDiagnostics),
       });
     }
   }
@@ -3354,6 +3447,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
   const providedClientRunId = readOptionalString(body.clientRunId);
   const clientRunId = providedClientRunId || runId;
   const provider = readProvider(body.provider);
+  const selectedModelId = readSelectedModelId(body.selectedModelId);
   const context = {
     runId,
     clientRunId,
@@ -3361,6 +3455,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     clientRunIdMissing: !providedClientRunId,
     conversationId,
     provider,
+    selectedModelId,
     prompt: readOptionalString(body.prompt) || '分析本月教学质量数据，找出异常指标',
     usageId: null,
     usageFinished: false,
@@ -3374,8 +3469,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     chartData: null,
     conclusion: '',
     conclusionSource: 'none',
+    agentConclusion: null,
     fallbackReason: null,
     modelDiagnostics: null,
+    modelTrace: createInitialModelTrace(selectedModelId),
     reportState: 'hidden',
     steps: [],
     toolInvocations: [],
@@ -3505,6 +3602,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         conclusionSource: 'fallback',
         conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
         fallbackReason: context.fallbackReason,
+        ...createModelEventMetadata(context, {
+          conclusionSource: 'fallback',
+          fallbackReason: context.fallbackReason,
+        }),
       });
     } else if (planned.plan.intent === 'unsupported') {
       conclusion = buildUnsupportedConclusion();
@@ -3515,6 +3616,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         conclusionSource: 'fallback',
         conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
         fallbackReason: context.fallbackReason,
+        ...createModelEventMetadata(context, {
+          conclusionSource: 'fallback',
+          fallbackReason: context.fallbackReason,
+        }),
       });
     } else if (planned.plan.intent === 'knowledge_qa') {
       const ragContext = await runKnowledgeQaSearch(db, currentUser, context, res, disconnect);
@@ -3535,12 +3640,19 @@ async function runRealAgentFlow(req, res, currentUser, body) {
       );
     }
 
+    const finalAgentConclusion = context.agentConclusion || setCanonicalConclusion(
+      context,
+      conclusion,
+      context.conclusionSource || 'fallback',
+    );
+  conclusion = finalAgentConclusion.markdownText;
     context.conclusion = conclusion;
     assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
       source: context.conclusionSource,
       fallbackReason: context.fallbackReason,
+      agentConclusion: context.agentConclusion,
       ...(context.assistantMessageMetadata || {}),
-      ...createModelEventMetadata(context.modelDiagnostics),
+      ...createModelEventMetadata(context, context.modelDiagnostics),
     });
     const elapsedMs = Math.max(Date.now() - startedAt, 1);
     await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
@@ -3561,7 +3673,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         assistantMessageId,
         conclusionSource: context.conclusionSource,
         fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context.modelDiagnostics),
+        ...createModelEventMetadata(context, context.modelDiagnostics),
       }),
     );
 
@@ -3572,7 +3684,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         assistantMessageId,
         conclusionSource: context.conclusionSource,
         fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context.modelDiagnostics),
+        ...createModelEventMetadata(context, context.modelDiagnostics),
       });
       context.usageFinished = true;
     } catch (finishError) {
@@ -3657,11 +3769,6 @@ const server = http.createServer(async (req, res) => {
   try {
     const currentUser = await authenticateRequest(req);
     const body = await readRequestBody(req);
-
-    if (body.mode === 'basic') {
-      await runBasicAgentFlow(req, res, currentUser, body);
-      return;
-    }
 
     await runRealAgentFlow(req, res, currentUser, body);
   } catch (error) {

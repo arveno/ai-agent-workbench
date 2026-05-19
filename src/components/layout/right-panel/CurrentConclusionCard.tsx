@@ -1,4 +1,6 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
+import type { ConclusionSectionView } from '../../../utils/runConclusionViewModel';
+import { createConclusionViewModel } from '../../../utils/runConclusionViewModel';
 import { getConclusionSourceLabel } from '../../../utils/runViewModel';
 import {
   LONG_MESSAGE_CHARACTER_THRESHOLD,
@@ -8,20 +10,23 @@ import {
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { LongTextBlock } from '../../chat/LongTextBlock';
+import { MarkdownMessage } from '../../chat/MarkdownMessage';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
 function getConclusionText(params: {
   status: string;
-  conclusion: string;
+  compactMarkdownText: string;
   errorMessage?: string;
 }): string {
   if (params.status === 'error') {
     return `执行失败：${params.errorMessage ?? '未知错误'}`;
   }
 
-  if (params.conclusion.trim()) {
-    return params.conclusion;
+  const conclusionText = params.compactMarkdownText.trim();
+
+  if (conclusionText) {
+    return conclusionText;
   }
 
   if (params.status === 'running') {
@@ -47,6 +52,19 @@ function createConclusionPreview(value: string): string {
   return `${value.slice(0, LONG_MESSAGE_PREVIEW_LENGTH).trimEnd()}...`;
 }
 
+function renderCompactSections(sections: ConclusionSectionView[]) {
+  return (
+    <div className="conclusion-compact-sections">
+      {sections.map((section) => (
+        <section key={section.title} className="conclusion-compact-section">
+          <h4 className="conclusion-compact-section-title">{section.title}</h4>
+          <p className="conclusion-compact-section-content">{section.content}</p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function CurrentConclusionCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
 
@@ -70,13 +88,15 @@ export function CurrentConclusionCard() {
     );
   }
 
+  const conclusionView = createConclusionViewModel(currentRun);
   const conclusionText = getConclusionText({
     status: currentRun.status,
-    conclusion: currentRun.conclusion,
+    compactMarkdownText: conclusionView.compactMarkdownText,
     errorMessage: currentRun.errorMessage,
   });
   const updatedText = `更新时间：${new Date(currentRun.updatedAt).toLocaleString('zh-CN', { hour12: false })}`;
   const shouldShowSourceBadge = currentRun.conclusionSource !== 'none';
+  const shouldShowCompactSections = currentRun.status !== 'running' && currentRun.status !== 'error' && conclusionView.compactSections.length > 0;
   const shouldCollapseConclusion = isLongText(conclusionText) && currentRun.status !== 'running';
 
   return (
@@ -118,15 +138,23 @@ export function CurrentConclusionCard() {
         ) : null}
 
         <div className="conclusion-card">
-          <LongTextBlock
-            key={`${currentRun.id}:${currentRun.status}:${shouldCollapseConclusion ? 'collapsed' : 'open'}`}
-            content={conclusionText}
-            previewText={createConclusionPreview(conclusionText)}
-            shouldCollapseByDefault={shouldCollapseConclusion}
-            expandLabel="展开完整结论"
-            collapseLabel="收起结论"
-            renderContent={(visibleContent) => <div className="conclusion-card-text">{visibleContent}</div>}
-          />
+          {shouldShowCompactSections ? (
+            renderCompactSections(conclusionView.compactSections)
+          ) : (
+            <LongTextBlock
+              key={`${currentRun.id}:${currentRun.status}:${shouldCollapseConclusion ? 'collapsed' : 'open'}`}
+              content={conclusionText}
+              previewText={createConclusionPreview(conclusionText)}
+              shouldCollapseByDefault={shouldCollapseConclusion}
+              expandLabel="展开完整结论"
+              collapseLabel="收起结论"
+              renderContent={(visibleContent) => (
+                <div className="conclusion-card-text">
+                  <MarkdownMessage content={visibleContent} />
+                </div>
+              )}
+            />
+          )}
           <div className="conclusion-updated-at">{updatedText}</div>
         </div>
       </CardContent>

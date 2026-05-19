@@ -26,6 +26,8 @@ export type {
   RunDataSourceSnapshot,
   RunEvent,
   RunIntent,
+  RunModelTrace,
+  RunModelTokenUsage,
   RunMode,
   RunPlanSnapshot,
   RunReportState,
@@ -125,13 +127,10 @@ export type CapabilityStatus =
   | 'error'
   | 'disabled';
 export type ModelProviderId =
-  | 'mock'
-  | 'groq'
-  | 'gemini'
-  | 'openrouter'
-  | 'openai-api-key'
-  | 'codex-oauth'
-  | 'ollama';
+  | 'mock-agent'
+  | 'siliconflow-qwen-free'
+  | 'siliconflow-glm-free'
+  | 'zhipu-glm-flash-free';
 export type ModelProvider = ModelProviderId;
 export type ModelTestStatus = 'idle' | 'testing' | 'success' | 'error';
 export type DataSourceProviderId = 'postgresql' | 'supabase' | 'mysql';
@@ -319,15 +318,6 @@ export interface AgentRunErrorResponse {
 
 export type AgentRunResponse = AgentRunSuccessResponse | AgentRunErrorResponse;
 
-export interface ModelProviderConfig {
-  baseUrl?: string;
-  modelName?: string;
-}
-
-export type ModelProviderConfigMap = Partial<Record<ModelProviderId, ModelProviderConfig>>;
-export type ModelConfigs = ModelProviderConfigMap;
-export type ModelProviderTestStatusMap = Partial<Record<ModelProviderId, ModelTestStatus>>;
-
 export interface ModelProviderOption {
   id: ModelProviderId;
   name: string;
@@ -414,16 +404,11 @@ export interface GenerationSlice {
 }
 
 export interface ModelSlice {
-  currentModelProvider: ModelProvider;
+  selectedModelId: ModelProvider;
   isModelModalOpen: boolean;
-  modelConfigs: ModelProviderConfigMap;
-  modelTestStatusMap: ModelProviderTestStatusMap;
   openModelModal: () => void;
   closeModelModal: () => void;
-  setCurrentModelProvider: (provider: ModelProviderId) => void;
-  saveModelConfig: (providerId: ModelProviderId, config: ModelProviderConfig) => void;
-  clearModelConfig: (providerId: ModelProviderId) => void;
-  setModelTestStatus: (providerId: ModelProviderId, status: ModelTestStatus) => void;
+  setSelectedModelId: (selectedModelId: ModelProviderId) => void;
 }
 
 export interface UiSlice {

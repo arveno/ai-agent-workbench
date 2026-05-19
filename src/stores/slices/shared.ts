@@ -1,7 +1,6 @@
 import type {
   AssistantStreamState,
   GenerationStatus,
-  ModelProviderConfigMap,
   ModelProviderId,
   RunSnapshot,
   WorkbenchMessage,
@@ -16,8 +15,7 @@ export const DEFAULT_ASSISTANT_REPLY =
   '我将先检索相关指标口径与教学质量分析规则，再查询本月各年级成绩与出勤数据，随后给出异常项和简短分析结论。';
 export const FINAL_REPORT_SUMMARY =
   '已基于当前数据生成简短分析结论：本月教学质量整体保持稳定，但七年级平均分和八年级出勤率出现明显波动，建议优先查看七年级周测成绩明细和八年级班级出勤记录，并将两个指标加入后续跟踪。';
-export const MODEL_CONFIG_SESSION_KEY = 'ai-agent-workbench-model-configs';
-export const MODEL_PROVIDER_SESSION_KEY = 'ai-agent-workbench-current-model-provider';
+export const SELECTED_MODEL_ID_SESSION_KEY = 'ai-agent-workbench-selected-model-id';
 export const WORKBENCH_SESSIONS_SESSION_KEY = 'ai-agent-workbench-sessions';
 export const WORKBENCH_SESSION_STORAGE_VERSION = 2;
 
@@ -32,14 +30,11 @@ interface WorkbenchSessionStorageState {
   activeSessionId: string;
 }
 
-export const modelProviderIds: ModelProviderId[] = [
-  'mock',
-  'groq',
-  'gemini',
-  'openrouter',
-  'openai-api-key',
-  'codex-oauth',
-  'ollama',
+export const selectableModelIds: ModelProviderId[] = [
+  'mock-agent',
+  'siliconflow-qwen-free',
+  'siliconflow-glm-free',
+  'zhipu-glm-flash-free',
 ];
 
 export function createSessionId(): string {
@@ -465,30 +460,21 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-export function getInitialModelConfigs(): ModelProviderConfigMap {
-  if (typeof window !== 'undefined') {
-    window.sessionStorage.removeItem(MODEL_CONFIG_SESSION_KEY);
-  }
-
-  return {};
-}
-
 export function isModelProviderId(value: string): value is ModelProviderId {
-  return modelProviderIds.includes(value as ModelProviderId);
+  return selectableModelIds.includes(value as ModelProviderId);
 }
 
-export function getInitialModelProvider(): ModelProviderId {
+export function getInitialSelectedModelId(): ModelProviderId {
   if (typeof window === 'undefined') {
-    return 'mock';
+    return 'mock-agent';
   }
 
-  window.sessionStorage.removeItem(MODEL_PROVIDER_SESSION_KEY);
+  window.sessionStorage.removeItem(SELECTED_MODEL_ID_SESSION_KEY);
 
-  return 'mock';
+  return 'mock-agent';
 }
 
-const initialModelConfigs = getInitialModelConfigs();
-const initialModelProvider = getInitialModelProvider();
+const initialSelectedModelId = getInitialSelectedModelId();
 const initialSessionState = getInitialWorkbenchSessionState();
 const initialSessions = initialSessionState.sessions;
 const initialCurrentSession =
@@ -511,8 +497,7 @@ interface InitialWorkbenchState {
   activeAssistantMessageId: string;
   generationStatus: GenerationStatus;
   assistantStream: AssistantStreamState;
-  modelConfigs: ModelProviderConfigMap;
-  currentModelProvider: ModelProviderId;
+  selectedModelId: ModelProviderId;
 }
 
 export const initialWorkbenchState: InitialWorkbenchState = {
@@ -526,8 +511,7 @@ export const initialWorkbenchState: InitialWorkbenchState = {
     content: initialAssistantReplyFromSession,
     status: initialAssistantReplyFromSession ? 'done' : 'idle',
   },
-  modelConfigs: initialModelConfigs,
-  currentModelProvider: initialModelProvider,
+  selectedModelId: initialSelectedModelId,
 };
 
 export { createSessionTitle };
