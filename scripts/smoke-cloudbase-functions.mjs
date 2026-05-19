@@ -1,15 +1,17 @@
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MODEL = 'mock-agent';
+const DEFAULT_SSE_PROMPT = '请分析本月教学质量数据，重点说明 warning_count 的含义，并给出一句结论。';
 const SMOKE_SOURCE = 'cloudbase-smoke-test';
 
 function printUsage() {
   console.log(`Usage:
-  pnpm cloudbase:smoke -- --base-url <url> [--token <token>] [--model <selectedModelId>] [--include-sse] [--skip-real-model] [--timeout <ms>] [--json]
+  pnpm cloudbase:smoke -- --base-url <url> [--token <token>] [--model <selectedModelId>] [--prompt <text>] [--include-sse] [--skip-real-model] [--timeout <ms>] [--json]
 
 Examples:
   pnpm cloudbase:smoke -- --base-url https://example.com
   pnpm cloudbase:smoke -- --base-url https://example.com --token <token>
-  pnpm cloudbase:smoke -- --base-url https://example.com --token <token> --include-sse --model mock-agent`);
+  pnpm cloudbase:smoke -- --base-url https://example.com --token <token> --include-sse --model mock-agent
+  pnpm cloudbase:smoke -- --base-url https://example.com --token <token> --include-sse --prompt "请分析本月教学质量数据"`);
 }
 
 function parseArgs(argv) {
@@ -17,6 +19,7 @@ function parseArgs(argv) {
     baseUrl: '',
     token: '',
     model: DEFAULT_MODEL,
+    prompt: DEFAULT_SSE_PROMPT,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     json: false,
     skipRealModel: false,
@@ -40,6 +43,12 @@ function parseArgs(argv) {
 
     if (arg === '--model') {
       options.model = readOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--prompt') {
+      options.prompt = readOptionValue(argv, index, arg);
       index += 1;
       continue;
     }
@@ -286,6 +295,193 @@ function isAuthRejection(response) {
 
 function isRealModel(model) {
   return model !== DEFAULT_MODEL;
+}
+
+function parseSseDataEvents(text) {
+  const normalizedText = String(text || '').replace(/\r\n/g, '\n');
+  const blocks = normalizedText.split(/\n{2,}/);
+  const events = [];
+  const warnings = [];
+
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+    const dataLines = [];
+
+    for (const line of blocks[blockIndex].split('\n')) {
+      if (!line.startsWith('data:')) {
+        continue;
+      }
+
+      const value = line.slice(5);
+      dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
+    }
+
+    if (dataLines.length === 0) {
+      continue;
+    }
+
+    const dataText = dataLines.join('\n').trim();
+
+    if (!dataText) {
+      continue;
+    }
+
+    try {
+      const payload = JSON.parse(dataText);
+      const type = typeof payload?.type === 'string' ? payload.type : '';
+      events.push({ type, payload });
+    } catch (error) {
+      warnings.push(`block ${blockIndex + 1}: ${error.message}`);
+    }
+  }
+
+  return summarizeSseEvents(events, warnings, text);
+}
+
+function summarizeSseEvents(events, warnings, text) {
+  const eventTypes = events.map((event) => event.type || 'unknown');
+  const lastEventType = eventTypes.length > 0 ? eventTypes[eventTypes.length - 1] : '';
+
+  return {
+    events,
+    eventTypes,
+    warnings,
+    lastEventType,
+    lastFiveEventTypes: eventTypes.slice(-5),
+    hasRunCompleted: events.some((event) => event.type === 'run_completed'),
+    hasRunFailed: events.some((event) => event.type === 'run_failed'),
+    hasRunReused: events.some((event) => event.type === 'run_reused'),
+    hasConclusionCompleted: events.some((event) => event.type === 'conclusion_completed'),
+    rawExcerpt: sanitizeRawExcerpt(text),
+  };
+}
+
+function findLastEvent(events, type) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (events[index].type === type) {
+      return events[index];
+    }
+  }
+
+  return null;
+}
+
+function findLastEventIn(events, types) {
+  const typeSet = new Set(types);
+
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (typeSet.has(events[index].type)) {
+      return events[index];
+    }
+  }
+
+  return null;
+}
+
+function sanitizeRawExcerpt(text) {
+  return String(text || '')
+    .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
+    .replace(/(token|secret|password|authorization)=([^&\s]+)/gi, '$1=[redacted]')
+    .slice(0, 500);
+}
+
+function summarizePrompt(prompt) {
+  const normalized = String(prompt || '').replace(/\s+/g, ' ').trim();
+
+  if (normalized.length <= 80) {
+    return normalized || '<empty>';
+  }
+
+  return `${normalized.slice(0, 80)}...`;
+}
+
+function isCompletedRunReused(event) {
+  const payload = event?.payload || {};
+  return payload.status === 'completed' || payload.existingRun?.status === 'completed';
+}
+
+function getModelObservation(summary) {
+  const event = findLastEventIn(summary.events, ['run_completed', 'conclusion_completed']);
+  const payload = event?.payload || {};
+  const modelTrace = payload.modelTrace || {};
+  const observation = {
+    selectedModelId: payload.selectedModelId ?? modelTrace.selectedModelId ?? null,
+    provider: payload.provider ?? payload.modelProvider ?? modelTrace.provider ?? null,
+    model: payload.model ?? payload.modelName ?? modelTrace.model ?? null,
+    tokenUsage: payload.tokenUsage ?? modelTrace.tokenUsage ?? null,
+    latencyMs: payload.latencyMs ?? modelTrace.latencyMs ?? null,
+    fallbackReason: payload.fallbackReason ?? modelTrace.fallbackReason ?? null,
+    modelErrorType: payload.modelErrorType ?? modelTrace.modelErrorType ?? null,
+    conclusionSource: payload.conclusionSource ?? modelTrace.conclusionSource ?? null,
+  };
+  const entries = Object.entries(observation).filter(([, value]) => value !== null && value !== undefined && value !== '');
+
+  return {
+    sourceEventType: event?.type || '',
+    values: observation,
+    entries,
+    hasEvidence: entries.length > 0,
+  };
+}
+
+function formatModelObservation(observation) {
+  if (!observation.hasEvidence) {
+    return 'modelFields=none';
+  }
+
+  const fields = observation.entries.map(([key, value]) => {
+    const formattedValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    return `${key}=${formattedValue}`;
+  });
+
+  return `modelFields(${observation.sourceEventType})=${fields.join(', ')}`;
+}
+
+function formatFailureObservation(event) {
+  const payload = event?.payload || {};
+  const fields = {
+    errorMessage: payload.errorMessage || payload.message || null,
+    errorCode: payload.errorCode || payload.code || null,
+    fallbackReason: payload.fallbackReason || payload.modelTrace?.fallbackReason || null,
+    modelErrorType: payload.modelErrorType || payload.modelTrace?.modelErrorType || null,
+  };
+  const entries = Object.entries(fields).filter(([, value]) => value);
+
+  if (entries.length === 0) {
+    return 'failure=run_failed';
+  }
+
+  return entries.map(([key, value]) => `${key}=${String(value)}`).join(', ');
+}
+
+function getRunFailedAdvice(failedEvent, modelObservation) {
+  const payload = failedEvent?.payload || {};
+  const fallbackReason = payload.fallbackReason ||
+    payload.modelTrace?.fallbackReason ||
+    modelObservation.values?.fallbackReason ||
+    '';
+
+  if (fallbackReason !== 'local_unsupported') {
+    return '';
+  }
+
+  return 'local_unsupported_hint=prompt likely did not match current Agent capabilities; retry with --prompt using a supported teaching data analysis question. This is not a modelGateway or CloudBase deployment failure by itself.';
+}
+
+function formatEventTypes(eventTypes) {
+  return eventTypes.length > 0 ? eventTypes.join(' -> ') : 'none';
+}
+
+function formatSseDiagnostics(summary) {
+  return [
+    `eventTypes=${formatEventTypes(summary.eventTypes)}`,
+    `lastEventType=${summary.lastEventType || 'none'}`,
+    `last5=${formatEventTypes(summary.lastFiveEventTypes)}`,
+    `run_completed=${summary.hasRunCompleted}`,
+    `run_failed=${summary.hasRunFailed}`,
+    `run_reused=${summary.hasRunReused}`,
+    `conclusion_completed=${summary.hasConclusionCompleted}`,
+    summary.warnings.length > 0 ? `parseWarnings=${summary.warnings.join(' | ')}` : '',
+  ].filter(Boolean).join('; ');
 }
 
 class ResultCollector {
@@ -641,7 +837,7 @@ async function checkAgentSse(options, context, conversationId) {
     token: options.token,
     accept: 'text/event-stream',
     body: {
-      prompt: '请用一句话回复 smoke test。',
+      prompt: options.prompt,
       conversationId,
       selectedModelId: options.model,
       clientRunId: context.clientRunId,
@@ -653,28 +849,70 @@ async function checkAgentSse(options, context, conversationId) {
   }
 
   const isEventStream = /text\/event-stream/i.test(response.contentType);
-  const hasCompletion = /run_completed/.test(response.text);
+  const contentTypeDetail = isEventStream ? 'event-stream' : `readable text; content-type=${response.contentType || 'unknown'}`;
+  const sseSummary = parseSseDataEvents(response.text);
+  const diagnostics = formatSseDiagnostics(sseSummary);
+  const modelObservation = getModelObservation(sseSummary);
+  const modelDetail = formatModelObservation(modelObservation);
+  const failedEvent = findLastEvent(sseSummary.events, 'run_failed');
 
-  if (!hasCompletion) {
+  if (failedEvent) {
+    const failedAdvice = getRunFailedAdvice(failedEvent, modelObservation);
+
     return {
       status: 'ERROR',
-      detail: `SSE response did not include run_completed; content-type=${response.contentType || 'unknown'}`,
+      detail: `run_failed received; ${formatFailureObservation(failedEvent)}; ${diagnostics}; ${modelDetail}${failedAdvice ? `; ${failedAdvice}` : ''}`,
     };
   }
 
-  if (isRealModel(options.model)) {
-    const hasModelTrace = /provider|tokenUsage|latencyMs|fallbackReason|modelErrorType/i.test(response.text);
-
-    if (!hasModelTrace) {
+  if (sseSummary.hasRunCompleted) {
+    if (isRealModel(options.model) && !modelObservation.hasEvidence) {
       return {
         status: 'WARN',
-        detail: 'run_completed found, but provider/tokenUsage/latency/fallback evidence was not found in SSE text.',
+        detail: `run_completed found, but model trace fields were not found; content=${contentTypeDetail}; ${diagnostics}; ${modelDetail}`,
       };
     }
+
+    return {
+      status: 'OK',
+      detail: `run_completed found; content=${contentTypeDetail}; ${diagnostics}; ${modelDetail}`,
+    };
   }
 
-  const contentTypeDetail = isEventStream ? 'event-stream' : `readable text; content-type=${response.contentType || 'unknown'}`;
-  return { status: 'OK', detail: `run_completed found; ${contentTypeDetail}` };
+  if (sseSummary.hasRunReused) {
+    const reusedEvent = findLastEvent(sseSummary.events, 'run_reused');
+
+    if (isCompletedRunReused(reusedEvent)) {
+      return {
+        status: 'WARN',
+        detail: `run_reused completed; content=${contentTypeDetail}; ${diagnostics}; ${modelDetail}`,
+      };
+    }
+
+    return {
+      status: 'ERROR',
+      detail: `run_reused received but existing run is not completed; status=${reusedEvent?.payload?.status || 'unknown'}; existingStatus=${reusedEvent?.payload?.existingRun?.status || 'unknown'}; ${diagnostics}`,
+    };
+  }
+
+  if (sseSummary.hasConclusionCompleted) {
+    return {
+      status: 'ERROR',
+      detail: `conclusion_completed received, but final run persistence or cleanup did not complete; content=${contentTypeDetail}; ${diagnostics}; ${modelDetail}`,
+    };
+  }
+
+  if (sseSummary.eventTypes.length === 0) {
+    return {
+      status: 'ERROR',
+      detail: `No recognizable SSE data JSON events; content=${contentTypeDetail}; parseWarnings=${sseSummary.warnings.join(' | ') || 'none'}; rawExcerpt=${sseSummary.rawExcerpt || '<empty>'}`,
+    };
+  }
+
+  return {
+    status: 'ERROR',
+    detail: `SSE ended without terminal completion event; content=${contentTypeDetail}; ${diagnostics}; ${modelDetail}`,
+  };
 }
 
 async function runSmoke(options) {
@@ -687,6 +925,9 @@ async function runSmoke(options) {
   console.log(`Base URL: ${redactUrl(options.baseUrl)}`);
   console.log(`Token: ${options.token ? 'provided' : 'not provided'}`);
   console.log(`Model: ${options.model}`);
+  if (options.includeSse) {
+    console.log(`SSE prompt: ${summarizePrompt(options.prompt)}`);
+  }
   console.log(`Timeout: ${options.timeoutMs}ms`);
 
   if (options.token) {
@@ -760,6 +1001,7 @@ async function runSmoke(options) {
       baseUrl: redactUrl(options.baseUrl),
       hasToken: Boolean(options.token),
       model: options.model,
+      promptSummary: summarizePrompt(options.prompt),
       includeSse: options.includeSse,
       skipRealModel: options.skipRealModel,
       summary,
