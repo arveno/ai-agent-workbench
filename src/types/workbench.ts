@@ -132,9 +132,9 @@ export type ModelProviderId =
   | 'zhipu-glm-flash-free';
 export type ModelProvider = ModelProviderId;
 export type ModelTestStatus = 'idle' | 'testing' | 'success' | 'error';
-export type DataSourceProviderId = 'postgresql' | 'supabase' | 'mysql';
+export type DataSourceProviderId = 'mysql';
 export type DataSourceConnectionStatus = 'idle' | 'connected' | 'disconnected' | 'testing' | 'error';
-export type DataSourceTestableProviderId = Extract<DataSourceProviderId, 'postgresql' | 'supabase'>;
+export type LegacyAgentDataSourceProviderId = 'postgresql' | 'supabase';
 export type ToolRiskLevel = 'low' | 'medium' | 'high';
 export type ToolStatus = 'enabled' | 'disabled' | 'comingSoon';
 export type WorkflowStepStatus = 'ready' | 'running' | 'done' | 'waiting' | 'disabled';
@@ -167,25 +167,6 @@ export interface DataSourceProvider {
   };
 }
 
-export interface DataSourceTestSuccessResponse {
-  ok: true;
-  provider: DataSourceTestableProviderId;
-  status: 'connected';
-  elapsedMs: number;
-  serverTime: string;
-  databaseVersion?: string;
-}
-
-export interface DataSourceTestErrorResponse {
-  ok: false;
-  provider?: DataSourceTestableProviderId;
-  status: 'error';
-  errorMessage: string;
-  elapsedMs?: number;
-}
-
-export type DataSourceTestResponse = DataSourceTestSuccessResponse | DataSourceTestErrorResponse;
-
 export interface DataSourceColumnSchema {
   columnName: string;
   dataType: string;
@@ -198,27 +179,6 @@ export interface DataSourceTableSchema {
   tableName: string;
   columns: DataSourceColumnSchema[];
 }
-
-export interface DataSourceSchemaSuccessResponse {
-  ok: true;
-  provider: DataSourceTestableProviderId;
-  status: 'success';
-  elapsedMs: number;
-  readAt: string;
-  schemas: string[];
-  tableCount: number;
-  tables: DataSourceTableSchema[];
-}
-
-export interface DataSourceSchemaErrorResponse {
-  ok: false;
-  provider?: DataSourceTestableProviderId;
-  status: 'error';
-  errorMessage: string;
-  elapsedMs?: number;
-}
-
-export type DataSourceSchemaResponse = DataSourceSchemaSuccessResponse | DataSourceSchemaErrorResponse;
 
 export interface AgentToolDefinition {
   id: string;
@@ -293,7 +253,7 @@ export interface AgentRunResult {
   id: string;
   status: AgentRunStatus;
   prompt: string;
-  provider: DataSourceTestableProviderId;
+  provider: LegacyAgentDataSourceProviderId;
   plan?: AgentRunPlanView;
   steps: AgentRunStep[];
   toolInvocations: AgentToolInvocationResult[];

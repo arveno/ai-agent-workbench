@@ -1,21 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type {
-  DataSourceProvider,
-  DataSourceSchemaResponse,
-  DataSourceTestResponse,
-  DataSourceTestableProviderId,
-} from '../../types/workbench';
-import { readDataSourceSchema, testDataSourceConnection } from '../../services/datasourceApi';
-import {
-  DataSourceProviderCard,
-  type DataSourceProviderRuntimeState,
-  type DataSourceProviderSchemaRuntimeState,
-} from './DataSourceProviderCard';
+import type { DataSourceProvider } from '../../types/workbench';
+import { DataSourceProviderCard } from './DataSourceProviderCard';
 
 const DATA_SOURCE_PROVIDERS: DataSourceProvider[] = [
   {
@@ -35,26 +25,9 @@ const DATA_SOURCE_PROVIDERS: DataSourceProvider[] = [
       updatedAt: undefined,
     },
   },
-  {
-    id: 'postgresql',
-    name: '外部关系型数据库（历史占位）',
-    description: '外部数据库接入暂不开放；当前正式数据能力已收敛到 CloudBase MySQL。',
-    status: 'idle',
-    enabled: false,
-    comingSoon: true,
-    meta: {
-      connectionMode: '已下线',
-    },
-  },
 ];
 
-type ProviderTestState = Partial<Record<DataSourceTestableProviderId, DataSourceProviderRuntimeState>>;
-
-type ProviderSchemaState = Partial<
-  Record<DataSourceTestableProviderId, DataSourceProviderSchemaRuntimeState>
->;
-
-type DataSourceTabId = 'all' | 'connected' | 'testable' | 'planned';
+type DataSourceTabId = 'all' | 'connected';
 
 interface DataSourceTabDefinition {
   id: DataSourceTabId;
@@ -65,90 +38,27 @@ interface DataSourceTabDefinition {
 const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
   {
     id: 'all',
-    label: '全部数据源',
-    description: '查看 Agent 可用的数据上下文和后续预留项。',
+    label: '全部',
+    description: '查看当前工作台可用的数据上下文。',
   },
   {
     id: 'connected',
-    label: '已连接',
+    label: '当前主线',
     description: '当前 CloudBase 主线已经接入的数据源。',
-  },
-  {
-    id: 'testable',
-    label: '可测试',
-    description: '当前不提供前端直接测试外部数据库连接。',
-  },
-  {
-    id: 'planned',
-    label: '规划中',
-    description: '后续预留接入的数据源类型。',
   },
 ];
 
-function isTestableProvider(providerId: DataSourceProvider['id']): providerId is DataSourceTestableProviderId {
-  void providerId;
-  return false;
-}
-
-function isConnectedProvider(
-  provider: DataSourceProvider,
-  providerTestState: ProviderTestState,
-  providerSchemaState: ProviderSchemaState
-): boolean {
-  if (provider.status === 'connected') {
-    return true;
-  }
-
-  if (!isTestableProvider(provider.id)) {
-    return false;
-  }
-
-  return providerTestState[provider.id]?.status === 'success' || providerSchemaState[provider.id]?.status === 'success';
-}
-
-function getProvidersByTab(
-  tabId: DataSourceTabId,
-  providerTestState: ProviderTestState,
-  providerSchemaState: ProviderSchemaState
-): DataSourceProvider[] {
+function getProvidersByTab(tabId: DataSourceTabId): DataSourceProvider[] {
   if (tabId === 'all') {
     return DATA_SOURCE_PROVIDERS;
   }
 
-  if (tabId === 'connected') {
-    return DATA_SOURCE_PROVIDERS.filter((provider) =>
-      isConnectedProvider(provider, providerTestState, providerSchemaState)
-    );
-  }
-
-  if (tabId === 'testable') {
-    return DATA_SOURCE_PROVIDERS.filter((provider) => isTestableProvider(provider.id));
-  }
-
-  return DATA_SOURCE_PROVIDERS.filter((provider) => provider.comingSoon);
-}
-
-function buildTestSuccessMessage(response: DataSourceTestResponse): string {
-  if (!response.ok) {
-    return response.errorMessage;
-  }
-
-  return `连接成功，用时 ${response.elapsedMs}ms`;
-}
-
-function buildSchemaSuccessMessage(response: DataSourceSchemaResponse): string {
-  if (!response.ok) {
-    return response.errorMessage;
-  }
-
-  return `Schema 读取成功，共 ${response.tableCount} 张表，用时 ${response.elapsedMs}ms`;
+  return DATA_SOURCE_PROVIDERS.filter((provider) => provider.status === 'connected');
 }
 
 export function DataSourceModal() {
   const isDataSourceModalOpen = useWorkbenchStore((state) => state.isDataSourceModalOpen);
   const closeDataSourceModal = useWorkbenchStore((state) => state.closeDataSourceModal);
-  const [providerTestState, setProviderTestState] = useState<ProviderTestState>({});
-  const [providerSchemaState, setProviderSchemaState] = useState<ProviderSchemaState>({});
 
   useEffect(() => {
     if (!isDataSourceModalOpen) {
@@ -171,106 +81,6 @@ export function DataSourceModal() {
   if (!isDataSourceModalOpen) {
     return null;
   }
-
-  const handleTestConnection = async (provider: DataSourceTestableProviderId) => {
-    setProviderTestState((prev) => ({
-      ...prev,
-      [provider]: {
-        ...prev[provider],
-        status: 'testing',
-        message: '正在测试连接...',
-      },
-    }));
-
-    try {
-      const response = await testDataSourceConnection(provider);
-
-      if (response.ok) {
-        setProviderTestState((prev) => ({
-          ...prev,
-          [provider]: {
-            ...prev[provider],
-            status: 'success',
-            message: buildTestSuccessMessage(response),
-            elapsedMs: response.elapsedMs,
-          },
-        }));
-
-        return;
-      }
-
-      setProviderTestState((prev) => ({
-        ...prev,
-        [provider]: {
-          ...prev[provider],
-          status: 'error',
-          message: response.errorMessage,
-          elapsedMs: response.elapsedMs,
-        },
-      }));
-    } catch {
-      setProviderTestState((prev) => ({
-        ...prev,
-        [provider]: {
-          ...prev[provider],
-          status: 'error',
-          message: '连接失败，请检查服务端环境变量或网络配置',
-        },
-      }));
-    }
-  };
-
-  const handleReadSchema = async (provider: DataSourceTestableProviderId) => {
-    setProviderSchemaState((prev) => ({
-      ...prev,
-      [provider]: {
-        ...prev[provider],
-        status: 'loading',
-        message: '正在读取 Schema...',
-      },
-    }));
-
-    try {
-      const response = await readDataSourceSchema(provider);
-
-      if (response.ok) {
-        setProviderSchemaState((prev) => ({
-          ...prev,
-          [provider]: {
-            ...prev[provider],
-            status: 'success',
-            message: buildSchemaSuccessMessage(response),
-            elapsedMs: response.elapsedMs,
-            schemas: response.schemas,
-            tableCount: response.tableCount,
-            tables: response.tables,
-            readAt: response.readAt,
-          },
-        }));
-
-        return;
-      }
-
-      setProviderSchemaState((prev) => ({
-        ...prev,
-        [provider]: {
-          ...prev[provider],
-          status: 'error',
-          message: response.errorMessage,
-          elapsedMs: response.elapsedMs,
-        },
-      }));
-    } catch {
-      setProviderSchemaState((prev) => ({
-        ...prev,
-        [provider]: {
-          ...prev[provider],
-          status: 'error',
-          message: '读取 Schema 失败，请检查服务端环境变量、数据库连接或网络配置。',
-        },
-      }));
-    }
-  };
 
   return (
     <div
@@ -327,7 +137,7 @@ export function DataSourceModal() {
             </TabsList>
 
             {DATA_SOURCE_TABS.map((tab) => {
-              const providers = getProvidersByTab(tab.id, providerTestState, providerSchemaState);
+              const providers = getProvidersByTab(tab.id);
 
               return (
                 <TabsContent key={tab.id} value={tab.id} className="datasource-tab-content">
@@ -342,32 +152,9 @@ export function DataSourceModal() {
                   <ScrollArea className="datasource-scroll">
                     {providers.length > 0 ? (
                       <div className="datasource-provider-grid">
-                        {providers.map((provider) => {
-                          if (isTestableProvider(provider.id)) {
-                            const testableProviderId = provider.id;
-                            const testState = providerTestState[testableProviderId];
-                            const schemaState = providerSchemaState[testableProviderId];
-                            const canReadSchema = testState?.status === 'success';
-
-                            return (
-                              <DataSourceProviderCard
-                                key={provider.id}
-                                provider={provider}
-                                runtimeState={testState}
-                                schemaState={schemaState}
-                                canReadSchema={canReadSchema}
-                                onTestConnection={() => {
-                                  void handleTestConnection(testableProviderId);
-                                }}
-                                onReadSchema={() => {
-                                  void handleReadSchema(testableProviderId);
-                                }}
-                              />
-                            );
-                          }
-
-                          return <DataSourceProviderCard key={provider.id} provider={provider} />;
-                        })}
+                        {providers.map((provider) => (
+                          <DataSourceProviderCard key={provider.id} provider={provider} />
+                        ))}
                       </div>
                     ) : (
                       <div className="datasource-empty-state">暂无该类型数据源</div>
