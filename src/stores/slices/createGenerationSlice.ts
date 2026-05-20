@@ -680,7 +680,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     });
 
     if (shouldPersistReportState && reportConversationId) {
-      void persistRunReportState(reportConversationId, normalizedRunId, 'skipped', null).then(
+      void persistRunReportState(reportConversationId, normalizedRunId, 'skipped').then(
         (result) => {
           if (result.ok) {
             return;

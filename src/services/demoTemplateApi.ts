@@ -76,7 +76,6 @@ export async function fetchDemoConversations(): Promise<
 
 export async function copyDemoConversationTemplate(
   templateId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<DemoConversationCopyResult>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();

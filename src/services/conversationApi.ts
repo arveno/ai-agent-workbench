@@ -29,7 +29,6 @@ async function readPersistenceResponse<TData>(response: Response): Promise<Workb
 
 export async function fetchConversations(
   params: FetchConversationsParams,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationListResult>> {
   const apiPath = buildApiPath('/api/workbench/conversations', {
     limit: params.limit,
@@ -52,7 +51,6 @@ export async function fetchConversations(
 
 export async function createConversation(
   input: ConversationCreateInput,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
@@ -73,9 +71,8 @@ export async function createConversation(
 
 export async function fetchConversation(
   id: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
-  const conversationResult = await fetchConversations({ limit: 50 }, null);
+  const conversationResult = await fetchConversations({ limit: 50 });
 
   if (!conversationResult.ok) {
     return conversationResult;
@@ -100,7 +97,6 @@ export async function fetchConversation(
 export async function updateConversation(
   id: string,
   input: ConversationUpdateInput,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();

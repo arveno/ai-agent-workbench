@@ -102,7 +102,6 @@ async function fetchCloudBaseRunBundle(
 
 export async function fetchLatestRunBundleForConversation(
   conversationId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<RunPersistenceBundleResult>> {
   return fetchCloudBaseRunBundle(
     { conversationId, latest: 1 },
@@ -112,7 +111,6 @@ export async function fetchLatestRunBundleForConversation(
 
 export async function fetchLatestRunForConversation(
   conversationId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<LatestRunResult>> {
   const result = await fetchCloudBaseRunBundle(
     { conversationId, latest: 1 },
@@ -133,7 +131,6 @@ export async function fetchLatestRunForConversation(
 
 export async function fetchRun(
   runId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<AgentRunRecord>> {
   const result = await fetchCloudBaseRunBundle({ runId }, '读取 Run 失败。');
 
@@ -163,7 +160,6 @@ export async function fetchRunBundle(
 
 export async function fetchRunEvents(
   runId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<RunEventListResult>> {
   const result = await fetchCloudBaseRunBundle({ runId }, '读取 Run Events 失败。');
 
@@ -181,7 +177,6 @@ export async function fetchRunEvents(
 
 export async function fetchToolInvocations(
   runId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ToolInvocationListResult>> {
   const result = await fetchCloudBaseRunBundle({ runId }, '读取工具调用失败。');
 

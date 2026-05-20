@@ -27,7 +27,6 @@ async function readPersistenceResponse<TData>(response: Response): Promise<Workb
 export async function fetchConversationMessages(
   conversationId: string,
   params: FetchConversationMessagesParams,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<MessageListResult>> {
   const cloudBaseApiPath = buildApiPath('/api/workbench/messages', {
     conversationId,
@@ -51,7 +50,6 @@ export async function fetchConversationMessages(
 export async function createConversationMessage(
   conversationId: string,
   input: MessageCreateInput,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<MessageRecord>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();

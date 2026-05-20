@@ -735,7 +735,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       });
 
       if (authContext) {
-        void updateConversation(previousState.currentSessionId, { title: nextTitle }, authContext.accessToken).then((result) => {
+        void updateConversation(previousState.currentSessionId, { title: nextTitle }).then((result) => {
           if (!result.ok || get().currentSessionId !== previousState.currentSessionId) {
             return;
           }
@@ -838,7 +838,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       {
         limit: 20,
       },
-      authContext.accessToken,
     );
 
     if (requestId !== persistenceRequestId) {
@@ -894,7 +893,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       {
         limit: DEFAULT_MESSAGE_PAGE_SIZE,
       },
-      authContext.accessToken,
     );
 
     if (requestId !== persistenceRequestId) {
@@ -1012,7 +1010,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       {
         limit: DEFAULT_MESSAGE_PAGE_SIZE,
       },
-      authContext.accessToken,
     );
 
     if (requestId !== messageLoadRequestId || get().currentSessionId !== sessionId) {
@@ -1083,7 +1080,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         limit: DEFAULT_MESSAGE_PAGE_SIZE,
         before,
       },
-      authContext.accessToken,
     );
 
     if (requestId !== olderMessageLoadRequestId || get().currentSessionId !== sessionId) {
@@ -1168,7 +1164,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       isPersistentStateCompatibleWithAuthContext(authContext, currentState.persistentUserId)
     ) {
       if (writableCurrentSession.title === '新会话' && conversationTitle !== '新会话') {
-        void updateConversation(writableCurrentSession.id, { title: conversationTitle }, authContext.accessToken).then((result) => {
+        void updateConversation(writableCurrentSession.id, { title: conversationTitle }).then((result) => {
           if (!result.ok || get().currentSessionId !== writableCurrentSession.id) {
             return;
           }
@@ -1207,7 +1203,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         mode: getConversationModeForSelectedModel(currentState.selectedModelId),
         metadata: createConversationMetadataForSession(writableCurrentSession, currentState.currentTaskId),
       },
-      authContext.accessToken,
     );
 
     if (!result.ok) {
@@ -1257,7 +1252,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
     const result = await createConversationMessage(
       conversationId,
       workbenchMessageToMessageCreateInput(message),
-      authContext.accessToken,
     );
 
     if (!result.ok) {

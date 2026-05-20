@@ -400,7 +400,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       ragSourcesError: null,
     });
 
-    const latestRunResult = await fetchLatestRunBundleForConversation(conversationId, accessToken);
+    const latestRunResult = await fetchLatestRunBundleForConversation(conversationId);
 
     if (requestId !== latestRunRequestId || get().currentSessionId !== conversationId) {
       return;
@@ -645,7 +645,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       runEventsError: null,
     });
 
-    const result = await fetchRunEvents(runId, accessToken);
+    const result = await fetchRunEvents(runId);
 
     if (!result.ok) {
       set({
@@ -669,7 +669,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const result = await fetchToolInvocations(runId, accessToken);
+    const result = await fetchToolInvocations(runId);
 
     if (!result.ok) {
       set({
@@ -716,7 +716,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       reportArtifactsError: null,
     });
 
-    const result = await fetchConversationReportArtifacts(conversationId, accessToken);
+    const result = await fetchConversationReportArtifacts(conversationId);
 
     if (requestId !== reportArtifactsRequestId || get().currentSessionId !== conversationId) {
       return;
@@ -774,7 +774,6 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         runtimeRunId: params.runId,
         metadata: createReportArtifactMetadata(run, params.runId),
       },
-      accessToken,
     );
 
     if (!result.ok) {

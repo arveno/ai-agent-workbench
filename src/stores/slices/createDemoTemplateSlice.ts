@@ -271,7 +271,7 @@ export const createDemoTemplateSlice: StateCreator<WorkbenchStore, [], [], DemoT
       copyDemoTemplateError: null,
     });
 
-    const result = await copyDemoConversationTemplateApi(templateId, accessToken);
+    const result = await copyDemoConversationTemplateApi(templateId);
 
     if (!result.ok) {
       set({

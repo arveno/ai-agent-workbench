@@ -26,7 +26,6 @@ async function readPersistenceResponse<TData>(
 
 export async function fetchConversationReportArtifacts(
   conversationId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactListResult>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
@@ -46,7 +45,6 @@ export async function fetchConversationReportArtifacts(
 
 export async function fetchReportArtifact(
   reportId: string,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactRecord>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
@@ -64,7 +62,6 @@ export async function fetchReportArtifact(
 export async function createRunReportArtifact(
   runId: string,
   input: ReportArtifactCreateInput,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactCreateResult>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
@@ -112,7 +109,6 @@ export async function updateRunReportState(
   conversationId: string,
   runId: string,
   reportState: Extract<RunReportState, 'generated' | 'skipped' | 'failed'>,
-  _accessToken: string | null | undefined,
 ): Promise<WorkbenchPersistenceResponse<{ runId: string; reportState: RunReportState }>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
