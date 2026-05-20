@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,6 @@ import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
-import { requestHealthCheck } from '../../services/healthApi';
 import type { ModelProviderId } from '../../types/workbench';
 
 interface ProviderOption {
@@ -193,33 +192,6 @@ function ModelConnectModalContent() {
   const closeModelModal = useWorkbenchStore((state) => state.closeModelModal);
   const setSelectedModelId = useWorkbenchStore((state) => state.setSelectedModelId);
 
-  const [hasHealthFailed, setHasHealthFailed] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    void requestHealthCheck()
-      .then((response) => {
-        if (!isMounted) {
-          return;
-        }
-
-        void response;
-        setHasHealthFailed(false);
-      })
-      .catch(() => {
-        if (!isMounted) {
-          return;
-        }
-
-        setHasHealthFailed(true);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const providerStatusViews = useMemo(
     () =>
       buildModelProviderStatusViews({
@@ -359,7 +331,6 @@ function ModelConnectModalContent() {
               <p>当前版本可主动选择 Mock 模式，避免模拟路径产生外部模型成本。</p>
               <p>模型调用由服务端受控转发，前端只提交模型 ID。</p>
               <p>真实 Agent 使用 CloudBase 函数端 Model Gateway，并按 Agent Run 额度使用。</p>
-              {hasHealthFailed ? <p>服务端状态检查失败，当前仍可使用公开演示模式。</p> : null}
             </CardContent>
           </Card>
 
