@@ -102,10 +102,10 @@ export function getToolStatusLabel(status: WorkbenchToolDefinition['status']): s
   }
 
   if (status === 'mock') {
-    return '本地演示';
+    return '本地执行';
   }
 
-  return '规划中';
+  return '不展示';
 }
 
 export function getToolRuntimeLabel(runtime: WorkbenchToolDefinition['runtime']): string {
@@ -117,7 +117,7 @@ export function getToolRuntimeLabel(runtime: WorkbenchToolDefinition['runtime'])
     return '本地执行';
   }
 
-  return '待接入';
+  return '不展示';
 }
 
 export function getToolRiskLabel(riskLevel: WorkbenchToolDefinition['riskLevel']): string {

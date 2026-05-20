@@ -17,7 +17,7 @@ function getToolStatusClassName(status: WorkbenchToolDefinition['status']): stri
     return 'tool-library-badge tool-library-badge-status-mock';
   }
 
-  return 'tool-library-badge tool-library-badge-status-planned';
+  return 'tool-library-badge tool-library-badge-disabled';
 }
 
 function getVisibleToolStatusLabel(status: WorkbenchToolDefinition['status']): string {
@@ -49,7 +49,7 @@ function getRuntimeClassName(runtime: WorkbenchToolDefinition['runtime']): strin
     return 'tool-library-badge tool-library-badge-runtime-mock';
   }
 
-  return 'tool-library-badge tool-library-badge-runtime-planned';
+  return 'tool-library-badge tool-library-badge-disabled';
 }
 
 function getCategoryLabel(category: WorkbenchToolDefinition['category']): string {

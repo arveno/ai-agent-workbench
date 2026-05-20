@@ -230,11 +230,6 @@
   color: #1d4ed8;
 }
 
-.tool-library-badge-status-planned {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
 .tool-library-badge-runtime-server {
   background: #eef2ff;
   color: #3730a3;
@@ -245,7 +240,6 @@
   color: #7e22ce;
 }
 
-.tool-library-badge-runtime-planned,
 .tool-library-badge-trace-off,
 .tool-library-badge-disabled {
   background: #f1f5f9;

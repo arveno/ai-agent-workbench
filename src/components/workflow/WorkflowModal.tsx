@@ -128,7 +128,7 @@ function getWorkflowInputSummary(step: WorkflowStepDefinition): string {
   }
 
   if (step.kind === 'schema') {
-    return 'provider, allowedSchemas';
+    return 'dataSourceId, allowedSchemas';
   }
 
   if (step.kind === 'toolSelect') {

@@ -16,6 +16,9 @@ export function RagSourcesCard() {
     isLoading: isRagSourcesLoading,
     errorMessage: ragSourcesError,
   });
+  const isMockRun = currentRun?.mode === 'mock';
+  const panelTitle = isMockRun ? '模拟来源' : view.title;
+  const panelDescription = isMockRun ? 'Mock RAG 来源，用于模拟模式验证。' : view.description;
 
   if (!currentRun) {
     return (
@@ -23,9 +26,9 @@ export function RagSourcesCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.search} size={16} />
-            <span>{view.title}</span>
+            <span>{panelTitle}</span>
           </CardTitle>
-          <CardDescription>{view.description}</CardDescription>
+          <CardDescription>{panelDescription}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
@@ -43,9 +46,9 @@ export function RagSourcesCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.search} size={16} />
-            <span>{view.title}</span>
+            <span>{panelTitle}</span>
           </CardTitle>
-          <CardDescription>{view.description}</CardDescription>
+          <CardDescription>{panelDescription}</CardDescription>
         </div>
         {view.retrievedChunkCount > 0 ? (
           <Badge variant="outline" className="right-card-count-badge">
@@ -108,7 +111,9 @@ export function RagSourcesCard() {
                   </Badge>
                 </div>
 
-                <div className="rag-source-chunk-title">来源：{source.sourceName}</div>
+                <div className="rag-source-chunk-title">
+                  来源：{isMockRun ? source.sourceName.replaceAll('公开演示', '模拟') : source.sourceName}
+                </div>
                 <p className="rag-source-preview">{source.snippet}</p>
 
                 <div className="rag-source-meta">

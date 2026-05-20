@@ -113,6 +113,12 @@ export function Sidebar() {
     isLoading: isConversationListLoading || isAuthLoading,
     errorMessage: conversationListError,
   });
+  const visibleConversationListView = {
+    ...conversationListView,
+    emptyTitle: conversationListView.emptyTitle.replaceAll('公开演示', '示例'),
+    emptyDescription: conversationListView.emptyDescription.replaceAll('公开演示', '示例'),
+    loadingMessage: conversationListView.loadingMessage.replaceAll('公开演示', '示例'),
+  };
   const demoConversationTemplateListView = createDemoConversationTemplateListView({
     templates: demoConversations,
     isLoading: isDemoConversationsLoading,
@@ -195,7 +201,7 @@ export function Sidebar() {
         <section className="sidebar-section">
           <h2 className="section-title">我的会话</h2>
           <ConversationList
-            view={conversationListView}
+            view={visibleConversationListView}
             onSelect={handleSessionClick}
             onCreate={() => {
               void handleCreateSession();

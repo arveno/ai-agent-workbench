@@ -103,7 +103,7 @@ function getCapabilityClassName(label: string): string {
     return 'model-badge model-badge-gateway';
   }
 
-  if (label.includes('预留') || label.includes('待接入')) {
+  if (label.includes('不可用') || label.includes('未启用')) {
     return 'model-badge model-badge-muted';
   }
 
@@ -120,7 +120,7 @@ function getKeySourceLabel(status: ModelProviderStatusView): string {
   }
 
   if (status.isReserved) {
-    return '预留';
+    return '未启用';
   }
 
   if (status.keySource === 'server_env') {
@@ -135,7 +135,7 @@ function getStreamingLabel(status: ModelProviderStatusView): string {
     return '支持 streaming';
   }
 
-  return '待接入 streaming';
+  return 'Streaming 未启用';
 }
 
 function getGatewayLabel(status: ModelProviderStatusView): string {
@@ -147,7 +147,7 @@ function getGatewayLabel(status: ModelProviderStatusView): string {
     return '本地模拟，不走 Gateway';
   }
 
-  return '待接入 Model Gateway';
+  return 'Gateway 未启用';
 }
 
 function getProviderDisplayName(status: ModelProviderStatusView): string {
@@ -328,10 +328,10 @@ function ModelConnectModalContent() {
     }
 
     if (status.isReserved) {
-      return '先配置';
+      return '不可用';
     }
 
-    return canActivateProvider(status) ? '启用' : '先配置';
+    return canActivateProvider(status) ? '启用' : '不可用';
   };
 
   return (

@@ -23,8 +23,8 @@ function createCloudBaseAgentDataSource(): RunDataSourceSnapshot {
 function getLegacyAgentDataSource(provider: LegacyAgentProvider): RunDataSourceSnapshot {
   return {
     provider,
-    name: provider === 'supabase' ? 'Supabase / Agent Run' : 'PostgreSQL / Agent Run',
-    typeLabel: provider === 'supabase' ? 'Supabase 托管 PostgreSQL' : 'PostgreSQL',
+    name: '历史数据源记录 / Agent Run',
+    typeLabel: '历史数据源',
     schema: 'public',
   };
 }

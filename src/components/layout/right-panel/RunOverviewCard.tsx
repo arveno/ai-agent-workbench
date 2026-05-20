@@ -1,10 +1,9 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunModelTrace, WorkbenchMessage } from '../../../types/workbench';
+import type { RunModelTrace, RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
 import {
   formatRunElapsed,
   getConclusionSourceLabel,
   getRunIntentLabel,
-  getRunModeLabel,
   getRunStatusLabel,
   getRunStatusTone,
   getRunTitle,
@@ -61,6 +60,10 @@ function formatNullableNumber(value: number | null | undefined, suffix = ''): st
   return typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '未返回';
 }
 
+function getVisibleRunModeLabel(mode: RunSnapshot['mode']): string {
+  return mode === 'mock' ? '模拟模式（Mock）' : '真实 Agent';
+}
+
 function getModelTraceItems(modelTrace: RunModelTrace | undefined): RunOverviewItem[] {
   if (!modelTrace) {
     return [];
@@ -77,7 +80,7 @@ function getModelTraceItems(modelTrace: RunModelTrace | undefined): RunOverviewI
 
   return [
     { label: '模型 ID', value: modelTrace.selectedModelId ?? '-' },
-    { label: 'Provider', value: modelTrace.provider ?? '-' },
+    { label: '模型服务商', value: modelTrace.provider ?? '-' },
     { label: '模型', value: modelTrace.model ?? '-' },
     { label: '模型耗时', value: formatNullableNumber(modelTrace.latencyMs, 'ms') },
     { label: 'Token', value: tokenUsageText },
@@ -158,7 +161,7 @@ export function RunOverviewCard() {
     { label: '本轮问题', value: runPrompt, wide: true },
     { label: 'Run ID', value: currentRun.id },
     { label: '轮次', value: getRunRoundLabel(currentRun.id, currentSession?.messages ?? []) },
-    { label: '模式', value: getRunModeLabel(currentRun.mode) },
+    { label: '模式', value: getVisibleRunModeLabel(currentRun.mode) },
     { label: '任务类型', value: getRunIntentLabel(currentRun.intent) },
     { label: '耗时', value: formatRunElapsed(currentRun) },
     { label: '结论来源', value: getConclusionSourceLabel(currentRun.conclusionSource) },
