@@ -43,22 +43,6 @@ export async function fetchConversationReportArtifacts(
   }
 }
 
-export async function fetchReportArtifact(
-  reportId: string,
-): Promise<WorkbenchPersistenceResponse<ReportArtifactRecord>> {
-  try {
-    const cloudBaseToken = await ensureCloudBaseAccessToken();
-    const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/reports', { id: reportId }), {
-      method: 'GET',
-      accessToken: cloudBaseToken,
-    });
-
-    return await readPersistenceResponse<ReportArtifactRecord>(response, '读取报告 Artifact 失败。');
-  } catch {
-    return createNetworkErrorResponse('网络异常，暂不能读取报告 Artifact。');
-  }
-}
-
 export async function createRunReportArtifact(
   runId: string,
   input: ReportArtifactCreateInput,

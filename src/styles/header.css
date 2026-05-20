@@ -337,21 +337,6 @@
   color: var(--aw-primary);
 }
 
-.header-icon-button {
-  flex: 0 0 32px;
-  color: #64748b;
-}
-
-.workspace-disabled-icon-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.workspace-disabled-icon-button:disabled:hover {
-  background: #ffffff;
-  color: #64748b;
-}
-
 .connect-model-button,
 .header-btn,
 .run-agent-button {

@@ -32,16 +32,6 @@ function normalizePersistenceErrorCode(value: unknown): WorkbenchPersistenceErro
   return 'db_error';
 }
 
-export function createAuthRequiredPersistenceResponse<TData>(
-  message: string,
-): WorkbenchPersistenceResponse<TData> {
-  return {
-    ok: false,
-    errorCode: 'auth_required',
-    message,
-  };
-}
-
 export function createNetworkPersistenceResponse<TData>(
   message: string,
 ): WorkbenchPersistenceResponse<TData> {

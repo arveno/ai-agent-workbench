@@ -69,31 +69,6 @@ export async function createConversation(
   }
 }
 
-export async function fetchConversation(
-  id: string,
-): Promise<WorkbenchPersistenceResponse<ConversationRecord>> {
-  const conversationResult = await fetchConversations({ limit: 50 });
-
-  if (!conversationResult.ok) {
-    return conversationResult;
-  }
-
-  const conversation = conversationResult.data.conversations.find((item) => item.id === id);
-
-  if (!conversation) {
-    return {
-      ok: false,
-      errorCode: 'not_found',
-      message: 'Workbench 会话不存在。',
-    };
-  }
-
-  return {
-    ok: true,
-    data: conversation,
-  };
-}
-
 export async function updateConversation(
   id: string,
   input: ConversationUpdateInput,

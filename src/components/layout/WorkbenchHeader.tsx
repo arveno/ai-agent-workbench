@@ -10,7 +10,6 @@ import {
 } from '../../utils/runViewModel';
 import { WORKBENCH_TOOL_DEFINITIONS } from '../../utils/toolRegistryView';
 import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
@@ -192,18 +191,6 @@ export function WorkbenchHeader() {
           ariaLabel="Workflow / Prompt：固定流程"
           onClick={openWorkflowModal}
         />
-
-        <Button
-          className="header-icon-button icon-button workspace-disabled-icon-button"
-          type="button"
-          aria-label="更多能力暂未开放"
-          title="更多能力暂未开放"
-          variant="outline"
-          size="icon-sm"
-          disabled
-        >
-          <AppIcon icon={icons.more} size={16} />
-        </Button>
       </div>
     </header>
   );

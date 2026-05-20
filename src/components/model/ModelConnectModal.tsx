@@ -356,7 +356,7 @@ function ModelConnectModalContent() {
         <div className="model-modal-body">
           <Card className="model-modal-info-card" size="sm">
             <CardContent className="model-modal-info-content">
-              <p>当前线上 Demo 可主动选择 Mock 模式，避免公开演示产生外部模型成本。</p>
+              <p>当前版本可主动选择 Mock 模式，避免模拟路径产生外部模型成本。</p>
               <p>模型调用由服务端受控转发，前端只提交模型 ID。</p>
               <p>真实 Agent 使用 CloudBase 函数端 Model Gateway，并按 Agent Run 额度使用。</p>
               {hasHealthFailed ? <p>服务端状态检查失败，当前仍可使用公开演示模式。</p> : null}

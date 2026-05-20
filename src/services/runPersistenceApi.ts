@@ -1,6 +1,5 @@
 import type {
   AgentRunRecord,
-  LatestRunResult,
   RunEventListResult,
   RunEventRecord,
   ToolInvocationRecord,
@@ -107,49 +106,6 @@ export async function fetchLatestRunBundleForConversation(
     { conversationId, latest: 1 },
     '读取最近 Run 失败。',
   );
-}
-
-export async function fetchLatestRunForConversation(
-  conversationId: string,
-): Promise<WorkbenchPersistenceResponse<LatestRunResult>> {
-  const result = await fetchCloudBaseRunBundle(
-    { conversationId, latest: 1 },
-    '读取最近 Run 失败。',
-  );
-
-  if (!result.ok) {
-    return result;
-  }
-
-  return {
-    ok: true,
-    data: {
-      run: result.data.run,
-    },
-  };
-}
-
-export async function fetchRun(
-  runId: string,
-): Promise<WorkbenchPersistenceResponse<AgentRunRecord>> {
-  const result = await fetchCloudBaseRunBundle({ runId }, '读取 Run 失败。');
-
-  if (!result.ok) {
-    return result;
-  }
-
-  if (!result.data.run) {
-    return {
-      ok: false,
-      errorCode: 'not_found',
-      message: 'Run 不存在。',
-    };
-  }
-
-  return {
-    ok: true,
-    data: result.data.run,
-  };
 }
 
 export async function fetchRunBundle(

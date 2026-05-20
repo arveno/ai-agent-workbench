@@ -637,18 +637,6 @@
   box-shadow: none;
 }
 
-.header-icon-button {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.header-icon-button:hover:not(:disabled) {
-  border-color: var(--aw-border);
-  background: var(--aw-surface-subtle);
-  box-shadow: none;
-}
-
 [data-slot="button"].header-capability-button {
   border-color: var(--aw-border);
   background: var(--aw-surface);
