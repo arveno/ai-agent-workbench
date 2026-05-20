@@ -135,7 +135,7 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           reason: '用户要求定位教学质量异常，需要读取 teaching_metrics 并聚合 warning_count。',
         },
         dataSource: {
-          provider: 'postgresql',
+          provider: 'cloudbase_mysql',
           name: 'CloudBase MySQL / teaching_metrics',
           typeLabel: 'CloudBase MySQL',
           schema: 'public_demo',
@@ -249,7 +249,7 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           reason: '用户要求月度趋势和 warning_count 解释，需要跨月聚合。',
         },
         dataSource: {
-          provider: 'postgresql',
+          provider: 'cloudbase_mysql',
           name: 'CloudBase MySQL / teaching_metrics',
           typeLabel: 'CloudBase MySQL',
           schema: 'public_demo',
@@ -342,7 +342,7 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           reason: '用户询问指标含义和解释依据，应使用 knowledge_search 检索知识库。',
         },
         dataSource: {
-          provider: 'postgresql',
+          provider: 'cloudbase_mysql',
           name: 'CloudBase MySQL / knowledge_documents',
           typeLabel: 'CloudBase MySQL',
           schema: 'knowledge_documents / knowledge_chunks',

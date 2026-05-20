@@ -58,7 +58,7 @@ export function DataSourceCard() {
   const metaItems = [
     { label: '数据源名称', value: dataSource?.name ?? '未记录' },
     { label: '底层类型', value: dataSource?.typeLabel ?? '-' },
-    { label: 'Provider', value: dataSource?.provider ?? '-' },
+    { label: '数据源标识', value: dataSource?.provider ?? '-' },
     { label: 'Schema', value: dataSource?.schema ?? '-' },
     { label: '表数量', value: typeof dataSource?.tableCount === 'number' ? String(dataSource.tableCount) : '-' },
     { label: 'Run 状态', value: getRunStatusLabel(currentRun.status) },

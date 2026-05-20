@@ -9,9 +9,18 @@ import type {
   RunToolInvocation,
 } from '@/types/run';
 
-type AgentProvider = 'postgresql' | 'supabase';
+type LegacyAgentProvider = 'postgresql' | 'supabase';
 
-function getAgentDataSource(provider: AgentProvider): RunDataSourceSnapshot {
+function createCloudBaseAgentDataSource(): RunDataSourceSnapshot {
+  return {
+    provider: 'cloudbase_mysql',
+    name: 'CloudBase MySQL / Agent Run',
+    typeLabel: 'CloudBase MySQL',
+    schema: 'public_demo',
+  };
+}
+
+function getLegacyAgentDataSource(provider: LegacyAgentProvider): RunDataSourceSnapshot {
   return {
     provider,
     name: provider === 'supabase' ? 'Supabase / Agent Run' : 'PostgreSQL / Agent Run',
@@ -79,7 +88,6 @@ function mapAgentChartData(agentRun: AgentRunResult): RunChartData | undefined {
 export function createAgentPendingRunStartedEvent(params: {
   runId: string;
   prompt: string;
-  provider: AgentProvider;
   sessionId?: string;
 }): RunStartedEvent {
   const timestamp = new Date().toISOString();
@@ -98,7 +106,7 @@ export function createAgentPendingRunStartedEvent(params: {
         shouldUseDataAnalysis: false,
         reason: '正在等待 Agent Planner 判断任务类型',
       },
-      dataSource: getAgentDataSource(params.provider),
+      dataSource: createCloudBaseAgentDataSource(),
       steps: [
         {
           id: 'create_run',
@@ -172,7 +180,7 @@ export function mapAgentRunResultToRunSnapshot(agentRun: AgentRunResult): RunSna
       timeRangeLabel: agentRun.plan?.timeRange?.label,
       comparison: agentRun.plan?.comparison,
     },
-    dataSource: getAgentDataSource(agentRun.provider),
+    dataSource: getLegacyAgentDataSource(agentRun.provider),
     steps: mapAgentSteps(agentRun),
     toolInvocations: mapAgentTools(agentRun),
     chartData: mapAgentChartData(agentRun),
