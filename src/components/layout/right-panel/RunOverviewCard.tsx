@@ -1,7 +1,8 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
+import type { RunEvent, RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
 import type { ModelTraceViewModel } from '../../../utils/modelTraceViewModel';
 import { createModelTraceViewModel } from '../../../utils/modelTraceViewModel';
+import { getRunReuseNotice } from '../../../utils/observabilityLabels';
 import {
   formatRunElapsed,
   getConclusionSourceLabel,
@@ -62,6 +63,25 @@ function getVisibleRunModeLabel(mode: RunSnapshot['mode']): string {
   return mode === 'mock' ? '模拟模式（Mock）' : '真实 Agent';
 }
 
+function getLatestRunReusedEvent(
+  runId: string,
+  events: RunEvent[],
+): Extract<RunEvent, { type: 'run_reused' }> | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (event.type !== 'run_reused') {
+      continue;
+    }
+
+    if (event.runId === runId || event.clientRunId === runId) {
+      return event;
+    }
+  }
+
+  return null;
+}
+
 function getModelTraceItems(modelTraceView: ModelTraceViewModel | null): RunOverviewItem[] {
   if (!modelTraceView) {
     return [];
@@ -84,6 +104,7 @@ function getModelTraceItems(modelTraceView: ModelTraceViewModel | null): RunOver
 export function RunOverviewCard() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
+  const runEventLog = useWorkbenchStore((state) => state.runEventLog);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const selectedRunId = useWorkbenchStore((state) => state.selectedRunId);
   const isLatestRunLoading = useWorkbenchStore((state) => state.isLatestRunLoading);
@@ -150,9 +171,11 @@ export function RunOverviewCard() {
   const statusTone = getRunStatusTone(currentRun.status);
   const runPrompt = getRunPromptText(currentRun.prompt);
   const modelTraceView = createModelTraceViewModel(currentRun.modelTrace);
+  const reuseNotice = getRunReuseNotice(getLatestRunReusedEvent(currentRun.id, runEventLog));
   const overviewItems: RunOverviewItem[] = [
     { label: '本轮问题', value: runPrompt, wide: true },
     { label: 'Run ID', value: currentRun.id },
+    ...(reuseNotice ? [{ label: '复用状态', value: reuseNotice, wide: true }] : []),
     { label: '轮次', value: getRunRoundLabel(currentRun.id, currentSession?.messages ?? []) },
     { label: '模式', value: getVisibleRunModeLabel(currentRun.mode) },
     { label: '任务类型', value: getRunIntentLabel(currentRun.intent) },

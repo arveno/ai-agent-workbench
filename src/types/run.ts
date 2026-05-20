@@ -134,6 +134,26 @@ export interface RunStartedEvent {
   run: RunSnapshot;
 }
 
+export interface RunReusedEvent {
+  type: 'run_reused';
+  runId: string;
+  usageId?: string | null;
+  clientRunId?: string | null;
+  conversationId?: string | null;
+  timestamp?: string;
+  duplicate?: boolean;
+  reused?: boolean;
+  reason?: string;
+  status?: string;
+  existingRun?: {
+    id?: string;
+    status?: string;
+    conclusionSource?: RunConclusionSource;
+    reportState?: RunReportState;
+    completedAt?: string | null;
+  } | null;
+}
+
 export interface RunStepStartedEvent {
   type: 'step_started';
   runId: string;
@@ -242,6 +262,7 @@ export interface RunStoppedEvent {
 
 export type RunEvent =
   | RunStartedEvent
+  | RunReusedEvent
   | RunStepStartedEvent
   | RunStepCompletedEvent
   | RunStepFailedEvent

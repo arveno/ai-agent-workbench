@@ -22,6 +22,7 @@ import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
 
 const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
   'run_started',
+  'run_reused',
   'step_started',
   'step_completed',
   'step_failed',

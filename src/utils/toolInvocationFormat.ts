@@ -1,4 +1,5 @@
 import type { RunToolInvocation } from '@/types/run';
+import { getToolFailureLabel, getToolStatusLabel } from './observabilityLabels';
 
 export interface FormattedToolInvocation {
   id: string;
@@ -8,6 +9,7 @@ export interface FormattedToolInvocation {
   statusLabel: string;
   inputText: string;
   outputText: string;
+  failureText: string;
   elapsedText: string;
 }
 
@@ -72,30 +74,6 @@ function getKnownToolId(invocation: RunToolInvocation): KnownToolId | null {
     .map((value) => value.toLowerCase());
 
   return KNOWN_TOOL_IDS.find((toolId) => candidates.some((candidate) => candidate === toolId || candidate.includes(toolId))) ?? null;
-}
-
-function getStatusLabel(status: RunToolInvocation['status']): string {
-  if (status === 'pending') {
-    return '待执行';
-  }
-
-  if (status === 'running') {
-    return '执行中';
-  }
-
-  if (status === 'success') {
-    return '已完成';
-  }
-
-  if (status === 'skipped') {
-    return '已跳过';
-  }
-
-  if (status === 'stopped') {
-    return '已停止';
-  }
-
-  return '异常';
 }
 
 function getStringField(source: Record<string, unknown> | null, key: string): string {
@@ -261,9 +239,10 @@ function formatToolInvocation(invocation: RunToolInvocation, limits: FormatLimit
     toolName: invocation.toolName,
     displayName,
     categoryLabel,
-    statusLabel: getStatusLabel(invocation.status),
+    statusLabel: getToolStatusLabel(invocation.status),
     inputText: truncateText(formatInputText(toolId, invocation), limits.input),
     outputText: truncateText(formatOutputText(toolId, invocation), limits.output),
+    failureText: invocation.status === 'error' ? truncateText(getToolFailureLabel(invocation), limits.output) : '',
     elapsedText: formatElapsedText(invocation.elapsedMs),
   };
 }

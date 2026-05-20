@@ -1,5 +1,6 @@
 import type { RagSourceChunk } from '@/types/rag';
 import type { RunSnapshot } from '@/types/run';
+import { getRagEmptyStateLabel, getRagSourcesDescription } from './observabilityLabels';
 import { formatSourceScore, getRunRagSources } from './ragSources';
 
 export interface RagSourceView {
@@ -60,20 +61,20 @@ export function createRagSourcesView(params: {
   const items = params.run ? sources.map((source) => sourceToView(source, params.run?.mode ?? 'agent')) : [];
   const isEmpty = !params.isLoading && !params.errorMessage && items.length === 0;
   const isMock = params.run?.mode === 'mock';
+  const usedSourceCount = items.filter((item) => item.isUsedInAnswer).length;
+  const emptyState = getRagEmptyStateLabel(params.run);
 
   return {
     title: isMock ? '公开演示来源' : 'RAG 来源',
-    description: isMock ? 'Mock RAG 来源，仅用于公开演示' : 'CloudBase knowledge_search 返回的来源、引用与证据链',
+    description: isMock ? 'Mock RAG 来源，仅用于公开演示' : getRagSourcesDescription(params.run, usedSourceCount, items.length),
     items,
     retrievedChunkCount: items.length,
     isLoading: params.isLoading,
     isEmpty,
     errorMessage: params.errorMessage,
     canRetry: Boolean(params.errorMessage && params.run),
-    emptyTitle: '本轮没有检索来源',
-    emptyDescription: params.run
-      ? '当前 Run 没有返回 citation/source，这不是执行错误。'
-      : '发送涉及知识检索的问题后，这里会展示 retrievedChunkCount、来源片段和引用信息。',
+    emptyTitle: emptyState.title,
+    emptyDescription: emptyState.description,
     loadingMessage: '正在读取 RAG 检索来源...',
     retryLabel: '重试',
   };

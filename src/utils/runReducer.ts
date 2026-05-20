@@ -39,6 +39,26 @@ function withModelTrace(run: RunSnapshot, modelTrace?: RunModelTrace): RunSnapsh
   };
 }
 
+function mapReusedRunStatus(status: string | null | undefined): RunSnapshot['status'] {
+  if (status === 'completed' || status === 'success') {
+    return 'success';
+  }
+
+  if (status === 'failed' || status === 'error') {
+    return 'error';
+  }
+
+  if (status === 'stopped') {
+    return 'stopped';
+  }
+
+  if (status === 'pending') {
+    return 'pending';
+  }
+
+  return 'running';
+}
+
 const CONCLUSION_SECTION_FIELDS: Array<{ title: string; keys: string[] }> = [
   { title: '关键发现', keys: ['keyFindings', 'key_findings', 'findings'] },
   { title: '可能原因', keys: ['possibleCauses', 'possible_causes', 'causes'] },
@@ -427,6 +447,27 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
       agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
       updatedAt,
     };
+  }
+
+  if (event.type === 'run_reused') {
+    if (!currentRun) {
+      return currentRun;
+    }
+
+    const reusedRunId = event.clientRunId?.trim() || event.runId;
+
+    if (reusedRunId && currentRun.id !== reusedRunId) {
+      return currentRun;
+    }
+
+    return withUpdatedAt(
+      {
+        ...currentRun,
+        status: mapReusedRunStatus(event.status),
+        completedAt: event.existingRun?.completedAt ?? currentRun.completedAt,
+      },
+      event.timestamp ?? nowIso(),
+    );
   }
 
   if (!isRunIdMatched(currentRun, event.runId)) {

@@ -1,5 +1,5 @@
 import type { RunConclusionSource, RunModelTrace, RunModelTokenUsage } from '@/types/run';
-import { getConclusionSourceLabel } from './runViewModel';
+import { getConclusionSourceLabel, getFallbackReasonLabel, getModelErrorTypeLabel } from './observabilityLabels';
 
 export interface ModelTraceViewModel {
   selectedModelIdLabel: string;
@@ -63,8 +63,8 @@ export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined)
     completionTokensLabel: formatNumber(modelTrace.tokenUsage?.completionTokens),
     totalTokensLabel: formatNumber(modelTrace.tokenUsage?.totalTokens),
     tokenUsageStatus: getTokenUsageStatus(modelTrace.tokenUsage, modelTrace.conclusionSource),
-    fallbackReasonLabel: formatText(modelTrace.fallbackReason),
-    modelErrorTypeLabel: formatText(modelTrace.modelErrorType),
+    fallbackReasonLabel: getFallbackReasonLabel(modelTrace.fallbackReason),
+    modelErrorTypeLabel: getModelErrorTypeLabel(modelTrace.modelErrorType),
     conclusionSourceLabel: getConclusionSourceLabel(modelTrace.conclusionSource),
   };
 }

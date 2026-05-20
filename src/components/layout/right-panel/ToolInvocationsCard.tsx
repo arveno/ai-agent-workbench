@@ -6,7 +6,6 @@ import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Separator } from '../../ui/separator';
-import { JsonPreview } from './JsonPreview';
 
 function getToolStatusClass(status: RunToolStatus): string {
   if (status === 'success') {
@@ -89,13 +88,12 @@ export function ToolInvocationsCard() {
                       <div className="tool-invocation-description">
                         {formattedTool.categoryLabel} · {formattedTool.toolName}
                       </div>
-	                      <div className="tool-invocation-summary">输入：{formattedTool.inputText}</div>
-	                      <div className="tool-invocation-summary">输出：{formattedTool.outputText}</div>
-	                      <div className="tool-invocation-details">
-	                        <JsonPreview title="输入详情" value={tool.inputSummary} />
-	                        <JsonPreview title="输出详情" value={tool.outputSummary} />
-	                      </div>
-	                    </div>
+                      <div className="tool-invocation-summary">输入：{formattedTool.inputText}</div>
+                      <div className="tool-invocation-summary">输出：{formattedTool.outputText}</div>
+                      {formattedTool.failureText ? (
+                        <div className="tool-invocation-summary">失败原因：{formattedTool.failureText}</div>
+                      ) : null}
+                    </div>
                     <div className="tool-invocation-meta">
                       <Badge variant="outline" className={`status-badge ${getToolStatusClass(tool.status)}`}>
                         {formattedTool.statusLabel}

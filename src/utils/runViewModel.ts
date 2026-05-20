@@ -7,6 +7,13 @@ import type {
   RunStepStatus,
   RunToolStatus,
 } from '@/types/run';
+import {
+  getConclusionSourceLabel as getObservabilityConclusionSourceLabel,
+  getRunStatusLabel as getObservabilityRunStatusLabel,
+  getRunStatusTone as getObservabilityRunStatusTone,
+  getStepStatusLabel as getObservabilityStepStatusLabel,
+  getToolStatusLabel as getObservabilityToolStatusLabel,
+} from './observabilityLabels';
 
 export type RunStatusTone = 'muted' | 'active' | 'success' | 'warning' | 'danger';
 
@@ -31,111 +38,23 @@ export function getRunIntentLabel(intent: RunIntent): string {
 }
 
 export function getRunStatusLabel(status: RunStatus): string {
-  if (status === 'idle') {
-    return '未开始';
-  }
-
-  if (status === 'pending') {
-    return '等待中';
-  }
-
-  if (status === 'running') {
-    return '运行中';
-  }
-
-  if (status === 'success') {
-    return '已完成';
-  }
-
-  if (status === 'error') {
-    return '执行异常';
-  }
-
-  return '已停止';
+  return getObservabilityRunStatusLabel(status);
 }
 
 export function getRunStatusTone(status: RunStatus): RunStatusTone {
-  if (status === 'running' || status === 'pending') {
-    return 'active';
-  }
-
-  if (status === 'success') {
-    return 'success';
-  }
-
-  if (status === 'error') {
-    return 'danger';
-  }
-
-  if (status === 'stopped') {
-    return 'warning';
-  }
-
-  return 'muted';
+  return getObservabilityRunStatusTone(status);
 }
 
 export function getStepStatusLabel(status: RunStepStatus): string {
-  if (status === 'pending') {
-    return '待执行';
-  }
-
-  if (status === 'running') {
-    return '进行中';
-  }
-
-  if (status === 'success') {
-    return '已完成';
-  }
-
-  if (status === 'error') {
-    return '执行异常';
-  }
-
-  if (status === 'skipped') {
-    return '已跳过';
-  }
-
-  return '已停止';
+  return getObservabilityStepStatusLabel(status);
 }
 
 export function getToolStatusLabel(status: RunToolStatus): string {
-  if (status === 'pending') {
-    return '待执行';
-  }
-
-  if (status === 'running') {
-    return '执行中';
-  }
-
-  if (status === 'success') {
-    return '已完成';
-  }
-
-  if (status === 'error') {
-    return '执行异常';
-  }
-
-  if (status === 'skipped') {
-    return '已跳过';
-  }
-
-  return '已停止';
+  return getObservabilityToolStatusLabel(status);
 }
 
 export function getConclusionSourceLabel(source: RunConclusionSource): string {
-  if (source === 'model') {
-    return '模型生成';
-  }
-
-  if (source === 'fallback') {
-    return '本地摘要';
-  }
-
-  if (source === 'mock') {
-    return 'Mock 生成';
-  }
-
-  return '未生成';
+  return getObservabilityConclusionSourceLabel(source);
 }
 
 export function formatRunElapsed(run: RunSnapshot | null): string {
