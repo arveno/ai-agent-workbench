@@ -349,7 +349,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     } finally {
       agentRunStartInFlight = false;
       void useAuthStore.getState().refreshAgentAccess();
-      void get().loadRecentTools();
 
       if (
         get().activeAgentRunRequestId === requestId &&

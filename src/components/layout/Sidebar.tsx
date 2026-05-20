@@ -4,14 +4,12 @@ import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { AgentAccessView, AuthSessionView } from '../../types/auth';
 import { createConversationListView } from '../../utils/conversationListViewModel';
 import { createDemoConversationTemplateListView } from '../../utils/demoTemplateViewModel';
-import { createRecentToolsView } from '../../utils/recentToolsViewModel';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { LoginModal } from '../auth/LoginModal';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { ConversationList } from '../conversation/ConversationList';
 import { DemoConversationList } from '../demo/DemoConversationList';
-import { RecentToolsCard } from '../tools/RecentToolsCard';
 
 function getAuthDisplayName(authView: AuthSessionView): string {
   if (authView.status === 'loading') {
@@ -104,10 +102,6 @@ export function Sidebar() {
   const retryLoadDemoConversations = useWorkbenchStore((state) => state.retryLoadDemoConversations);
   const openDemoConversationTemplate = useWorkbenchStore((state) => state.openDemoConversationTemplate);
   const copyDemoConversationTemplate = useWorkbenchStore((state) => state.copyDemoConversationTemplate);
-  const recentTools = useWorkbenchStore((state) => state.recentTools);
-  const isRecentToolsLoading = useWorkbenchStore((state) => state.isRecentToolsLoading);
-  const recentToolsError = useWorkbenchStore((state) => state.recentToolsError);
-  const retryLoadRecentTools = useWorkbenchStore((state) => state.retryLoadRecentTools);
   const isAuthenticated = authView.status === 'authenticated';
   const isAuthLoading = authView.status === 'loading';
   const canOpenLogin = authView.isAuthConfigured && !isAuthLoading;
@@ -124,13 +118,6 @@ export function Sidebar() {
     templates: demoConversations,
     isLoading: isDemoConversationsLoading,
     errorMessage: demoConversationsError,
-  });
-  const recentToolsView = createRecentToolsView({
-    tools: recentTools,
-    isLoading: isRecentToolsLoading,
-    errorMessage: recentToolsError,
-    isAuthenticated,
-    isAuthLoading,
   });
   const authStatusLines = getAuthStatusLines({
     authView,
@@ -238,16 +225,6 @@ export function Sidebar() {
             }}
             onRetryConversations={() => {
               void retryLoadDemoConversations();
-            }}
-          />
-        </section>
-
-        <section className="sidebar-section">
-          <h2 className="section-title">{recentToolsView.title}</h2>
-          <RecentToolsCard
-            view={recentToolsView}
-            onRetry={() => {
-              void retryLoadRecentTools();
             }}
           />
         </section>

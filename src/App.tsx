@@ -23,8 +23,6 @@ function App() {
   const hydrateFromUrl = useWorkbenchStore((state) => state.hydrateFromUrl);
   const hydratePersistentWorkbench = useWorkbenchStore((state) => state.hydratePersistentWorkbench);
   const resetPersistentWorkbench = useWorkbenchStore((state) => state.resetPersistentWorkbench);
-  const loadRecentTools = useWorkbenchStore((state) => state.loadRecentTools);
-  const clearRecentTools = useWorkbenchStore((state) => state.clearRecentTools);
 
   useEffect(() => {
     void initializeAuth();
@@ -58,22 +56,18 @@ function App() {
           });
         }
       })();
-      void loadRecentTools();
       return;
     }
 
     if (authStatus === 'anonymous' || authStatus === 'error') {
       resetPersistentWorkbench();
-      clearRecentTools();
     }
   }, [
     authAccessToken,
     authStatus,
     authUserId,
-    clearRecentTools,
     hydratePersistentWorkbench,
     isAuthInitialized,
-    loadRecentTools,
     resetPersistentWorkbench,
   ]);
 

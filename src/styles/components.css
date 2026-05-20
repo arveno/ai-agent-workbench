@@ -250,8 +250,7 @@
 .model-badge,
 .message-status-tag,
 .message-kind-tag,
-.composer-mode-status,
-.recent-tool-status {
+.composer-mode-status {
   min-height: 22px;
   border-radius: var(--aw-radius-pill);
   padding: 0 8px;
@@ -296,7 +295,6 @@
 .prompt-template-status-badge-default,
 .model-badge-green,
 .composer-mode-status-available,
-.recent-tool-status-success,
 .rag-source-badge-used,
 .message-copy-button-copied {
   border-color: var(--aw-success-border);
@@ -315,7 +313,6 @@
 .composer-mode-status-quota_exceeded,
 .composer-mode-status-auth_unavailable,
 .composer-mode-status-forbidden,
-.recent-tool-status-warning,
 .run-state-card-badge-stopped,
 .conclusion-source-badge-stopped,
 .message-status-tag {
@@ -332,8 +329,7 @@
 .tool-library-badge-risk-high,
 .message-status-tag-error,
 .run-state-card-badge-error,
-.conclusion-source-badge-danger,
-.recent-tool-status-danger {
+.conclusion-source-badge-danger {
   border-color: var(--aw-danger-border);
   background: var(--aw-danger-subtle);
   color: var(--aw-danger);
@@ -352,7 +348,6 @@
 .workflow-badge-muted,
 .prompt-template-local-badge,
 .model-badge-muted,
-.recent-tool-status-neutral,
 .rag-source-badge-type,
 .rag-source-badge-muted {
   border-color: var(--aw-border);
@@ -386,8 +381,7 @@
 .model-provider-card,
 .prompt-template-list-card,
 .prompt-template-editor,
-.demo-task-card,
-.recent-tool-item {
+.demo-task-card {
   border-color: var(--aw-border);
   border-radius: var(--aw-radius-xl);
   background: var(--aw-surface);
@@ -435,8 +429,7 @@
 .tool-empty-state,
 .model-empty-state,
 .conversation-list-state,
-.demo-template-state,
-.recent-tools-state {
+.demo-template-state {
   border: 1px dashed var(--aw-border-strong);
   border-radius: var(--aw-radius-lg);
   background: transparent;
@@ -447,8 +440,7 @@
 .right-panel-empty-state strong,
 .chat-empty-state strong,
 .conversation-list-state strong,
-.demo-template-state strong,
-.recent-tools-state strong {
+.demo-template-state strong {
   color: var(--aw-text-secondary);
   font-weight: var(--aw-type-card-title-weight);
 }
