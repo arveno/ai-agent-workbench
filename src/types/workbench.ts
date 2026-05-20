@@ -376,7 +376,6 @@ export interface SessionSlice {
   loadOlderMessagesForCurrentSession: () => Promise<void>;
   ensureCurrentPersistentConversation: () => Promise<string | null>;
   persistMessageToConversation: (conversationId: string, message: WorkbenchMessage) => Promise<void>;
-  startTask: (taskId: string, prompt: string) => void;
   hydrateFromUrl: (state: { sessionId?: string; taskId?: string }) => void;
 }
 

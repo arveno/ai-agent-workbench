@@ -5,7 +5,6 @@ import {
   createMockRunStartedEvent,
   createMockToolInvocation,
 } from '../../utils/mockRun';
-import { mockTasks } from '../../mocks/tasks';
 import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
 import { createConversationMessage, fetchConversationMessages } from '../../services/messageApi';
 import type { ConversationMode, ConversationRecord } from '../../types/persistence';
@@ -1267,29 +1266,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       persistenceError: null,
     });
   },
-  startTask: (taskId, prompt) => {
-    set((state) => {
-      const nextSessions = state.sessions.map((session) =>
-        session.id === state.currentSessionId
-          ? {
-              ...session,
-              taskId,
-            }
-          : session,
-      );
-
-      if (!state.isPersistentMode) {
-        persistWorkbenchSessions(getPersistableSessions(nextSessions), state.currentSessionId);
-      }
-
-      return {
-        sessions: nextSessions,
-        currentTaskId: taskId,
-      };
-    });
-
-    void get().runMockPrompt(prompt);
-  },
   hydrateFromUrl: (state) => {
     get().activeAgentRunAbortController?.abort();
 
@@ -1306,7 +1282,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
         ? currentState.sessions.map((session) => (session.id === hydratedNextSession.id ? hydratedNextSession : session))
         : currentState.sessions;
       const nextTaskId = state.taskId ?? hydratedNextSession?.taskId ?? '';
-      const matchedTask = mockTasks.find((task) => task.id === nextTaskId);
 
       if (hydratedNextSession) {
         persistWorkbenchSessions(getPersistableSessions(nextSessions), hydratedNextSession.id);
@@ -1317,7 +1292,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return {
         sessions: nextSessions,
         currentSessionId: hydratedNextSession?.id ?? '',
-        ...createSessionUiState(hydratedNextSession, matchedTask?.id ?? nextTaskId),
+        ...createSessionUiState(hydratedNextSession, nextTaskId),
       };
     });
   },

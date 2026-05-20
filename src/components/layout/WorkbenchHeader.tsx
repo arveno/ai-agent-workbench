@@ -1,5 +1,4 @@
 import { Fragment } from 'react';
-import { mockTasks } from '../../mocks/tasks';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
 import {
@@ -79,15 +78,13 @@ function getRunSummaryItems(currentRun: RunSnapshot | null): string[] {
 export function WorkbenchHeader() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
-  const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const generationStatus = useWorkbenchStore((state) => state.generationStatus);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const openDataSourceModal = useWorkbenchStore((state) => state.openDataSourceModal);
   const openToolLibraryModal = useWorkbenchStore((state) => state.openToolLibraryModal);
   const openWorkflowModal = useWorkbenchStore((state) => state.openWorkflowModal);
-  const currentTask = mockTasks.find((task) => task.id === currentTaskId);
   const currentSession = sessions.find((session) => session.id === currentSessionId);
-  const headerTitle = currentSession?.title || currentTask?.title || DEFAULT_HEADER_TITLE;
+  const headerTitle = currentSession?.title || DEFAULT_HEADER_TITLE;
   const statusLabel = currentRun ? getRunStatusLabel(currentRun.status) : getGenerationLabel(generationStatus);
   const statusTone = currentRun ? getRunStatusTone(currentRun.status) : getGenerationStatusTone(generationStatus);
   const runSummaryItems = getRunSummaryItems(currentRun);

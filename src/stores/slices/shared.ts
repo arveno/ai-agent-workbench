@@ -10,7 +10,6 @@ import type {
 import { createSessionTitle } from '../../utils/sessionTitle';
 import { readSessionStorageJson, writeSessionStorageJson } from '../../utils/sessionStorage';
 
-export const DEFAULT_TASK_ID = 't_month_analytics';
 export const DEFAULT_ASSISTANT_REPLY =
   '我将先检索相关指标口径与教学质量分析规则，再查询本月各年级成绩与出勤数据，随后给出异常项和简短分析结论。';
 export const FINAL_REPORT_SUMMARY =
