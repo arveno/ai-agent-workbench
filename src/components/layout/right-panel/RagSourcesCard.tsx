@@ -104,7 +104,7 @@ export function RagSourcesCard() {
                 <div className="rag-source-title-row">
                   <h3 className="rag-source-title">{source.title}</h3>
                   <Badge variant="outline" className="rag-source-badge rag-source-badge-type">
-                    {source.isMock ? '公开演示' : '真实来源'}
+                    {source.isMock ? '模拟来源' : '真实来源'}
                   </Badge>
                 </div>
 

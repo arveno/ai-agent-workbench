@@ -66,7 +66,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
           <div>
             <h3 className="auth-modal-title">登录</h3>
             <p className="auth-modal-subtitle">
-              使用 CloudBase 用户名和密码登录；公开演示无需登录，私有会话和真实 Agent 需要登录。
+              使用 CloudBase 用户名和密码登录；模拟模式无需登录，私有会话和真实 Agent 需要登录。
             </p>
           </div>
           <Button type="button" variant="outline" size="icon-sm" onClick={onClose} aria-label="关闭">

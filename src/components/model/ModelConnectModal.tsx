@@ -42,7 +42,7 @@ const providerFallbackTextMap: Record<ModelProviderId, string> = {
   'zhipu-glm-flash-free': 'GLM',
 };
 
-type ModelTabId = 'all' | 'configured' | 'usable' | 'reserved';
+type ModelTabId = 'all' | 'configured' | 'usable';
 
 interface ModelTabDefinition {
   id: ModelTabId;
@@ -59,17 +59,12 @@ const MODEL_TABS: ModelTabDefinition[] = [
   {
     id: 'configured',
     label: '已就绪',
-    description: '公开演示模式或服务端模型网关可用的入口。',
+    description: '模拟模式或服务端模型网关可用的入口。',
   },
   {
     id: 'usable',
     label: '可启用',
-    description: '当前主流程可切换的公开演示和真实 Agent 模型服务。',
-  },
-  {
-    id: 'reserved',
-    label: '预留',
-    description: '已在 UI 中预留入口，后续再接入 Model Gateway 的模型服务。',
+    description: '当前主流程可切换的模拟模式和真实 Agent 模型服务。',
   },
 ];
 
@@ -155,6 +150,46 @@ function getGatewayLabel(status: ModelProviderStatusView): string {
   return '待接入 Model Gateway';
 }
 
+function getProviderDisplayName(status: ModelProviderStatusView): string {
+  if (status.providerId === 'mock-agent') {
+    return 'Mock 模式';
+  }
+
+  return status.displayName;
+}
+
+function getProviderDescription(status: ModelProviderStatusView): string {
+  if (status.providerId === 'mock-agent') {
+    return '本地模拟流式输出，不依赖外部模型。';
+  }
+
+  return status.description;
+}
+
+function getProviderStatusLabel(status: ModelProviderStatusView): string {
+  if (status.providerId === 'mock-agent') {
+    return '模拟模式可用';
+  }
+
+  return status.statusLabel;
+}
+
+function getProviderStatusDescription(status: ModelProviderStatusView): string {
+  if (status.providerId === 'mock-agent') {
+    return '本地模拟路径用于稳定验证，不消耗外部模型额度。';
+  }
+
+  return status.statusDescription;
+}
+
+function getCapabilityLabel(label: string): string {
+  if (label === '稳定演示') {
+    return '稳定验证';
+  }
+
+  return label;
+}
+
 function isRealAgentEntryProvider(providerId: ModelProviderId): boolean {
   return providerId !== 'mock-agent';
 }
@@ -236,7 +271,7 @@ function ModelConnectModalContent() {
       });
     }
 
-    return PROVIDER_OPTIONS.filter((option) => getProviderStatusView(option.id).isReserved);
+    return [];
   };
 
   const canActivateProvider = (status: ModelProviderStatusView): boolean => {
@@ -317,7 +352,7 @@ function ModelConnectModalContent() {
           <div className="model-modal-title-wrap">
             <h3 className="model-modal-title">连接模型服务</h3>
             <p className="model-modal-subtitle">
-              选择当前会话使用的模型服务：公开演示模式或服务端受控真实 Agent。
+              选择当前会话使用的模型服务：模拟模式或服务端受控真实 Agent。
             </p>
           </div>
           <Button type="button" variant="outline" size="icon" className="model-modal-close" onClick={closeModelModal} aria-label="关闭">
@@ -363,7 +398,11 @@ function ModelConnectModalContent() {
                           const providerStatus = getProviderStatusView(option.id);
                           const isActiveProvider = providerStatus.isActive;
                           const canClickAction = canClickProviderAction(providerStatus);
-                          const capabilities = providerStatus.capabilityLabels;
+                          const displayName = getProviderDisplayName(providerStatus);
+                          const description = getProviderDescription(providerStatus);
+                          const statusLabel = getProviderStatusLabel(providerStatus);
+                          const statusDescription = getProviderStatusDescription(providerStatus);
+                          const capabilities = providerStatus.capabilityLabels.map(getCapabilityLabel);
 
                           return (
                             <Card
@@ -374,23 +413,23 @@ function ModelConnectModalContent() {
                               <CardHeader className="model-provider-card-header">
                                 <div className="model-provider-main">
                                   <div className="model-provider-icon">
-                                    <ModelProviderLogo providerId={option.id} alt={providerStatus.displayName} />
+                                    <ModelProviderLogo providerId={option.id} alt={displayName} />
                                   </div>
 
                                   <div className="model-provider-content">
                                     <div className="model-provider-title-row">
-                                      <CardTitle className="model-provider-title">{providerStatus.displayName}</CardTitle>
+                                      <CardTitle className="model-provider-title">{displayName}</CardTitle>
                                       {isActiveProvider ? (
                                         <Badge variant="outline" className="model-badge model-badge-active">
                                           当前启用
                                         </Badge>
                                       ) : null}
                                       <Badge variant="outline" className={getProviderStatusClassName(providerStatus)}>
-                                        {providerStatus.statusLabel}
+                                        {statusLabel}
                                       </Badge>
                                     </div>
                                     <CardDescription className="model-provider-description">
-                                      {providerStatus.description}
+                                      {description}
                                     </CardDescription>
                                   </div>
 
@@ -449,7 +488,7 @@ function ModelConnectModalContent() {
                                     <strong>{getGatewayLabel(providerStatus)}</strong>
                                   </div>
                                 </div>
-                                <p className="model-config-help model-config-help-standalone">{providerStatus.statusDescription}</p>
+                                <p className="model-config-help model-config-help-standalone">{statusDescription}</p>
                                 {isRealAgentEntryProvider(option.id) ? (
                                   <p
                                     className={`model-config-help model-config-help-standalone model-agent-access-note model-agent-access-note-${realAgentAvailability.status}`}

@@ -71,7 +71,7 @@ function getAuthStatusLines(params: {
     return ['登录状态异常'];
   }
 
-  return ['公开演示模式'];
+  return ['模拟模式可用'];
 }
 
 export function Sidebar() {
@@ -207,7 +207,7 @@ export function Sidebar() {
         <section className="sidebar-section">
           <h2 className="section-title">示例会话</h2>
           <p className="sidebar-demo-tip">
-            公开只读示例，打开后不会写入我的会话。
+            预置只读示例，打开后不会写入我的会话。
           </p>
           <DemoConversationList
             view={demoConversationTemplateListView}

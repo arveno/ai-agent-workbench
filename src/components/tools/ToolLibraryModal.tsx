@@ -7,7 +7,7 @@ import type { WorkbenchToolDefinition } from '../../types/workbench';
 import { WORKBENCH_TOOL_DEFINITIONS } from '../../utils/toolRegistryView';
 import { ToolCard } from './ToolCard';
 
-type ToolTabId = 'all' | WorkbenchToolDefinition['status'];
+type ToolTabId = 'all' | 'connected' | 'mock';
 
 interface ToolTabDefinition {
   id: ToolTabId;
@@ -19,7 +19,7 @@ const TOOL_TABS: ToolTabDefinition[] = [
   {
     id: 'all',
     label: '全部工具',
-    description: '当前工作台展示的服务端白名单工具、本地演示能力与规划中工具。',
+    description: '当前工作台展示的服务端白名单工具和本地执行能力。',
   },
   {
     id: 'connected',
@@ -28,22 +28,19 @@ const TOOL_TABS: ToolTabDefinition[] = [
   },
   {
     id: 'mock',
-    label: '本地演示',
-    description: '仅用于公开演示或本地生成的能力，不伪装成真实 Agent 工具。',
-  },
-  {
-    id: 'planned',
-    label: '规划中',
-    description: '后续阶段预留接入的工具能力。',
+    label: '本地执行',
+    description: '由前端基于当前 Run 结果生成的辅助能力，不伪装成服务端 Agent 工具。',
   },
 ];
 
 function getToolsByTab(tabId: ToolTabId): WorkbenchToolDefinition[] {
+  const visibleTools = WORKBENCH_TOOL_DEFINITIONS.filter((tool) => tool.status !== 'planned');
+
   if (tabId === 'all') {
-    return WORKBENCH_TOOL_DEFINITIONS;
+    return visibleTools;
   }
 
-  return WORKBENCH_TOOL_DEFINITIONS.filter((tool) => tool.status === tabId);
+  return visibleTools.filter((tool) => tool.status === tabId);
 }
 
 export function ToolLibraryModal() {

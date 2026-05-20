@@ -28,7 +28,7 @@ interface ChatModeOption {
 const CHAT_MODE_OPTIONS: ChatModeOption[] = [
   {
     id: 'mock-agent',
-    label: '公开演示 Mock',
+    label: 'Mock 模式',
     icon: icons.brand,
   },
   {
@@ -82,7 +82,7 @@ export function ChatInput() {
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const isReadOnlySession = currentSession?.isReadOnly === true || currentSession?.visibility === 'demo';
   const activeChatMode: ChatModeProviderId = selectedModelId;
-  const isPublicDemoMode = activeChatMode === 'mock-agent';
+  const isMockMode = activeChatMode === 'mock-agent';
   const isMockGenerating = selectedModelId === 'mock-agent' && generationStatus === 'streaming';
   const isAgentRunning =
     selectedModelId !== 'mock-agent' &&
@@ -174,7 +174,7 @@ export function ChatInput() {
             placeholder={
               isReadOnlySession
                 ? '示例会话为公开只读，不能在这里发送新消息。'
-                : isPublicDemoMode
+                : isMockMode
                 ? '开始一条新聊天，或打开左侧示例会话查看完整流程。'
                 : '继续输入问题，或让 AI 生成报告...'
             }
@@ -213,13 +213,6 @@ export function ChatInput() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" sideOffset={8} className="composer-tool-menu">
-                <DropdownMenuItem className="composer-menu-item" disabled>
-                  <AppIcon icon={icons.attachment} size={15} />
-                  <span className="composer-menu-copy">
-                    <span className="composer-menu-title">附件</span>
-                    <span className="composer-menu-description">暂未开放</span>
-                  </span>
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="composer-menu-item"
                   onSelect={() => {

@@ -61,7 +61,7 @@ function getReportDescription(run: RunSnapshot): string {
   }
 
   if (run.reportState === 'failed') {
-    return '当前选中 Run 的报告生成失败，暂未开放重试入口。';
+    return '当前选中 Run 的报告生成失败。可重新发起分析后再生成报告。';
   }
 
   if (shouldShowReportConfirm(run)) {

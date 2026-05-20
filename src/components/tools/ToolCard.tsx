@@ -20,6 +20,14 @@ function getToolStatusClassName(status: WorkbenchToolDefinition['status']): stri
   return 'tool-library-badge tool-library-badge-status-planned';
 }
 
+function getVisibleToolStatusLabel(status: WorkbenchToolDefinition['status']): string {
+  if (status === 'mock') {
+    return '本地执行';
+  }
+
+  return getToolStatusLabel(status);
+}
+
 function getRiskClassName(level: WorkbenchToolDefinition['riskLevel']): string {
   if (level === 'low') {
     return 'tool-library-badge tool-library-badge-risk-low';
@@ -78,7 +86,7 @@ export function ToolCard({ tool }: ToolCardProps) {
             <CardDescription className="tool-library-id">{tool.name}</CardDescription>
           </div>
           <Badge variant="outline" className={getToolStatusClassName(tool.status)}>
-            {getToolStatusLabel(tool.status)}
+            {getVisibleToolStatusLabel(tool.status)}
           </Badge>
         </div>
       </CardHeader>

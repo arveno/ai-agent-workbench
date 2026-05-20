@@ -121,20 +121,20 @@ export function WorkbenchHeader() {
 
         <HeaderCapabilityButton
           icon={icons.stepDone}
-          label="公开演示可用"
+          label="模拟模式可用"
           tone="success"
-          title="当前可完整体验公开演示流程。"
-          ariaLabel="公开演示可用"
+          title="当前可使用模拟模式验证核心流程。"
+          ariaLabel="模拟模式可用"
           tooltip={{
-            title: '公开演示可用',
-            description: '当前可完整体验 Mock Run、Run Trace、RAG 来源和报告生成流程。',
+            title: '模拟模式可用',
+            description: '当前可使用 Mock Run 验证 Run Trace、RAG 来源和报告生成流程。',
             items: [
-              { label: '公开演示模式', status: '可用', variant: 'success' },
+              { label: '模拟模式', status: '可用', variant: 'success' },
               { label: 'Mock Run', status: '已接入', variant: 'success' },
               { label: 'Run Trace', status: '已接入', variant: 'success' },
               { label: 'RAG 来源展示', status: '已接入', variant: 'success' },
               { label: '报告生成', status: '已接入', variant: 'success' },
-              { label: '真实 Agent', status: '需登录 / 需模型 Provider', variant: 'warning' },
+              { label: '真实 Agent', status: '需登录 / 需模型配置', variant: 'warning' },
             ],
           }}
         />
@@ -153,7 +153,6 @@ export function WorkbenchHeader() {
               { label: 'teaching_metrics', status: '已接入', variant: 'success' },
               { label: 'knowledge_documents', status: '已接入', variant: 'success' },
               { label: 'knowledge_chunks', status: '已接入', variant: 'success' },
-              { label: '外部关系型数据库', status: '规划中', variant: 'neutral' },
             ],
           }}
           onClick={openDataSourceModal}
