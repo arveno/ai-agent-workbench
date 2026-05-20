@@ -458,7 +458,6 @@
 .datasource-modal-backdrop,
 .tool-library-modal-backdrop,
 .workflow-modal-backdrop,
-[data-slot="dialog-overlay"],
 .aw-drawer-backdrop {
   background: var(--aw-overlay-bg);
   backdrop-filter: blur(2px);
@@ -469,7 +468,6 @@
 .datasource-modal,
 .tool-library-modal,
 .workflow-modal,
-[data-slot="dialog-content"],
 .aw-drawer {
   border: 1px solid var(--aw-border);
   border-radius: var(--aw-radius-2xl);
@@ -483,7 +481,6 @@
 .datasource-modal-header,
 .tool-library-modal-header,
 .workflow-modal-header,
-[data-slot="dialog-header"],
 .aw-drawer-header {
   border-color: var(--aw-border);
 }
@@ -493,7 +490,6 @@
 .tool-library-modal-title,
 .workflow-modal-title,
 .demo-choice-modal-title,
-[data-slot="dialog-title"],
 .aw-drawer-title {
   color: var(--aw-text-primary);
   font-size: var(--aw-type-page-title-size);
@@ -506,7 +502,6 @@
 .tool-library-modal-description,
 .workflow-modal-description,
 .demo-choice-modal-subtitle,
-[data-slot="dialog-description"],
 .aw-drawer-description {
   color: var(--aw-text-muted);
   font-size: var(--aw-type-body-sm-size);
@@ -518,14 +513,12 @@
 .tool-library-modal-footer,
 .workflow-modal-footer,
 .demo-choice-modal-actions,
-[data-slot="dialog-footer"],
 .aw-drawer-footer {
   border-color: var(--aw-border);
   background: var(--aw-surface);
 }
 
-[data-slot="tooltip-content"],
-.environment-status-detail {
+[data-slot="tooltip-content"] {
   border: 1px solid var(--aw-border);
   border-radius: var(--aw-radius-lg);
   background: var(--aw-surface);
@@ -644,14 +637,12 @@
   box-shadow: none;
 }
 
-.environment-status-trigger,
 .header-icon-button {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
-.environment-status-trigger:hover,
 .header-icon-button:hover:not(:disabled) {
   border-color: var(--aw-border);
   background: var(--aw-surface-subtle);
