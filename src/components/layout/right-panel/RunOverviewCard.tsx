@@ -1,5 +1,7 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunModelTrace, RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
+import type { RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
+import type { ModelTraceViewModel } from '../../../utils/modelTraceViewModel';
+import { createModelTraceViewModel } from '../../../utils/modelTraceViewModel';
 import {
   formatRunElapsed,
   getConclusionSourceLabel,
@@ -56,36 +58,26 @@ function getRunRoundLabel(runId: string, messages: WorkbenchMessage[]): string {
   return `第 ${runIndex + 1} 轮 / 共 ${runIds.length} 轮`;
 }
 
-function formatNullableNumber(value: number | null | undefined, suffix = ''): string {
-  return typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '未返回';
-}
-
 function getVisibleRunModeLabel(mode: RunSnapshot['mode']): string {
   return mode === 'mock' ? '模拟模式（Mock）' : '真实 Agent';
 }
 
-function getModelTraceItems(modelTrace: RunModelTrace | undefined): RunOverviewItem[] {
-  if (!modelTrace) {
+function getModelTraceItems(modelTraceView: ModelTraceViewModel | null): RunOverviewItem[] {
+  if (!modelTraceView) {
     return [];
   }
 
-  const tokenUsage = modelTrace.tokenUsage;
-  const tokenUsageText = tokenUsage
-    ? [
-        `输入 ${formatNullableNumber(tokenUsage.promptTokens)}`,
-        `输出 ${formatNullableNumber(tokenUsage.completionTokens)}`,
-        `总计 ${formatNullableNumber(tokenUsage.totalTokens)}`,
-      ].join(' / ')
-    : '未返回';
-
   return [
-    { label: '模型 ID', value: modelTrace.selectedModelId ?? '-' },
-    { label: '模型服务商', value: modelTrace.provider ?? '-' },
-    { label: '模型', value: modelTrace.model ?? '-' },
-    { label: '模型耗时', value: formatNullableNumber(modelTrace.latencyMs, 'ms') },
-    { label: 'Token', value: tokenUsageText },
-    { label: 'Fallback', value: modelTrace.fallbackReason ?? '-' },
-    { label: '模型错误', value: modelTrace.modelErrorType ?? '-' },
+    { label: '模型 ID', value: modelTraceView.selectedModelIdLabel },
+    { label: '模型服务商', value: modelTraceView.providerLabel },
+    { label: '模型名称', value: modelTraceView.modelLabel },
+    { label: '模型耗时', value: modelTraceView.latencyLabel },
+    { label: 'Token 状态', value: modelTraceView.tokenUsageStatus },
+    { label: '输入 Tokens', value: modelTraceView.promptTokensLabel },
+    { label: '输出 Tokens', value: modelTraceView.completionTokensLabel },
+    { label: '总 Tokens', value: modelTraceView.totalTokensLabel },
+    { label: 'Fallback', value: modelTraceView.fallbackReasonLabel },
+    { label: '模型错误', value: modelTraceView.modelErrorTypeLabel },
   ];
 }
 
@@ -157,6 +149,7 @@ export function RunOverviewCard() {
 
   const statusTone = getRunStatusTone(currentRun.status);
   const runPrompt = getRunPromptText(currentRun.prompt);
+  const modelTraceView = createModelTraceViewModel(currentRun.modelTrace);
   const overviewItems: RunOverviewItem[] = [
     { label: '本轮问题', value: runPrompt, wide: true },
     { label: 'Run ID', value: currentRun.id },
@@ -164,8 +157,11 @@ export function RunOverviewCard() {
     { label: '模式', value: getVisibleRunModeLabel(currentRun.mode) },
     { label: '任务类型', value: getRunIntentLabel(currentRun.intent) },
     { label: '耗时', value: formatRunElapsed(currentRun) },
-    { label: '结论来源', value: getConclusionSourceLabel(currentRun.conclusionSource) },
-    ...getModelTraceItems(currentRun.modelTrace),
+    {
+      label: '结论来源',
+      value: modelTraceView?.conclusionSourceLabel ?? getConclusionSourceLabel(currentRun.conclusionSource),
+    },
+    ...getModelTraceItems(modelTraceView),
   ];
 
   return (
