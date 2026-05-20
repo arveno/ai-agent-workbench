@@ -267,7 +267,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
           ...session,
           title: shouldRenameSession ? createSessionTitle(trimmedPrompt) : session.title,
           updatedAt: now,
-          taskId: state.currentTaskId,
           messageCount: (session.messageCount ?? session.messages.length) + nextMessages.length,
           messages: [...session.messages, ...nextMessages],
         };
@@ -281,7 +280,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
               id: state.currentSessionId,
               title: createSessionTitle(trimmedPrompt),
               updatedAt: now,
-              taskId: state.currentTaskId,
               messages: nextMessages,
               messageCount: nextMessages.length,
               runsById: {},

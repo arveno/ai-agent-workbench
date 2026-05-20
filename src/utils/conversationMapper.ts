@@ -37,7 +37,6 @@ export function workbenchSessionToConversationCreateInput(
     mode,
     metadata: {
       runtimeSessionId: session.id,
-      taskId: session.taskId ?? null,
     },
   };
 }

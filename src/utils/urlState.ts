@@ -19,10 +19,6 @@ export function buildWorkbenchSearch(state: WorkbenchUrlState): string {
     params.set('sessionId', state.sessionId);
   }
 
-  if (state.taskId) {
-    params.set('taskId', state.taskId);
-  }
-
   const query = params.toString();
   return query ? `?${query}` : '';
 }

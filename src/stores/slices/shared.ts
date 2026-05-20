@@ -64,13 +64,11 @@ export function createWorkbenchMessage(params: {
 
 export function createEmptySession(params?: {
   title?: string;
-  taskId?: string;
 }): WorkbenchSession {
   return {
     id: createSessionId(),
     title: params?.title ?? '新会话',
     updatedAt: Date.now(),
-    taskId: params?.taskId,
     messages: [],
     runsById: {},
     latestRunId: undefined,

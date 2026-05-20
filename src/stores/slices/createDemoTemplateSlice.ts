@@ -161,7 +161,6 @@ function createReadonlyDemoSessionFromTemplate(template: DemoConversationTemplat
   return {
     ...createEmptySession({
       title: template.title,
-      taskId: template.id,
     }),
     id: sessionId,
     updatedAt,

@@ -85,7 +85,6 @@ export function Sidebar() {
   const agentAccessError = useAuthStore((state) => state.agentAccessError);
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
-  const currentTaskId = useWorkbenchStore((state) => state.currentTaskId);
   const createSession = useWorkbenchStore((state) => state.createSession);
   const switchSession = useWorkbenchStore((state) => state.switchSession);
   const hydratePersistentWorkbench = useWorkbenchStore((state) => state.hydratePersistentWorkbench);
@@ -132,13 +131,9 @@ export function Sidebar() {
     void loadDemoConversations();
   }, [loadDemoConversations]);
 
-  const replaceUrlForSession = (sessionId: string, taskId?: string) => {
-    const state = useWorkbenchStore.getState();
-    const session = state.sessions.find((item) => item.id === sessionId);
-
+  const replaceUrlForSession = (sessionId: string) => {
     replaceWorkbenchUrl({
       sessionId,
-      taskId: state.isPersistentMode ? undefined : taskId ?? session?.taskId ?? state.currentTaskId,
     });
   };
 
@@ -168,7 +163,7 @@ export function Sidebar() {
     const sessionId = await copyDemoConversationTemplate(templateId);
 
     if (sessionId) {
-      replaceUrlForSession(sessionId, currentTaskId);
+      replaceUrlForSession(sessionId);
     }
   };
 

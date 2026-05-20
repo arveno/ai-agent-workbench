@@ -374,13 +374,9 @@ function findTargetConversation(
   );
 }
 
-function createConversationMetadataForSession(
-  session: WorkbenchSession | undefined,
-  fallbackTaskId: string,
-): Record<string, unknown> {
+function createConversationMetadataForSession(session: WorkbenchSession | undefined): Record<string, unknown> {
   return {
     runtimeSessionId: session?.id ?? null,
-    taskId: (session?.taskId ?? fallbackTaskId) || null,
   };
 }
 
@@ -389,10 +385,9 @@ function getDraftTitleFromState(state: WorkbenchStore, session?: WorkbenchSessio
   return createSessionTitle(state.chatDraft || state.currentPrompt || firstUserMessage);
 }
 
-function replaceUrlForActiveSession(sessionId: string, taskId: string | undefined, isPersistentMode: boolean): void {
+function replaceUrlForActiveSession(sessionId: string): void {
   replaceWorkbenchUrl({
     sessionId,
-    taskId: isPersistentMode ? undefined : taskId,
   });
 }
 
@@ -643,7 +638,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
             messages,
             messageCount: messages.length,
             updatedAt: now,
-            taskId: state.currentTaskId,
           });
         }),
       );
@@ -711,7 +705,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
             ...session,
             title: shouldRenameSession ? createSessionTitle(normalizedContent) : session.title,
             updatedAt: now,
-            taskId: state.currentTaskId,
             messageCount: (session.messageCount ?? session.messages.length) + 1,
             messages: [...session.messages, userMessage],
           };
@@ -784,7 +777,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
             ? {
                 ...session,
                 updatedAt: now,
-                taskId: state.currentTaskId,
                 messageCount: (session.messageCount ?? session.messages.length) + 1,
                 messages: [...session.messages, assistantMessage],
               }
@@ -1135,7 +1127,6 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
       const newSession = createEmptySession({
         title: conversationTitle,
-        taskId: currentState.currentTaskId || undefined,
       });
 
       set((state) => {
@@ -1152,7 +1143,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
           persistenceError: null,
         };
       });
-      replaceUrlForActiveSession(newSession.id, newSession.taskId, false);
+      replaceUrlForActiveSession(newSession.id);
 
       return newSession.id;
     }
@@ -1200,7 +1191,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       {
         title: conversationTitle,
         mode: getConversationModeForSelectedModel(currentState.selectedModelId),
-        metadata: createConversationMetadataForSession(writableCurrentSession, currentState.currentTaskId),
+        metadata: createConversationMetadataForSession(writableCurrentSession),
       },
     );
 
@@ -1227,7 +1218,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       conversationListError: null,
       persistenceError: null,
     }));
-    replaceUrlForActiveSession(nextSession.id, undefined, true);
+    replaceUrlForActiveSession(nextSession.id);
 
     return nextSession.id;
   },
