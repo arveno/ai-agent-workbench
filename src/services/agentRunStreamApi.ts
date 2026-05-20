@@ -150,7 +150,6 @@ export async function streamAgentRunAnalysis(params: {
 }): Promise<void> {
   const body = JSON.stringify({
     prompt: params.prompt,
-    provider: 'cloudbase_mysql',
     conversationId: params.conversationId,
     selectedModelId: params.selectedModelId,
     clientRunId: params.clientRunId,
