@@ -1,34 +1,38 @@
 import { spawnSync } from 'node:child_process';
-import path from 'node:path';
+import { existsSync } from 'node:fs';
 
 import {
   defaultDeployOutputRoot,
+  getManifest,
   getPackageOutputDir,
-  getSelectedManifests,
   repoRoot,
   resolveUserPath,
-  scriptDir,
 } from './cloudbase-functions-manifest.mjs';
+
+const defaultRuntime = 'Nodejs20.19';
+const httpPathByFunction = new Map([
+  ['workbench-evaluations', '/api/workbench/evaluations'],
+]);
 
 function printUsage() {
   console.log(`Usage:
-  pnpm cloudbase:deploy -- --function <name|all> --envId <env-id> [--out <dir>] [--clean] [--check] [--dry-run] [--deployMode <mode>]
+  pnpm cloudbase:deploy:function -- --function <name> [--out <dir>] [--clean] [--check] [--force] [--runtime <runtime>] [--path <httpPath>] [--dry-run]
 
 Examples:
-  pnpm cloudbase:deploy -- --function workbench-agent-run-stream --envId <env-id> --out ./.cloudbase-packages --clean --check --dry-run
-  pnpm cloudbase:deploy -- --function all --env-id <env-id> --out ./.cloudbase-packages --clean`);
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check --dry-run
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check --force`);
 }
 
 function parseArgs(argv) {
   const options = {
     functionName: '',
-    envId: '',
     outputRoot: defaultDeployOutputRoot,
     clean: false,
-    check: true,
+    check: false,
+    force: false,
+    runtime: defaultRuntime,
+    httpPath: '',
     dryRun: false,
-    deployMode: 'cos',
-    yes: true,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -40,12 +44,6 @@ function parseArgs(argv) {
 
     if (arg === '--function') {
       options.functionName = readOptionValue(argv, index, arg);
-      index += 1;
-      continue;
-    }
-
-    if (arg === '--envId' || arg === '--env-id') {
-      options.envId = readOptionValue(argv, index, arg);
       index += 1;
       continue;
     }
@@ -66,19 +64,25 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (arg === '--dry-run') {
-      options.dryRun = true;
+    if (arg === '--force') {
+      options.force = true;
       continue;
     }
 
-    if (arg === '--deployMode') {
-      options.deployMode = readOptionValue(argv, index, arg);
+    if (arg === '--runtime') {
+      options.runtime = readOptionValue(argv, index, arg);
       index += 1;
       continue;
     }
 
-    if (arg === '--yes') {
-      options.yes = true;
+    if (arg === '--path') {
+      options.httpPath = readOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--dry-run') {
+      options.dryRun = true;
       continue;
     }
 
@@ -91,16 +95,15 @@ function parseArgs(argv) {
   }
 
   if (!options.functionName) {
-    throw new Error('Missing required argument: --function <name|all>');
+    throw new Error('Missing required argument: --function <name>');
   }
 
-  if (!options.envId) {
-    throw new Error('Missing required argument: --envId <env-id>');
+  if (options.functionName === 'all') {
+    throw new Error('Deploying all functions is not supported. Deploy one CloudBase HTTP Function at a time.');
   }
 
-  if (!options.check) {
-    throw new Error('CloudBase package structure check is required before deployment.');
-  }
+  getManifest(options.functionName);
+  options.httpPath = resolveHttpPath(options.functionName, options.httpPath);
 
   return options;
 }
@@ -115,23 +118,24 @@ function readOptionValue(argv, index, optionName) {
   return value;
 }
 
-function runNodeScript(scriptName, args) {
-  const result = spawnSync(process.execPath, [path.join(scriptDir, scriptName), ...args], {
-    cwd: repoRoot,
-    stdio: 'inherit',
-  });
-
-  if (result.error) {
-    throw result.error;
+function resolveHttpPath(functionName, providedPath) {
+  if (providedPath) {
+    return providedPath;
   }
 
-  if (result.status !== 0) {
-    throw new Error(`${scriptName} failed.`);
+  const manifestPath = httpPathByFunction.get(functionName);
+
+  if (!manifestPath) {
+    throw new Error(`${functionName}: missing HTTP path manifest. Pass --path <httpPath> or add this function to the deploy script HTTP path manifest.`);
   }
+
+  return manifestPath;
 }
 
-function runPackage(options) {
+function createPackageCommand(options) {
   const args = [
+    'cloudbase:package',
+    '--',
     '--function',
     options.functionName,
     '--out',
@@ -142,31 +146,77 @@ function runPackage(options) {
     args.push('--clean');
   }
 
-  runNodeScript('package-cloudbase-function.mjs', args);
+  if (options.check) {
+    args.push('--check');
+  }
+
+  return {
+    command: getPnpmCommand(),
+    args,
+  };
 }
 
-function runChecks(manifests, options) {
-  for (const manifest of manifests) {
-    runNodeScript('check-cloudbase-package.mjs', [
-      '--function',
-      manifest.name,
-      '--dir',
-      getPackageOutputDir(options.outputRoot, manifest.name),
-    ]);
+function createDeployCommand(options, stagingDir) {
+  const args = [
+    'exec',
+    'tcb',
+    'fn',
+    'deploy',
+    options.functionName,
+    '--dir',
+    stagingDir,
+    '--httpFn',
+    '--path',
+    options.httpPath,
+    '--runtime',
+    options.runtime,
+  ];
+
+  if (options.force) {
+    args.push('--force');
+  }
+
+  return {
+    command: getPnpmCommand(),
+    args,
+  };
+}
+
+function getPnpmCommand() {
+  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+}
+
+function runCommand(label, commandSpec) {
+  const result = spawnSync(commandSpec.command, commandSpec.args, {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`${label} failed.`);
   }
 }
 
-function getTcbCommand() {
-  return process.platform === 'win32' ? 'tcb.cmd' : 'tcb';
+function assertStagingDirExists(stagingDir) {
+  if (!existsSync(stagingDir)) {
+    throw new Error(`Staging directory does not exist: ${stagingDir}`);
+  }
 }
 
-function assertTcbAvailable(tcbCommand) {
-  const result = spawnSync(tcbCommand, ['--version'], {
+function assertTcbAvailable() {
+  const result = spawnSync(getPnpmCommand(), ['exec', 'tcb', '-v'], {
     cwd: repoRoot,
-    stdio: 'ignore',
+    stdio: 'pipe',
+    encoding: 'utf8',
   });
 
   if (!result.error && result.status === 0) {
+    const version = (result.stdout || result.stderr).trim();
+    console.log(`OK CloudBase CLI: ${version || 'tcb detected'}`);
     return;
   }
 
@@ -182,31 +232,23 @@ function assertTcbAvailable(tcbCommand) {
     throw new Error(`${installHint}\nOriginal error: ${result.error.message}`);
   }
 
-  throw new Error(`${installHint}\nCommand failed: ${tcbCommand} --version`);
+  const detail = [result.stderr, result.stdout].filter(Boolean).join('\n').trim();
+  throw new Error(`${installHint}${detail ? `\n${detail}` : ''}`);
 }
 
-function createDeployCommand(manifest, options) {
-  const args = [
-    'fn',
-    'deploy',
-    manifest.name,
-    '--httpFn',
-    '--dir',
-    getPackageOutputDir(options.outputRoot, manifest.name),
-    '-e',
-    options.envId,
-    '--deployMode',
-    options.deployMode,
-  ];
+function printDryRun(packageCommand, deployCommand) {
+  console.log('Dry run: commands that would run:');
+  console.log(formatCommand(packageCommand.command, packageCommand.args));
+  console.log(formatCommand(deployCommand.command, deployCommand.args));
+  console.log('');
+  console.log('Dry run finished. No package, tcb check, or CloudBase deployment was executed.');
+}
 
-  if (options.yes) {
-    args.push('--yes');
-  }
-
-  return {
-    command: getTcbCommand(),
-    args,
-  };
+function printSmokeHint() {
+  console.log('');
+  console.log('Deployment finished. Suggested verification:');
+  console.log('pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>');
+  console.log('curl <deployed-http-function-url>');
 }
 
 function formatCommand(command, args) {
@@ -221,63 +263,25 @@ function formatShellArg(value) {
   return JSON.stringify(value);
 }
 
-function printDeployCommands(manifests, options) {
-  console.log('');
-  console.log(options.dryRun ? 'Dry run: CloudBase deploy commands that would run:' : 'CloudBase deploy commands:');
-
-  for (const manifest of manifests) {
-    const deployCommand = createDeployCommand(manifest, options);
-    console.log(`- ${formatCommand(deployCommand.command, deployCommand.args)}`);
-  }
-}
-
-function deployFunctions(manifests, options) {
-  const tcbCommand = getTcbCommand();
-  assertTcbAvailable(tcbCommand);
-
-  for (const manifest of manifests) {
-    const deployCommand = createDeployCommand(manifest, options);
-
-    console.log('');
-    console.log(`Deploying CloudBase HTTP Function: ${manifest.name}`);
-    console.log(formatCommand(deployCommand.command, deployCommand.args));
-
-    const result = spawnSync(deployCommand.command, deployCommand.args, {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    });
-
-    if (result.error) {
-      throw result.error;
-    }
-
-    if (result.status !== 0) {
-      throw new Error(`${manifest.name}: CloudBase deployment failed.`);
-    }
-  }
-}
-
-function printSmokeHint() {
-  console.log('');
-  console.log('Deployment finished. Suggested smoke test command:');
-  console.log('pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>');
-}
-
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const selectedManifests = getSelectedManifests(options.functionName);
-
-  runPackage(options);
-  runChecks(selectedManifests, options);
+  const stagingDir = getPackageOutputDir(options.outputRoot, options.functionName);
+  const packageCommand = createPackageCommand(options);
+  const deployCommand = createDeployCommand(options, stagingDir);
 
   if (options.dryRun) {
-    printDeployCommands(selectedManifests, options);
-    console.log('');
-    console.log('Dry run finished. No CloudBase deployment was executed.');
+    printDryRun(packageCommand, deployCommand);
     return;
   }
 
-  deployFunctions(selectedManifests, options);
+  runCommand('CloudBase package', packageCommand);
+
+  if (!options.check) {
+    assertStagingDirExists(stagingDir);
+  }
+
+  assertTcbAvailable();
+  runCommand('CloudBase function deployment', deployCommand);
   printSmokeHint();
 }
 

@@ -1,6 +1,6 @@
 # CloudBase Functions 手动上传说明
 
-本文档用于手动上传 CloudBase HTTP Functions 前的本地打包和结构检查。当前流程只覆盖本地 staging 目录生成、上传前检查和人工上传注意事项，不包含自动上传、自动部署或 CI/CD。
+本文档用于 CloudBase HTTP Functions 上传前的本地打包、结构检查和单函数自动部署。当前流程只覆盖本地 staging 目录生成、上传前检查、人工上传注意事项和单函数代码上传，不包含 SQL 自动执行、migration / seed 自动化或完整 CI/CD。
 
 ## 前置要求
 
@@ -56,6 +56,26 @@ pnpm cloudbase:package -- --function all --out ./.cloudbase-packages --clean --c
 ```
 
 `.cloudbase-packages/` 是本地打包产物目录，不提交 Git，已加入 `.gitignore`。使用该目录上传 CloudBase 时，仍然压缩具体函数 package 目录内的内容，不要压缩 `.cloudbase-packages/` 或 `cloudbase-<function>-package` 外层目录。
+
+## 单函数自动部署
+
+手动上传流程仍然保留。需要减少手动压缩 zip 和控制台上传时，可以使用 CloudBase CLI 自动部署单个 HTTP Function：
+
+```bash
+pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check --dry-run
+```
+
+确认 dry-run 输出的 package 和 `tcb fn deploy` 命令无误后，再移除 `--dry-run` 执行真实部署：
+
+```bash
+pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check
+```
+
+自动部署脚本只处理目标函数代码上传，不执行 SQL，不执行 migration / seed，不修改云端环境变量，也不自动运行 smoke test。部署后仍建议按环境运行 smoke 或 curl 验证：
+
+```bash
+pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>
+```
 
 ## 正确包结构
 
