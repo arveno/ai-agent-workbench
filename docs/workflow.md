@@ -2,7 +2,7 @@
 
 本文档说明 AI Agent Workbench 项目中用户、ChatGPT、Codex、Git / GitHub 的协作流程。
 
-AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。
+AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。核心对象与 ID 契约见 `docs/id-contract.md`。
 
 本文档只描述协作流程，不描述详细架构，不写代码生成硬规则，不写 CloudBase 部署教程。
 
@@ -94,6 +94,7 @@ GitHub 负责远程备份和阶段同步。
 
 - 生命周期归位：判断任务属于 Access / Identity 到 Audit / Governance / Cost 的哪一段。
 - 对象关系判断：明确绑定 User / Workspace / Conversation / Message / Run / Artifact / Evaluation / Usage 等哪个核心对象。
+- ID 契约对齐：涉及 conversation / message / run / report / source / usage / evaluation ID 的任务，必须先阅读 `docs/id-contract.md`，确认 canonical ID、幂等 ID、兼容 ID 的边界，再写代码。
 - 依赖顺序判断：确认上游能力已经具备，不能跳过依赖直接推进下游能力。
 - 执行顺序固定为：生命周期归位 -> 设计 -> 执行 -> 验收。
 - 方案：说明实现边界、数据链路、服务端受控点和验收方式。
@@ -176,6 +177,7 @@ Codex 指令应包含：
 根据任务类型指定参考文档：
 
 - 涉及功能归位和新功能接入：参考 `docs/agent-run-lifecycle.md`
+- 涉及核心对象 ID：参考 `docs/id-contract.md`
 - 涉及代码规则：参考 `AGENTS.md`
 - 涉及架构判断：参考 `docs/architecture.md`
 - 涉及 CloudBase 打包 / 上传 / smoke test：参考 `docs/cloudbase-functions-deploy.md`

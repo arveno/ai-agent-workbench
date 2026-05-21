@@ -22,6 +22,7 @@ selectedModelId -> model catalog -> _shared/modelGateway.js -> SiliconFlow / Zhi
 ### 必读文档
 
 - `docs/agent-run-lifecycle.md`：AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT，功能归位和新功能接入的最高主线。
+- `docs/id-contract.md`：核心对象与 ID 契约，约束 conversation / message / run / report / source / usage / evaluation 的 ID 语义。
 - `docs/architecture.md`：架构、模块职责、数据流、前后端边界。
 - `docs/workflow.md`：协作流程、只读审查、验收、提交规范。
 - `docs/cloudbase-functions-deploy.md`：CloudBase 打包、上传、smoke test。
@@ -29,6 +30,7 @@ selectedModelId -> model catalog -> _shared/modelGateway.js -> SiliconFlow / Zhi
 AI Agent Enterprise Lifecycle 约束：
 
 - Codex 改功能前必须先判断生命周期位置和核心对象绑定。
+- 涉及 conversation / message / run / report / source / usage / evaluation ID 的修改，必须先遵守 `docs/id-contract.md`。
 - 新功能必须围绕 AI Agent Enterprise Lifecycle 接入，不允许只按局部页面或组件自由扩展。
 - 如果具体实现和 AI Agent Enterprise Lifecycle 主线冲突，先停止并汇报，不允许直接写代码。
 
