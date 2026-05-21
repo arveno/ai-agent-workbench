@@ -1,40 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, copyFile, mkdir, readFile, rm } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, '..');
-const functionsRoot = path.join(repoRoot, 'tencent', 'functions');
-const sharedRoot = path.join(functionsRoot, '_shared');
-const defaultOutputRoot = path.join(os.homedir(), 'Desktop');
-
-const manifests = [
-  createManifest('auth-me', ['auth.js', 'mysql.js']),
-  createManifest('demo-tasks', []),
-  createManifest('demo-conversations', []),
-  createManifest('workbench-conversations', ['auth.js', 'mysql.js']),
-  createManifest('workbench-messages', ['auth.js', 'mysql.js']),
-  createManifest('workbench-reports', ['auth.js', 'mysql.js']),
-  createManifest('workbench-demo-copy', ['auth.js', 'mysql.js']),
-  createManifest('workbench-quota', ['auth.js', 'mysql.js']),
-  createManifest('workbench-runs', ['auth.js', 'mysql.js']),
-  createManifest('workbench-evaluations', ['auth.js', 'mysql.js']),
-  createManifest('workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js']),
-];
-
-function createManifest(name, sharedFiles) {
-  return {
-    name,
-    sourceDir: path.join('tencent', 'functions', name),
-    entry: 'index.js',
-    packageJson: 'package.json',
-    scfBootstrap: 'scf_bootstrap',
-    sharedFiles,
-  };
-}
+import {
+  defaultPackageOutputRoot,
+  getPackageOutputDir,
+  getSelectedManifests,
+  repoRoot,
+  resolveUserPath,
+  scriptDir,
+  sharedRoot,
+} from './cloudbase-functions-manifest.mjs';
 
 function printUsage() {
   console.log(`Usage:
@@ -48,7 +24,7 @@ Examples:
 function parseArgs(argv) {
   const options = {
     functionName: '',
-    outputRoot: defaultOutputRoot,
+    outputRoot: defaultPackageOutputRoot,
     clean: false,
     check: false,
   };
@@ -107,33 +83,6 @@ function readOptionValue(argv, index, optionName) {
   return value;
 }
 
-function resolveUserPath(value) {
-  if (!value || value === '~') {
-    return os.homedir();
-  }
-
-  if (value.startsWith('~/') || value.startsWith('~\\')) {
-    return path.join(os.homedir(), value.slice(2));
-  }
-
-  return path.resolve(process.cwd(), value);
-}
-
-function getSelectedManifests(functionName) {
-  if (functionName === 'all') {
-    return manifests;
-  }
-
-  const manifest = manifests.find((item) => item.name === functionName);
-
-  if (!manifest) {
-    const knownNames = manifests.map((item) => item.name).join(', ');
-    throw new Error(`Unknown function: ${functionName}. Known functions: ${knownNames}`);
-  }
-
-  return [manifest];
-}
-
 async function assertReadableFile(filePath, label) {
   if (!existsSync(filePath)) {
     throw new Error(`Missing ${label}: ${filePath}`);
@@ -190,13 +139,9 @@ async function validateScfBootstrap(outputDir, manifest) {
   }
 }
 
-function getOutputDir(outputRoot, functionName) {
-  return path.join(outputRoot, `cloudbase-${functionName}-package`);
-}
-
 async function packageFunction(manifest, options) {
   const sourceDir = path.join(repoRoot, manifest.sourceDir);
-  const outputDir = getOutputDir(options.outputRoot, manifest.name);
+  const outputDir = getPackageOutputDir(options.outputRoot, manifest.name);
 
   await assertReadableFile(path.join(sourceDir, manifest.entry), `${manifest.name}/${manifest.entry}`);
   await assertReadableFile(path.join(sourceDir, manifest.packageJson), `${manifest.name}/${manifest.packageJson}`);

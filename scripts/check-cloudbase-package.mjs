@@ -1,31 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-
-const manifests = [
-  createManifest('auth-me', ['auth.js', 'mysql.js']),
-  createManifest('demo-tasks', []),
-  createManifest('demo-conversations', []),
-  createManifest('workbench-conversations', ['auth.js', 'mysql.js']),
-  createManifest('workbench-messages', ['auth.js', 'mysql.js']),
-  createManifest('workbench-reports', ['auth.js', 'mysql.js']),
-  createManifest('workbench-demo-copy', ['auth.js', 'mysql.js']),
-  createManifest('workbench-quota', ['auth.js', 'mysql.js']),
-  createManifest('workbench-runs', ['auth.js', 'mysql.js']),
-  createManifest('workbench-evaluations', ['auth.js', 'mysql.js']),
-  createManifest('workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js']),
-];
-
-function createManifest(name, sharedFiles) {
-  return {
-    name,
-    entry: 'index.js',
-    packageJson: 'package.json',
-    scfBootstrap: 'scf_bootstrap',
-    sharedFiles,
-  };
-}
+import { getManifest, resolveUserPath } from './cloudbase-functions-manifest.mjs';
 
 function printUsage() {
   console.log(`Usage:
@@ -87,29 +63,6 @@ function readOptionValue(argv, index, optionName) {
   }
 
   return value;
-}
-
-function resolveUserPath(value) {
-  if (!value || value === '~') {
-    return os.homedir();
-  }
-
-  if (value.startsWith('~/') || value.startsWith('~\\')) {
-    return path.join(os.homedir(), value.slice(2));
-  }
-
-  return path.resolve(process.cwd(), value);
-}
-
-function getManifest(functionName) {
-  const manifest = manifests.find((item) => item.name === functionName);
-
-  if (!manifest) {
-    const knownNames = manifests.map((item) => item.name).join(', ');
-    throw new Error(`Unknown function: ${functionName}. Known functions: ${knownNames}`);
-  }
-
-  return manifest;
 }
 
 function pushMissingFileError(errors, dir, fileName, label) {
