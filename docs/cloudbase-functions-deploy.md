@@ -1,6 +1,6 @@
 # CloudBase Functions 手动上传说明
 
-本文档用于 CloudBase HTTP Functions 上传前的本地打包、结构检查和单函数自动部署。当前流程只覆盖本地 staging 目录生成、上传前检查、人工上传注意事项和单函数代码上传，不包含 SQL 自动执行、migration / seed 自动化或完整 CI/CD。
+本文档用于 CloudBase HTTP Functions 上传前的本地打包、结构检查和单函数自动部署。当前流程只覆盖本地 staging 目录生成、上传前检查、单函数代码上传和部署后人工核对清单，不包含 SQL 自动执行、migration / seed 自动化、HTTP route 自动修改、函数环境变量自动修改或完整 CI/CD。
 
 ## 前置要求
 
@@ -59,23 +59,71 @@ pnpm cloudbase:package -- --function all --out ./.cloudbase-packages --clean --c
 
 ## 单函数自动部署
 
-手动上传流程仍然保留。需要减少手动压缩 zip 和控制台上传时，可以使用 CloudBase CLI 自动部署单个 HTTP Function：
+手动上传流程仍然保留。需要减少手动压缩 zip 和控制台上传时，可以使用 CloudBase CLI 自动部署单个 HTTP Function。推荐使用 profile 配置：
 
 ```bash
-pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check --dry-run
+pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --clean --check --dry-run
 ```
 
 确认 dry-run 输出的 package 和 `tcb fn deploy` 命令无误后，再移除 `--dry-run` 执行真实部署：
 
 ```bash
-pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check
+pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --clean --check
 ```
 
-自动部署脚本只处理目标函数代码上传，不执行 SQL，不执行 migration / seed，不修改云端环境变量，也不自动运行 smoke test。部署后仍建议按环境运行 smoke 或 curl 验证：
+当前 `cloudbase:deploy:function` 的自动化范围是：
+
+- package
+- check
+- function code deploy
+- post-deploy checklist
+
+当前不自动化：
+
+- SQL
+- migration
+- seed
+- HTTP route 修改
+- function env var 修改
+- CI/CD
+
+脚本会把 profile 或命令行传入的 CloudBase 环境 ID 转发为 `tcb fn deploy -e <envId> --yes`，不依赖交互式环境选择或确认。`workbench-evaluations` 等依赖 CloudBase MySQL 的函数仍需人工确认函数环境变量中存在：
+
+```txt
+CLOUDBASE_ENV_ID=<env-id>
+```
+
+接口可用前还需要人工确认 HTTP 访问服务路由挂在正确 domain/group 下，例如 `path=/api/workbench/evaluations` 指向 `workbench-evaluations`。涉及 SQL、migration 或 seed 的变更继续使用 Navicat、DBeaver、DataGrip、TablePlus 这类成熟数据库客户端处理，不由部署脚本自动执行。部署后仍建议按环境运行 smoke 或 curl 验证：
 
 ```bash
 pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>
 ```
+
+### 自动部署配置事实源
+
+profile、函数 HTTP path、必需函数环境变量名称和说明维护在：
+
+```txt
+tencent/cloudbase-functions.config.json
+```
+
+配置文件分三层：
+
+- `defaults`：本地脚本默认行为，例如 `outputRoot` 和 `runtime`。
+- `functions`：函数级稳定配置，例如 `httpPath`、`requiredEnvVars` 和说明。
+- `environments`：环境级 profile，例如 `envId`、`baseUrl` 和 `routeDomain`。
+
+`envId`、`baseUrl` 和 `routeDomain` 可以提交，它们不是密钥。Secret、Key、Password、Token、数据库密码、Service Role、Private Key 等敏感值不得写入配置文件。部署脚本只读取该配置并执行 package / check / function code deploy / post-deploy checklist，不在脚本里长期硬编码业务路由或云端环境。
+
+参数优先级为：显式命令行参数 > profile 配置 > defaults 配置 > 脚本内最低默认值。`--envId` / `--env-id` 可覆盖 profile 的 `envId`，`--base-url` 可覆盖 profile 的 `baseUrl`，`--expected-route-domain` 可覆盖 profile 的 `routeDomain`，`--out` 可覆盖 `defaults.outputRoot`，`--runtime` 可覆盖 `defaults.runtime`。`--path <httpPath>` 只作为临时覆盖，脚本会输出 warning；长期变更应回写 `tencent/cloudbase-functions.config.json`。
+
+不使用 profile 时，仍可显式传入环境参数执行：
+
+```bash
+pnpm cloudbase:deploy:function -- --function workbench-evaluations --envId <env-id> --base-url <cloudbase-http-functions-base-url> --out ./.cloudbase-packages --clean --check
+```
+
+函数环境变量和 HTTP route 仍需人工确认，或后续作为独立自动化能力补充；当前脚本不会自动修改这些云端配置。
 
 ## 正确包结构
 

@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 import {
   defaultDeployOutputRoot,
@@ -9,29 +10,50 @@ import {
   resolveUserPath,
 } from './cloudbase-functions-manifest.mjs';
 
-const defaultRuntime = 'Nodejs20.19';
-const httpPathByFunction = new Map([
-  ['workbench-evaluations', '/api/workbench/evaluations'],
-]);
+const fallbackRuntime = 'Nodejs20.19';
+const cloudbaseFunctionsConfigPath = path.join(repoRoot, 'tencent', 'cloudbase-functions.config.json');
+const sensitiveFieldNamePatterns = [
+  /secret[_-]?id/i,
+  /secret[_-]?key/i,
+  /api[_-]?key/i,
+  /token/i,
+  /password/i,
+  /db[_-]?password/i,
+  /service[_-]?role/i,
+  /private[_-]?key/i,
+];
 
 function printUsage() {
   console.log(`Usage:
-  pnpm cloudbase:deploy:function -- --function <name> [--out <dir>] [--clean] [--check] [--force] [--runtime <runtime>] [--path <httpPath>] [--dry-run]
+  pnpm cloudbase:deploy:function -- --function <name> [--profile <profile>] [--envId <env-id>] [--out <dir>] [--clean] [--check] [--force] [--runtime <runtime>] [--path <httpPath>] [--base-url <url>] [--expected-route-domain <domain>] [--dry-run]
 
-Examples:
-  pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check --dry-run
-  pnpm cloudbase:deploy:function -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check --force`);
+Recommended examples:
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --clean --check --dry-run
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --clean --check
+
+Override example:
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --envId <env-id> --base-url <cloudbase-http-functions-base-url> --out ./.cloudbase-packages --clean --check`);
 }
 
 function parseArgs(argv) {
-  const options = {
+  const cli = {
     functionName: '',
-    outputRoot: defaultDeployOutputRoot,
+    profile: '',
+    envId: '',
+    envIdProvided: false,
+    outputRoot: '',
+    outputRootProvided: false,
     clean: false,
     check: false,
     force: false,
-    runtime: defaultRuntime,
+    runtime: '',
+    runtimeProvided: false,
     httpPath: '',
+    httpPathOverride: false,
+    baseUrl: '',
+    baseUrlProvided: false,
+    expectedRouteDomain: '',
+    expectedRouteDomainProvided: false,
     dryRun: false,
   };
 
@@ -43,46 +65,76 @@ function parseArgs(argv) {
     }
 
     if (arg === '--function') {
-      options.functionName = readOptionValue(argv, index, arg);
+      cli.functionName = readOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--profile') {
+      cli.profile = readOptionValue(argv, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--envId' || arg === '--env-id') {
+      cli.envId = readOptionValue(argv, index, arg);
+      cli.envIdProvided = true;
       index += 1;
       continue;
     }
 
     if (arg === '--out') {
-      options.outputRoot = resolveUserPath(readOptionValue(argv, index, arg), repoRoot);
+      cli.outputRoot = readOptionValue(argv, index, arg);
+      cli.outputRootProvided = true;
       index += 1;
       continue;
     }
 
     if (arg === '--clean') {
-      options.clean = true;
+      cli.clean = true;
       continue;
     }
 
     if (arg === '--check') {
-      options.check = true;
+      cli.check = true;
       continue;
     }
 
     if (arg === '--force') {
-      options.force = true;
+      cli.force = true;
       continue;
     }
 
     if (arg === '--runtime') {
-      options.runtime = readOptionValue(argv, index, arg);
+      cli.runtime = readOptionValue(argv, index, arg);
+      cli.runtimeProvided = true;
       index += 1;
       continue;
     }
 
     if (arg === '--path') {
-      options.httpPath = readOptionValue(argv, index, arg);
+      cli.httpPath = readOptionValue(argv, index, arg);
+      cli.httpPathOverride = true;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--base-url') {
+      cli.baseUrl = readOptionValue(argv, index, arg);
+      cli.baseUrlProvided = true;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--expected-route-domain') {
+      cli.expectedRouteDomain = readOptionValue(argv, index, arg);
+      cli.expectedRouteDomainProvided = true;
       index += 1;
       continue;
     }
 
     if (arg === '--dry-run') {
-      options.dryRun = true;
+      cli.dryRun = true;
       continue;
     }
 
@@ -94,18 +146,22 @@ function parseArgs(argv) {
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (!options.functionName) {
+  if (!cli.functionName) {
     throw new Error('Missing required argument: --function <name>');
   }
 
-  if (options.functionName === 'all') {
+  if (cli.functionName === 'all') {
     throw new Error('Deploying all functions is not supported. Deploy one CloudBase HTTP Function at a time.');
   }
 
-  getManifest(options.functionName);
-  options.httpPath = resolveHttpPath(options.functionName, options.httpPath);
+  const config = readCloudBaseFunctionsConfig();
+  validateCloudBaseFunctionsConfig(config);
+  const functionConfig = resolveFunctionConfig(config, cli);
+  const profileConfig = resolveProfileConfig(config, cli.profile);
 
-  return options;
+  getManifest(cli.functionName);
+
+  return resolveDeployOptions(cli, config, functionConfig, profileConfig);
 }
 
 function readOptionValue(argv, index, optionName) {
@@ -118,18 +174,334 @@ function readOptionValue(argv, index, optionName) {
   return value;
 }
 
-function resolveHttpPath(functionName, providedPath) {
-  if (providedPath) {
-    return providedPath;
+function readCloudBaseFunctionsConfig() {
+  try {
+    return JSON.parse(readFileSync(cloudbaseFunctionsConfigPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Failed to read CloudBase function deploy config: ${cloudbaseFunctionsConfigPath}. ${error.message}`);
+  }
+}
+
+function validateCloudBaseFunctionsConfig(config) {
+  if (!isRecord(config)) {
+    throw new Error('CloudBase deploy config root must be an object.');
   }
 
-  const manifestPath = httpPathByFunction.get(functionName);
-
-  if (!manifestPath) {
-    throw new Error(`${functionName}: missing HTTP path manifest. Pass --path <httpPath> or add this function to the deploy script HTTP path manifest.`);
+  const sensitivePaths = findSensitiveFieldNamePaths(config);
+  if (sensitivePaths.length > 0) {
+    throw new Error(`CloudBase deploy config contains sensitive-looking field names: ${sensitivePaths.join(', ')}. Secrets, keys, passwords, tokens, service roles, and private keys must not be stored in this file.`);
   }
 
-  return manifestPath;
+  if (!isRecord(config.defaults)) {
+    throw new Error('CloudBase deploy config defaults must be an object.');
+  }
+
+  if (!isRecord(config.functions)) {
+    throw new Error('CloudBase deploy config functions must be an object.');
+  }
+
+  if (!isRecord(config.environments)) {
+    throw new Error('CloudBase deploy config environments must be an object.');
+  }
+
+  validateDefaultsConfig(config.defaults);
+  validateFunctionsConfig(config.functions);
+  validateEnvironmentsConfig(config.environments);
+}
+
+function validateDefaultsConfig(defaults) {
+  if (defaults.outputRoot !== undefined && !isNonEmptyString(defaults.outputRoot)) {
+    throw new Error('CloudBase deploy config defaults.outputRoot must be a non-empty string when present.');
+  }
+
+  if (defaults.runtime !== undefined && !isNonEmptyString(defaults.runtime)) {
+    throw new Error('CloudBase deploy config defaults.runtime must be a non-empty string when present.');
+  }
+}
+
+function validateFunctionsConfig(functionsConfig) {
+  for (const [functionName, functionConfig] of Object.entries(functionsConfig)) {
+    if (!isRecord(functionConfig)) {
+      throw new Error(`${functionName}: CloudBase function config must be an object.`);
+    }
+
+    assertHttpPath(functionConfig.httpPath, `functions.${functionName}.httpPath`);
+
+    if (!Array.isArray(functionConfig.requiredEnvVars)) {
+      throw new Error(`functions.${functionName}.requiredEnvVars must be an array.`);
+    }
+
+    for (const envVarName of functionConfig.requiredEnvVars) {
+      if (!isNonEmptyString(envVarName)) {
+        throw new Error(`functions.${functionName}.requiredEnvVars must contain only non-empty strings.`);
+      }
+    }
+  }
+}
+
+function validateEnvironmentsConfig(environmentsConfig) {
+  for (const [profileName, profileConfig] of Object.entries(environmentsConfig)) {
+    if (!isRecord(profileConfig)) {
+      throw new Error(`environments.${profileName} must be an object.`);
+    }
+
+    if (profileConfig.envId !== undefined && !isNonEmptyString(profileConfig.envId)) {
+      throw new Error(`environments.${profileName}.envId must be a non-empty string when present.`);
+    }
+
+    if (profileConfig.baseUrl !== undefined) {
+      normalizeBaseUrl(profileConfig.baseUrl, `environments.${profileName}.baseUrl`);
+    }
+
+    if (profileConfig.routeDomain !== undefined) {
+      normalizeRouteDomain(profileConfig.routeDomain, `environments.${profileName}.routeDomain`);
+    }
+  }
+}
+
+function resolveFunctionConfig(config, cli) {
+  const functionConfig = config.functions[cli.functionName];
+
+  if (functionConfig) {
+    return functionConfig;
+  }
+
+  if (cli.httpPathOverride) {
+    return null;
+  }
+
+  throw new Error(`${cli.functionName}: missing function config in ${cloudbaseFunctionsConfigPath}. Pass --path <httpPath> for a temporary override, or add this function to the config file.`);
+}
+
+function resolveProfileConfig(config, profileName) {
+  if (!profileName) {
+    return null;
+  }
+
+  if (!Object.hasOwn(config.environments, profileName)) {
+    throw new Error(`CloudBase deploy profile not found: ${profileName}`);
+  }
+
+  const profileConfig = config.environments[profileName];
+  if (!isNonEmptyString(profileConfig.envId)) {
+    throw new Error(`CloudBase deploy profile ${profileName} is missing envId.`);
+  }
+
+  return profileConfig;
+}
+
+function resolveDeployOptions(cli, config, functionConfig, profileConfig) {
+  const outputRootResolution = resolveOutputRoot(cli, config.defaults);
+  const runtimeResolution = resolveRuntime(cli, config.defaults);
+  const envIdResolution = resolveEnvId(cli, profileConfig);
+  const baseUrlResolution = resolveBaseUrl(cli, profileConfig);
+  const routeDomainResolution = resolveRouteDomain(cli, profileConfig, baseUrlResolution.value);
+  const httpPath = resolveHttpPath(cli, functionConfig);
+
+  return {
+    functionName: cli.functionName,
+    profile: cli.profile,
+    envId: envIdResolution.value,
+    outputRoot: outputRootResolution.value,
+    clean: cli.clean,
+    check: cli.check,
+    force: cli.force,
+    runtime: runtimeResolution.value,
+    httpPath,
+    httpPathOverride: cli.httpPathOverride,
+    baseUrl: baseUrlResolution.value,
+    routeDomain: routeDomainResolution.value,
+    requiredEnvVars: functionConfig?.requiredEnvVars ?? [],
+    dryRun: cli.dryRun,
+    sources: {
+      envId: envIdResolution.source,
+      baseUrl: baseUrlResolution.source,
+      routeDomain: routeDomainResolution.source,
+      outputRoot: outputRootResolution.source,
+      runtime: runtimeResolution.source,
+    },
+  };
+}
+
+function resolveOutputRoot(cli, defaults) {
+  if (cli.outputRootProvided) {
+    return {
+      value: resolveUserPath(cli.outputRoot, repoRoot),
+      source: 'command',
+    };
+  }
+
+  if (isNonEmptyString(defaults.outputRoot)) {
+    return {
+      value: resolveUserPath(defaults.outputRoot, repoRoot),
+      source: 'defaults',
+    };
+  }
+
+  return {
+    value: defaultDeployOutputRoot,
+    source: 'fallback',
+  };
+}
+
+function resolveRuntime(cli, defaults) {
+  if (cli.runtimeProvided) {
+    return {
+      value: cli.runtime,
+      source: 'command',
+    };
+  }
+
+  if (isNonEmptyString(defaults.runtime)) {
+    return {
+      value: defaults.runtime,
+      source: 'defaults',
+    };
+  }
+
+  return {
+    value: fallbackRuntime,
+    source: 'fallback',
+  };
+}
+
+function resolveEnvId(cli, profileConfig) {
+  if (cli.envIdProvided) {
+    return {
+      value: cli.envId,
+      source: 'command',
+    };
+  }
+
+  if (profileConfig?.envId) {
+    return {
+      value: profileConfig.envId,
+      source: 'profile',
+    };
+  }
+
+  throw new Error('Missing CloudBase envId. Pass --profile <profile> with environments.<profile>.envId, or pass --envId <env-id>.');
+}
+
+function resolveBaseUrl(cli, profileConfig) {
+  if (cli.baseUrlProvided) {
+    return {
+      value: normalizeBaseUrl(cli.baseUrl, '--base-url'),
+      source: 'command',
+    };
+  }
+
+  if (profileConfig?.baseUrl) {
+    return {
+      value: normalizeBaseUrl(profileConfig.baseUrl, `environments.${cli.profile}.baseUrl`),
+      source: 'profile',
+    };
+  }
+
+  return {
+    value: '',
+    source: 'missing',
+  };
+}
+
+function resolveRouteDomain(cli, profileConfig, baseUrl) {
+  if (cli.expectedRouteDomainProvided) {
+    return {
+      value: normalizeRouteDomain(cli.expectedRouteDomain, '--expected-route-domain'),
+      source: 'command',
+    };
+  }
+
+  if (profileConfig?.routeDomain) {
+    return {
+      value: normalizeRouteDomain(profileConfig.routeDomain, `environments.${cli.profile}.routeDomain`),
+      source: 'profile',
+    };
+  }
+
+  if (baseUrl) {
+    return {
+      value: new URL(baseUrl).host,
+      source: 'derived from baseUrl',
+    };
+  }
+
+  return {
+    value: '',
+    source: 'missing',
+  };
+}
+
+function resolveHttpPath(cli, functionConfig) {
+  const httpPath = cli.httpPathOverride ? cli.httpPath : functionConfig?.httpPath;
+  assertHttpPath(httpPath, cli.httpPathOverride ? '--path' : `functions.${cli.functionName}.httpPath`);
+  return httpPath;
+}
+
+function normalizeBaseUrl(value, label) {
+  if (!isNonEmptyString(value)) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('must use http or https.');
+    }
+
+    return url.toString().replace(/\/$/, '');
+  } catch (error) {
+    throw new Error(`Invalid ${label}: ${error.message}`);
+  }
+}
+
+function normalizeRouteDomain(value, label) {
+  if (!isNonEmptyString(value)) {
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+
+  const routeDomain = value.trim();
+
+  if (/^https?:\/\//i.test(routeDomain)) {
+    throw new Error(`${label} must not include http:// or https://.`);
+  }
+
+  if (routeDomain.includes('/')) {
+    throw new Error(`${label} must be a domain, not a URL path.`);
+  }
+
+  return routeDomain;
+}
+
+function assertHttpPath(value, label) {
+  if (!isNonEmptyString(value) || !value.startsWith('/')) {
+    throw new Error(`${label} must be a non-empty HTTP path starting with /.`);
+  }
+}
+
+function findSensitiveFieldNamePaths(value, parentPath = '') {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => findSensitiveFieldNamePaths(item, `${parentPath}[${index}]`));
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  return Object.entries(value).flatMap(([key, childValue]) => {
+    const keyPath = parentPath ? `${parentPath}.${key}` : key;
+    const currentPath = sensitiveFieldNamePatterns.some((pattern) => pattern.test(key)) ? [keyPath] : [];
+    return [...currentPath, ...findSensitiveFieldNamePaths(childValue, keyPath)];
+  });
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function createPackageCommand(options) {
@@ -170,6 +542,9 @@ function createDeployCommand(options, stagingDir) {
     options.httpPath,
     '--runtime',
     options.runtime,
+    '-e',
+    options.envId,
+    '--yes',
   ];
 
   if (options.force) {
@@ -180,6 +555,7 @@ function createDeployCommand(options, stagingDir) {
     command: getPnpmCommand(),
     args,
     cwd: stagingDir,
+    options,
   };
 }
 
@@ -261,23 +637,97 @@ function assertTcbAvailable() {
 }
 
 function printDryRun(packageCommand, deployCommand) {
-  console.log('Dry run: commands that would run:');
+  const { options } = deployCommand;
+
+  console.log('Dry run configuration:');
+  console.log(`- profile: ${options.profile || 'not provided'}`);
+  console.log(`- envId source: ${options.sources.envId}`);
+  console.log(`- baseUrl source: ${options.sources.baseUrl}`);
+  console.log(`- routeDomain source: ${options.sources.routeDomain}`);
+  console.log(`- outputRoot source: ${options.sources.outputRoot}`);
+  console.log(`- runtime source: ${options.sources.runtime}`);
+  console.log('');
+  console.log('Package command:');
   console.log(formatCommand(packageCommand.command, packageCommand.args));
+  console.log('');
+  console.log('Deploy command:');
   console.log(`cd ${formatShellArg(deployCommand.cwd)}`);
   console.log(formatCommand(deployCommand.command, deployCommand.args));
   console.log('');
-  console.log('Dry run finished. No package, tcb check, or CloudBase deployment was executed.');
+  console.log('Dry run finished. No package, tcb check, CloudBase deployment, SQL, HTTP route, or function env var changes were executed.');
+  printPostDeployChecklist(options, { dryRun: true });
 }
 
-function printSmokeHint() {
+function printPostDeployChecklist(options, { dryRun = false } = {}) {
   console.log('');
-  console.log('Deployment finished. Suggested verification:');
-  console.log('pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>');
-  console.log('curl <deployed-http-function-url>');
+  if (dryRun) {
+    console.log('Post-deploy checklist preview:');
+  } else {
+    console.log('Function code deployed successfully.');
+    console.log('Please verify HTTP route and function env vars before using the API.');
+  }
+
+  if (dryRun) {
+    console.log('- 函数代码上传：dry-run 未执行，真实部署成功后应为已完成。');
+  } else {
+    console.log('- 函数代码上传：已完成。');
+  }
+
+  printRequiredEnvVarsChecklist(options);
+  console.log(`- HTTP route path: ${options.httpPath}`);
+
+  if (options.routeDomain) {
+    console.log(`- HTTP route domain: ${options.routeDomain}`);
+  } else {
+    console.log('- HTTP route domain: missing. Verify the CloudBase HTTP access service domain manually.');
+  }
+
+  if (options.baseUrl) {
+    console.log(`- curl 验证命令：curl ${formatShellArg(buildVerificationUrl(options.baseUrl, options.httpPath))}`);
+  } else {
+    console.log('- curl 验证命令：missing baseUrl. Use the CloudBase HTTP Functions Base URL manually.');
+  }
+
+  console.log('- This script did not modify SQL.');
+  console.log('- This script did not modify function env vars.');
+  console.log('- This script did not modify HTTP routes.');
+}
+
+function printPathOverrideWarning(options) {
+  if (!options.httpPathOverride) {
+    return;
+  }
+
+  console.warn(`WARN --path ${options.httpPath} overrides ${cloudbaseFunctionsConfigPath}. This may diverge from the deploy configuration source of truth; long-term HTTP path changes should be written back to the config file.`);
+}
+
+function printRequiredEnvVarsChecklist(options) {
+  console.log('- 函数环境变量：');
+
+  if (options.requiredEnvVars.length === 0) {
+    console.log(`  - none configured in ${cloudbaseFunctionsConfigPath}`);
+    return;
+  }
+
+  for (const envVarName of options.requiredEnvVars) {
+    console.log(`  - ${formatRequiredEnvVarCheck(envVarName, options)}`);
+  }
+}
+
+function formatRequiredEnvVarCheck(envVarName, options) {
+  if (envVarName === 'CLOUDBASE_ENV_ID') {
+    return `${envVarName}=${options.envId}`;
+  }
+
+  return `${envVarName}=<required>`;
 }
 
 function formatCommand(command, args) {
   return [command, ...args].map(formatShellArg).join(' ');
+}
+
+function buildVerificationUrl(baseUrl, httpPath) {
+  return new URL(httpPath, `${baseUrl}/`).toString();
 }
 
 function printCommandOutput(output) {
@@ -297,11 +747,13 @@ function isCancelledOutput(output) {
 }
 
 function formatShellArg(value) {
-  if (/^[A-Za-z0-9_./:=@-]+$/.test(value)) {
-    return value;
+  const text = String(value);
+
+  if (/^[A-Za-z0-9_./:=@-]+$/.test(text)) {
+    return text;
   }
 
-  return JSON.stringify(value);
+  return JSON.stringify(text);
 }
 
 async function main() {
@@ -309,6 +761,7 @@ async function main() {
   const stagingDir = getPackageOutputDir(options.outputRoot, options.functionName);
   const packageCommand = createPackageCommand(options);
   const deployCommand = createDeployCommand(options, stagingDir);
+  printPathOverrideWarning(options);
 
   if (options.dryRun) {
     printDryRun(packageCommand, deployCommand);
@@ -323,7 +776,7 @@ async function main() {
 
   assertTcbAvailable();
   runDeployCommand(deployCommand);
-  printSmokeHint();
+  printPostDeployChecklist(options);
 }
 
 main().catch((error) => {

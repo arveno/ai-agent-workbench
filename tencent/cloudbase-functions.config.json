@@ -1,0 +1,20 @@
+{
+  "defaults": {
+    "outputRoot": "./.cloudbase-packages",
+    "runtime": "Nodejs20.19"
+  },
+  "functions": {
+    "workbench-evaluations": {
+      "httpPath": "/api/workbench/evaluations",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Evaluation / Bad Case API"
+    }
+  },
+  "environments": {
+    "poc": {
+      "envId": "ai-agent-workbench-poc-d6731923d",
+      "baseUrl": "https://ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com",
+      "routeDomain": "ai-agent-workbench-poc-d6731923d-1317403720.ap-shanghai.app.tcloudbase.com"
+    }
+  }
+}
