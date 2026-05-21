@@ -164,7 +164,7 @@ function createDeployCommand(options, stagingDir) {
     'deploy',
     options.functionName,
     '--dir',
-    stagingDir,
+    '.',
     '--httpFn',
     '--path',
     options.httpPath,
@@ -179,6 +179,7 @@ function createDeployCommand(options, stagingDir) {
   return {
     command: getPnpmCommand(),
     args,
+    cwd: stagingDir,
   };
 }
 
@@ -186,9 +187,9 @@ function getPnpmCommand() {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
-function runCommand(label, commandSpec) {
+function runCommand(label, commandSpec, cwd = repoRoot) {
   const result = spawnSync(commandSpec.command, commandSpec.args, {
-    cwd: repoRoot,
+    cwd,
     stdio: 'inherit',
   });
 
@@ -198,6 +199,29 @@ function runCommand(label, commandSpec) {
 
   if (result.status !== 0) {
     throw new Error(`${label} failed.`);
+  }
+}
+
+function runDeployCommand(commandSpec) {
+  const result = spawnSync(commandSpec.command, commandSpec.args, {
+    cwd: commandSpec.cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+
+  const output = [result.stdout, result.stderr].filter(Boolean).join('');
+  printCommandOutput(output);
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (isCancelledOutput(output)) {
+    throw new Error('CloudBase function deployment was cancelled.');
+  }
+
+  if (result.status !== 0) {
+    throw new Error('CloudBase function deployment failed.');
   }
 }
 
@@ -239,6 +263,7 @@ function assertTcbAvailable() {
 function printDryRun(packageCommand, deployCommand) {
   console.log('Dry run: commands that would run:');
   console.log(formatCommand(packageCommand.command, packageCommand.args));
+  console.log(`cd ${formatShellArg(deployCommand.cwd)}`);
   console.log(formatCommand(deployCommand.command, deployCommand.args));
   console.log('');
   console.log('Dry run finished. No package, tcb check, or CloudBase deployment was executed.');
@@ -253,6 +278,22 @@ function printSmokeHint() {
 
 function formatCommand(command, args) {
   return [command, ...args].map(formatShellArg).join(' ');
+}
+
+function printCommandOutput(output) {
+  if (!output) {
+    return;
+  }
+
+  process.stdout.write(output);
+
+  if (!output.endsWith('\n')) {
+    process.stdout.write('\n');
+  }
+}
+
+function isCancelledOutput(output) {
+  return /\b(?:deployment\s+cancelled|cancelled|canceled)\b/i.test(output);
 }
 
 function formatShellArg(value) {
@@ -281,7 +322,7 @@ async function main() {
   }
 
   assertTcbAvailable();
-  runCommand('CloudBase function deployment', deployCommand);
+  runDeployCommand(deployCommand);
   printSmokeHint();
 }
 
