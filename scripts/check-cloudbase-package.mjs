@@ -13,6 +13,7 @@ const manifests = [
   createManifest('workbench-demo-copy', ['auth.js', 'mysql.js']),
   createManifest('workbench-quota', ['auth.js', 'mysql.js']),
   createManifest('workbench-runs', ['auth.js', 'mysql.js']),
+  createManifest('workbench-evaluations', ['auth.js', 'mysql.js']),
   createManifest('workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js']),
 ];
 
@@ -42,6 +43,10 @@ function parseArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+
+    if (arg === '--') {
+      continue;
+    }
 
     if (arg === '--function') {
       options.functionName = readOptionValue(argv, index, arg);
