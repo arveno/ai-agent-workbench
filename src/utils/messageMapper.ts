@@ -46,8 +46,10 @@ function toPersistableRunId(runId: string | undefined): string | null {
 
 export function messageRecordToWorkbenchMessage(record: MessageRecord): WorkbenchMessage {
   const runtimeRunId = typeof record.metadata.runtimeRunId === 'string' ? record.metadata.runtimeRunId : null;
+  const clientMessageId = record.client_message_id ?? record.id;
   const message: WorkbenchMessage = {
-    id: record.client_message_id ?? record.id,
+    id: clientMessageId,
+    clientMessageId,
     role: messageRoleToWorkbenchRole(record.role),
     kind: messageKindToWorkbenchKind(record.kind),
     content: record.content,
@@ -63,6 +65,7 @@ export function messageRecordToWorkbenchMessage(record: MessageRecord): Workbenc
 
 export function workbenchMessageToMessageCreateInput(message: WorkbenchMessage): MessageCreateInput {
   const runId = toPersistableRunId(message.runId);
+  const clientMessageId = message.clientMessageId ?? message.id;
   const metadata: Record<string, unknown> = {};
 
   if (message.runId && !runId) {
@@ -74,7 +77,7 @@ export function workbenchMessageToMessageCreateInput(message: WorkbenchMessage):
     kind: workbenchKindToMessageKind(message.kind),
     content: message.content,
     runId,
-    clientMessageId: message.id,
+    clientMessageId,
     status: message.kind === 'partial' ? 'streaming' : 'completed',
     metadata,
   };

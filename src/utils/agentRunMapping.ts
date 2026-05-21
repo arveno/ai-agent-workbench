@@ -96,6 +96,9 @@ export function createAgentPendingRunStartedEvent(params: {
     type: 'run_started',
     run: {
       id: params.runId,
+      clientRunId: params.runId,
+      runtimeRunId: params.runId,
+      displayRunId: params.runId,
       sessionId: params.sessionId,
       mode: 'agent',
       status: 'running',
@@ -167,6 +170,7 @@ export function mapAgentRunResultToRunSnapshot(agentRun: AgentRunResult): RunSna
 
   return {
     id: agentRun.id,
+    displayRunId: agentRun.id,
     mode: 'agent',
     status: agentRun.status,
     intent,

@@ -13,8 +13,10 @@ function toTimestamp(value: string): number {
 
 export function reportArtifactToMessage(record: ReportArtifactRecord): WorkbenchMessage {
   const runtimeRunId = getMetadataString(record.metadata, 'runtimeRunId');
+  const clientMessageId = `report_artifact_${record.id}`;
   const message: WorkbenchMessage = {
-    id: `report_artifact_${record.id}`,
+    id: clientMessageId,
+    clientMessageId,
     role: 'assistant',
     kind: 'report',
     content: record.content_markdown,

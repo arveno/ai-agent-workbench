@@ -50,6 +50,7 @@ export function createMockRunStartedEvent(params: {
     type: 'run_started',
     run: {
       id: params.runId,
+      displayRunId: params.runId,
       sessionId: params.sessionId,
       mode: 'mock',
       status: 'running',

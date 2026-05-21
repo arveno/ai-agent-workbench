@@ -201,8 +201,26 @@ function eventRecordToRunEvent(record: RunEventRecord): RunEvent | null {
   return isRunEvent(record.payload) ? record.payload : null;
 }
 
+function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
+  RunSnapshot,
+  'id' | 'canonicalRunId' | 'clientRunId' | 'runtimeRunId' | 'displayRunId'
+> {
+  const canonicalRunId = record.id;
+  const runtimeRunId = record.runtime_run_id ?? undefined;
+  const clientRunId = getMetadataString(record.metadata, 'clientRunId') || runtimeRunId;
+  const snapshotId = runtimeRunId ?? canonicalRunId;
+
+  return {
+    id: snapshotId,
+    canonicalRunId,
+    clientRunId,
+    runtimeRunId,
+    displayRunId: snapshotId,
+  };
+}
+
 export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
-  const runtimeRunId = record.runtime_run_id ?? record.id;
+  const runIdentity = getAgentRunRecordIdentity(record);
   const conclusionNotice = getMetadataString(record.metadata, 'conclusionNotice');
   const conclusionSource = mapConclusionSource(record.conclusion_source);
   const agentConclusion = normalizeAgentConclusion(
@@ -212,7 +230,7 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
   );
 
   return {
-    id: runtimeRunId,
+    ...runIdentity,
     sessionId: record.conversation_id,
     mode: record.mode,
     status: mapRunStatus(record.status),
@@ -265,12 +283,13 @@ export function runPersistenceRecordsToSnapshot(params: {
   );
   const persistedTools = params.tools.map((tool) => toolInvocationRecordToRunTool(tool));
   const persistedReportState = mapReportState(params.run.report_state);
+  const runIdentity = getAgentRunRecordIdentity(params.run);
 
   return {
     ...snapshot,
+    ...runIdentity,
     conclusion: agentConclusion.plainText,
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    id: params.run.runtime_run_id ?? snapshot.id,
     sessionId: params.run.conversation_id,
     toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
     reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : snapshot.reportState,

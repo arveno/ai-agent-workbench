@@ -57,6 +57,14 @@ export function getConclusionSourceLabel(source: RunConclusionSource): string {
   return getObservabilityConclusionSourceLabel(source);
 }
 
+export function getRunDisplayId(run: Pick<RunSnapshot, 'id' | 'displayRunId'> | null): string {
+  if (!run) {
+    return '-';
+  }
+
+  return run.displayRunId?.trim() || run.id;
+}
+
 export function formatRunElapsed(run: RunSnapshot | null): string {
   if (!run) {
     return '-';

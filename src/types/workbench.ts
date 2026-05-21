@@ -56,6 +56,7 @@ export type WorkbenchMessageKind = 'normal' | 'report' | 'partial' | 'error';
 
 export interface WorkbenchMessage {
   id: string;
+  clientMessageId?: string;
   role: 'user' | 'assistant';
   kind: WorkbenchMessageKind;
   content: string;
