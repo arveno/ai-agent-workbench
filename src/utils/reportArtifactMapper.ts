@@ -3,7 +3,7 @@ import type { WorkbenchMessage } from '@/types/workbench';
 
 function getMetadataString(metadata: Record<string, unknown>, key: string): string {
   const value = metadata[key];
-  return typeof value === 'string' ? value : '';
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function toTimestamp(value: string): number {
@@ -25,7 +25,7 @@ export function reportArtifactToMessage(record: ReportArtifactRecord): Workbench
   };
 
   if (dbRunId || runtimeRunId) {
-    message.runId = dbRunId ?? runtimeRunId;
+    message.runId = dbRunId || runtimeRunId;
   }
 
   return message;

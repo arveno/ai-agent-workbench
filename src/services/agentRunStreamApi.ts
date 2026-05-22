@@ -78,7 +78,12 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
   const normalizedClientRunId = clientRunId?.trim();
 
   if (event.type === 'run_started') {
-    const canonicalRunId = normalizeOptionalId(event.runId) ?? normalizeOptionalId(event.run.id) ?? normalizedClientRunId;
+    const eventRunId = normalizeOptionalId(event.runId);
+    const eventSnapshotId = normalizeOptionalId(event.run.id);
+    const canonicalRunId =
+      eventRunId ??
+      (eventSnapshotId && eventSnapshotId !== normalizedClientRunId ? eventSnapshotId : undefined);
+    const fallbackRunId = canonicalRunId ?? eventSnapshotId ?? normalizedClientRunId;
     const eventClientRunId =
       normalizeOptionalId(event.clientRunId) ??
       normalizeOptionalId(event.run.clientRunId) ??
@@ -86,23 +91,25 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
     const runtimeRunId =
       normalizeOptionalId(event.run.runtimeRunId) ??
       eventClientRunId;
-    const displayRunId = normalizeOptionalId(event.run.displayRunId) ?? canonicalRunId;
+    const displayRunId = normalizeOptionalId(event.run.displayRunId) ?? fallbackRunId;
 
-    if (!canonicalRunId) {
+    if (!fallbackRunId) {
       return event;
     }
 
     return {
       ...event,
-      runId: canonicalRunId,
+      runId: fallbackRunId,
       clientRunId: eventClientRunId,
       run: {
         ...event.run,
-        id: canonicalRunId,
+        id: fallbackRunId,
         canonicalRunId,
         clientRunId: eventClientRunId,
         runtimeRunId,
         displayRunId,
+        isCanonicalRunId: Boolean(canonicalRunId),
+        missingCanonicalRunId: !canonicalRunId,
       },
     };
   }

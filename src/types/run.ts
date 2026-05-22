@@ -108,6 +108,8 @@ export interface RunSnapshot {
   clientRunId?: string;
   runtimeRunId?: string;
   displayRunId?: string;
+  isCanonicalRunId?: boolean;
+  missingCanonicalRunId?: boolean;
   sessionId?: string;
   mode: RunMode;
   status: RunStatus;

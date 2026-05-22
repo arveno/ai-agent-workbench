@@ -47,7 +47,7 @@ function getMetadataString(metadata: Record<string, unknown>, key: string): stri
 }
 
 function getReportArtifactRunId(report: ReportArtifactRecord): string | null {
-  return getMetadataString(report.metadata, 'runtimeRunId') || report.run_id || null;
+  return report.run_id?.trim() || getMetadataString(report.metadata, 'runtimeRunId') || null;
 }
 
 function getReportArtifactState(report: ReportArtifactRecord): RunReportState | null {
@@ -208,15 +208,27 @@ function upsertReportArtifactsIntoSessions(
 }
 
 function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId: string): Record<string, unknown> {
-  return {
+  const metadata: Record<string, unknown> = {
     source: 'agent-run',
     runId,
-    runtimeRunId: runId,
+    canonicalRunId: runId,
     conclusionSource: run?.conclusionSource ?? null,
     fallbackReason: run?.conclusionSource === 'fallback' ? run.conclusionNotice ?? null : null,
     conclusionNotice: run?.conclusionNotice ?? null,
     toolNames: run?.toolInvocations.map((tool) => tool.toolName || tool.toolId) ?? [],
   };
+  const runtimeRunId = run?.runtimeRunId?.trim();
+
+  if (runtimeRunId && runtimeRunId !== runId) {
+    metadata.runtimeRunId = runtimeRunId;
+  }
+
+  return metadata;
+}
+
+function getReportArtifactRuntimeRunId(run: RunSnapshot | null | undefined, runId: string): string {
+  const runtimeRunId = run?.runtimeRunId?.trim();
+  return runtimeRunId && runtimeRunId !== runId ? runtimeRunId : '';
 }
 
 function cacheRunInSession(
@@ -829,7 +841,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         conversationId: params.conversationId,
         title: params.title,
         contentMarkdown: params.contentMarkdown,
-        runtimeRunId: params.runId,
+        runtimeRunId: getReportArtifactRuntimeRunId(run, params.runId),
         metadata: createReportArtifactMetadata(run, params.runId),
       },
     );
