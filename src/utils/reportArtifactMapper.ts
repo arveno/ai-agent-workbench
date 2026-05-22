@@ -13,6 +13,7 @@ function toTimestamp(value: string): number {
 
 export function reportArtifactToMessage(record: ReportArtifactRecord): WorkbenchMessage {
   const runtimeRunId = getMetadataString(record.metadata, 'runtimeRunId');
+  const dbRunId = record.run_id?.trim() || null;
   const clientMessageId = `report_artifact_${record.id}`;
   const message: WorkbenchMessage = {
     id: clientMessageId,
@@ -23,8 +24,8 @@ export function reportArtifactToMessage(record: ReportArtifactRecord): Workbench
     createdAt: toTimestamp(record.created_at),
   };
 
-  if (runtimeRunId) {
-    message.runId = runtimeRunId;
+  if (dbRunId || runtimeRunId) {
+    message.runId = dbRunId ?? runtimeRunId;
   }
 
   return message;

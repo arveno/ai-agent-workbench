@@ -46,6 +46,7 @@ function toPersistableRunId(runId: string | undefined): string | null {
 
 export function messageRecordToWorkbenchMessage(record: MessageRecord): WorkbenchMessage {
   const runtimeRunId = typeof record.metadata.runtimeRunId === 'string' ? record.metadata.runtimeRunId : null;
+  const dbRunId = record.run_id?.trim() || null;
   const clientMessageId = record.client_message_id ?? record.id;
   const message: WorkbenchMessage = {
     id: clientMessageId,
@@ -56,8 +57,8 @@ export function messageRecordToWorkbenchMessage(record: MessageRecord): Workbenc
     createdAt: toTimestamp(record.created_at),
   };
 
-  if (runtimeRunId || record.run_id) {
-    message.runId = runtimeRunId ?? record.run_id ?? undefined;
+  if (dbRunId || runtimeRunId) {
+    message.runId = dbRunId ?? runtimeRunId ?? undefined;
   }
 
   return message;

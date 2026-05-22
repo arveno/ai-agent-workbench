@@ -208,14 +208,13 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   const canonicalRunId = record.id;
   const runtimeRunId = record.runtime_run_id ?? undefined;
   const clientRunId = getMetadataString(record.metadata, 'clientRunId') || runtimeRunId;
-  const snapshotId = runtimeRunId ?? canonicalRunId;
 
   return {
-    id: snapshotId,
+    id: canonicalRunId,
     canonicalRunId,
     clientRunId,
     runtimeRunId,
-    displayRunId: snapshotId,
+    displayRunId: canonicalRunId,
   };
 }
 
