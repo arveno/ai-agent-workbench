@@ -54,6 +54,21 @@ function isAgentRunInProgress(state: WorkbenchStore): boolean {
   );
 }
 
+function getCanonicalRunIdForClientRun(state: WorkbenchStore, clientRunId: string): string {
+  const currentRun = state.currentRun;
+
+  if (
+    currentRun?.mode === 'agent' &&
+    (currentRun.id === clientRunId ||
+      currentRun.clientRunId === clientRunId ||
+      currentRun.runtimeRunId === clientRunId)
+  ) {
+    return currentRun.id;
+  }
+
+  return clientRunId;
+}
+
 function withDemoFallbackHint(message: string): string {
   const normalizedMessage = message.trim();
 
@@ -276,14 +291,11 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
         if (assistantMessage) {
           hasAppendedFinalMessage = true;
-          const persistedAssistantMessage = get().appendAssistantMessageToCurrentSession(assistantMessage, {
-            runId,
+          const assistantRunId = getCanonicalRunIdForClientRun(get(), runId);
+          get().appendAssistantMessageToCurrentSession(assistantMessage, {
+            runId: assistantRunId,
             kind: 'normal',
           });
-
-          if (persistedAssistantMessage && get().isPersistentMode) {
-            void get().persistMessageToConversation(sessionId, persistedAssistantMessage);
-          }
         }
 
         return;
@@ -356,14 +368,11 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         );
 
         if (assistantMessage) {
-          const persistedAssistantMessage = get().appendAssistantMessageToCurrentSession(assistantMessage, {
-            runId,
+          const assistantRunId = getCanonicalRunIdForClientRun(get(), runId);
+          get().appendAssistantMessageToCurrentSession(assistantMessage, {
+            runId: assistantRunId,
             kind: 'normal',
           });
-
-          if (persistedAssistantMessage && get().isPersistentMode) {
-            void get().persistMessageToConversation(sessionId, persistedAssistantMessage);
-          }
         }
       }
     }

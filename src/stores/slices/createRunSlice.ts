@@ -283,6 +283,58 @@ function setSessionLatestRunId(
   );
 }
 
+function getRunStartedPendingRunId(event: RunEvent, run: RunSnapshot): string | null {
+  if (event.type !== 'run_started' || run.mode !== 'agent') {
+    return null;
+  }
+
+  const canonicalRunId = (run.canonicalRunId ?? run.id).trim();
+  const clientRunId = (run.clientRunId ?? event.clientRunId ?? '').trim();
+
+  if (!canonicalRunId || !clientRunId || canonicalRunId === clientRunId) {
+    return null;
+  }
+
+  return clientRunId;
+}
+
+function migratePendingRunIdInSessions(
+  sessions: WorkbenchStore['sessions'],
+  conversationId: string,
+  pendingRunId: string | null,
+  canonicalRun: RunSnapshot,
+): WorkbenchStore['sessions'] {
+  if (!pendingRunId || pendingRunId === canonicalRun.id) {
+    return sessions;
+  }
+
+  return sessions.map((session) => {
+    if (session.id !== conversationId) {
+      return session;
+    }
+
+    const runsById = {
+      ...session.runsById,
+      [canonicalRun.id]: canonicalRun,
+    };
+    delete runsById[pendingRunId];
+
+    return {
+      ...session,
+      messages: session.messages.map((message) =>
+        message.runId === pendingRunId
+          ? {
+              ...message,
+              runId: canonicalRun.id,
+            }
+          : message,
+      ),
+      runsById,
+      latestRunId: session.latestRunId === pendingRunId ? canonicalRun.id : session.latestRunId,
+    };
+  });
+}
+
 export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (set, get) => ({
   currentRun: initialCurrentRun,
   selectedRunId: initialCurrentRun?.id ?? null,
@@ -365,7 +417,13 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       };
       const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
       const syncedRun = activeSession ? withReportStateFromSessionMessages(runWithSession, activeSession) : runWithSession;
-      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, syncedRun);
+      const pendingRunId = getRunStartedPendingRunId(event, syncedRun);
+      const nextSessions = migratePendingRunIdInSessions(
+        upsertRunIntoSessions(state.sessions, state.currentSessionId, syncedRun),
+        state.currentSessionId,
+        pendingRunId,
+        syncedRun,
+      );
 
       if (!state.isPersistentMode) {
         persistWorkbenchSessions(nextSessions, state.currentSessionId);

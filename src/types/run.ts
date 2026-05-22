@@ -135,6 +135,11 @@ export interface RunSnapshot {
 
 export interface RunStartedEvent {
   type: 'run_started';
+  runId?: string;
+  usageId?: string | null;
+  clientRunId?: string | null;
+  conversationId?: string | null;
+  timestamp?: string;
   run: RunSnapshot;
 }
 

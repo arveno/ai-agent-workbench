@@ -69,26 +69,51 @@ function consumeSseBlocks(buffer: string, onEvent: (event: RunEvent) => void): s
   return remainingBuffer;
 }
 
+function normalizeOptionalId(value: string | null | undefined): string | undefined {
+  const normalizedValue = value?.trim();
+  return normalizedValue || undefined;
+}
+
 function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunEvent {
   const normalizedClientRunId = clientRunId?.trim();
 
-  if (!normalizedClientRunId) {
-    return event;
-  }
-
   if (event.type === 'run_started') {
+    const canonicalRunId = normalizeOptionalId(event.runId) ?? normalizeOptionalId(event.run.id) ?? normalizedClientRunId;
+    const eventClientRunId =
+      normalizeOptionalId(event.clientRunId) ??
+      normalizeOptionalId(event.run.clientRunId) ??
+      normalizedClientRunId;
+    const runtimeRunId =
+      normalizeOptionalId(event.run.runtimeRunId) ??
+      eventClientRunId;
+    const displayRunId = normalizeOptionalId(event.run.displayRunId) ?? canonicalRunId;
+
+    if (!canonicalRunId) {
+      return event;
+    }
+
     return {
       ...event,
+      runId: canonicalRunId,
+      clientRunId: eventClientRunId,
       run: {
         ...event.run,
-        id: normalizedClientRunId,
+        id: canonicalRunId,
+        canonicalRunId,
+        clientRunId: eventClientRunId,
+        runtimeRunId,
+        displayRunId,
       },
     };
   }
 
+  if (!normalizedClientRunId || 'clientRunId' in event) {
+    return event;
+  }
+
   return {
     ...event,
-    runId: normalizedClientRunId,
+    clientRunId: normalizedClientRunId,
   } as RunEvent;
 }
 
