@@ -250,7 +250,7 @@ Conversation
 
 以下是当前优先关注的架构风险，不在本文档展开为项目计划：
 
-- `runId` / `clientRunId` / `runtimeRunId` 三轨混用。
+- `runId` / `clientRunId` / `runtimeRunId` 三轨混用；迁移期字段必须逐步收敛，不能长期扩散到 component / ViewModel / 业务逻辑。
 - 前后端 model catalog 双事实源。
 - Tool Registry 前端展示与服务端白名单漂移。
 - conclusion / report / evaluation formatter 分散。

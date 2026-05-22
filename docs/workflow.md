@@ -95,6 +95,7 @@ GitHub 负责远程备份和阶段同步。
 - 生命周期归位：判断任务属于 Access / Identity 到 Audit / Governance / Cost 的哪一段。
 - 对象关系判断：明确绑定 User / Workspace / Conversation / Message / Run / Artifact / Evaluation / Usage 等哪个核心对象。
 - ID 契约对齐：涉及 conversation / message / run / report / source / usage / evaluation ID 的任务，必须先阅读 `docs/id-contract.md`，确认 canonical ID、幂等 ID、兼容 ID 的边界，再写代码。
+- ID 契约变更：如果执行中发现文档契约与目标不一致，先暂停代码任务，更新并提交 `docs/id-contract.md` 事实源，再按新契约改代码。
 - 依赖顺序判断：确认上游能力已经具备，不能跳过依赖直接推进下游能力。
 - 执行顺序固定为：生命周期归位 -> 设计 -> 执行 -> 验收。
 - 方案：说明实现边界、数据链路、服务端受控点和验收方式。
@@ -109,6 +110,39 @@ GitHub 负责远程备份和阶段同步。
 - Bad Case 必须排在 Evaluation 之后。
 - Improvement 必须排在 Bad Case / Dataset 之后。
 - Operation / Audit 贯穿全程，但不要提前建设重后台。
+
+## 2.2 文档事实源与变更门禁
+
+项目长期事实源是仓库文档，不是单次聊天结论。对话用于讨论、拆解和验收，不能直接覆盖已经冻结的项目文档事实源。
+
+如果聊天建议、Codex 方案或临时判断与项目文档冲突，不能直接改代码。涉及以下长期规则变化时，必须先修改对应文档并提交，再按新文档执行代码任务：
+
+- 生命周期主线。
+- ID 契约。
+- 架构边界。
+- 代码生成规范。
+- 协作流程。
+- 部署流程。
+- Mock / Real / Fallback 规则。
+- Evaluation / Bad Case / Improvement 阶段顺序。
+
+当前阶段执行中出现新建议时，必须先判断：
+
+- 采用。
+- 部分采用。
+- 暂不采用。
+- 不采用。
+
+只有属于当前阶段、且不改变文档事实源的建议，才能直接进入当前 Codex 任务。如果建议有价值但依赖未完成，应进入后置待办，不打断当前阶段。
+
+固定原则：
+
+- 文档是事实源。
+- 对话是工作台。
+- Codex 是执行器。
+- 用户是最终决策者。
+
+文档事实源变更应及时 commit，并在必要时 push；代码小步治理可以阶段性集中 push。
 
 ## 3. 什么时候必须只读审查
 

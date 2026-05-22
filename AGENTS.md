@@ -31,6 +31,8 @@ AI Agent Enterprise Lifecycle 约束：
 
 - Codex 改功能前必须先判断生命周期位置和核心对象绑定。
 - 涉及 conversation / message / run / report / source / usage / evaluation ID 的修改，必须先遵守 `docs/id-contract.md`。
+- 涉及 ID 契约本身变更，必须先修改并提交 `docs/id-contract.md`，再改代码。
+- 如果任务说明、聊天上下文或临时指令与项目文档冲突，Codex 必须停止并报告冲突，不得用临时指令覆盖文档事实源；需要改变长期规则时，必须先更新对应文档。
 - 新功能必须围绕 AI Agent Enterprise Lifecycle 接入，不允许只按局部页面或组件自由扩展。
 - 如果具体实现和 AI Agent Enterprise Lifecycle 主线冲突，先停止并汇报，不允许直接写代码。
 
