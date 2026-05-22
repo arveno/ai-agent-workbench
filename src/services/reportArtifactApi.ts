@@ -24,6 +24,30 @@ async function readPersistenceResponse<TData>(
   return readWorkbenchPersistenceResponse(response, fallbackMessage);
 }
 
+function normalizeRuntimeRunId(runtimeRunId: string | null | undefined, runId: string): string | undefined {
+  const normalizedRuntimeRunId = runtimeRunId?.trim();
+  return normalizedRuntimeRunId && normalizedRuntimeRunId !== runId ? normalizedRuntimeRunId : undefined;
+}
+
+function createReportArtifactRequestMetadata(
+  metadata: ReportArtifactCreateInput['metadata'],
+  runId: string,
+  runtimeRunId: string | undefined,
+): ReportArtifactCreateInput['metadata'] {
+  const nextMetadata = { ...(metadata ?? {}) };
+  const metadataRuntimeRunId = typeof nextMetadata.runtimeRunId === 'string' ? nextMetadata.runtimeRunId.trim() : '';
+
+  if (!metadataRuntimeRunId || metadataRuntimeRunId === runId) {
+    delete nextMetadata.runtimeRunId;
+  }
+
+  if (runtimeRunId) {
+    nextMetadata.runtimeRunId = runtimeRunId;
+  }
+
+  return nextMetadata;
+}
+
 export async function fetchConversationReportArtifacts(
   conversationId: string,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactListResult>> {
@@ -49,13 +73,8 @@ export async function createRunReportArtifact(
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactCreateResult>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
-    const metadata =
-      input.runtimeRunId || runId
-        ? {
-            ...input.metadata,
-            runtimeRunId: input.runtimeRunId ?? runId,
-          }
-        : input.metadata;
+    const runtimeRunId = normalizeRuntimeRunId(input.runtimeRunId, runId);
+    const metadata = createReportArtifactRequestMetadata(input.metadata, runId, runtimeRunId);
     const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/reports'), {
       method: 'POST',
       headers: {
@@ -64,7 +83,7 @@ export async function createRunReportArtifact(
       body: JSON.stringify({
         conversationId: input.conversationId,
         runId,
-        runtimeRunId: input.runtimeRunId ?? runId,
+        runtimeRunId,
         title: input.title,
         contentMarkdown: input.contentMarkdown,
         status: 'generated',
@@ -106,7 +125,6 @@ export async function updateRunReportState(
         body: JSON.stringify({
           conversationId,
           runId,
-          runtimeRunId: runId,
           reportState,
         }),
         accessToken: cloudBaseToken,

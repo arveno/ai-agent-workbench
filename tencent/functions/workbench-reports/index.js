@@ -241,7 +241,22 @@ function readRunReportState(value) {
 }
 
 function readRuntimeRunId(body, metadata) {
-  return readQueryString(body.runtimeRunId) || readQueryString(metadata.runtimeRunId) || readQueryString(body.runId);
+  return readQueryString(body.runtimeRunId) || readQueryString(metadata.runtimeRunId);
+}
+
+function createReportMetadata(metadata, runId, runtimeRunId) {
+  const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
+  const metadataRuntimeRunId = readQueryString(nextMetadata.runtimeRunId);
+
+  if (!metadataRuntimeRunId || metadataRuntimeRunId === runId) {
+    delete nextMetadata.runtimeRunId;
+  }
+
+  if (runtimeRunId && runtimeRunId !== runId) {
+    nextMetadata.runtimeRunId = runtimeRunId;
+  }
+
+  return nextMetadata;
 }
 
 function toUuidOrNull(value) {
@@ -393,13 +408,23 @@ async function createReportStateMarker(db, currentUser, conversationId, params, 
     return null;
   }
 
+  const runId = toUuidOrNull(params.runId);
+  const runtimeRunId = readRuntimeRunId(params, params.metadata || {});
   const metadata = {
     source: 'agent-run-report-state',
     reportState,
-    runtimeRunId: readRuntimeRunId(params, params.metadata || {}),
   };
 
-  if (!metadata.runtimeRunId) {
+  if (runId) {
+    metadata.runId = runId;
+    metadata.canonicalRunId = runId;
+  }
+
+  if (runtimeRunId && runtimeRunId !== runId) {
+    metadata.runtimeRunId = runtimeRunId;
+  }
+
+  if (!runId && !runtimeRunId) {
     return null;
   }
 
@@ -409,7 +434,7 @@ async function createReportStateMarker(db, currentUser, conversationId, params, 
     _openid: currentUser.openid,
     user_id: currentUser.userId,
     conversation_id: conversationId,
-    run_id: toUuidOrNull(params.runId),
+    run_id: runId,
     title: '报告状态',
     content_markdown: '用户已选择暂不生成报告。',
     status: 'archived',
@@ -444,7 +469,7 @@ async function updateRunReportState(currentUser, body) {
   await createReportStateMarker(db, currentUser, conversationId, params, reportState);
 
   return {
-    runId: readRuntimeRunId(params, metadata) || String(body.runId || ''),
+    runId: toUuidOrNull(body.runId) || readRuntimeRunId(params, metadata) || String(body.runId || ''),
     reportState,
   };
 }
@@ -460,13 +485,16 @@ async function createReport(currentUser, body) {
   await assertConversationOwner(db, currentUser, conversationId);
 
   const reportId = randomUUID();
-  const metadata = readMetadata(body.metadata);
+  const requestMetadata = readMetadata(body.metadata);
+  const runId = toUuidOrNull(body.runId);
+  const runtimeRunId = readRuntimeRunId(body, requestMetadata);
+  const metadata = createReportMetadata(requestMetadata, runId, runtimeRunId);
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,
     user_id: currentUser.userId,
     conversation_id: conversationId,
-    run_id: toUuidOrNull(body.runId),
+    run_id: runId,
     title: readTitle(body.title),
     content_markdown: readContentMarkdown(body.contentMarkdown),
     status: readStatus(body.status),
@@ -482,7 +510,7 @@ async function createReport(currentUser, body) {
     conversationId,
     {
       runId: body.runId,
-      runtimeRunId: body.runtimeRunId,
+      runtimeRunId,
       metadata,
     },
     'generated',

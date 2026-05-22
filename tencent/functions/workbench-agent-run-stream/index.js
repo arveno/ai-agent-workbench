@@ -561,12 +561,13 @@ async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'clou
       id: usageId,
       _openid: currentUser.openid,
       user_id: currentUser.userId,
-      run_id: runtimeRunId || runId,
+      run_id: runId,
       quota_type: 'agent_run',
       status: 'started',
       metadata: JSON.stringify({
         source,
         runId,
+        clientRunId: runtimeRunId || null,
         runtimeRunId,
       }),
     });
