@@ -22,9 +22,31 @@ const REPORT_COLUMNS = [
   'created_at',
   'updated_at',
 ].join(',');
+const RUN_SOURCE_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+  'run_id',
+  'conversation_id',
+  'tool_invocation_id',
+  'retrieval_log_id',
+  'document_id',
+  'chunk_id',
+  'citation_label',
+  'source_order',
+  'title',
+  'preview',
+  'score',
+  'source_type',
+  'used_in_answer',
+  'no_source_reason',
+  'created_at',
+  'metadata',
+].join(',');
 
 const VALID_STATUSES = new Set(['draft', 'generated', 'archived']);
 const VALID_RUN_REPORT_STATES = new Set(['hidden', 'pending', 'generating', 'generated', 'skipped', 'failed']);
+const VALID_SOURCE_TYPES = new Set(['knowledge', 'tool', 'report', 'manual']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function loadSharedModule(name) {
@@ -89,6 +111,11 @@ function normalizeNumber(value) {
   return Number.isFinite(numberValue) ? numberValue : 0;
 }
 
+function normalizeNullableNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 function normalizeDateTime(value) {
   if (value instanceof Date) {
     return value.toISOString();
@@ -127,6 +154,22 @@ function compareCreatedDesc(left, right) {
   }
 
   return String(right.id ?? '').localeCompare(String(left.id ?? ''));
+}
+
+function compareSourceOrderAsc(left, right) {
+  const orderDiff = normalizeNumber(left.source_order) - normalizeNumber(right.source_order);
+
+  if (orderDiff !== 0) {
+    return orderDiff;
+  }
+
+  const createdDiff = normalizeDateTime(left.created_at).localeCompare(normalizeDateTime(right.created_at));
+
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
+
+  return String(left.id ?? '').localeCompare(String(right.id ?? ''));
 }
 
 function toNullableString(value) {
@@ -244,7 +287,113 @@ function readRuntimeRunId(body, metadata) {
   return readQueryString(body.runtimeRunId) || readQueryString(metadata.runtimeRunId);
 }
 
-function createReportMetadata(metadata, runId, runtimeRunId) {
+function normalizeSourceType(value) {
+  const sourceType = String(value || 'knowledge');
+  return VALID_SOURCE_TYPES.has(sourceType) ? sourceType : 'knowledge';
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === 1 || value === '1';
+}
+
+function setOptionalString(target, key, value) {
+  const normalizedValue = toNullableString(value);
+
+  if (normalizedValue) {
+    target[key] = normalizedValue;
+  }
+}
+
+function mapRunSource(row) {
+  const metadata = parseJsonObject(row.metadata);
+  const sourceOrder = normalizeNumber(row.source_order);
+
+  return {
+    id: String(row.id ?? ''),
+    runId: String(row.run_id ?? ''),
+    conversationId: String(row.conversation_id ?? ''),
+    toolInvocationId: toNullableString(row.tool_invocation_id) || undefined,
+    retrievalLogId: toNullableString(row.retrieval_log_id) || undefined,
+    documentId: toNullableString(row.document_id) || undefined,
+    chunkId: toNullableString(row.chunk_id) || undefined,
+    citationLabel: toNullableString(row.citation_label) || undefined,
+    title: String(row.title ?? ''),
+    preview: String(row.preview ?? ''),
+    score: normalizeNullableNumber(row.score) ?? undefined,
+    sourceType: normalizeSourceType(row.source_type),
+    usedInAnswer: normalizeBoolean(row.used_in_answer),
+    noSourceReason: toNullableString(row.no_source_reason) || undefined,
+    createdAt: normalizeDateTime(row.created_at),
+    metadata: {
+      ...metadata,
+      sourceOrder,
+    },
+  };
+}
+
+function normalizeReportSource(value) {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = toNullableString(value.id);
+  const runId = toNullableString(value.runId) || toNullableString(value.run_id);
+  const conversationId = toNullableString(value.conversationId) || toNullableString(value.conversation_id);
+  const title = toNullableString(value.title);
+  const preview = toNullableString(value.preview) || '';
+
+  if (!id || !runId || !conversationId || !title) {
+    return null;
+  }
+
+  const metadata = isRecord(value.metadata) ? { ...value.metadata } : {};
+  const sourceOrder = normalizeNullableNumber(value.sourceOrder ?? value.source_order ?? metadata.sourceOrder);
+
+  if (sourceOrder !== null) {
+    metadata.sourceOrder = sourceOrder;
+  }
+
+  const source = {
+    id,
+    runId,
+    conversationId,
+    title,
+    preview,
+    sourceType: normalizeSourceType(value.sourceType ?? value.source_type),
+    usedInAnswer: normalizeBoolean(value.usedInAnswer ?? value.used_in_answer),
+    createdAt: normalizeDateTime(value.createdAt ?? value.created_at),
+    metadata,
+  };
+
+  setOptionalString(source, 'toolInvocationId', value.toolInvocationId ?? value.tool_invocation_id);
+  setOptionalString(source, 'retrievalLogId', value.retrievalLogId ?? value.retrieval_log_id);
+  setOptionalString(source, 'documentId', value.documentId ?? value.document_id);
+  setOptionalString(source, 'chunkId', value.chunkId ?? value.chunk_id);
+  setOptionalString(source, 'citationLabel', value.citationLabel ?? value.citation_label);
+  setOptionalString(source, 'noSourceReason', value.noSourceReason ?? value.no_source_reason);
+
+  const score = normalizeNullableNumber(value.score);
+
+  if (score !== null) {
+    source.score = score;
+  }
+
+  return source;
+}
+
+function readReportSourcesFromMetadata(metadata) {
+  if (!Object.prototype.hasOwnProperty.call(metadata, 'sources')) {
+    return null;
+  }
+
+  if (!Array.isArray(metadata.sources)) {
+    return [];
+  }
+
+  return metadata.sources.map(normalizeReportSource).filter((source) => source !== null);
+}
+
+function createReportMetadata(metadata, runId, runtimeRunId, sourceSnapshot) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
   const metadataRuntimeRunId = readQueryString(nextMetadata.runtimeRunId);
 
@@ -254,6 +403,15 @@ function createReportMetadata(metadata, runId, runtimeRunId) {
 
   if (runtimeRunId && runtimeRunId !== runId) {
     nextMetadata.runtimeRunId = runtimeRunId;
+  }
+
+  const reportSources = Array.isArray(sourceSnapshot?.sources) ? sourceSnapshot.sources : [];
+  nextMetadata.sources = reportSources;
+  nextMetadata.sourceCount = reportSources.length;
+  nextMetadata.sourceLineage = 'run_sources';
+
+  if (sourceSnapshot?.noSourceReason) {
+    nextMetadata.sourceNoSourceReason = sourceSnapshot.noSourceReason;
   }
 
   return nextMetadata;
@@ -281,6 +439,8 @@ function mapReport(row) {
     created_at: normalizeDateTime(row.created_at),
     updated_at: normalizeDateTime(row.updated_at),
     metadata: parseJsonObject(row.metadata),
+    sources: [],
+    sourceCount: 0,
   };
 }
 
@@ -321,6 +481,91 @@ async function assertConversationOwner(db, currentUser, conversationId) {
   return conversation;
 }
 
+async function fetchRunSources(db, currentUser, conversationId, runId) {
+  if (!runId) {
+    return [];
+  }
+
+  const result = await db
+    .from('run_sources')
+    .select(RUN_SOURCE_COLUMNS)
+    .eq('run_id', runId)
+    .eq('conversation_id', conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  return extractRows(result)
+    .filter(
+      (row) =>
+        String(row._openid ?? '') === currentUser.openid &&
+        String(row.user_id ?? '') === currentUser.userId &&
+        String(row.conversation_id ?? '') === conversationId &&
+        String(row.run_id ?? '') === runId,
+    )
+    .sort(compareSourceOrderAsc)
+    .map(mapRunSource);
+}
+
+async function readRunSourceSnapshot(db, currentUser, conversationId, runId) {
+  if (!runId) {
+    return {
+      sources: [],
+      noSourceReason: 'missing_run_id',
+    };
+  }
+
+  try {
+    const sources = await fetchRunSources(db, currentUser, conversationId, runId);
+
+    return {
+      sources,
+      noSourceReason: sources.length > 0 ? null : 'no_run_sources',
+    };
+  } catch (error) {
+    console.warn(
+      '[workbench-reports] failed to read run_sources',
+      sanitizeLogMessage(error && error.message ? error.message : 'unknown_error'),
+    );
+
+    return {
+      sources: [],
+      noSourceReason: 'source_query_failed',
+    };
+  }
+}
+
+async function hydrateReportSources(db, currentUser, report) {
+  const metadataSources = readReportSourcesFromMetadata(report.metadata);
+
+  if (metadataSources !== null) {
+    return {
+      ...report,
+      sources: metadataSources,
+      sourceCount: metadataSources.length,
+    };
+  }
+
+  const runId = toUuidOrNull(report.run_id);
+
+  if (!runId) {
+    return {
+      ...report,
+      sources: [],
+      sourceCount: 0,
+    };
+  }
+
+  const sourceSnapshot = await readRunSourceSnapshot(db, currentUser, report.conversation_id, runId);
+
+  return {
+    ...report,
+    sources: sourceSnapshot.sources,
+    sourceCount: sourceSnapshot.sources.length,
+  };
+}
+
 async function fetchReportById(db, currentUser, reportId) {
   const result = await db
     .from('report_artifacts')
@@ -332,7 +577,7 @@ async function fetchReportById(db, currentUser, reportId) {
   assertNoQueryError(result);
 
   const rows = extractRows(result).filter((row) => hasExpectedReportOwner(row, currentUser));
-  return rows.length > 0 ? mapReport(rows[0]) : null;
+  return rows.length > 0 ? hydrateReportSources(db, currentUser, mapReport(rows[0])) : null;
 }
 
 async function fetchReportsByConversation(currentUser, conversationId) {
@@ -356,9 +601,12 @@ async function fetchReportsByConversation(currentUser, conversationId) {
     )
     .sort(compareCreatedDesc)
     .map(mapReport);
+  const reportsWithSources = await Promise.all(
+    reports.map((report) => hydrateReportSources(db, currentUser, report)),
+  );
 
   return {
-    reports,
+    reports: reportsWithSources,
   };
 }
 
@@ -488,7 +736,8 @@ async function createReport(currentUser, body) {
   const requestMetadata = readMetadata(body.metadata);
   const runId = toUuidOrNull(body.runId);
   const runtimeRunId = readRuntimeRunId(body, requestMetadata);
-  const metadata = createReportMetadata(requestMetadata, runId, runtimeRunId);
+  const sourceSnapshot = await readRunSourceSnapshot(db, currentUser, conversationId, runId);
+  const metadata = createReportMetadata(requestMetadata, runId, runtimeRunId, sourceSnapshot);
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,

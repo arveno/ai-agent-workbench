@@ -87,6 +87,7 @@ function MessageBlockRenderer({
   const isStoppedAssistant = message.kind === 'partial' || (isActiveAssistant && generationStatus === 'stopped');
   const isReportMessage = message.kind === 'report';
   const isErrorMessage = message.kind === 'error';
+  const reportSourceCount = message.reportSourceCount ?? message.reportSources?.length ?? 0;
   const messageView = createMessageView(message);
   const canSelectRun = Boolean(message.runId && message.kind !== 'report');
   const isSelectedRunMessage = Boolean(message.runId && message.runId === selectedRunId);
@@ -145,6 +146,11 @@ function MessageBlockRenderer({
             {isReportMessage ? (
               <Badge variant="outline" className="message-kind-tag message-kind-tag-report">
                 报告
+              </Badge>
+            ) : null}
+            {isReportMessage ? (
+              <Badge variant="outline" className="message-kind-tag">
+                来源 {reportSourceCount}
               </Badge>
             ) : null}
             {isStoppedAssistant ? <span className="message-status-tag">已停止</span> : null}

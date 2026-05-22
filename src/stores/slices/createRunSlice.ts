@@ -113,6 +113,22 @@ function isReportDecisionState(reportState: RunReportState): boolean {
   return reportState === 'generated' || reportState === 'skipped' || reportState === 'failed';
 }
 
+function mergeReportMessage(existingMessage: WorkbenchMessage, artifactMessage: WorkbenchMessage): WorkbenchMessage {
+  if (existingMessage.kind !== 'report' || artifactMessage.kind !== 'report') {
+    return existingMessage;
+  }
+
+  const reportSources = artifactMessage.reportSources ?? existingMessage.reportSources ?? [];
+
+  return {
+    ...existingMessage,
+    content: existingMessage.content || artifactMessage.content,
+    runId: existingMessage.runId ?? artifactMessage.runId,
+    reportSources,
+    reportSourceCount: artifactMessage.reportSourceCount ?? reportSources.length,
+  };
+}
+
 function upsertReportArtifactsIntoSessions(
   sessions: WorkbenchStore['sessions'],
   conversationId: string,
@@ -146,23 +162,32 @@ function upsertReportArtifactsIntoSessions(
       return session;
     }
 
-    const existingMessageIds = new Set(session.messages.map((message) => message.id));
     const nextMessages = [...session.messages];
     let didUpdateMessages = false;
 
     for (const message of reportMessages) {
-      const hasRunReport =
-        message.runId &&
-        nextMessages.some(
-          (existingMessage) =>
-            existingMessage.kind === 'report' && existingMessage.runId === message.runId,
-        );
+      const existingMessageIndex = nextMessages.findIndex((existingMessage) => existingMessage.id === message.id);
 
-      if (!existingMessageIds.has(message.id) && !hasRunReport) {
-        nextMessages.push(message);
-        existingMessageIds.add(message.id);
+      if (existingMessageIndex >= 0) {
+        nextMessages[existingMessageIndex] = mergeReportMessage(nextMessages[existingMessageIndex], message);
         didUpdateMessages = true;
+        continue;
       }
+
+      const existingRunReportIndex = message.runId
+        ? nextMessages.findIndex(
+            (existingMessage) => existingMessage.kind === 'report' && existingMessage.runId === message.runId,
+          )
+        : -1;
+
+      if (existingRunReportIndex >= 0) {
+        nextMessages[existingRunReportIndex] = mergeReportMessage(nextMessages[existingRunReportIndex], message);
+        didUpdateMessages = true;
+        continue;
+      }
+
+      nextMessages.push(message);
+      didUpdateMessages = true;
     }
 
     if (didUpdateMessages) {

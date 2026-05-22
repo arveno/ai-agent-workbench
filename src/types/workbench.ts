@@ -1,4 +1,4 @@
-﻿export type SessionId = string;
+﻿import type { RunSource as WorkbenchRunSource } from './rag';
 import type {
   ConversationMode,
   ConversationStatus,
@@ -6,6 +6,8 @@ import type {
   ConversationVisibility,
 } from './persistence';
 import type { RunEvent, RunSnapshot } from './run';
+
+export type SessionId = string;
 
 export type {
   ChatBlock,
@@ -62,6 +64,8 @@ export interface WorkbenchMessage {
   content: string;
   createdAt: number;
   runId?: string;
+  reportSources?: WorkbenchRunSource[];
+  reportSourceCount?: number;
 }
 
 export interface WorkbenchSession {

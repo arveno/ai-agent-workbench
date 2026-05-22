@@ -1,3 +1,5 @@
+import type { RunSource } from './rag';
+
 export type JsonObject = Record<string, unknown>;
 
 export type ConversationMode = 'mock' | 'agent' | 'mixed';
@@ -222,6 +224,8 @@ export interface ReportArtifactRecord {
   created_at: string;
   updated_at: string;
   metadata: JsonObject;
+  sources?: RunSource[];
+  sourceCount?: number;
 }
 
 export type KnowledgeVisibility = 'private' | 'demo' | 'system';
