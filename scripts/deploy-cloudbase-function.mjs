@@ -25,14 +25,17 @@ const sensitiveFieldNamePatterns = [
 
 function printUsage() {
   console.log(`Usage:
-  pnpm cloudbase:deploy:function -- --function <name> [--profile <profile>] [--envId <env-id>] [--out <dir>] [--clean] [--check] [--force] [--runtime <runtime>] [--path <httpPath>] [--base-url <url>] [--expected-route-domain <domain>] [--dry-run]
+  pnpm cloudbase:deploy:function -- --function <name> [--profile <profile>] [--envId <env-id>] [--out <dir>] [--clean] [--check] [--force] [--runtime <runtime>] [--base-url <url>] [--expected-route-domain <domain>] [--dry-run]
 
 Recommended examples:
   pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --clean --check --dry-run
   pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --clean --check
 
 Override example:
-  pnpm cloudbase:deploy:function -- --function workbench-evaluations --envId <env-id> --base-url <cloudbase-http-functions-base-url> --out ./.cloudbase-packages --clean --check`);
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --envId <env-id> --base-url <cloudbase-http-functions-base-url> --out ./.cloudbase-packages --clean --check
+
+HTTP route update override:
+  pnpm cloudbase:deploy:function -- --function workbench-evaluations --profile poc --allow-http-route-update --path /api/workbench/evaluations --clean --check --dry-run`);
 }
 
 function parseArgs(argv) {
@@ -54,6 +57,7 @@ function parseArgs(argv) {
     baseUrlProvided: false,
     expectedRouteDomain: '',
     expectedRouteDomainProvided: false,
+    allowHttpRouteUpdate: false,
     dryRun: false,
   };
 
@@ -119,6 +123,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === '--allow-http-route-update') {
+      cli.allowHttpRouteUpdate = true;
+      continue;
+    }
+
     if (arg === '--base-url') {
       cli.baseUrl = readOptionValue(argv, index, arg);
       cli.baseUrlProvided = true;
@@ -152,6 +161,10 @@ function parseArgs(argv) {
 
   if (cli.functionName === 'all') {
     throw new Error('Deploying all functions is not supported. Deploy one CloudBase HTTP Function at a time.');
+  }
+
+  if (cli.httpPathOverride && !cli.allowHttpRouteUpdate) {
+    throw new Error('--path is only allowed together with --allow-http-route-update. Default deploy is code-only and must not update CloudBase HTTP routes.');
   }
 
   const config = readCloudBaseFunctionsConfig();
@@ -266,11 +279,7 @@ function resolveFunctionConfig(config, cli) {
     return functionConfig;
   }
 
-  if (cli.httpPathOverride) {
-    return null;
-  }
-
-  throw new Error(`${cli.functionName}: missing function config in ${cloudbaseFunctionsConfigPath}. Pass --path <httpPath> for a temporary override, or add this function to the config file.`);
+  throw new Error(`${cli.functionName}: missing function config in ${cloudbaseFunctionsConfigPath}. Add this function to the config file before deployment.`);
 }
 
 function resolveProfileConfig(config, profileName) {
@@ -312,6 +321,7 @@ function resolveDeployOptions(cli, config, functionConfig, profileConfig) {
     baseUrl: baseUrlResolution.value,
     routeDomain: routeDomainResolution.value,
     requiredEnvVars: functionConfig?.requiredEnvVars ?? [],
+    allowHttpRouteUpdate: cli.allowHttpRouteUpdate,
     dryRun: cli.dryRun,
     sources: {
       envId: envIdResolution.source,
@@ -537,15 +547,16 @@ function createDeployCommand(options, stagingDir) {
     options.functionName,
     '--dir',
     '.',
-    '--httpFn',
-    '--path',
-    options.httpPath,
     '--runtime',
     options.runtime,
     '-e',
     options.envId,
     '--yes',
   ];
+
+  if (options.allowHttpRouteUpdate) {
+    args.push('--httpFn', '--path', options.httpPath);
+  }
 
   if (options.force) {
     args.push('--force');
@@ -646,6 +657,7 @@ function printDryRun(packageCommand, deployCommand) {
   console.log(`- routeDomain source: ${options.sources.routeDomain}`);
   console.log(`- outputRoot source: ${options.sources.outputRoot}`);
   console.log(`- runtime source: ${options.sources.runtime}`);
+  console.log(`- deploy mode: ${options.allowHttpRouteUpdate ? 'function code + HTTP route update' : 'code-only, HTTP route unchanged'}`);
   console.log('');
   console.log('Package command:');
   console.log(formatCommand(packageCommand.command, packageCommand.args));
@@ -674,6 +686,7 @@ function printPostDeployChecklist(options, { dryRun = false } = {}) {
   }
 
   printRequiredEnvVarsChecklist(options);
+  printHttpRouteChecklist(options);
   console.log(`- HTTP route path: ${options.httpPath}`);
 
   if (options.routeDomain) {
@@ -690,15 +703,35 @@ function printPostDeployChecklist(options, { dryRun = false } = {}) {
 
   console.log('- This script did not modify SQL.');
   console.log('- This script did not modify function env vars.');
-  console.log('- This script did not modify HTTP routes.');
+  if (options.allowHttpRouteUpdate) {
+    console.log('- This script requested a CloudBase CLI HTTP route update. Manually verify fixed domain, identity auth, path passthrough, and wildcard routes in the CloudBase console.');
+  } else {
+    console.log('- This script did not modify HTTP routes.');
+  }
 }
 
 function printPathOverrideWarning(options) {
-  if (!options.httpPathOverride) {
+  if (!options.allowHttpRouteUpdate) {
     return;
   }
 
-  console.warn(`WARN --path ${options.httpPath} overrides ${cloudbaseFunctionsConfigPath}. This may diverge from the deploy configuration source of truth; long-term HTTP path changes should be written back to the config file.`);
+  const pathOverrideDetail = options.httpPathOverride
+    ? `--path ${options.httpPath} overrides ${cloudbaseFunctionsConfigPath}. `
+    : '';
+  console.warn(`WARN ${pathOverrideDetail}--allow-http-route-update lets CloudBase CLI create or update an HTTP route, but this script cannot set the fixed route domain, identity auth, or path passthrough. Manually verify the route is not under wildcard *.`);
+}
+
+function printHttpRouteChecklist(options) {
+  if (options.allowHttpRouteUpdate) {
+    console.log('- HTTP route deploy mode: route update explicitly enabled.');
+    console.log('- HTTP route risk: CloudBase CLI --httpFn/--path does not expose fixed domain, identity auth, or path passthrough controls in this script.');
+    console.log('- Manual route checks: fixed app.tcloudbase.com domain, identity auth enabled, path passthrough disabled, no wildcard * route for main APIs.');
+    return;
+  }
+
+  console.log('- HTTP route deploy mode: code-only; route creation/update is intentionally skipped.');
+  console.log('- Code-only deploy assumes the CloudBase function already exists as an HTTP function. Create the first HTTP function and main API route in the CloudBase console.');
+  console.log('- Manual route checks: fixed app.tcloudbase.com domain, identity auth enabled, path passthrough disabled, no wildcard * route for main APIs.');
 }
 
 function printRequiredEnvVarsChecklist(options) {

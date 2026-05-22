@@ -8,6 +8,16 @@
       "httpPath": "/api/workbench/evaluations",
       "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
       "description": "Evaluation / Bad Case API"
+    },
+    "workbench-agent-run-stream": {
+      "httpPath": "/api/agent/run/stream",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID", "SILICONFLOW_API_KEY", "ZHIPU_API_KEY"],
+      "description": "Agent Run SSE / streaming endpoint"
+    },
+    "workbench-reports": {
+      "httpPath": "/api/workbench/reports",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Workbench report artifacts and report state endpoint"
     }
   },
   "environments": {
