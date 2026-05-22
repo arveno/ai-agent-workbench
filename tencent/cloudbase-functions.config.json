@@ -11,11 +11,13 @@
     },
     "workbench-agent-run-stream": {
       "httpPath": "/api/agent/run/stream",
+      "timeout": 120,
       "requiredEnvVars": ["CLOUDBASE_ENV_ID", "SILICONFLOW_API_KEY", "ZHIPU_API_KEY"],
       "description": "Agent Run SSE / streaming endpoint"
     },
     "workbench-reports": {
       "httpPath": "/api/workbench/reports",
+      "timeout": 60,
       "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
       "description": "Workbench report artifacts and report state endpoint"
     }

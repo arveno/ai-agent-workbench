@@ -249,6 +249,10 @@ function validateFunctionsConfig(functionsConfig) {
         throw new Error(`functions.${functionName}.requiredEnvVars must contain only non-empty strings.`);
       }
     }
+
+    if (functionConfig.timeout !== undefined) {
+      assertPositiveInteger(functionConfig.timeout, `functions.${functionName}.timeout`);
+    }
   }
 }
 
@@ -306,6 +310,7 @@ function resolveDeployOptions(cli, config, functionConfig, profileConfig) {
   const baseUrlResolution = resolveBaseUrl(cli, profileConfig);
   const routeDomainResolution = resolveRouteDomain(cli, profileConfig, baseUrlResolution.value);
   const httpPath = resolveHttpPath(cli, functionConfig);
+  const timeoutResolution = resolveTimeout(functionConfig);
 
   return {
     functionName: cli.functionName,
@@ -321,6 +326,7 @@ function resolveDeployOptions(cli, config, functionConfig, profileConfig) {
     baseUrl: baseUrlResolution.value,
     routeDomain: routeDomainResolution.value,
     requiredEnvVars: functionConfig?.requiredEnvVars ?? [],
+    timeout: timeoutResolution.value,
     allowHttpRouteUpdate: cli.allowHttpRouteUpdate,
     dryRun: cli.dryRun,
     sources: {
@@ -329,6 +335,7 @@ function resolveDeployOptions(cli, config, functionConfig, profileConfig) {
       routeDomain: routeDomainResolution.source,
       outputRoot: outputRootResolution.source,
       runtime: runtimeResolution.source,
+      timeout: timeoutResolution.source,
     },
   };
 }
@@ -448,6 +455,21 @@ function resolveHttpPath(cli, functionConfig) {
   return httpPath;
 }
 
+function resolveTimeout(functionConfig) {
+  if (functionConfig?.timeout !== undefined) {
+    assertPositiveInteger(functionConfig.timeout, 'function timeout');
+    return {
+      value: functionConfig.timeout,
+      source: 'function config',
+    };
+  }
+
+  return {
+    value: null,
+    source: 'missing',
+  };
+}
+
 function normalizeBaseUrl(value, label) {
   if (!isNonEmptyString(value)) {
     throw new Error(`${label} must be a non-empty string.`);
@@ -487,6 +509,12 @@ function normalizeRouteDomain(value, label) {
 function assertHttpPath(value, label) {
   if (!isNonEmptyString(value) || !value.startsWith('/')) {
     throw new Error(`${label} must be a non-empty HTTP path starting with /.`);
+  }
+}
+
+function assertPositiveInteger(value, label) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive integer when present.`);
   }
 }
 
@@ -570,6 +598,31 @@ function createDeployCommand(options, stagingDir) {
   };
 }
 
+function createRuntimeConfigCommand(options) {
+  if (!options.timeout) {
+    return null;
+  }
+
+  return {
+    command: getPnpmCommand(),
+    args: [
+      'exec',
+      'tcb',
+      'config',
+      'update',
+      'fn',
+      options.functionName,
+      '--timeout',
+      String(options.timeout),
+      '-e',
+      options.envId,
+      '--yes',
+    ],
+    cwd: repoRoot,
+    options,
+  };
+}
+
 function getPnpmCommand() {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
@@ -589,7 +642,7 @@ function runCommand(label, commandSpec, cwd = repoRoot) {
   }
 }
 
-function runDeployCommand(commandSpec) {
+function runCloudBaseCommand(label, commandSpec) {
   const result = spawnSync(commandSpec.command, commandSpec.args, {
     cwd: commandSpec.cwd,
     stdio: 'pipe',
@@ -604,12 +657,20 @@ function runDeployCommand(commandSpec) {
   }
 
   if (isCancelledOutput(output)) {
-    throw new Error('CloudBase function deployment was cancelled.');
+    throw new Error(`${label} was cancelled.`);
   }
 
   if (result.status !== 0) {
-    throw new Error('CloudBase function deployment failed.');
+    throw new Error(`${label} failed.`);
   }
+}
+
+function runDeployCommand(commandSpec) {
+  runCloudBaseCommand('CloudBase function deployment', commandSpec);
+}
+
+function runRuntimeConfigCommand(commandSpec) {
+  runCloudBaseCommand('CloudBase function runtime config update', commandSpec);
 }
 
 function assertStagingDirExists(stagingDir) {
@@ -647,7 +708,7 @@ function assertTcbAvailable() {
   throw new Error(`${installHint}${detail ? `\n${detail}` : ''}`);
 }
 
-function printDryRun(packageCommand, deployCommand) {
+function printDryRun(packageCommand, deployCommand, runtimeConfigCommand) {
   const { options } = deployCommand;
 
   console.log('Dry run configuration:');
@@ -657,6 +718,8 @@ function printDryRun(packageCommand, deployCommand) {
   console.log(`- routeDomain source: ${options.sources.routeDomain}`);
   console.log(`- outputRoot source: ${options.sources.outputRoot}`);
   console.log(`- runtime source: ${options.sources.runtime}`);
+  console.log(`- timeout source: ${options.sources.timeout}`);
+  console.log(`- function timeout: ${options.timeout ? `${options.timeout}s` : 'missing'}`);
   console.log(`- deploy mode: ${options.allowHttpRouteUpdate ? 'function code + HTTP route update' : 'code-only, HTTP route unchanged'}`);
   console.log('');
   console.log('Package command:');
@@ -666,7 +729,13 @@ function printDryRun(packageCommand, deployCommand) {
   console.log(`cd ${formatShellArg(deployCommand.cwd)}`);
   console.log(formatCommand(deployCommand.command, deployCommand.args));
   console.log('');
-  console.log('Dry run finished. No package, tcb check, CloudBase deployment, SQL, HTTP route, or function env var changes were executed.');
+  if (runtimeConfigCommand) {
+    console.log('Function runtime config command:');
+    console.log(`cd ${formatShellArg(runtimeConfigCommand.cwd)}`);
+    console.log(formatCommand(runtimeConfigCommand.command, runtimeConfigCommand.args));
+    console.log('');
+  }
+  console.log('Dry run finished. No package, tcb check, CloudBase deployment, function runtime config update, SQL, HTTP route, or function env var changes were executed.');
   printPostDeployChecklist(options, { dryRun: true });
 }
 
@@ -686,6 +755,7 @@ function printPostDeployChecklist(options, { dryRun = false } = {}) {
   }
 
   printRequiredEnvVarsChecklist(options);
+  printFunctionTimeoutChecklist(options);
   printHttpRouteChecklist(options);
   console.log(`- HTTP route path: ${options.httpPath}`);
 
@@ -708,6 +778,16 @@ function printPostDeployChecklist(options, { dryRun = false } = {}) {
   } else {
     console.log('- This script did not modify HTTP routes.');
   }
+}
+
+function printFunctionTimeoutChecklist(options) {
+  if (options.timeout) {
+    console.log(`- Function timeout: ${options.timeout}s.`);
+    console.log('- Runtime config update: tcb config update fn --timeout is used after code deploy.');
+    return;
+  }
+
+  console.log('- Function timeout: missing in config. Verify CloudBase final config manually.');
 }
 
 function printPathOverrideWarning(options) {
@@ -794,10 +874,11 @@ async function main() {
   const stagingDir = getPackageOutputDir(options.outputRoot, options.functionName);
   const packageCommand = createPackageCommand(options);
   const deployCommand = createDeployCommand(options, stagingDir);
+  const runtimeConfigCommand = createRuntimeConfigCommand(options);
   printPathOverrideWarning(options);
 
   if (options.dryRun) {
-    printDryRun(packageCommand, deployCommand);
+    printDryRun(packageCommand, deployCommand, runtimeConfigCommand);
     return;
   }
 
@@ -809,6 +890,9 @@ async function main() {
 
   assertTcbAvailable();
   runDeployCommand(deployCommand);
+  if (runtimeConfigCommand) {
+    runRuntimeConfigCommand(runtimeConfigCommand);
+  }
   printPostDeployChecklist(options);
 }
 

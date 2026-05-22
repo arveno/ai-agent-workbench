@@ -106,6 +106,7 @@ pnpm cloudbase:deploy:function -- --function workbench-reports --profile poc --c
 - package
 - check
 - function code deploy
+- function timeout config update
 - post-deploy checklist
 
 当前不自动化：
@@ -120,7 +121,11 @@ pnpm cloudbase:deploy:function -- --function workbench-reports --profile poc --c
 - function env var 修改
 - CI/CD
 
-脚本会把 profile 或命令行传入的 CloudBase 环境 ID 转发为 code-only `tcb fn deploy -e <envId> --yes`，不依赖交互式环境选择或确认。默认部署命令不包含 `--httpFn` / `--path`，不会主动维护 HTTP route。code-only 部署默认用于已存在的 HTTP 函数；首次创建 HTTP 函数和主 API route 绑定应在 CloudBase 控制台完成并人工确认。`workbench-evaluations` 等依赖 CloudBase MySQL 的函数仍需人工确认函数环境变量中存在：
+脚本会把 profile 或命令行传入的 CloudBase 环境 ID 转发为 code-only `tcb fn deploy -e <envId> --yes`，不依赖交互式环境选择或确认。默认部署命令不包含 `--httpFn` / `--path`，不会主动维护 HTTP route。code-only 部署默认用于已存在的 HTTP 函数；首次创建 HTTP 函数和主 API route 绑定应在 CloudBase 控制台完成并人工确认。
+
+CloudBase CLI 3.4.0 的 `tcb fn deploy` 不提供 `--timeout` 参数；函数超时时间由脚本在代码部署后通过 `tcb config update fn <name> --timeout <seconds>` 推送。dry-run 时必须确认 function runtime config command 中的 `--timeout` 数值正确。
+
+`workbench-evaluations` 等依赖 CloudBase MySQL 的函数仍需人工确认函数环境变量中存在：
 
 ```txt
 CLOUDBASE_ENV_ID=<env-id>
@@ -141,6 +146,19 @@ pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>
 - 真实 Agent Run 能完成。
 - report 生成和刷新恢复正常。
 - usage / quota 不报错。
+
+### 函数运行配置
+
+函数级运行配置维护在 `tencent/cloudbase-functions.config.json` 的 `functions.<name>` 下。当前 POC 推荐：
+
+- `workbench-agent-run-stream.timeout = 120`
+- `workbench-reports.timeout = 60`
+
+`workbench-agent-run-stream` 是 SSE Agent Run 函数，不应使用 CloudBase 默认或历史残留的 15s timeout。Agent Run 需要完成 quota、run persistence、tool events、chart、conclusion 和 `run_completed`，当前 POC 使用 120s 避免 SSE 中途被平台截断。
+
+`workbench-reports` 推荐 60s，避免报告写入、report state 更新或数据库抖动导致偶发超时，但不做过度放大。
+
+如果 smoke test 中 `/api/agent/run/stream` 只能收到 `run_started` / step / tool / `chart_ready`，但没有收到 conclusion 或 `run_completed`，应优先检查 CloudBase 函数 final config 的 timeout 是否仍是 15s。
 
 ### HTTP route 维护边界
 
@@ -170,7 +188,7 @@ tencent/cloudbase-functions.config.json
 配置文件分三层：
 
 - `defaults`：本地脚本默认行为，例如 `outputRoot` 和 `runtime`。
-- `functions`：函数级稳定配置，例如 `httpPath`、`requiredEnvVars` 和说明。
+- `functions`：函数级稳定配置，例如 `httpPath`、`timeout`、`requiredEnvVars` 和说明。
 - `environments`：环境级 profile，例如 `envId`、`baseUrl` 和 `routeDomain`。
 
 `envId`、`baseUrl` 和 `routeDomain` 可以提交，它们不是密钥。Secret、Key、Password、Token、数据库密码、Service Role、Private Key 等敏感值不得写入配置文件。部署脚本只读取该配置并执行 package / check / function code deploy / post-deploy checklist，不在脚本里长期硬编码业务路由或云端环境。
