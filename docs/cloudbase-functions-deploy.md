@@ -185,6 +185,8 @@ profile、函数 HTTP path、必需函数环境变量名称和说明维护在：
 tencent/cloudbase-functions.config.json
 ```
 
+该配置文件是 CloudBase 函数部署清单的 SSOT。新增 HTTP 函数必须先登记 `functions.<name>.httpPath`、`requiredEnvVars` 和 `description`，再执行 `cloudbase:deploy:function`。未登记函数部署失败是预期保护，用于避免继续依赖 `--path` 临时覆盖或控制台记忆。
+
 配置文件分三层：
 
 - `defaults`：本地脚本默认行为，例如 `outputRoot` 和 `runtime`。
@@ -202,6 +204,24 @@ pnpm cloudbase:deploy:function -- --function workbench-evaluations --envId <env-
 ```
 
 函数环境变量和 HTTP route 仍需人工确认，或后续作为独立自动化能力补充；当前脚本默认不会自动修改这些云端配置。
+
+当前 POC HTTP 函数清单：
+
+| Function | HTTP path | 身份认证 |
+| --- | --- | --- |
+| `workbench-agent-run-stream` | `/api/agent/run/stream` | 开启 |
+| `auth-me` | `/api/auth/me` | 开启 |
+| `workbench-conversations` | `/api/workbench/conversations` | 开启 |
+| `workbench-messages` | `/api/workbench/messages` | 开启 |
+| `workbench-reports` | `/api/workbench/reports` | 开启 |
+| `workbench-runs` | `/api/workbench/runs` | 开启 |
+| `workbench-quota` | `/api/workbench/quota` | 开启 |
+| `workbench-evaluations` | `/api/workbench/evaluations` | 开启 |
+| `workbench-demo-copy` | `/api/workbench/demo-copy` | 开启 |
+| `demo-conversations` | `/api/workbench/demo-conversations` | 公开读取 |
+| `demo-tasks` | `/api/workbench/demo-tasks` | 公开读取 |
+
+主 API 路由仍以固定 `app.tcloudbase.com` 主域名为准。身份认证、路径透传关闭和无 `*` 通配路由承载主 API 仍需在 CloudBase 控制台人工确认。
 
 ## 正确包结构
 

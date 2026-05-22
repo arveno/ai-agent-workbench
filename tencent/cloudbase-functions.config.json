@@ -20,6 +20,46 @@
       "timeout": 60,
       "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
       "description": "Workbench report artifacts and report state endpoint"
+    },
+    "auth-me": {
+      "httpPath": "/api/auth/me",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "CloudBase Auth current user profile endpoint"
+    },
+    "workbench-conversations": {
+      "httpPath": "/api/workbench/conversations",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Workbench private conversations endpoint"
+    },
+    "workbench-messages": {
+      "httpPath": "/api/workbench/messages",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Workbench private messages endpoint"
+    },
+    "workbench-runs": {
+      "httpPath": "/api/workbench/runs",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Workbench Agent Run trace and source recovery endpoint"
+    },
+    "workbench-quota": {
+      "httpPath": "/api/workbench/quota",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Workbench quota and Agent Run usage endpoint"
+    },
+    "workbench-demo-copy": {
+      "httpPath": "/api/workbench/demo-copy",
+      "requiredEnvVars": ["CLOUDBASE_ENV_ID"],
+      "description": "Copy public demo conversation into private workspace endpoint"
+    },
+    "demo-conversations": {
+      "httpPath": "/api/workbench/demo-conversations",
+      "requiredEnvVars": [],
+      "description": "Public demo conversations endpoint"
+    },
+    "demo-tasks": {
+      "httpPath": "/api/workbench/demo-tasks",
+      "requiredEnvVars": [],
+      "description": "Public demo task templates endpoint"
     }
   },
   "environments": {
