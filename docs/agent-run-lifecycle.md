@@ -2,7 +2,7 @@
 
 本文档是 AI Agent Workbench 的 AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT。
 
-后续历史功能治理、新功能接入、Codex 任务拆解、验收、README 表达和面试讲法，都以本文档为准。`docs/architecture.md` 负责架构和边界，`docs/workflow.md` 负责协作流程，`AGENTS.md` 负责 Codex 代码生成硬约束。
+后续历史功能治理、新功能接入、Codex 任务拆解、验收、README 表达和面试讲法，都以本文档为准。`docs/architecture.md` 负责架构和边界，`docs/workflow.md` 负责协作流程，`docs/source-lineage.md` 负责 Source / RAG Lineage 契约，`AGENTS.md` 负责 Codex 代码生成硬约束。
 
 ## 1. 项目定位
 
@@ -86,7 +86,7 @@ badCaseId -> evaluationId/runId/rootCause/improvementTarget
 usageId -> runId/selectedModelId/token/cost/status
 ```
 
-`runId` 是执行中心。Chat、Run Trace、Source Panel、Report、Evaluation、Bad Case、Usage 不应分别维护互相不一致的执行结果副本。
+`runId` 是执行中心。Chat、Run Trace、Source Panel、Report、Evaluation、Bad Case、Usage 不应分别维护互相不一致的执行结果副本。Source / RAG lineage 的来源、检索和引用关系以 `docs/source-lineage.md` 为准。
 
 ## 5. AI Agent Enterprise Lifecycle 依赖顺序
 

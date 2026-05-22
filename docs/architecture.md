@@ -2,7 +2,7 @@
 
 本文档说明 AI Agent Workbench 的项目架构、模块职责、数据流、状态边界和前后端边界。
 
-AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。核心对象与 ID 契约见 `docs/id-contract.md`。
+AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。核心对象与 ID 契约见 `docs/id-contract.md`。Source / RAG Lineage 契约见 `docs/source-lineage.md`。
 
 本文档只描述架构设计、模块职责、数据流和前后端边界，不重复完整生命周期，不描述 Codex 执行规则，不描述协作流程，不写具体部署教程。
 
@@ -67,6 +67,7 @@ zhipu-glm-flash-free
 - ViewModel 对应 UI 消费模型，负责把 Canonical 转成展示结构。
 - component 只展示 ViewModel 和触发 action，不直接消费 raw payload，不拼接业务结论。
 - conversation / message / run / report / source / usage / evaluation 的 ID 语义必须遵守 `docs/id-contract.md`。
+- knowledge_search、RAG sources、citations、report sources、retrieval 和 source persistence 必须遵守 `docs/source-lineage.md`。
 
 ## 3. 前端模块职责
 
@@ -243,6 +244,7 @@ Conversation
 - report 应能关联 conversation / run。
 - Run Trace 基于 run events 和 tool invocations。
 - RAG 来源基于 knowledge documents / chunks。
+- Source lineage 归属 Persistence / Lineage，目标契约详见 `docs/source-lineage.md`。
 - quota / usage 与 Agent Run 执行相关。
 - ID 契约详见 `docs/id-contract.md`，本文只描述对象关系和架构边界，不重复完整 ID 契约。
 
@@ -254,7 +256,7 @@ Conversation
 - 前后端 model catalog 双事实源。
 - Tool Registry 前端展示与服务端白名单漂移。
 - conclusion / report / evaluation formatter 分散。
-- Source / Lineage 不完整。
+- Source / Lineage 不完整，后续治理必须先对齐 `docs/source-lineage.md`。
 - Report 前端生成与 artifact 归属需要收口。
 
 ## 6. Agent Run 链路
@@ -344,6 +346,8 @@ metadata
 - Chat / Run Trace / Report 各自维护结论副本。
 
 ## 10. RAG
+
+Source / RAG Lineage 目标契约见 `docs/source-lineage.md`，本节只描述架构层展示原则。
 
 RAG 相关数据：
 

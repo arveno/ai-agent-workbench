@@ -1,12 +1,12 @@
 # AI Agent Workbench ID Contract
 
-本文档冻结 AI Agent Workbench 的核心对象与 ID 契约。后续涉及 Run、Trace、Report、Source、Usage、Evaluation 的代码修改，都必须先对齐本文。若 ID 契约本身需要调整，必须先更新并提交本文，再进入代码治理。
+本文档冻结 AI Agent Workbench 的核心对象与 ID 契约。后续涉及 Run、Trace、Report、Source、Usage、Evaluation 的代码修改，都必须先对齐本文。Source / RAG Lineage 的对象语义和数据流详见 `docs/source-lineage.md`。若 ID 契约本身需要调整，必须先更新并提交本文，再进入代码治理。
 
 ## 1. 文档定位
 
 本文是 AI Agent Workbench 的核心对象与 ID 契约文档。
 
-它服务于 `docs/agent-run-lifecycle.md`，用于约束 conversation / message / run / event / tool / source / report / usage / evaluation 的 ID 语义。
+它服务于 `docs/agent-run-lifecycle.md`，用于约束 conversation / message / run / event / tool / source / report / usage / evaluation 的 ID 语义。source / retrieval 的 lineage 细则见 `docs/source-lineage.md`。
 
 后续所有涉及 Run、Trace、Report、Source、Usage、Evaluation 的代码修改，都必须先对齐本文，再进入类型、mapper、service、store、component 或后端函数修改。
 
@@ -139,6 +139,7 @@ run -> source / RAG：
 
 - 后续 retrieval log 必须绑定 `agent_runs.id`、conversationId、toolInvocationId / sourceId。
 - 当前 `RunSnapshot.sources` 只能作为展示层数据，不代表完整 lineage。
+- `sourceId` / `retrievalId` / `toolInvocationId` 与 `runId` 的详细语义以 `docs/source-lineage.md` 为准。
 
 run -> evaluation：
 
