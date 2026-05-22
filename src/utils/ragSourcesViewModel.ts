@@ -1,4 +1,4 @@
-import type { RagSourceChunk } from '@/types/rag';
+import type { RunSource } from '@/types/rag';
 import type { RunSnapshot } from '@/types/run';
 import { getRagEmptyStateLabel, getRagSourcesDescription } from './observabilityLabels';
 import { formatSourceScore, getRunRagSources } from './ragSources';
@@ -39,16 +39,38 @@ function truncateSnippet(value: string): string {
   return `${normalizedValue.slice(0, 139)}…`;
 }
 
-function sourceToView(source: RagSourceChunk, runMode: RunSnapshot['mode']): RagSourceView {
+function getMetadataString(metadata: Record<string, unknown> | undefined, key: string): string {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getMetadataBoolean(metadata: Record<string, unknown> | undefined, key: string): boolean {
+  return metadata?.[key] === true;
+}
+
+function sourceToView(source: RunSource, runMode: RunSnapshot['mode']): RagSourceView {
+  const legacySource = source as RunSource & {
+    documentTitle?: string;
+    contentPreview?: string;
+    sourceName?: string;
+    isMock?: boolean;
+  };
+  const title = source.title || legacySource.documentTitle || '未命名来源';
+  const preview = source.preview || legacySource.contentPreview || '';
+  const sourceName =
+    getMetadataString(source.metadata, 'sourceName') ||
+    legacySource.sourceName ||
+    (runMode === 'mock' ? '公开演示来源' : '教学评价制度示例知识库');
+
   return {
     id: source.id,
-    citationId: source.citationLabel,
-    title: source.documentTitle,
-    snippet: truncateSnippet(source.contentPreview),
-    sourceName: source.sourceName ?? (runMode === 'mock' ? '公开演示来源' : '教学评价制度示例知识库'),
+    citationId: source.citationLabel || '-',
+    title,
+    snippet: truncateSnippet(preview),
+    sourceName,
     scoreText: formatSourceScore(source.score),
-    isUsedInAnswer: source.usedInAnswer,
-    isMock: runMode === 'mock' || source.isMock === true,
+    isUsedInAnswer: source.usedInAnswer === true,
+    isMock: runMode === 'mock' || legacySource.isMock === true || getMetadataBoolean(source.metadata, 'isMock'),
   };
 }
 

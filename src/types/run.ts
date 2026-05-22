@@ -1,4 +1,4 @@
-import type { RagSourceChunk } from './rag';
+import type { RunSource } from './rag';
 
 export type RunMode = 'mock' | 'agent';
 
@@ -119,7 +119,7 @@ export interface RunSnapshot {
   dataSource?: RunDataSourceSnapshot;
   steps: RunStep[];
   toolInvocations: RunToolInvocation[];
-  sources?: RagSourceChunk[];
+  sources?: RunSource[];
   chartData?: RunChartData;
   conclusion: string;
   conclusionSource: RunConclusionSource;
@@ -242,7 +242,7 @@ export interface RunConclusionCompletedEvent {
 export interface RunRagSourcesReadyEvent {
   type: 'rag_sources_ready';
   runId: string;
-  sources: RagSourceChunk[];
+  sources: RunSource[];
 }
 
 export interface RunReportPendingEvent {

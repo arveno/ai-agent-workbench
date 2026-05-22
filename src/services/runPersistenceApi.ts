@@ -2,6 +2,7 @@ import type {
   AgentRunRecord,
   RunEventListResult,
   RunEventRecord,
+  RunSourceRecord,
   ToolInvocationRecord,
   ToolInvocationListResult,
   WorkbenchPersistenceResponse,
@@ -17,6 +18,7 @@ export interface RunPersistenceBundleResult {
   run: AgentRunRecord | null;
   events: RunEventRecord[];
   toolInvocations: ToolInvocationRecord[];
+  sources: RunSourceRecord[];
 }
 
 function createNetworkErrorResponse<TData>(message: string): WorkbenchPersistenceResponse<TData> {
@@ -71,6 +73,7 @@ function toCloudBaseRunBundle(value: unknown): RunPersistenceBundleResult {
     toolInvocations: Array.isArray(data.toolInvocations)
       ? (data.toolInvocations as ToolInvocationRecord[])
       : [],
+    sources: Array.isArray(data.sources) ? (data.sources as RunSourceRecord[]) : [],
   };
 }
 

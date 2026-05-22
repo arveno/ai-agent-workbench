@@ -187,6 +187,27 @@ export interface ToolInvocationRecord {
   metadata: JsonObject;
 }
 
+export interface RunSourceRecord {
+  id: string;
+  run_id: string;
+  conversation_id: string;
+  user_id: string;
+  tool_invocation_id: string | null;
+  retrieval_log_id: string | null;
+  document_id: string | null;
+  chunk_id: string | null;
+  citation_label: string | null;
+  source_order: number;
+  title: string;
+  preview: string;
+  score: number | null;
+  source_type: string;
+  used_in_answer: boolean;
+  no_source_reason: string | null;
+  created_at: string;
+  metadata: JsonObject;
+}
+
 export type ReportArtifactStatus = 'draft' | 'generated' | 'archived';
 
 export interface ReportArtifactRecord {
@@ -281,6 +302,10 @@ export interface RunEventListResult {
 
 export interface ToolInvocationListResult {
   tools: ToolInvocationRecord[];
+}
+
+export interface RunSourceListResult {
+  sources: RunSourceRecord[];
 }
 
 export interface RagRetrievalLogListResult {

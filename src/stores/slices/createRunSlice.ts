@@ -517,6 +517,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       run: runRecord,
       events: latestRunResult.data.events,
       tools: latestRunResult.data.toolInvocations,
+      sources: latestRunResult.data.sources,
     });
     const runEvents = runEventsRecordToRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
@@ -663,6 +664,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       run: result.data.run,
       events: result.data.events,
       tools: result.data.toolInvocations,
+      sources: result.data.sources,
     });
 
     if (runSnapshot.sessionId && runSnapshot.sessionId !== conversationId) {
@@ -821,7 +823,62 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   },
 
   loadRagRetrievals: async (runId) => {
-    void runId;
+    const accessToken = getAccessToken();
+
+    if (!accessToken) {
+      return;
+    }
+
+    set({
+      isRagSourcesLoading: true,
+      ragSourcesError: null,
+    });
+
+    const result = await fetchRunBundle(runId);
+
+    if (!result.ok) {
+      set({
+        isRagSourcesLoading: false,
+        ragSourcesError: result.message,
+      });
+      return;
+    }
+
+    if (!result.data.run) {
+      set({
+        isRagSourcesLoading: false,
+        ragSourcesError: '未找到这条 Run 的来源记录。',
+      });
+      return;
+    }
+
+    const runSnapshot = runPersistenceRecordsToSnapshot({
+      run: result.data.run,
+      events: result.data.events,
+      tools: result.data.toolInvocations,
+      sources: result.data.sources,
+    });
+
+    set((state) => {
+      const conversationId = runSnapshot.sessionId ?? state.currentSessionId;
+
+      if (!conversationId || !state.currentRun || state.currentRun.id !== runId) {
+        return {
+          isRagSourcesLoading: false,
+          ragSourcesError: null,
+        };
+      }
+
+      const nextSessions = cacheRunInSession(state.sessions, conversationId, runSnapshot);
+
+      return {
+        sessions: nextSessions,
+        currentRun: runSnapshot,
+        selectedRunId: runSnapshot.id,
+        isRagSourcesLoading: false,
+        ragSourcesError: null,
+      };
+    });
   },
 
   saveReportArtifact: async (params) => {

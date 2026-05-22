@@ -1,8 +1,10 @@
 import type {
   AgentRunRecord,
   RunEventRecord,
+  RunSourceRecord,
   ToolInvocationRecord,
 } from '@/types/persistence';
+import type { RunSource, RunSourceType } from '@/types/rag';
 import type {
   AgentConclusion,
   RunChartData,
@@ -98,6 +100,18 @@ function mapReportState(value: string | null): RunReportState {
   }
 
   return 'hidden';
+}
+
+function mapSourceType(value: string): RunSourceType {
+  if (value === 'knowledge' || value === 'tool' || value === 'report' || value === 'manual') {
+    return value;
+  }
+
+  if (value === 'knowledge_base' || value === 'document' || value === 'database_note' || value === 'policy') {
+    return 'knowledge';
+  }
+
+  return 'knowledge';
 }
 
 function shouldPreferPersistedReportState(reportState: RunReportState): boolean {
@@ -201,6 +215,31 @@ function eventRecordToRunEvent(record: RunEventRecord): RunEvent | null {
   return isRunEvent(record.payload) ? record.payload : null;
 }
 
+function toOptionalString(value: string | null): string | undefined {
+  return value ?? undefined;
+}
+
+function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
+  return {
+    id: record.id,
+    runId: record.run_id,
+    conversationId: record.conversation_id,
+    toolInvocationId: toOptionalString(record.tool_invocation_id),
+    retrievalLogId: toOptionalString(record.retrieval_log_id),
+    documentId: toOptionalString(record.document_id),
+    chunkId: toOptionalString(record.chunk_id),
+    citationLabel: toOptionalString(record.citation_label),
+    title: record.title,
+    preview: record.preview,
+    score: record.score ?? undefined,
+    sourceType: mapSourceType(record.source_type),
+    usedInAnswer: record.used_in_answer,
+    noSourceReason: toOptionalString(record.no_source_reason),
+    createdAt: record.created_at,
+    metadata: record.metadata,
+  };
+}
+
 function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   RunSnapshot,
   'id' | 'canonicalRunId' | 'clientRunId' | 'runtimeRunId' | 'displayRunId'
@@ -267,6 +306,7 @@ export function runPersistenceRecordsToSnapshot(params: {
   run: AgentRunRecord;
   events: RunEventRecord[];
   tools: ToolInvocationRecord[];
+  sources: RunSourceRecord[];
 }): RunSnapshot {
   const runEvents = runEventsRecordToRunEvents(params.events);
   const eventSnapshot = runEvents.reduce<RunSnapshot | null>(
@@ -281,6 +321,7 @@ export function runPersistenceRecordsToSnapshot(params: {
     snapshot.agentConclusion,
   );
   const persistedTools = params.tools.map((tool) => toolInvocationRecordToRunTool(tool));
+  const persistedSources = params.sources.map((source) => runSourceRecordToRunSource(source));
   const persistedReportState = mapReportState(params.run.report_state);
   const runIdentity = getAgentRunRecordIdentity(params.run);
 
@@ -291,6 +332,7 @@ export function runPersistenceRecordsToSnapshot(params: {
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
     sessionId: params.run.conversation_id,
     toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
+    sources: persistedSources,
     reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : snapshot.reportState,
   };
 }

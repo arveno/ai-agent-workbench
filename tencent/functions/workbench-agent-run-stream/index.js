@@ -1996,20 +1996,121 @@ function createContentPreview(content) {
   return normalizedContent.length > 180 ? `${normalizedContent.slice(0, 179)}…` : normalizedContent;
 }
 
-function toRunRagSources(searchResult) {
-  return searchResult.matchedChunks.map((chunk, index) => ({
-    id: chunk.id,
-    documentTitle: chunk.documentTitle,
-    chunkTitle: chunk.title,
-    contentPreview: chunk.contentPreview,
-    score: chunk.score,
-    citationLabel: chunk.citationLabel || `[S${index + 1}]`,
-    usedInAnswer: index < 3,
-    sourceType: 'knowledge_base',
-    sourceName: 'CloudBase MySQL 知识库',
-    isMock: false,
-    updatedAt: chunk.updatedAt || undefined,
-  }));
+function toRunRagSources(searchResult, params = {}) {
+  return createRunSourcesFromSearchResult(searchResult, {
+    runId: params.runId || '',
+    conversationId: params.conversationId || '',
+    toolInvocationId: params.toolInvocationId || null,
+    retrievalLogId: params.retrievalLogId || null,
+    createdAt: nowIso(),
+  });
+}
+
+function normalizeSourceTitle(value) {
+  const normalizedValue = String(value || '').trim();
+  return (normalizedValue || '未命名来源').slice(0, 255);
+}
+
+function createRunSourcesFromSearchResult(searchResult, params) {
+  return searchResult.matchedChunks.map((chunk, index) => {
+    const citationLabel = chunk.citationLabel || `[S${index + 1}]`;
+    const usedInAnswer = index < 3;
+
+    return {
+      id: params.sourceIds?.[index] || chunk.id,
+      runId: params.runId,
+      conversationId: params.conversationId,
+      toolInvocationId: params.toolInvocationId || undefined,
+      retrievalLogId: params.retrievalLogId || undefined,
+      documentId: chunk.documentId || undefined,
+      chunkId: chunk.id || undefined,
+      citationLabel,
+      title: normalizeSourceTitle(chunk.documentTitle),
+      preview: chunk.contentPreview || '',
+      score: typeof chunk.score === 'number' ? chunk.score : undefined,
+      sourceType: 'knowledge',
+      usedInAnswer,
+      createdAt: params.createdAt,
+      metadata: {
+        provider: 'knowledge_search',
+        sourceName: 'CloudBase MySQL 知识库',
+        documentTitle: chunk.documentTitle || null,
+        chunkTitle: chunk.title || null,
+        category: chunk.category || null,
+        rawScore: typeof chunk.rawScore === 'number' ? chunk.rawScore : null,
+        updatedAt: chunk.updatedAt || null,
+      },
+    };
+  });
+}
+
+async function persistKnowledgeSearchLineage(db, currentUser, context, searchInput, searchResult, toolInvocationId) {
+  const retrievalLogId = randomUUID();
+  const createdAt = nowIso();
+  const matchedChunkCount = Number(searchResult.retrievedChunkCount) || 0;
+  const sourceIds = searchResult.matchedChunks.map(() => randomUUID());
+
+  const retrievalInsertResult = await db.from('retrieval_logs').insert({
+    id: retrievalLogId,
+    _openid: currentUser.openid,
+    user_id: currentUser.userId,
+    run_id: context.runId,
+    conversation_id: context.conversationId,
+    tool_invocation_id: toolInvocationId || null,
+    query: searchResult.query || searchInput.prompt || '',
+    provider: 'knowledge_search',
+    matched_chunk_count: matchedChunkCount,
+    metadata: JSON.stringify({
+      source: 'cloudbase-agent-run-real',
+      provider: 'knowledge_search',
+      topK: Number(searchInput.topK) || null,
+      terms: Array.isArray(searchResult.terms) ? searchResult.terms : [],
+      totalMatches: Number(searchResult.totalMatches) || 0,
+      matchedChunkCount,
+    }),
+  });
+
+  assertNoQueryError(retrievalInsertResult);
+
+  const sources = createRunSourcesFromSearchResult(searchResult, {
+    runId: context.runId,
+    conversationId: context.conversationId,
+    toolInvocationId,
+    retrievalLogId,
+    createdAt,
+    sourceIds,
+  });
+
+  for (const [index, source] of sources.entries()) {
+    const metadata = source.metadata || {};
+    const insertResult = await db.from('run_sources').insert({
+      id: source.id,
+      _openid: currentUser.openid,
+      user_id: currentUser.userId,
+      run_id: context.runId,
+      conversation_id: context.conversationId,
+      tool_invocation_id: toolInvocationId || null,
+      retrieval_log_id: retrievalLogId,
+      document_id: source.documentId || null,
+      chunk_id: source.chunkId || null,
+      citation_label: source.citationLabel || null,
+      source_order: index + 1,
+      title: source.title,
+      preview: source.preview,
+      score: typeof source.score === 'number' ? source.score : null,
+      source_type: source.sourceType,
+      used_in_answer: source.usedInAnswer ? 1 : 0,
+      no_source_reason: source.noSourceReason || null,
+      metadata: JSON.stringify(metadata),
+    });
+
+    assertNoQueryError(insertResult);
+  }
+
+  return {
+    retrievalLogId,
+    sources,
+  };
 }
 
 async function searchKnowledgeBase(db, input) {
@@ -2796,6 +2897,8 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
     input: params.input,
     inputSummary: params.inputSummary,
   });
+  context.toolInvocationIds = context.toolInvocationIds || {};
+  context.toolInvocationIds[params.runtimeToolId] = toolInvocationId;
 
   const started = await persistAndWriteRawEvent(
     db,
@@ -3238,6 +3341,31 @@ async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
         ? `检索到 ${output.retrievedChunkCount} 条相关知识片段`
         : '未找到相关知识片段',
     });
+    const toolInvocationId = context.toolInvocationIds.knowledge_search || null;
+    let canonicalSources = toRunRagSources(searchResult, {
+      runId: context.runId,
+      conversationId: context.conversationId,
+      toolInvocationId,
+    });
+
+    try {
+      const lineage = await persistKnowledgeSearchLineage(
+        db,
+        currentUser,
+        context,
+        searchInput,
+        searchResult,
+        toolInvocationId,
+      );
+      canonicalSources = lineage.sources;
+    } catch (error) {
+      console.warn('[workbench-agent-run-stream] source_lineage_persist_failed', JSON.stringify({
+        runId: context.runId,
+        conversationId: context.conversationId,
+        toolInvocationId,
+        errorMessage: error && error.message ? String(error.message).slice(0, 500) : 'unknown',
+      }));
+    }
 
     await persistAndWriteRawEvent(
       db,
@@ -3246,7 +3374,7 @@ async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
       res,
       disconnect,
       createRunEvent('rag_sources_ready', context, {
-        sources: toRunRagSources(searchResult),
+        sources: canonicalSources,
       }),
     );
 
@@ -3477,6 +3605,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     reportState: 'hidden',
     steps: [],
     toolInvocations: [],
+    toolInvocationIds: {},
   };
   const idempotencyKey = providedClientRunId ? createIdempotencyKey(currentUser, clientRunId) : null;
 

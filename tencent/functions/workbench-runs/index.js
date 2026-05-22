@@ -64,6 +64,27 @@ const TOOL_INVOCATION_COLUMNS = [
   'created_at',
   'updated_at',
 ].join(',');
+const RUN_SOURCE_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+  'run_id',
+  'conversation_id',
+  'tool_invocation_id',
+  'retrieval_log_id',
+  'document_id',
+  'chunk_id',
+  'citation_label',
+  'source_order',
+  'title',
+  'preview',
+  'score',
+  'source_type',
+  'used_in_answer',
+  'no_source_reason',
+  'created_at',
+  'metadata',
+].join(',');
 
 function loadSharedModule(name) {
   const bundledSharedPath = path.join(__dirname, '_shared', `${name}.js`);
@@ -211,6 +232,23 @@ function compareToolCreatedAsc(left, right) {
   return String(left.id ?? '').localeCompare(String(right.id ?? ''));
 }
 
+function compareRunSourceAsc(left, right) {
+  const orderDiff = normalizeNumber(left.source_order) - normalizeNumber(right.source_order);
+
+  if (orderDiff !== 0) {
+    return orderDiff;
+  }
+
+  const leftTime = toComparableTime(left.created_at);
+  const rightTime = toComparableTime(right.created_at);
+
+  if (leftTime !== null && rightTime !== null && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+
+  return String(left.id ?? '').localeCompare(String(right.id ?? ''));
+}
+
 function readGetParams(req) {
   const url = new URL(req.url || '/', 'http://localhost');
 
@@ -292,11 +330,35 @@ function mapToolInvocation(row) {
   };
 }
 
+function mapRunSource(row) {
+  return {
+    id: String(row.id ?? ''),
+    run_id: String(row.run_id ?? ''),
+    conversation_id: String(row.conversation_id ?? ''),
+    user_id: String(row.user_id ?? ''),
+    tool_invocation_id: toNullableString(row.tool_invocation_id),
+    retrieval_log_id: toNullableString(row.retrieval_log_id),
+    document_id: toNullableString(row.document_id),
+    chunk_id: toNullableString(row.chunk_id),
+    citation_label: toNullableString(row.citation_label),
+    source_order: normalizeNumber(row.source_order),
+    title: String(row.title ?? ''),
+    preview: String(row.preview ?? ''),
+    score: normalizeNullableNumber(row.score),
+    source_type: String(row.source_type ?? 'knowledge'),
+    used_in_answer: Number(row.used_in_answer) === 1 || row.used_in_answer === true,
+    no_source_reason: toNullableString(row.no_source_reason),
+    created_at: normalizeDateTime(row.created_at),
+    metadata: parseJsonObject(row.metadata),
+  };
+}
+
 function createEmptyRunBundle() {
   return {
     run: null,
     events: [],
     toolInvocations: [],
+    sources: [],
   };
 }
 
@@ -422,20 +484,43 @@ async function fetchToolInvocations(db, currentUser, run) {
     .map(mapToolInvocation);
 }
 
+async function fetchRunSources(db, currentUser, run) {
+  const result = await db
+    .from('run_sources')
+    .select(RUN_SOURCE_COLUMNS)
+    .eq('run_id', run.id)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  return extractRows(result)
+    .filter(
+      (row) =>
+        hasExpectedOwner(row, currentUser) &&
+        String(row.run_id ?? '') === run.id &&
+        String(row.conversation_id ?? '') === run.conversation_id,
+    )
+    .sort(compareRunSourceAsc)
+    .map(mapRunSource);
+}
+
 async function hydrateRunBundle(db, currentUser, run) {
   if (!run) {
     return createEmptyRunBundle();
   }
 
-  const [events, toolInvocations] = await Promise.all([
+  const [events, toolInvocations, sources] = await Promise.all([
     fetchRunEvents(db, currentUser, run),
     fetchToolInvocations(db, currentUser, run),
+    fetchRunSources(db, currentUser, run),
   ]);
 
   return {
     run,
     events,
     toolInvocations,
+    sources,
   };
 }
 

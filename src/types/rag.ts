@@ -1,12 +1,28 @@
-export interface RagSourceChunk {
+export type RunSourceType = 'knowledge' | 'tool' | 'report' | 'manual';
+
+export interface RunSource {
   id: string;
-  documentTitle: string;
-  chunkTitle?: string;
-  contentPreview: string;
+  runId: string;
+  conversationId: string;
+  toolInvocationId?: string;
+  retrievalLogId?: string;
+  documentId?: string;
+  chunkId?: string;
+  citationLabel?: string;
+  title: string;
+  preview: string;
   score?: number;
-  citationLabel: string;
-  usedInAnswer: boolean;
-  sourceType: 'knowledge_base' | 'document' | 'database_note' | 'policy';
+  sourceType: RunSourceType;
+  usedInAnswer?: boolean;
+  noSourceReason?: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RagSourceChunk extends RunSource {
+  documentTitle?: string;
+  chunkTitle?: string;
+  contentPreview?: string;
   sourceName?: string;
   isMock?: boolean;
   updatedAt?: string;
