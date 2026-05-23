@@ -50,9 +50,9 @@ export function RagSourcesCard() {
           </CardTitle>
           <CardDescription>{panelDescription}</CardDescription>
         </div>
-        {view.retrievedChunkCount > 0 ? (
+        {view.sourceCount > 0 ? (
           <Badge variant="outline" className="right-card-count-badge">
-            retrievedChunkCount {view.retrievedChunkCount}
+            {view.sourceCountLabel}
           </Badge>
         ) : null}
       </CardHeader>

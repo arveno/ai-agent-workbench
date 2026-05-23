@@ -18,6 +18,8 @@ export interface RagSourcesView {
   title: string;
   description: string;
   items: RagSourceView[];
+  sourceCount: number;
+  sourceCountLabel: string;
   retrievedChunkCount: number;
   isLoading: boolean;
   isEmpty: boolean;
@@ -85,12 +87,15 @@ export function createRagSourcesView(params: {
   const isMock = params.run?.mode === 'mock';
   const usedSourceCount = items.filter((item) => item.isUsedInAnswer).length;
   const emptyState = getRagEmptyStateLabel(params.run);
+  const sourceCount = items.length;
 
   return {
     title: isMock ? '公开演示来源' : 'RAG 来源',
-    description: isMock ? 'Mock RAG 来源，仅用于公开演示' : getRagSourcesDescription(params.run, usedSourceCount, items.length),
+    description: isMock ? 'Mock RAG 来源，仅用于公开演示' : getRagSourcesDescription(params.run, usedSourceCount, sourceCount),
     items,
-    retrievedChunkCount: items.length,
+    sourceCount,
+    sourceCountLabel: `来源 ${sourceCount} 条`,
+    retrievedChunkCount: sourceCount,
     isLoading: params.isLoading,
     isEmpty,
     errorMessage: params.errorMessage,

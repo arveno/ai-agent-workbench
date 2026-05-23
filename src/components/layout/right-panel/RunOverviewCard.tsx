@@ -1,11 +1,12 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunEvent, RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
+import type { RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
 import type { ModelTraceViewModel } from '../../../utils/modelTraceViewModel';
 import { createModelTraceViewModel } from '../../../utils/modelTraceViewModel';
 import { getRunReuseNotice } from '../../../utils/observabilityLabels';
 import {
   formatRunElapsed,
   getConclusionSourceLabel,
+  getLatestRunReusedEventForRun,
   getRunIntentLabel,
   getRunStatusLabel,
   getRunStatusTone,
@@ -61,25 +62,6 @@ function getRunRoundLabel(runId: string, messages: WorkbenchMessage[]): string {
 
 function getVisibleRunModeLabel(mode: RunSnapshot['mode']): string {
   return mode === 'mock' ? '模拟模式（Mock）' : '真实 Agent';
-}
-
-function getLatestRunReusedEvent(
-  runId: string,
-  events: RunEvent[],
-): Extract<RunEvent, { type: 'run_reused' }> | null {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-
-    if (event.type !== 'run_reused') {
-      continue;
-    }
-
-    if (event.runId === runId || event.clientRunId === runId) {
-      return event;
-    }
-  }
-
-  return null;
 }
 
 function getModelTraceItems(modelTraceView: ModelTraceViewModel | null): RunOverviewItem[] {
@@ -171,7 +153,7 @@ export function RunOverviewCard() {
   const statusTone = getRunStatusTone(currentRun.status);
   const runPrompt = getRunPromptText(currentRun.prompt);
   const modelTraceView = createModelTraceViewModel(currentRun.modelTrace);
-  const reuseNotice = getRunReuseNotice(getLatestRunReusedEvent(currentRun.id, runEventLog));
+  const reuseNotice = getRunReuseNotice(getLatestRunReusedEventForRun(currentRun, runEventLog));
   const overviewItems: RunOverviewItem[] = [
     { label: '本轮问题', value: runPrompt, wide: true },
     { label: 'Run ID', value: currentRun.id },

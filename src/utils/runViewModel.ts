@@ -1,5 +1,6 @@
 import type {
   RunConclusionSource,
+  RunEvent,
   RunIntent,
   RunMode,
   RunSnapshot,
@@ -63,6 +64,36 @@ export function getRunDisplayId(run: Pick<RunSnapshot, 'id' | 'displayRunId'> | 
   }
 
   return run.displayRunId?.trim() || run.id;
+}
+
+export function isRunEventForRun(
+  event: Pick<RunEvent, 'runId'> & { clientRunId?: string | null },
+  run: Pick<RunSnapshot, 'id' | 'clientRunId'> | null,
+): boolean {
+  if (!run) {
+    return false;
+  }
+
+  if (event.runId === run.id) {
+    return true;
+  }
+
+  return Boolean(run.clientRunId && event.clientRunId === run.clientRunId);
+}
+
+export function getLatestRunReusedEventForRun(
+  run: Pick<RunSnapshot, 'id' | 'clientRunId'> | null,
+  events: RunEvent[],
+): Extract<RunEvent, { type: 'run_reused' }> | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (event.type === 'run_reused' && isRunEventForRun(event, run)) {
+      return event;
+    }
+  }
+
+  return null;
 }
 
 export function formatRunElapsed(run: RunSnapshot | null): string {

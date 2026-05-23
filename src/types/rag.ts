@@ -9,6 +9,7 @@ export interface RunSource {
   documentId?: string;
   chunkId?: string;
   citationLabel?: string;
+  sourceOrder?: number;
   title: string;
   preview: string;
   score?: number;

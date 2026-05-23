@@ -55,6 +55,11 @@ function normalizeReportSource(value: unknown): RunSource | null {
   const conversationId = getStringField(value, 'conversationId', 'conversation_id');
   const title = getStringField(value, 'title');
   const preview = getStringField(value, 'preview') ?? '';
+  const metadata = isRecord(value.metadata) ? value.metadata : {};
+  const sourceOrder =
+    getNumberField(value, 'sourceOrder') ??
+    getNumberField(value, 'source_order') ??
+    getNumberField(metadata, 'sourceOrder');
 
   if (!id || !runId || !conversationId || !title) {
     return null;
@@ -69,6 +74,7 @@ function normalizeReportSource(value: unknown): RunSource | null {
     documentId: getStringField(value, 'documentId', 'document_id'),
     chunkId: getStringField(value, 'chunkId', 'chunk_id'),
     citationLabel: getStringField(value, 'citationLabel', 'citation_label'),
+    sourceOrder,
     title,
     preview,
     score: getNumberField(value, 'score'),
@@ -76,7 +82,7 @@ function normalizeReportSource(value: unknown): RunSource | null {
     usedInAnswer: normalizeBoolean(value.usedInAnswer ?? value.used_in_answer),
     noSourceReason: getStringField(value, 'noSourceReason', 'no_source_reason'),
     createdAt: getStringField(value, 'createdAt', 'created_at') ?? '',
-    metadata: isRecord(value.metadata) ? value.metadata : {},
+    metadata,
   };
 
   return source;
