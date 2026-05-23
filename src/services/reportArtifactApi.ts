@@ -24,16 +24,6 @@ async function readPersistenceResponse<TData>(
   return readWorkbenchPersistenceResponse(response, fallbackMessage);
 }
 
-function createReportArtifactRequestMetadata(
-  metadata: ReportArtifactCreateInput['metadata'],
-): ReportArtifactCreateInput['metadata'] {
-  const nextMetadata = { ...(metadata ?? {}) };
-
-  delete nextMetadata.runtimeRunId;
-
-  return nextMetadata;
-}
-
 export async function fetchConversationReportArtifacts(
   conversationId: string,
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactListResult>> {
@@ -59,7 +49,6 @@ export async function createRunReportArtifact(
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactCreateResult>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
-    const metadata = createReportArtifactRequestMetadata(input.metadata);
     const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/reports'), {
       method: 'POST',
       headers: {
@@ -71,7 +60,7 @@ export async function createRunReportArtifact(
         title: input.title,
         contentMarkdown: input.contentMarkdown,
         status: 'generated',
-        metadata,
+        metadata: input.metadata ?? {},
       }),
       accessToken: cloudBaseToken,
     });

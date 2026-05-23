@@ -54,7 +54,7 @@ function isAgentRunInProgress(state: WorkbenchStore): boolean {
   );
 }
 
-function getRunIdForClientRun(state: WorkbenchStore, clientRunId: string): string {
+function getRunIdForClientRun(state: WorkbenchStore, clientRunId: string): string | undefined {
   const currentRun = state.currentRun;
 
   if (
@@ -64,7 +64,7 @@ function getRunIdForClientRun(state: WorkbenchStore, clientRunId: string): strin
     return currentRun.id;
   }
 
-  return clientRunId;
+  return undefined;
 }
 
 function withDemoFallbackHint(message: string): string {

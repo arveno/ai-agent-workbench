@@ -45,8 +45,7 @@ function toPersistableRunId(runId: string | undefined): string | null {
 }
 
 export function messageRecordToWorkbenchMessage(record: MessageRecord): WorkbenchMessage {
-  const runtimeRunId = typeof record.metadata.runtimeRunId === 'string' ? record.metadata.runtimeRunId : null;
-  const dbRunId = record.run_id?.trim() || null;
+  const runId = record.run_id?.trim() || null;
   const clientMessageId = record.client_message_id ?? record.id;
   const message: WorkbenchMessage = {
     id: clientMessageId,
@@ -57,8 +56,8 @@ export function messageRecordToWorkbenchMessage(record: MessageRecord): Workbenc
     createdAt: toTimestamp(record.created_at),
   };
 
-  if (dbRunId || runtimeRunId) {
-    message.runId = dbRunId ?? runtimeRunId ?? undefined;
+  if (runId) {
+    message.runId = runId;
   }
 
   return message;
@@ -67,11 +66,6 @@ export function messageRecordToWorkbenchMessage(record: MessageRecord): Workbenc
 export function workbenchMessageToMessageCreateInput(message: WorkbenchMessage): MessageCreateInput {
   const runId = toPersistableRunId(message.runId);
   const clientMessageId = message.clientMessageId ?? message.id;
-  const metadata: Record<string, unknown> = {};
-
-  if (message.runId && !runId) {
-    metadata.clientRunId = message.runId;
-  }
 
   return {
     role: message.role,
@@ -80,6 +74,6 @@ export function workbenchMessageToMessageCreateInput(message: WorkbenchMessage):
     runId,
     clientMessageId,
     status: message.kind === 'partial' ? 'streaming' : 'completed',
-    metadata,
+    metadata: {},
   };
 }

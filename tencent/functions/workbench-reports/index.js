@@ -338,7 +338,19 @@ function normalizeReportSource(value) {
   const title = toNullableString(value.title);
   const preview = toNullableString(value.preview) || '';
 
-  if (!id || !runId || !conversationId || !title) {
+  if (!id) {
+    return null;
+  }
+
+  if (!runId) {
+    return null;
+  }
+
+  if (!conversationId) {
+    return null;
+  }
+
+  if (!title) {
     return null;
   }
 
@@ -391,8 +403,6 @@ function readReportSourcesFromMetadata(metadata) {
 
 function createReportMetadata(metadata, sourceSnapshot) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
-
-  delete nextMetadata.runtimeRunId;
 
   const reportSources = Array.isArray(sourceSnapshot?.sources) ? sourceSnapshot.sources : [];
   nextMetadata.sources = reportSources;

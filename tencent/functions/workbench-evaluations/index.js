@@ -9,6 +9,7 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const DEFAULT_RESULTS_LIMIT = 20;
 const MAX_RESULTS_LIMIT = 50;
 const ROUTE_PATH = '/api/workbench/evaluations';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const CASE_COLUMNS = [
   'id',
@@ -31,7 +32,6 @@ const RESULT_COLUMNS = [
   'case_id',
   'conversation_id',
   'run_id',
-  'runtime_run_id',
   'verdict',
   'bad_case_reason',
   'human_note',
@@ -50,7 +50,6 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
-  'runtime_run_id',
   'created_at',
 ].join(',');
 
@@ -251,6 +250,20 @@ function readOptionalString(body, fieldName, maxLength = 0) {
   return value;
 }
 
+function readOptionalRunId(value) {
+  const runId = typeof value === 'string' ? value.trim() : '';
+
+  if (!runId) {
+    return null;
+  }
+
+  if (!UUID_PATTERN.test(runId)) {
+    throw new RequestError(400, 'validation_error', 'runId must be a canonical UUID.');
+  }
+
+  return runId;
+}
+
 function readVerdict(value) {
   const verdict = typeof value === 'string' ? value.trim() : '';
 
@@ -399,7 +412,7 @@ function readGetParams(req) {
     resource: readQueryString(url.searchParams.get('resource')),
     category: readQueryString(url.searchParams.get('category')),
     caseId: readQueryString(url.searchParams.get('caseId')),
-    runId: readQueryString(url.searchParams.get('runId')),
+    runId: readOptionalRunId(url.searchParams.get('runId')),
     conversationId: readQueryString(url.searchParams.get('conversationId')),
     limit: readPositiveLimit(url.searchParams.get('limit')),
   };
@@ -442,7 +455,6 @@ function mapResult(row) {
     caseId: String(row.case_id ?? ''),
     conversationId: toNullableString(row.conversation_id),
     runId: toNullableString(row.run_id),
-    runtimeRunId: toNullableString(row.runtime_run_id),
     verdict: String(row.verdict ?? 'unknown'),
     badCaseReason: toNullableString(row.bad_case_reason),
     humanNote: toNullableString(row.human_note),
@@ -514,50 +526,17 @@ async function assertConversationOwner(db, currentUser, conversationId) {
   return conversation;
 }
 
-async function fetchRunByLookupId(db, currentUser, runLookupId) {
-  const idResult = await db
-    .from('agent_runs')
-    .select(AGENT_RUN_COLUMNS)
-    .eq('id', runLookupId)
-    .eq('_openid', currentUser.openid)
-    .eq('user_id', currentUser.userId);
-
-  assertNoQueryError(idResult);
-
-  const idRows = extractRows(idResult).filter((row) => hasExpectedOwner(row, currentUser));
-
-  if (idRows.length > 0) {
-    return idRows[0];
-  }
-
-  const runtimeResult = await db
-    .from('agent_runs')
-    .select(AGENT_RUN_COLUMNS)
-    .eq('runtime_run_id', runLookupId)
-    .eq('_openid', currentUser.openid)
-    .eq('user_id', currentUser.userId);
-
-  assertNoQueryError(runtimeResult);
-
-  const runtimeRows = extractRows(runtimeResult).filter((row) => hasExpectedOwner(row, currentUser));
-  runtimeRows.sort(compareCreatedDesc);
-
-  return runtimeRows.length > 0 ? runtimeRows[0] : null;
-}
-
-async function fetchRunByRuntimeId(db, currentUser, runtimeRunId) {
+async function fetchRunById(db, currentUser, runId) {
   const result = await db
     .from('agent_runs')
     .select(AGENT_RUN_COLUMNS)
-    .eq('runtime_run_id', runtimeRunId)
+    .eq('id', runId)
     .eq('_openid', currentUser.openid)
     .eq('user_id', currentUser.userId);
 
   assertNoQueryError(result);
 
   const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
-  rows.sort(compareCreatedDesc);
-
   return rows.length > 0 ? rows[0] : null;
 }
 
@@ -586,11 +565,25 @@ async function fetchResults(currentUser, params) {
 
   const results = extractRows(result)
     .filter(
-      (row) =>
-        hasExpectedOwner(row, currentUser) &&
-        (!params.caseId || String(row.case_id ?? '') === params.caseId) &&
-        (!params.runId || String(row.run_id ?? '') === params.runId) &&
-        (!params.conversationId || String(row.conversation_id ?? '') === params.conversationId),
+      (row) => {
+        if (!hasExpectedOwner(row, currentUser)) {
+          return false;
+        }
+
+        if (params.caseId && String(row.case_id ?? '') !== params.caseId) {
+          return false;
+        }
+
+        if (params.runId && String(row.run_id ?? '') !== params.runId) {
+          return false;
+        }
+
+        if (params.conversationId && String(row.conversation_id ?? '') !== params.conversationId) {
+          return false;
+        }
+
+        return true;
+      },
     )
     .sort(compareCreatedDesc)
     .slice(0, params.limit)
@@ -621,8 +614,7 @@ function readCreateResultPayload(body) {
   return {
     caseId: readRequiredString(body, 'caseId'),
     conversationId: readOptionalString(body, 'conversationId'),
-    runId: readOptionalString(body, 'runId'),
-    runtimeRunId: readOptionalString(body, 'runtimeRunId'),
+    runId: readOptionalRunId(body.runId),
     verdict: readVerdict(body.verdict),
     badCaseReason: readOptionalString(body, 'badCaseReason', 128),
     humanNote: readOptionalString(body, 'humanNote'),
@@ -655,24 +647,16 @@ async function createResult(currentUser, body) {
   let run = null;
 
   if (payload.runId) {
-    run = await fetchRunByLookupId(db, currentUser, payload.runId);
-  } else if (payload.runtimeRunId) {
-    run = await fetchRunByRuntimeId(db, currentUser, payload.runtimeRunId);
+    run = await fetchRunById(db, currentUser, payload.runId);
   }
 
-  if ((payload.runId || payload.runtimeRunId) && !run) {
+  if (payload.runId && !run) {
     throw new RequestError(404, 'run_not_found', 'Workbench run was not found.');
   }
 
   const runConversationId = run ? toNullableString(run.conversation_id) : null;
 
   if (payload.conversationId && runConversationId !== payload.conversationId) {
-    throw new RequestError(404, 'run_not_found', 'Workbench run was not found.');
-  }
-
-  const runRuntimeRunId = run ? toNullableString(run.runtime_run_id) : null;
-
-  if (payload.runtimeRunId && runRuntimeRunId && payload.runtimeRunId !== runRuntimeRunId) {
     throw new RequestError(404, 'run_not_found', 'Workbench run was not found.');
   }
 
@@ -684,7 +668,6 @@ async function createResult(currentUser, body) {
     case_id: payload.caseId,
     conversation_id: payload.conversationId || runConversationId,
     run_id: run ? String(run.id ?? '') : null,
-    runtime_run_id: runRuntimeRunId,
     verdict: payload.verdict,
     bad_case_reason: payload.badCaseReason,
     human_note: payload.humanNote,

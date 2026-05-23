@@ -12,7 +12,7 @@ const AGENT_RUN_COLUMNS = [
   'user_id',
   'conversation_id',
   'usage_id',
-  'runtime_run_id',
+  'client_run_id',
   'mode',
   'status',
   'intent',
@@ -277,7 +277,7 @@ function mapAgentRun(row) {
     conversation_id: String(row.conversation_id ?? ''),
     user_id: String(row.user_id ?? ''),
     usage_id: toNullableString(row.usage_id),
-    runtime_run_id: toNullableString(row.runtime_run_id),
+    client_run_id: toNullableString(row.client_run_id),
     mode: String(row.mode ?? 'agent'),
     status: String(row.status ?? 'running'),
     intent: toNullableString(row.intent),
@@ -411,35 +411,18 @@ async function fetchLatestRunForConversation(db, currentUser, conversationId) {
 }
 
 async function fetchRunById(db, currentUser, runId) {
-  const idResult = await db
+  const result = await db
     .from('agent_runs')
     .select(AGENT_RUN_COLUMNS)
     .eq('id', runId)
     .eq('_openid', currentUser.openid)
     .eq('user_id', currentUser.userId);
 
-  assertNoQueryError(idResult);
+  assertNoQueryError(result);
 
-  const idRows = extractRows(idResult).filter((row) => hasExpectedOwner(row, currentUser));
+  const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
 
-  if (idRows.length > 0) {
-    return mapAgentRun(idRows[0]);
-  }
-
-  const runtimeResult = await db
-    .from('agent_runs')
-    .select(AGENT_RUN_COLUMNS)
-    .eq('runtime_run_id', runId)
-    .eq('_openid', currentUser.openid)
-    .eq('user_id', currentUser.userId);
-
-  assertNoQueryError(runtimeResult);
-
-  const runtimeRows = extractRows(runtimeResult)
-    .filter((row) => hasExpectedOwner(row, currentUser))
-    .sort(compareRunCreatedDesc);
-
-  return runtimeRows.length > 0 ? mapAgentRun(runtimeRows[0]) : null;
+  return rows.length > 0 ? mapAgentRun(rows[0]) : null;
 }
 
 async function fetchRunEvents(db, currentUser, run) {

@@ -62,7 +62,7 @@ const AGENT_RUN_COLUMNS = [
   'user_id',
   'conversation_id',
   'usage_id',
-  'runtime_run_id',
+  'client_run_id',
   'status',
   'conclusion_source',
   'report_state',
@@ -332,7 +332,7 @@ function mapAgentRun(row) {
     id: String(row.id ?? ''),
     conversationId: String(row.conversation_id ?? ''),
     usageId: row.usage_id ? String(row.usage_id) : null,
-    runtimeRunId: row.runtime_run_id ? String(row.runtime_run_id) : null,
+    clientRunId: row.client_run_id ? String(row.client_run_id) : null,
     status: String(row.status ?? 'running'),
     conclusionSource: row.conclusion_source ? String(row.conclusion_source) : null,
     reportState: row.report_state ? String(row.report_state) : null,
@@ -353,7 +353,7 @@ async function fetchAgentRunByClientRunId(db, currentUser, clientRunId) {
     .select(AGENT_RUN_COLUMNS)
     .eq('user_id', currentUser.userId)
     .eq('_openid', currentUser.openid)
-    .eq('runtime_run_id', clientRunId);
+    .eq('client_run_id', clientRunId);
 
   assertNoQueryError(result);
 
@@ -526,7 +526,7 @@ async function updateQuotaUsedAtomically(db, currentUser, quota) {
   };
 }
 
-async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'cloudbase-agent-run-real') {
+async function consumeQuota(db, currentUser, runId, clientRunId, source = 'cloudbase-agent-run-real') {
   let updatedQuota = await ensureMonthlyQuota(db, currentUser);
 
   if (!isAdmin(currentUser)) {
@@ -536,7 +536,7 @@ async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'clou
       const quota = await ensureMonthlyQuota(db, currentUser);
 
       if (quota.quotaUsed >= quota.quotaLimit) {
-        console.warn('[workbench-agent-run-stream] quota_exceeded', currentUser.userId, runtimeRunId || runId);
+        console.warn('[workbench-agent-run-stream] quota_exceeded', currentUser.userId, clientRunId ?? runId);
         throw new RequestError(429, 'quota_exceeded', 'Agent Run quota exceeded.');
       }
 
@@ -550,7 +550,7 @@ async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'clou
     }
 
     if (!didConsume) {
-      console.error('[workbench-agent-run-stream] quota_consume_failed', currentUser.userId, runtimeRunId || runId);
+      console.error('[workbench-agent-run-stream] quota_consume_failed', currentUser.userId, clientRunId ?? runId);
       throw new RequestError(409, 'quota_consume_failed', 'Agent Run quota consume failed.');
     }
   }
@@ -567,13 +567,13 @@ async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'clou
       metadata: JSON.stringify({
         source,
         runId,
-        clientRunId: runtimeRunId || null,
+        clientRunId: clientRunId || null,
       }),
     });
 
     assertNoQueryError(insertUsageResult);
   } catch (error) {
-    console.error('[workbench-agent-run-stream] quota_consume_failed', currentUser.userId, runtimeRunId || runId);
+    console.error('[workbench-agent-run-stream] quota_consume_failed', currentUser.userId, clientRunId ?? runId);
     throw error;
   }
 
@@ -627,7 +627,7 @@ async function createAgentRun(db, currentUser, context, options = {}) {
       user_id: currentUser.userId,
       conversation_id: context.conversationId,
       usage_id: context.usageId,
-      runtime_run_id: context.runtimeRunId,
+      client_run_id: context.clientRunId,
       mode: 'agent',
       status: options.status || 'running',
       intent: context.intent || 'unknown',
@@ -643,11 +643,11 @@ async function createAgentRun(db, currentUser, context, options = {}) {
 
     assertNoQueryError(insertResult);
   } catch (error) {
-    if (!context.runtimeRunId || !isDuplicateKeyError(error)) {
+    if (!context.clientRunId || !isDuplicateKeyError(error)) {
       throw error;
     }
 
-    const existingRun = await waitForAgentRunByClientRunId(db, currentUser, context.runtimeRunId);
+    const existingRun = await waitForAgentRunByClientRunId(db, currentUser, context.clientRunId);
     return {
       created: false,
       existingRun,
@@ -772,7 +772,11 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
 }
 
 async function failAgentRun(db, currentUser, context, status, errorMessage) {
-  if (!context.runId || !context.conversationId) {
+  if (!context.runId) {
+    return;
+  }
+
+  if (!context.conversationId) {
     return;
   }
 
@@ -1997,7 +2001,7 @@ function createContentPreview(content) {
 
 function toRunRagSources(searchResult, params = {}) {
   return createRunSourcesFromSearchResult(searchResult, {
-    runId: params.runId || '',
+    runId: params.runId ?? '',
     conversationId: params.conversationId || '',
     toolInvocationId: params.toolInvocationId || null,
     retrievalLogId: params.retrievalLogId || null,
@@ -2800,7 +2804,7 @@ function writeSseEvent(res, event) {
   }
 
   res.write(`data: ${JSON.stringify(event)}\n\n`);
-  debugLog('[workbench-agent-run-stream] event', event.type, event.runId || event.run?.id);
+  debugLog('[workbench-agent-run-stream] event', event.type, event.runId ?? event.run?.id);
   return true;
 }
 
@@ -3573,13 +3577,12 @@ async function runRealAgentFlow(req, res, currentUser, body) {
 
   const runId = randomUUID();
   const providedClientRunId = readOptionalString(body.clientRunId);
-  const clientRunId = providedClientRunId || runId;
+  const clientRunId = providedClientRunId || null;
   const provider = readProvider(body.provider);
   const selectedModelId = readSelectedModelId(body.selectedModelId);
   const context = {
     runId,
     clientRunId,
-    runtimeRunId: clientRunId,
     clientRunIdMissing: !providedClientRunId,
     conversationId,
     provider,
@@ -3645,7 +3648,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     let quotaResult;
 
     try {
-      quotaResult = await consumeQuota(db, currentUser, runId, context.runtimeRunId, 'cloudbase-agent-run-real');
+      quotaResult = await consumeQuota(db, currentUser, runId, context.clientRunId, 'cloudbase-agent-run-real');
       context.usageId = quotaResult.usageId;
       await startAgentRunAfterQuota(db, currentUser, context);
     } catch (error) {

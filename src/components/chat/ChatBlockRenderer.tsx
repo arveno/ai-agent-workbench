@@ -90,9 +90,13 @@ function MessageBlockRenderer({
   const messageView = createMessageView(message);
   const canSelectRun = Boolean(message.runId && message.kind !== 'report');
   const isSelectedRunMessage = Boolean(message.runId && message.runId === selectedRunId);
-  const shouldUseContentCard = Boolean(message.runId || isReportMessage);
+  const shouldUseContentCard = Boolean(message.runId) || isReportMessage;
   const selectRun = () => {
-    if (!message.runId || !canSelectRun) {
+    if (!message.runId) {
+      return;
+    }
+
+    if (!canSelectRun) {
       return;
     }
 

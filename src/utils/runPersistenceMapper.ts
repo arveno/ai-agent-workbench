@@ -245,8 +245,7 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   'id' | 'clientRunId' | 'displayRunId'
 > {
   const runId = record.id;
-  const runtimeRunId = record.runtime_run_id ?? undefined;
-  const clientRunId = getMetadataString(record.metadata, 'clientRunId') || runtimeRunId;
+  const clientRunId = record.client_run_id ?? (getMetadataString(record.metadata, 'clientRunId') || undefined);
 
   return {
     id: runId,

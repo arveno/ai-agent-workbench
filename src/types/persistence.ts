@@ -139,7 +139,7 @@ export interface AgentRunRecord {
   conversation_id: string;
   user_id: string;
   usage_id: string | null;
-  runtime_run_id: string | null;
+  client_run_id: string | null;
   mode: AgentRunRecordMode;
   status: AgentRunRecordStatus;
   intent: string | null;

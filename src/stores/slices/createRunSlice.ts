@@ -47,7 +47,7 @@ function getMetadataString(metadata: Record<string, unknown>, key: string): stri
 }
 
 function getReportArtifactRunId(report: ReportArtifactRecord): string | null {
-  return report.run_id?.trim() || getMetadataString(report.metadata, 'runtimeRunId') || null;
+  return report.run_id?.trim() || null;
 }
 
 function getReportArtifactState(report: ReportArtifactRecord): RunReportState | null {
@@ -317,7 +317,15 @@ function getRunStartedPendingRunId(event: RunEvent, run: RunSnapshot): string | 
   const runId = run.id.trim();
   const clientRunId = (run.clientRunId ?? event.clientRunId ?? '').trim();
 
-  if (!runId || !clientRunId || runId === clientRunId) {
+  if (!runId) {
+    return null;
+  }
+
+  if (!clientRunId) {
+    return null;
+  }
+
+  if (runId === clientRunId) {
     return null;
   }
 

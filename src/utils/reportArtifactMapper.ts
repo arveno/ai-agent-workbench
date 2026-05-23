@@ -4,11 +4,6 @@ import type { WorkbenchMessage } from '@/types/workbench';
 
 const SOURCE_TYPES = new Set<RunSourceType>(['knowledge', 'tool', 'report', 'manual']);
 
-function getMetadataString(metadata: Record<string, unknown>, key: string): string {
-  const value = metadata[key];
-  return typeof value === 'string' ? value.trim() : '';
-}
-
 function toTimestamp(value: string): number {
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : Date.now();
@@ -61,7 +56,19 @@ function normalizeReportSource(value: unknown): RunSource | null {
     getNumberField(value, 'source_order') ??
     getNumberField(metadata, 'sourceOrder');
 
-  if (!id || !runId || !conversationId || !title) {
+  if (!id) {
+    return null;
+  }
+
+  if (!runId) {
+    return null;
+  }
+
+  if (!conversationId) {
+    return null;
+  }
+
+  if (!title) {
     return null;
   }
 
@@ -110,8 +117,7 @@ function readReportSourceCount(record: ReportArtifactRecord, sources: RunSource[
 }
 
 export function reportArtifactToMessage(record: ReportArtifactRecord): WorkbenchMessage {
-  const runtimeRunId = getMetadataString(record.metadata, 'runtimeRunId');
-  const dbRunId = record.run_id?.trim() || null;
+  const runId = record.run_id?.trim() || null;
   const clientMessageId = `report_artifact_${record.id}`;
   const reportSources = readReportSources(record);
   const message: WorkbenchMessage = {
@@ -125,8 +131,8 @@ export function reportArtifactToMessage(record: ReportArtifactRecord): Workbench
     reportSourceCount: readReportSourceCount(record, reportSources),
   };
 
-  if (dbRunId || runtimeRunId) {
-    message.runId = dbRunId || runtimeRunId;
+  if (runId) {
+    message.runId = runId;
   }
 
   return message;

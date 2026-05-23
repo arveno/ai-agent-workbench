@@ -37,7 +37,7 @@ eval_results._openid = currentUser.openid
 eval_results.user_id = currentUser.userId
 ```
 
-When a result references `conversationId`, the function verifies the row exists in `conversations` for the same `_openid` and `user_id`. When a result references `runId` or `runtimeRunId`, the function resolves it through `agent_runs.id` or `agent_runs.runtime_run_id` for the same `_openid` and `user_id`. If both conversation and run are present, `agent_runs.conversation_id` must match the supplied conversation.
+When a result references `conversationId`, the function verifies the row exists in `conversations` for the same `_openid` and `user_id`. When a result references `runId`, it must be a canonical UUID and resolves through `agent_runs.id` for the same `_openid` and `user_id`. If both conversation and run are present, `agent_runs.conversation_id` must match the supplied conversation.
 
 Missing or cross-user conversations/runs return not-found style errors and do not reveal whether another user's resource exists.
 

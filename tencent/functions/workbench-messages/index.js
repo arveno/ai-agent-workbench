@@ -290,6 +290,20 @@ function toUuidOrNull(value) {
   return UUID_PATTERN.test(normalizedValue) ? normalizedValue : null;
 }
 
+function readMessageRunId(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const runId = toUuidOrNull(value);
+
+  if (!runId) {
+    throw new RequestError(400, 'validation_error', 'Message runId must be a canonical UUID.');
+  }
+
+  return runId;
+}
+
 function readMetadata(value) {
   return isRecord(value) ? value : {};
 }
@@ -456,7 +470,7 @@ async function createMessage(currentUser, conversationId, body) {
     role: readMessageRole(body.role),
     kind: readMessageKind(body.kind),
     content: readMessageContent(body.content),
-    run_id: toUuidOrNull(body.runId),
+    run_id: readMessageRunId(body.runId),
     client_message_id: clientMessageId,
     status: readMessageStatus(body.status),
     metadata: JSON.stringify(readMetadata(body.metadata)),
