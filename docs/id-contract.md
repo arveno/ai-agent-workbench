@@ -100,7 +100,71 @@ type RunSnapshot = {
 
 `canonicalRunId` 不属于长期目标字段。`runtimeRunId` 不属于长期业务主模型字段。如果短期仍存在 `runtimeRunId` / `canonicalRunId`，必须标记为 migration-only，并明确删除条件。
 
-## 8. 对象绑定规则
+## 8. 迁移字段退出条件
+
+本节定义 `canonicalRunId` / `runtimeRunId` / `metadata.runtimeRunId` 的退出边界。删除迁移字段前必须先确认本节条件，避免把仍服务 pending、幂等或旧数据恢复的字段误删。
+
+### 8.1 canonicalRunId 退出条件
+
+`canonicalRunId` 是 Phase 2B / 2C 迁移期字段，只用于 `RunSnapshot.id` 语义尚未完全稳定时承载 DB `agent_runs.id`。
+
+当 live path 和 refresh path 均满足 `RunSnapshot.id = agent_runs.id` 后，`canonicalRunId` 应视为冗余字段。第一批可删除范围：
+
+- `RunSnapshot.canonicalRunId` 类型字段。
+- `runPersistenceMapper` 中的 `canonicalRunId` 输出。
+- `agentRunStreamApi` 中仅用于 `canonicalRunId` 的辅助字段写入。
+- `createRunSlice` 中 report metadata 的 `canonicalRunId`。
+- `workbench-reports` skipped marker metadata 中的 `canonicalRunId`。
+
+删除后，所有业务主关系统一使用 `id` / `runId`，且二者必须指向 DB `agent_runs.id`。如果需要表示“缺少后端 DB runId”，不能通过 `canonicalRunId` 表示，应使用明确错误状态或 `nonCanonical` / `missingCanonicalRunId` 这类显式标记；不得把 `clientRunId` 静默提升为 canonical `runId`。
+
+删除 `canonicalRunId` 不得影响 `clientRunId` / `runtimeRunId` 的合法用途。`clientRunId` 仍可用于 pending / idempotency，`runtimeRunId` 仍可用于后端幂等和旧数据兼容边界。
+
+### 8.2 runtimeRunId 保留边界
+
+`runtimeRunId` 不是业务主关系，不能作为 message / event / tool / report / usage / source 的主外键。
+
+当前后端 `agent_runs.runtime_run_id` 和 `003_agent_run_idempotency.sql` 中的唯一约束仍用于 idempotency / duplicate run 防护，不能在 canonical ID 清理阶段删除。
+
+`runtimeRunId` 可以短期存在于以下边界：
+
+- 后端 idempotency 查询、等待和 duplicate run 防护。
+- mapper / backend 对旧数据的兼容兜底。
+- pending / `run_reused` 迁移边界。
+
+`runtimeRunId` 不应长期存在于 `RunSnapshot` 主模型。从 `RunSnapshot` 移除 `runtimeRunId` 前，必须先确认：
+
+- `createUiSlice` 不再依赖 `RunSnapshot.runtimeRunId` 做 pending 匹配。
+- `reportArtifactApi` 不再需要从 `RunSnapshot` 读取 `runtimeRunId`。
+- run reuse 展示不再需要 `runtimeRunId`。
+- `messageMapper` / `reportArtifactMapper` 的旧数据恢复仍有明确替代策略。
+
+### 8.3 metadata.runtimeRunId 保留边界
+
+`metadata.runtimeRunId` 只允许作为旧数据兜底。DB `run_id` 永远优先，mapper 和后端读取逻辑不得让 `metadata.runtimeRunId` 覆盖 DB `run_id`。
+
+新写入不得把 DB `runId` 塞进 `metadata.runtimeRunId`。如确实需要新写入 `metadata.runtimeRunId`，必须说明它是真实 runtime / client id，且不同于 DB `runId`。
+
+长期目标是只在 mapper / backend 边界处理 `metadata.runtimeRunId`，不让它进入 component / ViewModel，也不让 UI 依赖它判断业务关系。
+
+### 8.4 Phase 2E 后续阶段
+
+- Phase 2E-2A：补充 ID 迁移字段退出条件文档。
+- Phase 2E-3：删除 `canonicalRunId`。
+- Phase 2E-4：收口 `runtimeRunId` 到边界层。
+- Phase 2E-5：清理 `metadata.runtimeRunId` 新写入和旧兜底策略。
+
+### 8.5 禁止误删范围
+
+后续字段清理不得误删：
+
+- `clientRunId`。
+- `agent_runs.runtime_run_id`。
+- `003_agent_run_idempotency.sql` 中的唯一约束。
+- `workbench-agent-run-stream` 的 idempotency 查询 / 等待 / `run_reused` 逻辑。
+- `messageMapper` / `reportArtifactMapper` 的旧数据 fallback，除非已有明确替代策略。
+
+## 9. 对象绑定规则
 
 conversation -> message：
 
@@ -149,7 +213,7 @@ run -> evaluation：
 
 所有主关系都必须优先 DB ID。`messages.run_id`、`run_events.run_id`、`tool_invocations.run_id`、`report_artifacts.run_id`、`eval_results.run_id` 和 usage 的 run 关联字段，只要存在并写入新数据，都必须指向 `agent_runs.id`。
 
-## 9. Live Run 与 Refresh Run 目标契约
+## 10. Live Run 与 Refresh Run 目标契约
 
 Live path：
 
@@ -173,7 +237,7 @@ Refresh path：
 
 目标状态下，live run 和 refresh run 不能因为入口不同而产生不同的 `currentRun.id` 语义。
 
-## 10. 兼容策略
+## 11. 兼容策略
 
 允许短期兼容：
 
@@ -194,7 +258,7 @@ Refresh path：
 
 兼容读取只服务历史数据和迁移窗口，不能成为新数据写入规范。
 
-## 11. 禁止写法
+## 12. 禁止写法
 
 禁止：
 
@@ -212,7 +276,7 @@ Refresh path：
 - service / store 边界层为 pending run 使用 `clientRunId`。
 - UI 使用 `displayRunId`。
 
-## 12. 分阶段治理计划
+## 13. 分阶段治理计划
 
 Phase 2B-1：ID 契约文档冻结
 
@@ -256,10 +320,13 @@ Phase 2D：Report / Usage / Source 持久化关系收敛
 
 Phase 2E：旧兼容清理
 
-- 逐步删除旧 `runtimeRunId` 兜底路径。
-- 保留必要历史数据读取兼容。
+- Phase 2E-2A 先补充 ID 迁移字段退出条件文档。
+- Phase 2E-3 优先删除已冗余的 `canonicalRunId`。
+- Phase 2E-4 将 `runtimeRunId` 收口到后端幂等、pending / `run_reused` 和 mapper / backend 兼容边界。
+- Phase 2E-5 清理 `metadata.runtimeRunId` 新写入和旧兜底策略。
+- 保留必要历史数据读取兼容，直到替代策略明确。
 
-## 13. 验收标准
+## 14. 验收标准
 
 - live run 和 refresh run 的 `currentRun.id` 都指向 `agent_runs.id`。
 - `clientRunId` 独立字段存在，只用于 pending / idempotency。
@@ -271,7 +338,7 @@ Phase 2E：旧兼容清理
 - 旧数据仍可通过兼容读取。
 - Evaluation 继续后置，不继承当前 ID 双轨。
 
-## 14. 面试解释口径
+## 15. 面试解释口径
 
 ID 契约治理是为了让 Trace、Report、Source、Usage、Evaluation 都能指向同一次 Agent Run，而不是各自维护不同的执行 ID。
 
