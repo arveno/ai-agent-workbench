@@ -1,31 +1,8 @@
 # Architecture
 
-本文档说明 AI Agent Workbench 的项目架构、模块职责、数据流、状态边界和前后端边界。
+本文档只定义 AI Agent Workbench 的架构分层、模块职责、数据流和前后端边界。生命周期主线见 `docs/agent-run-lifecycle.md`，ID 语义见 `docs/id-contract.md`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`。
 
-AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。核心对象与 ID 契约见 `docs/id-contract.md`。Source / RAG Lineage 契约见 `docs/source-lineage.md`。Tool Registry / Tool Governance 契约见 `docs/tool-governance.md`。
-
-本文档只描述架构设计、模块职责、数据流和前后端边界，不重复完整生命周期，不描述 Codex 执行规则，不描述协作流程，不写具体部署教程。
-
-## 1. 总体架构
-
-AI Agent Workbench 是一个面向 AI 应用场景的前端工作台。
-
-核心链路：
-
-```text
-用户输入
-  -> Conversation / Message
-  -> Agent Run
-  -> Tool Calling
-  -> Model Gateway
-  -> Run Trace
-  -> Report / RAG Source
-  -> 持久化恢复
-```
-
-项目重点不是单纯聊天 UI，而是把 AI 任务的执行、观测、结果沉淀和状态恢复组织成完整应用链路。
-
-## 2. 主运行链路
+## 1. 主链路
 
 当前运行链路：
 
@@ -43,60 +20,64 @@ EdgeOne / Vite
 selectedModelId
   -> model catalog
   -> _shared/modelGateway.js
-  -> SiliconFlow / Zhipu
+  -> provider client
   -> modelTrace / tokenUsage / latency / fallbackReason
 ```
 
-当前模型选项：
+前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
+
+## 2. 核心执行链路
 
 ```text
-mock-agent
-siliconflow-qwen-free
-siliconflow-glm-free
-zhipu-glm-flash-free
+User Input
+  -> Conversation / Message
+  -> Agent Run
+  -> Tool Invocation
+  -> Model Gateway
+  -> Run Trace
+  -> Response
+  -> Report / Source
+  -> Persistence
 ```
 
-## 2.1 架构与生命周期关系
+Agent Run 是执行中心。Chat、Run Trace、Report、Source Panel、Evaluation、Usage 必须围绕同一 Run 关系组织，具体 ID 契约以 `docs/id-contract.md` 为准。
 
-架构模块必须服务 `docs/agent-run-lifecycle.md` 中的 AI Agent Enterprise Lifecycle 主线：
+## 3. 数据分层
 
-- CloudBase Function 对应服务端安全边界、模型调用、工具调用、数据库访问和 Agent Run 编排。
-- service 对应前端 API 请求，只负责调用后端能力和处理响应边界。
-- store 对应业务状态，维护当前 conversation / message / run / artifact 等状态。
-- mapper / reducer 对应 Raw -> Canonical，负责数据归一和状态合并。
-- ViewModel 对应 UI 消费模型，负责把 Canonical 转成展示结构。
-- component 只展示 ViewModel 和触发 action，不直接消费 raw payload，不拼接业务结论。
-- conversation / message / run / report / source / usage / evaluation 的 ID 语义必须遵守 `docs/id-contract.md`。
-- knowledge_search、RAG sources、citations、report sources、retrieval 和 source persistence 必须遵守 `docs/source-lineage.md`。
-- 工具定义、工具参数、Tool Invocation、Run Trace 工具展示和前端工具库必须遵守 `docs/tool-governance.md`。
+所有业务展示数据必须走：
 
-## 3. 前端模块职责
+```text
+Raw -> Canonical -> ViewModel -> UI
+```
+
+分层要求：
+
+- Raw：后端响应、SSE event、tool raw input / output、debug payload。
+- Canonical：mapper / reducer 产出的标准业务对象。
+- ViewModel：UI 可直接消费的展示模型。
+- UI：component 只展示 ViewModel 并触发 action。
+
+约束：
+
+- raw 数据只能进入 debug / rawText / 日志 / 调试详情。
+- component 不解析 raw JSON，不清洗 markdown，不拼接业务结论。
+- 同源数据只能标准化一次。
+- Chat、Run Trace、Report、Source Panel 不得各自维护 formatter / parser。
+
+## 4. 前端模块职责
 
 ### `src/components`
 
-负责页面展示和用户交互：
-
-- Layout
-- Sidebar
-- Chat
-- Composer
-- Model Selector
-- Right Panel
-- Run Trace
-- Report UI
-- Source / Inspector
-
-组件只消费 ViewModel 和触发 action。  
-组件层限制见 `AGENTS.md`。
+展示 ViewModel 和触发交互。组件层限制以 `AGENTS.md` 为准。
 
 ### `src/services`
 
 负责前端 API 请求：
 
-- 调用 CloudBase HTTP Functions
-- 组织请求参数
-- 处理响应边界
-- 暴露语义明确的请求函数
+- 调用 CloudBase HTTP Functions。
+- 组织请求参数。
+- 处理响应边界。
+- 暴露语义明确的请求函数。
 
 ### `src/stores`
 
@@ -112,66 +93,57 @@ zhipu-glm-flash-free
 
 ### `src/utils`
 
-负责纯函数工具、数据转换、mapper、ViewModel builder。
+负责纯函数工具、mapper、reducer helper、ViewModel builder。
 
 ### `src/types`
 
-负责类型定义：
-
-- API DTO
-- domain model
-- ViewModel
-- run / message / report / source 相关类型
+负责 API DTO、domain model、ViewModel、run / message / report / source 相关类型。
 
 ### `scripts`
 
-负责本地工程化能力：
+负责本地工程化脚本。CloudBase 打包、部署和 smoke 边界见 `docs/cloudbase-functions-deploy.md`。
 
-- CloudBase 函数打包
-- 包结构检查
-- 部署后 smoke test
-
-## 4. 后端函数职责
+## 5. 后端函数职责
 
 ### `auth-me`
 
-负责当前用户识别和 profile 映射。
+当前用户识别和 profile 映射。
 
-### `demo-tasks`
+### `demo-tasks` / `demo-conversations`
 
-负责返回预置任务数据。
-
-### `demo-conversations`
-
-负责返回预置会话数据。
+公开 demo 读取类数据。
 
 ### `workbench-conversations`
 
-负责私有 conversation 的创建、读取和更新。
+私有 conversation 的创建、读取和更新。
 
 ### `workbench-messages`
 
-负责 message 的写入和读取。
+message 的写入和读取。
 
 ### `workbench-reports`
 
-负责 report artifact 的生成状态、保存和读取。
+report artifact 的生成状态、保存和读取。
 
 ### `workbench-demo-copy`
 
-负责将预置内容复制到用户私有空间。
+将预置内容复制到用户私有空间。
 
 ### `workbench-quota`
 
-负责 quota / usage 状态读取。
+quota / usage 状态读取。
 
 ### `workbench-runs`
 
-负责读取 Agent Run、Run Events 和 Tool Invocations。
+读取 Agent Run、Run Events、Tool Invocations 和标准化运行快照。
+
+### `workbench-evaluations`
+
+Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。
 
 ### `workbench-agent-run-stream`
 
-负责 Agent Run SSE 主链路：
+Agent Run SSE 主链路：
 
 ```text
 Auth
@@ -186,8 +158,9 @@ Run Persistence
 SSE Events
 ```
 
-这是当前后端最高风险函数，涉及 Auth、MySQL、Model Gateway、工具链、RAG、报告和 SSE。
-其中工具链属于服务端受控工具治理范围，正式工具、参数边界、Tool Invocation 和 Run Trace 展示必须对齐 `docs/tool-governance.md`。
+该函数承担服务端安全边界、模型调用、工具调用、RAG、报告状态和 SSE 编排。工具定义、参数边界和 Tool Invocation 必须遵守 `docs/tool-governance.md`。
+
+## 6. 共享后端模块
 
 ### `_shared/auth.js`
 
@@ -211,99 +184,23 @@ selectedModelId
   -> tokenUsage / latency / fallbackReason
 ```
 
-## 5. 核心数据关系
+## 7. 核心对象关系
 
-核心实体：
-
-```text
-Conversation
-Message
-Agent Run
-Run Event
-Tool Invocation
-Report Artifact
-Knowledge Document
-Knowledge Chunk
-Quota / Usage
-```
-
-关系：
+架构层只描述对象关系，不定义字段契约：
 
 ```text
 Conversation
-  -> Messages
-  -> Agent Runs
-  -> Run Events
-  -> Tool Invocations
-  -> Report Artifacts
-  -> RAG Sources
-```
-
-基本原则：
-
-- message 应能关联 runId。
-- run 属于 conversation。
-- report 应能关联 conversation / run。
-- Run Trace 基于 run events 和 tool invocations。
-- RAG 来源基于 knowledge documents / chunks。
-- Source lineage 归属 Persistence / Lineage，目标契约详见 `docs/source-lineage.md`。
-- quota / usage 与 Agent Run 执行相关。
-- ID 契约详见 `docs/id-contract.md`，本文只描述对象关系和架构边界，不重复完整 ID 契约。
-
-## 5.1 当前优先治理的架构风险
-
-以下是当前优先关注的架构风险，不在本文档展开为项目计划：
-
-- `runId` / `clientRunId` / `runtimeRunId` 三轨混用；迁移期字段必须逐步收敛，不能长期扩散到 component / ViewModel / 业务逻辑。
-- 前后端 model catalog 双事实源。
-- Tool Registry 前端展示与服务端白名单漂移。
-- conclusion / report / evaluation formatter 分散。
-- Source / Lineage 不完整，后续治理必须先对齐 `docs/source-lineage.md`。
-- Report 前端生成与 artifact 归属需要收口。
-
-## 6. Agent Run 链路
-
-典型链路：
-
-```text
-用户输入
-  -> conversation / message
+  -> Message
   -> Agent Run
-  -> intent / capability
-  -> tool chain
-  -> schema inspect
-  -> aggregate / chart / knowledge_search
-  -> modelGateway
-  -> conclusion
-  -> report_pending
-  -> run_completed / run_failed
+  -> Run Event
+  -> Tool Invocation
+  -> Report Artifact
+  -> Source
+  -> Usage
+  -> Evaluation
 ```
 
-Agent Run 通过 SSE 返回执行过程。  
-Run Trace 负责展示执行步骤、工具调用、模型状态和结果摘要。
-
-## 7. Model Gateway 链路
-
-模型调用链路：
-
-```text
-selectedModelId
-  -> catalog lookup
-  -> provider
-  -> model
-  -> apiKeyEnv
-  -> timeout
-  -> provider request
-  -> model result
-  -> tokenUsage
-  -> latencyMs
-  -> fallbackReason
-  -> modelErrorType
-```
-
-前端只传 `selectedModelId`。  
-provider / model / apiKeyEnv 由后端 catalog 决定。  
-模型 Key 不进入前端。
+字段、主外键和 ID 禁止项以 `docs/id-contract.md` 为准。Source / retrieval 关系以 `docs/source-lineage.md` 为准。
 
 ## 8. Run Trace
 
@@ -324,52 +221,9 @@ modelErrorType
 conclusion summary
 ```
 
-raw payload 只应进入调试详情或可展开区域。
+raw payload 只进入调试详情或可展开区域。工具展示字段和工具名以 `docs/tool-governance.md` 为准。
 
-## 9. Report
-
-Report 是 Agent Run 之后的结果沉淀。
-
-建议关联：
-
-```text
-conversationId
-runId
-status
-contentMarkdown
-metadata
-```
-
-报告链路需要避免：
-
-- conversation 级别和 run 级别状态分裂。
-- 生成 / 跳过后确认卡重复出现。
-- 刷新后重复弹出确认。
-- Chat / Run Trace / Report 各自维护结论副本。
-
-## 10. RAG
-
-Source / RAG Lineage 目标契约见 `docs/source-lineage.md`，本节只描述架构层展示原则。
-
-RAG 相关数据：
-
-```text
-knowledge_documents
-knowledge_chunks
-knowledge_search tool event
-source score
-citation / source marker
-noSourceReason
-```
-
-RAG 展示原则：
-
-- 来源必须可解释。
-- 无来源时必须明确说明。
-- fallback 来源不能伪装成真实来源。
-- Chat 和 Source Panel 应消费统一来源数据。
-
-## 11. 安全边界
+## 9. 安全边界
 
 前端禁止：
 
@@ -390,36 +244,4 @@ RAG 展示原则：
 - 模型调用。
 - 数据库访问。
 
-服务端受控工具链的正式工具清单、展示边界和参数治理以 `docs/tool-governance.md` 为准。前端工具库、Workflow 工具说明和 Run Trace formatter 不应维护独立工具事实源。
-
 模型只负责生成或规划，不拥有直接执行权限。
-
-## 12. 工程化脚本
-
-当前本地工程脚本：
-
-```text
-cloudbase:package
-cloudbase:check
-cloudbase:smoke
-```
-
-用途：
-
-- 生成 CloudBase 函数上传包。
-- 检查包结构。
-- 检查 `_shared` 是否正确复制。
-- 检查 `scf_bootstrap`。
-- 部署后验证接口、Auth、MySQL、Report、Agent SSE、Model Gateway。
-
-本地推荐打包目录：
-
-```text
-.cloudbase-packages/
-```
-
-具体使用方式见：
-
-```text
-docs/cloudbase-functions-deploy.md
-```

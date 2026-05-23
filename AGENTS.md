@@ -1,58 +1,33 @@
 # AGENTS.md
 
-本文件是 AI Agent Workbench 项目的 Codex / AI Coding Agent 执行规则。  
-只写代码生成硬约束，不写完整架构、不写协作流程、不写部署教程。
+本文件只定义 Codex / AI Coding Agent 在本仓库执行代码任务时必须遵守的硬规则。
 
-## 1. 项目上下文
+## 1. 必读事实源
 
-本项目是 AI 应用前端工作台 / Agent Workbench。
+改动前按任务范围读取对应文档：
 
-当前主链路：
+- 生命周期归位：`docs/agent-run-lifecycle.md`
+- 核心对象与 ID：`docs/id-contract.md`
+- Source / RAG lineage：`docs/source-lineage.md`
+- 工具治理：`docs/tool-governance.md`
+- 架构分层与数据流：`docs/architecture.md`
+- 协作、门禁与验收：`docs/workflow.md`
+- CloudBase 函数部署：`docs/cloudbase-functions-deploy.md`
 
-```text
-EdgeOne / Vite -> CloudBase Auth -> CloudBase HTTP Functions -> CloudBase MySQL
-```
+如果任务说明、聊天上下文或临时指令与仓库文档冲突，必须停止并报告冲突。需要改变长期契约时，先更新对应事实源文档，再改代码。
 
-当前模型链路：
+## 2. 默认执行原则
 
-```text
-selectedModelId -> model catalog -> _shared/modelGateway.js -> SiliconFlow / Zhipu
-```
-
-### 必读文档
-
-- `docs/agent-run-lifecycle.md`：AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT，功能归位和新功能接入的最高主线。
-- `docs/id-contract.md`：核心对象与 ID 契约，约束 conversation / message / run / report / source / usage / evaluation 的 ID 语义。
-- `docs/source-lineage.md`：Source / RAG Lineage 契约，约束 knowledge_search、RAG sources、citations、report sources、retrieval 和 source persistence。
-- `docs/tool-governance.md`：Tool Registry / Tool Governance 契约，约束工具定义、参数治理、Tool Invocation、Run Trace 和前端工具展示。
-- `docs/architecture.md`：架构、模块职责、数据流、前后端边界。
-- `docs/workflow.md`：协作流程、只读审查、验收、提交规范。
-- `docs/cloudbase-functions-deploy.md`：CloudBase 打包、上传、smoke test。
-
-AI Agent Enterprise Lifecycle 约束：
-
-- Codex 改功能前必须先判断生命周期位置和核心对象绑定。
-- 涉及 conversation / message / run / report / source / usage / evaluation ID 的修改，必须先遵守 `docs/id-contract.md`。
-- 涉及 Source / RAG lineage 的修改，必须先遵守 `docs/source-lineage.md`。
-- 涉及工具定义、工具参数、Tool Invocation、Run Trace 工具展示或前端工具库的修改，必须先遵守 `docs/tool-governance.md`。
-- 涉及 ID 契约本身变更，必须先修改并提交 `docs/id-contract.md`，再改代码。
-- 如果任务说明、聊天上下文或临时指令与项目文档冲突，Codex 必须停止并报告冲突，不得用临时指令覆盖文档事实源；需要改变长期规则时，必须先更新对应文档。
-- 新功能必须围绕 AI Agent Enterprise Lifecycle 接入，不允许只按局部页面或组件自由扩展。
-- 如果具体实现和 AI Agent Enterprise Lifecycle 主线冲突，先停止并汇报，不允许直接写代码。
-
-## 2. 代码生成原则
-
-必须遵守：
-
-- 企业级代码质量，但不是企业级规模。
-- 简洁、易读、单链单轨、职责清晰。
+- 默认单轨实现，不新增兼容链。
+- 不保留新旧链路并存。
 - 不做无关重构。
 - 不新增无关依赖。
 - 不做过度抽象。
-- 不保留多套实现。
-- 不做只遮盖问题的临时修复。
-- 不长期保留旧兼容逻辑。
+- 不引入无意义 manager / engine / factory / adapter。
+- 不用临时兜底遮盖主链路问题。
 - 死代码、废弃代码、冗余代码、旧兼容代码默认删除。
+- 当前主链路不需要的代码默认删除。
+- 旧兼容逻辑确实暂时不能删除时，必须说明原因、影响范围和删除条件。
 
 处理顺序：
 
@@ -60,12 +35,26 @@ AI Agent Enterprise Lifecycle 约束：
 先删除确定无用代码 -> 再合并重复逻辑 -> 再收敛职责边界 -> 最后调整目录结构
 ```
 
-## 3. 职责边界
+## 3. 生命周期门禁
+
+任何功能变更前必须判断：
+
+- 属于 `docs/agent-run-lifecycle.md` 的哪个生命周期节点。
+- 绑定哪些核心对象。
+- 是否涉及 conversation / message / run / report / source / usage / evaluation ID。
+- 是否涉及 Source / RAG lineage。
+- 是否涉及工具定义、工具参数、Tool Invocation、Run Trace 或前端工具展示。
+- 是否会新增多轨实现、重复状态、重复字段、重复 formatter。
+
+涉及 ID、Source 或 Tool 的细节不得在代码任务中临时决定，必须遵守对应契约文档。
+
+## 4. 职责边界
 
 - CloudBase Function：Auth、数据库访问、模型调用、工具调用、Agent Run 编排。
 - service：前端 API 请求。
 - store：业务状态。
 - mapper / reducer：数据归一和状态合并。
+- ViewModel：UI 展示模型。
 - component：展示 ViewModel 和触发交互。
 - utils：纯函数工具。
 - scripts：本地工程化脚本。
@@ -79,23 +68,21 @@ AI Agent Enterprise Lifecycle 约束：
 - 判断复杂 provider / fallback / modelErrorType。
 - 维护重复业务状态。
 
-## 4. 数据链路
+component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 raw payload。
 
-所有业务展示数据必须走：
+## 5. 数据链路
 
-```text
-Raw -> Canonical -> ViewModel -> UI
-```
+业务展示数据分层以 `docs/architecture.md` 为准。
 
-要求：
+硬性要求：
 
+- component 只能消费 ViewModel。
 - raw 数据只能进入 debug / rawText / 日志 / 调试详情。
 - UI 主视图不能直接消费 raw payload。
-- Chat、Run Trace、Report、Source Panel 应消费同一份标准化数据。
 - 同源数据只能标准化一次。
 - 不允许多个组件各自 formatter / parse / clean 同一份数据。
 
-## 5. Model Gateway
+## 6. Model Gateway
 
 模型调用必须走：
 
@@ -106,7 +93,7 @@ selectedModelId -> model catalog -> _shared/modelGateway.js -> provider client
 要求：
 
 - 前端只传 `selectedModelId`。
-- 前端不能出现模型 API Key、baseURL、provider 密钥配置。
+- 前端不得出现模型 API Key、baseURL、provider 密钥配置。
 - 后端通过 catalog 白名单解析 provider / model / apiKeyEnv。
 - 真实模型调用统一走 `_shared/modelGateway.js`。
 
@@ -117,7 +104,7 @@ selectedModelId -> model catalog -> _shared/modelGateway.js -> provider client
 - 恢复前端 provider / model 透传链路。
 - 绕过 modelGateway 直接调用模型。
 
-## 6. Mock / Real / Fallback
+## 7. Mock / Real / Fallback
 
 必须区分：
 
@@ -130,9 +117,9 @@ selectedModelId -> model catalog -> _shared/modelGateway.js -> provider client
 - Fallback 不能伪装成真实模型结果。
 - UI 必须能区分 `conclusionSource`。
 - Run Trace 必须展示 `fallbackReason` / `modelErrorType`。
-- Chat、Run Trace、Report 不应各自解释不同结论来源。
+- Chat、Run Trace、Report 不得各自解释不同结论来源。
 
-## 7. 状态一致性
+## 8. 状态一致性
 
 关键字段：
 
@@ -152,11 +139,11 @@ selectedModelId
 - 重复扣 quota。
 - 切换会话后旧响应落入新会话。
 
-## 8. 配置与部署边界
+## 9. 配置与部署
 
-凡是影响运行结果的配置，都必须有明确事实源，不能只存在于脚本硬编码或控制台记忆中。
+影响运行结果的配置必须有明确事实源，不能只存在于脚本硬编码或控制台记忆中。
 
-包括但不限于：
+包括：
 
 - CloudBase envId
 - HTTP 访问服务 domain / route
@@ -169,52 +156,11 @@ selectedModelId
 要求：
 
 - 部署脚本只能作为执行器，不能成为云端资源配置的唯一事实源。
-- 路由、环境变量、函数清单、部署域名等配置必须来自显式参数、配置文件或文档化清单。
+- 路由、环境变量、函数清单、部署域名来自显式参数、配置文件或文档化清单。
 - 不允许脚本静默猜测 envId、domain、route、runtime 或函数类型。
 - 不允许把“函数代码上传成功”描述成“完整部署成功”。
-- 部署完成后必须区分：
-  - 函数代码是否已上传
-  - HTTP 路由是否已绑定到正确 domain
-  - 函数环境变量是否已配置
-  - 接口是否通过 curl / smoke test 验证
-- 如果某项云端配置暂时不能自动化，必须在输出中明确列为人工操作项和验证步骤。
-- 敏感值不能写入仓库；可以提交环境变量名称、配置模板和检查规则。
-- SQL / migration / seed 必须保留仓库文件作为事实源，执行方式可以是数据库客户端或后续自动化脚本。
-
-禁止：
-
-- 在部署脚本中长期硬编码业务路由、域名或环境配置。
-- 控制台手动配置后不记录、不提示、不校验。
-- 多处维护同一份函数清单、路由清单或 shared 文件依赖。
-- 依赖交互式选择环境完成部署。
-- 部署脚本成功退出但实际接口不可访问。
-
-## 9. 代码干净度
-
-必须主动识别并清理：
-
-- dead-code
-- deprecated-code
-- redundant-code
-- legacy-compat
-- temp-debug-code
-- duplicate-logic
-- misplaced-responsibility
-- raw-data-leak
-- unused-style
-- unused-asset
-- unused-dependency
-- config-drift：本地配置、部署脚本、文档和云端实际状态不一致。
-- deploy-drift：函数代码已更新，但路由、环境变量、runtime、HTTP 访问域名或 smoke test 未同步验证。
-- doc-drift
-
-处理原则：
-
-- 当前主链路不需要的代码，默认删除。
-- 重复逻辑默认合并。
-- 组件内处理 raw 数据，默认收敛到 mapper / ViewModel。
-- 新旧链路并存，默认删除旧链路。
-- 旧兼容代码不能长期保留；如确实暂时不能删，必须说明原因、影响范围和删除条件。
+- 敏感值不能写入仓库。
+- SQL / migration / seed 必须保留仓库文件作为事实源。
 
 ## 10. 固定禁止项
 
@@ -228,7 +174,6 @@ selectedModelId
 - 恢复旧 Provider / Groq / Supabase / Vercel runtime。
 - 新旧链路并存。
 - UI 主视图消费 raw payload。
-- 引入无意义 manager / engine / factory / adapter。
 - 未经要求修改 README / docs / package.json / pnpm-lock.yaml。
 - 未经确认把云端控制台配置写死到脚本里。
 - 部署脚本静默猜测 envId、domain、HTTP route 或函数类型。
