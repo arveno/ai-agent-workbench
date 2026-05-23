@@ -72,10 +72,6 @@ export function getModelProviderMetadata(
   return MODEL_PROVIDER_METADATA[providerId];
 }
 
-export function getModelProviderList(): ModelProviderMetadata[] {
-  return MODEL_PROVIDER_IDS.map((providerId) => getModelProviderMetadata(providerId));
-}
-
 export function isModelProviderId(value: string): value is ModelProviderId {
   return MODEL_PROVIDER_IDS.includes(value as ModelProviderId);
 }

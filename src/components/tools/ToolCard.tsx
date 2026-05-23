@@ -2,7 +2,12 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import type { WorkbenchToolDefinition } from '../../types/workbench';
-import { getToolRiskLabel, getToolRuntimeLabel, getToolStatusLabel } from '../../utils/toolRegistryView';
+import {
+  getToolCategoryLabel,
+  getToolRiskLabel,
+  getToolRuntimeLabel,
+  getToolStatusLabel,
+} from '../../utils/toolRegistryView';
 
 interface ToolCardProps {
   tool: WorkbenchToolDefinition;
@@ -52,30 +57,6 @@ function getRuntimeClassName(runtime: WorkbenchToolDefinition['runtime']): strin
   return 'tool-library-badge tool-library-badge-disabled';
 }
 
-function getCategoryLabel(category: WorkbenchToolDefinition['category']): string {
-  if (category === 'schema') {
-    return 'Schema 工具';
-  }
-
-  if (category === 'query') {
-    return '查询工具';
-  }
-
-  if (category === 'analysis') {
-    return '分析工具';
-  }
-
-  if (category === 'render') {
-    return '可视化工具';
-  }
-
-  if (category === 'knowledge') {
-    return '知识工具';
-  }
-
-  return '报告工具';
-}
-
 export function ToolCard({ tool }: ToolCardProps) {
   return (
     <Card size="sm" className="tool-library-card">
@@ -96,7 +77,7 @@ export function ToolCard({ tool }: ToolCardProps) {
 
         <div className="tool-library-tag-row" aria-label="工具属性">
           <Badge variant="outline" className="tool-library-badge tool-library-badge-category">
-            {getCategoryLabel(tool.category)}
+            {getToolCategoryLabel(tool.category)}
           </Badge>
           <Badge variant="outline" className={getRuntimeClassName(tool.runtime)}>
             {getToolRuntimeLabel(tool.runtime)}

@@ -405,8 +405,8 @@ function getModelObservation(summary) {
   const modelTrace = payload.modelTrace || {};
   const observation = {
     selectedModelId: payload.selectedModelId ?? modelTrace.selectedModelId ?? null,
-    provider: payload.provider ?? payload.modelProvider ?? modelTrace.provider ?? null,
-    model: payload.model ?? payload.modelName ?? modelTrace.model ?? null,
+    provider: payload.provider ?? modelTrace.provider ?? null,
+    model: payload.model ?? modelTrace.model ?? null,
     tokenUsage: payload.tokenUsage ?? modelTrace.tokenUsage ?? null,
     latencyMs: payload.latencyMs ?? modelTrace.latencyMs ?? null,
     fallbackReason: payload.fallbackReason ?? modelTrace.fallbackReason ?? null,

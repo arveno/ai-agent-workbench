@@ -3,8 +3,6 @@ import { createRunReportArtifact, fetchConversationReportArtifacts } from '../..
 import {
   fetchLatestRunBundleForConversation,
   fetchRunBundle,
-  fetchRunEvents,
-  fetchToolInvocations,
 } from '../../services/runPersistenceApi';
 import type { ReportArtifactRecord } from '../../types/persistence';
 import type {
@@ -19,7 +17,6 @@ import type {
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
 import { runEventsRecordToRunEvents, runPersistenceRecordsToSnapshot } from '../../utils/runPersistenceMapper';
 import { applyRunEventToSnapshot } from '../../utils/runReducer';
-import { toolInvocationRecordToRunTool } from '../../utils/toolInvocationMapper';
 import { getSessionLatestRun, initialWorkbenchState, persistWorkbenchSessions, upsertRunIntoSessions } from './shared';
 import { useAuthStore } from '../authStore';
 
@@ -723,75 +720,6 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         ragSourcesError: null,
         currentReportRunId: getReportRunId(syncedRun),
         reportActionState: getReportActionState(syncedRun.reportState),
-      };
-    });
-  },
-
-  loadRunEvents: async (runId) => {
-    const accessToken = getAccessToken();
-
-    if (!accessToken) {
-      return;
-    }
-
-    set({
-      isRunEventsLoading: true,
-      runEventsError: null,
-    });
-
-    const result = await fetchRunEvents(runId);
-
-    if (!result.ok) {
-      set({
-        isRunEventsLoading: false,
-        runEventsError: result.message,
-      });
-      return;
-    }
-
-    set({
-      runEventLog: runEventsRecordToRunEvents(result.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH),
-      isRunEventsLoading: false,
-      runEventsError: null,
-    });
-  },
-
-  loadToolInvocations: async (runId) => {
-    const accessToken = getAccessToken();
-
-    if (!accessToken) {
-      return;
-    }
-
-    const result = await fetchToolInvocations(runId);
-
-    if (!result.ok) {
-      set({
-        runEventsError: result.message,
-      });
-      return;
-    }
-
-    const tools = result.data.tools.map((tool) => toolInvocationRecordToRunTool(tool));
-
-    set((state) => {
-      if (!state.currentRun || state.currentRun.id !== runId) {
-        return {
-          runEventsError: null,
-        };
-      }
-
-      const nextRun: RunSnapshot = {
-        ...state.currentRun,
-        toolInvocations: tools,
-        updatedAt: new Date().toISOString(),
-      };
-      const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, nextRun);
-
-      return {
-        currentRun: nextRun,
-        sessions: nextSessions,
-        runEventsError: null,
       };
     });
   },

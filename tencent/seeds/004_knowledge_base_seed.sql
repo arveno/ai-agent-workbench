@@ -63,9 +63,9 @@ INSERT INTO knowledge_chunks (
   ('kb-chunk-quota-002', 'kb-doc-quota', 2, 'fallback 原则', 'fallback 表示服务端明确说明某个环节不可用或模型失败，不能把 fallback 结果伪装成真实模型输出。', JSON_ARRAY('fallback', '模型失败', 'model_forbidden', 'model_not_configured'), JSON_OBJECT('source', 'seed')),
   ('kb-chunk-quota-003', 'kb-doc-quota', 3, '幂等保护', 'Agent Run 使用 user_id + clientRunId 做幂等保护，并依赖数据库唯一约束避免并发重复创建 run 或重复扣 quota。', JSON_ARRAY('幂等', 'clientRunId', 'quota', '唯一约束'), JSON_OBJECT('source', 'seed')),
 
-  ('kb-chunk-cloudbase-001', 'kb-doc-cloudbase', 1, 'CloudBase 单轨主线', '当前迁移目标是让 CloudBase 成为默认 Auth、API、MySQL 和 Agent Run 主线，Vercel/Supabase legacy 仅作为迁移期回滚路径保留。', JSON_ARRAY('CloudBase', 'Auth', 'MySQL', 'legacy'), JSON_OBJECT('source', 'seed')),
+  ('kb-chunk-cloudbase-001', 'kb-doc-cloudbase', 1, 'CloudBase 单轨主线', 'CloudBase 是当前默认 Auth、API、MySQL 和 Agent Run 单轨主线；真实 Agent Run 通过 CloudBase Functions 访问受控数据源并写入 Run Trace。', JSON_ARRAY('CloudBase', 'Auth', 'MySQL', 'Agent Run'), JSON_OBJECT('source', 'seed')),
   ('kb-chunk-cloudbase-002', 'kb-doc-cloudbase', 2, '本地开发代理', '本地开发可使用 Vite proxy 将 /api 代理到 CloudBase HTTP Function 域名，避免 localhost 直接跨域请求 CloudBase 产生 CORS。', JSON_ARRAY('Vite proxy', 'CORS', 'CLOUDBASE_PROXY_TARGET'), JSON_OBJECT('source', 'seed')),
-  ('kb-chunk-cloudbase-003', 'kb-doc-cloudbase', 3, '私有 API token', 'CloudBase private API 必须使用 CloudBase access_token，不应混用 Supabase token。公开 demo templates 可以不带 token 读取。', JSON_ARRAY('access_token', 'private API', 'Supabase token'), JSON_OBJECT('source', 'seed')),
+  ('kb-chunk-cloudbase-003', 'kb-doc-cloudbase', 3, '私有 API token', 'CloudBase private API 必须使用 CloudBase access_token；公开 demo templates 可以不带 token 读取，私有 workbench API 必须通过 CloudBase Auth。', JSON_ARRAY('access_token', 'private API', 'CloudBase Auth'), JSON_OBJECT('source', 'seed')),
 
   ('kb-chunk-rag-001', 'kb-doc-rag', 1, 'RAG 检索范围', '当前 CloudBase RAG 是受控 MySQL 检索，不接外部向量库。knowledge_search 只读取启用的 demo/system 知识文档和 chunks。', JSON_ARRAY('RAG', 'knowledge_search', 'knowledge_documents', 'knowledge_chunks'), JSON_OBJECT('source', 'seed')),
   ('kb-chunk-rag-002', 'kb-doc-rag', 2, 'RAG 匹配方式', 'knowledge_search 根据用户问题提取关键词，在 chunk title、content 和 keywords 中做简单评分，返回 top 3-5 个知识片段。', JSON_ARRAY('关键词', '评分', 'topK', 'keywords'), JSON_OBJECT('source', 'seed')),

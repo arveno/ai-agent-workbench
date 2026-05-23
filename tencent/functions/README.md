@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存腾讯云迁移阶段的 CloudBase HTTP Function 草案。当前包含低风险 demo templates 只读接口、Tencent-09A 的正式 CloudBase Auth helper 验证入口、Tencent-10C/Tencent-13 的 conversations / messages / reports / demo-copy / quota 基础闭环验证函数，以及 Agent Run 流式验证函数。Tencent-21 保留固定 `basic` 验证路径，并将 `workbench-agent-run-stream` 的 `real` data tools 改为直接读取 CloudBase MySQL `teaching_metrics`；Tencent-22 新增轻量 `_shared/modelGateway.js`，Phase 0 后当前模型链路通过 catalog 白名单调用 SiliconFlow / Zhipu OpenAI-compatible API。现阶段不替换前端 Auth store，也不删除旧 Vercel / Supabase 代码。
+本目录保存当前 CloudBase HTTP Functions 实现。当前包含公开 demo templates 只读接口、CloudBase Auth helper、conversations / messages / reports / demo-copy / quota / runs 基础闭环函数，以及 Agent Run 流式函数。`workbench-agent-run-stream` 的 `real` data tools 直接读取 CloudBase MySQL `teaching_metrics` 和 `knowledge_documents` / `knowledge_chunks`；模型链路通过前端 `selectedModelId`、服务端 catalog 白名单和 `_shared/modelGateway.js` 调用 SiliconFlow / Zhipu OpenAI-compatible API。
 
 ## 函数
 
@@ -203,7 +203,7 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-agent-run-stream` 的 `real` 模式不再需要 PostgreSQL / Supabase 数据库连接串。CloudBase MySQL 访问由函数运行时通过 `@cloudbase/node-sdk` 和 `app.rdb()` 完成。当前模型链路由前端 `selectedModelId` 进入 `_shared/modelGateway.js`，通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
+`workbench-agent-run-stream` 的 `real` 模式通过 CloudBase 函数运行时、`@cloudbase/node-sdk` 和 `app.rdb()` 访问 CloudBase MySQL。当前模型链路由前端 `selectedModelId` 进入 `_shared/modelGateway.js`，通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
 所有依赖 `_shared/mysql.js` 的函数都需要先在 CloudBase 函数环境变量中配置 `CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d`；EdgeOne 不需要也不应配置该变量。
 
@@ -223,7 +223,7 @@ ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
 MODEL_GATEWAY_TIMEOUT_MS=30000
 ```
 
-模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 不再读取 `POSTGRES_CONNECTION_STRING` 或 `SUPABASE_DB_CONNECTION_STRING`。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
+模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -244,7 +244,7 @@ pnpm start
 curl -i http://127.0.0.1:9000/
 ```
 
-成功响应格式应与现有 Vercel API 兼容：
+成功响应格式应与当前 CloudBase HTTP API 契约一致：
 
 ```json
 { "ok": true, "data": { "tasks": [] } }
@@ -356,13 +356,13 @@ curl -N -i -X POST \
   https://<your-domain>/api/agent/run/stream
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 数据分析问题应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `modelProvider`、`modelName`、`modelErrorType`、`modelHttpStatus`。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `003_agent_run_idempotency.sql` 已先执行。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 数据分析问题应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `provider`、`model`、`modelErrorType`、`modelHttpStatus`。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `007_agent_runs_client_run_id.sql` 已先执行。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
 
 ## 安全说明
 
 - `demo-tasks` 和 `demo-conversations` 是公开只读接口，不读取 token，不做身份认证。
 - `auth-me` 必须开启 CloudBase HTTP 路由身份认证；它会读取 Bearer token payload，并可能创建 `app_profiles`。
-- `auth-me` 是正式 Auth helper 验证入口，不是旧 POC 函数，当前暂不改前端 Auth store。
+- `auth-me` 是正式 Auth helper 验证入口，不是旧 POC 函数。
 - `workbench-conversations` 必须开启 CloudBase HTTP 路由身份认证；它只读取和创建 `conversations`，不写入 messages 或 reports。
 - `workbench-messages` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它会先校验 conversation 归属，再读取或写入 `messages`，不写 reports、Agent Run、SSE 或 quota。
 - `workbench-reports` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它会先校验 conversation 归属，再读取或写入 `report_artifacts`，不写 Agent Run、SSE 或 quota。

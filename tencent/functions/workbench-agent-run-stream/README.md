@@ -1,10 +1,10 @@
 # workbench-agent-run-stream
 
-CloudBase HTTP Function for Tencent-21 Agent Run stream verification.
+CloudBase HTTP Function for the current Agent Run stream path.
 
 This function keeps the Tencent-14 fixed `basic` mode and updates the `real` mode to read CloudBase MySQL `teaching_metrics` and public demo knowledge tables directly through `@cloudbase/node-sdk` / `app.rdb()`. It verifies the CloudBase Agent Run path with Auth, conversation ownership, quota, `agent_runs`, `run_events`, `tool_invocations`, assistant message persistence, SSE output, planner, controlled data tools, controlled knowledge search, lightweight model gateway conclusion generation, and explicit fallback.
 
-It still does not switch the production frontend traffic, does not migrate the full report generation entry, and does not delete the Vercel / Supabase implementation.
+Report generation remains a separate artifact API; this function only owns Agent Run streaming and persistence.
 
 ## Route
 
@@ -160,7 +160,7 @@ MODEL_GATEWAY_TIMEOUT_MS=30000
 CLOUDBASE_ENV_ID / TCB_ENV_ID Provided by CloudBase runtime or deployment config.
 ```
 
-Tencent-21 no longer needs `POSTGRES_CONNECTION_STRING` or `SUPABASE_DB_CONNECTION_STRING` for Agent Run data tools. CloudBase MySQL access comes from the CloudBase function runtime through `@cloudbase/node-sdk` and `app.rdb()`.
+Agent Run data tools use CloudBase MySQL through the CloudBase function runtime, `@cloudbase/node-sdk`, and `app.rdb()`.
 
 Model keys must be CloudBase function environment variables only. Do not put `SILICONFLOW_API_KEY` or `ZHIPU_API_KEY` in EdgeOne / frontend `VITE_*` variables.
 
@@ -194,8 +194,8 @@ Model diagnostics are deliberately redacted. Function logs record only:
 ```txt
 hasModelApiKey
 modelApiKeyLength
-modelProvider
-modelName
+provider
+model
 modelHttpStatus
 modelErrorType
 modelErrorMessage
@@ -250,8 +250,8 @@ Example event:
   "conclusionSource": "model",
   "fallbackReason": null,
   "selectedModelId": "siliconflow-qwen-free",
-  "modelProvider": "siliconflow",
-  "modelName": "Qwen/Qwen2.5-7B-Instruct",
+  "provider": "siliconflow",
+  "model": "Qwen/Qwen2.5-7B-Instruct",
   "latencyMs": 1280,
   "tokenUsage": {
     "promptTokens": 320,
@@ -284,7 +284,7 @@ JSON fields are written with `JSON.stringify(...)`:
 - `tool_invocations.metadata`
 - `messages.metadata`
 
-This Tencent-24 verification uses CAS-style atomic quota update plus migration `003_agent_run_idempotency.sql` for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public production traffic, review high-concurrency quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
+This function uses CAS-style atomic quota update plus migration `007_agent_runs_client_run_id.sql` for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public high-concurrency traffic, review quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
 
 ## Package
 
@@ -344,9 +344,9 @@ Expected result:
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
 - `mode = "basic"` streams the fixed Tencent-14 event sequence.
 - `mode = "real"` streams `schema_inspect` / `aggregate_table` / `chart_render` tool completions, chart, conclusion, and completion events where available.
-- If the model provider succeeds after data tools succeed, the real mode returns `conclusionSource = "model"` with `selectedModelId`, `modelProvider`, `modelName`, `tokenUsage`, and `latencyMs`.
+- If the model provider succeeds after data tools succeed, the real mode returns `conclusionSource = "model"` with `selectedModelId`, `provider`, `model`, `tokenUsage`, and `latencyMs`.
 - If the model provider fails after data tools succeed, the real mode returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
-- `conclusion_completed` and `run_completed` include `modelProvider`, `modelName`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
+- `conclusion_completed` and `run_completed` include `provider`, `model`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
 - `quotaUsed` increases for `demo_user`.
 - `messages` contains the assistant message.
 - `agent_runs`, `run_events`, and `tool_invocations` contain records for the run.

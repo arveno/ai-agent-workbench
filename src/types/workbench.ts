@@ -255,18 +255,11 @@ export interface GenerationSlice {
   confirmStatus: ConfirmStatus;
   streamRunId: number;
   sendPrompt: (prompt: string) => void;
-  regenerateFromAssistantMessage: (assistantMessageId: string) => void;
   runMockPrompt: (prompt: string) => Promise<void>;
-  setRealModelNotice: (notice: string) => void;
-  setAssistantStream: (stream: AssistantStreamState) => void;
   runAgentStepsPreview: (runId: number) => Promise<void>;
-  triggerMockError: () => void;
-  retryCurrentTask: () => Promise<void>;
   generateReportForRun: (runId: string) => void;
   skipReportForRun: (runId: string) => void;
   stopGenerating: () => void;
-  regenerate: () => Promise<void>;
-  startAssistantStream: () => Promise<void>;
 }
 
 export interface ModelSlice {
@@ -316,8 +309,6 @@ export interface RunSlice {
   applyRunEvent: (event: RunEvent) => void;
   selectRunForCurrentSession: (runId: string) => Promise<void>;
   loadLatestRunForConversation: (conversationId: string) => Promise<void>;
-  loadRunEvents: (runId: string) => Promise<void>;
-  loadToolInvocations: (runId: string) => Promise<void>;
   loadReportArtifacts: (conversationId: string) => Promise<void>;
   loadRagRetrievals: (runId: string) => Promise<void>;
   saveReportArtifact: (params: {

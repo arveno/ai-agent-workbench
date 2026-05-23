@@ -5,7 +5,11 @@
 ```txt
 001_cloudbase_mysql_schema.sql
 002_cloudbase_teaching_metrics.sql
-003_agent_run_idempotency.sql
+003_agent_run_idempotency.sql（历史幂等 migration）
+004_cloudbase_knowledge_base.sql
+005_cloudbase_evaluations.sql
+006_cloudbase_source_lineage.sql
+007_agent_runs_client_run_id.sql
 ```
 
 当前阶段只说明执行方式，不实现自动化脚本，不引入腾讯云 SDK，不在仓库中写入任何腾讯云密钥。
@@ -20,7 +24,7 @@
 
 ## RunSql 分段执行建议
 
-CloudBase RunSql 更适合单条或分段 SQL 执行，不建议一次性粘贴完整长 SQL。执行 `001_cloudbase_mysql_schema.sql` 时，建议每个 `CREATE TABLE ... ENGINE=InnoDB ...;` 语句单独执行。`002_cloudbase_teaching_metrics.sql` 独立创建公开演示数据源表，可在 `001` 全部完成后执行。`003_agent_run_idempotency.sql` 为 Agent Run 增加 `(user_id, runtime_run_id)` 唯一约束，必须在部署 Tencent-24 版 `workbench-agent-run-stream` 前执行。
+CloudBase RunSql 更适合单条或分段 SQL 执行，不建议一次性粘贴完整长 SQL。执行 `001_cloudbase_mysql_schema.sql` 时，建议每个 `CREATE TABLE ... ENGINE=InnoDB ...;` 语句单独执行。`002_cloudbase_teaching_metrics.sql` 独立创建公开演示数据源表，可在 `001` 全部完成后执行。`003_agent_run_idempotency.sql` 是历史幂等 migration，不作为当前 Agent Run 单轨部署前置条件；当前 Run ID 单轨以 `007_agent_runs_client_run_id.sql` 的 `(user_id, client_run_id)` 唯一约束为准。
 
 执行顺序必须遵守外键依赖：
 
@@ -36,11 +40,13 @@ CloudBase RunSql 更适合单条或分段 SQL 执行，不建议一次性粘贴�
 10. `demo_task_templates`
 11. `demo_conversation_templates`
 12. `teaching_metrics`（来自 `002_cloudbase_teaching_metrics.sql`，无外键依赖）
-13. `agent_runs` 幂等唯一约束（来自 `003_agent_run_idempotency.sql`）
+13. `knowledge_documents` / `knowledge_chunks`（来自 `004_cloudbase_knowledge_base.sql`）
+14. `source_lineage` 相关表（来自 `006_cloudbase_source_lineage.sql`）
+15. `agent_runs` 当前幂等唯一约束（来自 `007_agent_runs_client_run_id.sql`）
 
 执行时每次只复制一段完整 `CREATE TABLE` 语句，确认成功后再执行下一段。不要在控制台拆开单个建表语句，也不要跳过依赖表。
 
-执行 `003_agent_run_idempotency.sql` 前先运行文件内的 preflight 查询；如果返回重复的 `user_id + runtime_run_id`，需要先人工确认并清理重复 run，再添加唯一约束。该 migration 会先把空字符串 `runtime_run_id` 规整为 `NULL`，避免没有 `clientRunId` 的历史记录被唯一约束误伤。
+执行 `007_agent_runs_client_run_id.sql` 前先运行文件内的 preflight 查询；如果返回重复的 `user_id + client_run_id`，需要先人工确认并清理重复 run，再添加唯一约束。该 migration 会先把空字符串 `client_run_id` 规整为 `NULL`，避免没有 `clientRunId` 的历史记录被唯一约束误伤。
 
 ## Seed 执行说明
 
@@ -50,6 +56,7 @@ CloudBase RunSql 更适合单条或分段 SQL 执行，不建议一次性粘贴�
 tencent/seeds/001_demo_task_templates_seed.sql
 tencent/seeds/002_demo_conversation_templates_seed.sql
 tencent/seeds/003_teaching_metrics_seed.sql
+tencent/seeds/004_knowledge_base_seed.sql
 ```
 
 每个 seed 文件只包含一个 `INSERT ... ON DUPLICATE KEY UPDATE` 语句，可整段复制到 CloudBase RunSql。

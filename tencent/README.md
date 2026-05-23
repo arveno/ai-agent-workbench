@@ -1,6 +1,6 @@
-# Tencent Cloud Migration Draft
+# Tencent Cloud Single Track
 
-本目录用于腾讯云单轨实现的迁移草案，目标栈为：
+本目录用于当前腾讯云单轨实现，目标栈为：
 
 ```txt
 EdgeOne Pages
@@ -9,11 +9,10 @@ EdgeOne Pages
 + CloudBase MySQL
 ```
 
-当前迁移状态见 `../docs/TENCENT_MIGRATION_STATUS.md`。本目录保留腾讯云单轨实现的迁移草案和 CloudBase MySQL schema；Tencent-09A 已验证 CloudBase Auth helper 与正式 `/api/auth/me`，Tencent-10C/Tencent-13 已新增 conversations / messages / reports / demo-copy / quota 基础闭环函数，Tencent-21 新增 `teaching_metrics` 演示数据源并将 Agent Run `real` data tools 改为直接读取 CloudBase MySQL，Tencent-22 新增轻量 OpenAI-compatible model gateway，Phase 0 后当前模型链路收敛到 SiliconFlow / Zhipu 国内 provider，Tencent-25B 已将正式前端身份主线切到 CloudBase 用户名密码登录，Tencent-26 新增 `workbench-runs` 用于 Run Trace 恢复，Tencent-28 新增 CloudBase MySQL `knowledge_search`，Tencent-29B 已删除旧 Vercel / Supabase 主体代码。后续仍需要 EdgeOne Preview / Production 线上回归。
+本目录保留 CloudBase MySQL schema、seed、CloudBase HTTP Functions 和部署说明。当前前端身份主线使用 CloudBase 用户名密码登录；Agent Run `real` data tools 直接读取 CloudBase MySQL `teaching_metrics` 与 `knowledge_documents` / `knowledge_chunks`；模型链路通过 `selectedModelId`、服务端 catalog 白名单和 `_shared/modelGateway.js` 调用 SiliconFlow / Zhipu OpenAI-compatible API。后续仍需要 EdgeOne Preview / Production 线上回归。
 
 ## 文件
 
-- `../docs/TENCENT_MIGRATION_STATUS.md`：腾讯云迁移当前状态、已验证 POC、schema 落库结果和 POC 清理计划。
 - `migrations/001_cloudbase_mysql_schema.sql`：CloudBase MySQL schema 第一版。
 - `migrations/README.md`：CloudBase MySQL migration 执行原则、RunSql 分段建议和验证 SQL。
 - `seeds/README.md`：CloudBase MySQL seed 执行顺序和验证 SQL。
@@ -36,7 +35,7 @@ EdgeOne Pages
 
 | 表 | 用途 |
 | --- | --- |
-| `app_profiles` | 业务用户资料与角色。承接 Supabase `profiles`，关联 CloudBase `_openid` 与业务 `user_id`。 |
+| `app_profiles` | 业务用户资料与角色，关联 CloudBase `_openid` 与业务 `user_id`。 |
 | `agent_run_quota` | 真实 Agent Run 月度额度。后续通过 MySQL 事务扣减。 |
 | `agent_run_usage` | 每次真实 Agent Run 的使用记录，记录 started/completed/failed/stopped。 |
 | `conversations` | Workbench 会话列表与会话状态。 |
@@ -48,21 +47,21 @@ EdgeOne Pages
 | `demo_task_templates` | 公开演示任务模板。 |
 | `demo_conversation_templates` | 公开演示会话模板。 |
 
-RAG 相关表暂不落地，只在 migration 末尾保留后续扩展注释，避免第一版 schema 过早复杂化。
+RAG 相关表由后续 migration 和 seed 单独维护，当前 `knowledge_search` 读取 CloudBase MySQL `knowledge_documents` / `knowledge_chunks`。
 
-## Supabase 能力替换
+## CloudBase 服务端边界
 
-| Supabase 能力 | CloudBase MySQL 替换方式 |
+| 能力 | 当前方式 |
 | --- | --- |
-| `auth.users` 外键 | CloudBase Auth v2 登录态 + `app_profiles` 业务用户表。 |
-| `auth.uid()` | CloudBase HTTP Function 校验 access token 后得到 `_openid`，再查询/创建 `app_profiles`。 |
-| RLS policy | 服务端 repository 查询必须显式追加 `_openid = ?` 和 `user_id = ?`。 |
-| `service_role` grant | CloudBase HTTP Function 使用服务端私密配置连接 MySQL，前端不直连数据库。 |
+| 用户身份 | CloudBase Auth v2 登录态 + `app_profiles` 业务用户表。 |
+| 当前用户解析 | CloudBase HTTP Function 校验 access token 后得到 `_openid`，再查询或创建 `app_profiles`。 |
+| 私有数据权限 | 服务端查询必须显式追加 `_openid = ?` 和 `user_id = ?`。 |
+| 数据库访问 | CloudBase HTTP Function 通过服务端运行时访问 MySQL，前端不直连数据库。 |
 | `uuid` / `gen_random_uuid()` | 函数层生成 UUID/ULID，MySQL 字段使用 `VARCHAR(36)`。 |
 | `jsonb` | MySQL `JSON`。 |
 | `timestamptz` | MySQL `DATETIME(3)`，时间统一由服务端按 UTC 或约定时区写入。 |
-| Supabase trigger | 第一版不使用业务 trigger；`updated_at` 使用 MySQL `ON UPDATE CURRENT_TIMESTAMP(3)`。 |
-| Supabase quota RPC | CloudBase HTTP Function 内部 MySQL transaction + `SELECT ... FOR UPDATE`。 |
+| 更新时间 | 第一版不使用业务 trigger；`updated_at` 使用 MySQL `ON UPDATE CURRENT_TIMESTAMP(3)`。 |
+| quota 扣减 | CloudBase HTTP Function 使用 CAS 条件更新；公开高并发前再评估 transaction / row lock。 |
 
 ## JSON 写入约定
 
@@ -76,9 +75,9 @@ RAG 相关表暂不落地，只在 migration 末尾保留后续扩展注释，�
 
 Demo 模板表是公开/system 模板表，不绑定用户，不包含 `_openid` 或 `user_id`。用户复制模板生成私有会话时，才进入后续 conversations/messages 迁移范围。
 
-## RLS 替代原则
+## 私有数据访问原则
 
-CloudBase MySQL 不提供 Supabase RLS。后续 API 迁移必须遵守：
+所有私有 API 必须遵守：
 
 1. 每个私有 API 先校验 CloudBase access token，得到 `_openid`。
 2. 通过已验证的 `_shared/auth.js` 查或创建 `app_profiles`，得到业务 `user_id` 和统一 `currentUser`。第一阶段 `_openid` 与 `user_id` 可以同值。
@@ -124,7 +123,7 @@ CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 
 受影响函数包括 `auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs` 和 `workbench-agent-run-stream`。这是 CloudBase 函数运行时变量，不是前端变量；不要写入代码，不要放进 EdgeOne，也不要加 `VITE_` 前缀。
 
-Tencent-21 后，`workbench-agent-run-stream` 的 data tools 不再需要 PostgreSQL / Supabase 数据库连接串。当前模型链路由 `selectedModelId` 进入 `_shared/modelGateway.js`，再通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
+`workbench-agent-run-stream` 的 data tools 通过 CloudBase 函数运行时读取 CloudBase MySQL。当前模型链路由 `selectedModelId` 进入 `_shared/modelGateway.js`，再通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
 ```txt
 SILICONFLOW_API_KEY=...
@@ -156,7 +155,7 @@ CloudBase RunSql 更适合单条或分段 SQL 执行。正式迁移时需要提�
 
 Preview 阶段仍需注意：
 
-1. quota consume 已使用 CAS 条件更新做原子扣减重试；Agent Run 幂等需要先执行 `migrations/003_agent_run_idempotency.sql`，为 `agent_runs(user_id, runtime_run_id)` 增加唯一约束；公开高并发前仍建议为 quota 补事务或存储过程。
+1. quota consume 已使用 CAS 条件更新做原子扣减重试；Agent Run 幂等需要先执行 `migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束；公开高并发前仍建议为 quota 补事务或存储过程。
 2. Agent Run 的模型网关仍可能 fallback，fallback 不能伪装成真实模型结果；`data_table_not_found` / `data_tool_query_failed` / `data_empty` / `model_*` 需要结合 CloudBase MySQL、模型服务和函数日志排查。
 3. `local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品，也不应提交为正式能力。
 
@@ -167,5 +166,5 @@ Preview 阶段仍需注意：
 3. 新增 CloudBase Auth 后端校验 helper，建立 `_openid -> app_profiles.user_id` 映射。当前 `auth-me` 已验证该链路，Tencent-25/Tencent-25B 已把前端默认登录主线切到 CloudBase 用户名密码登录。
 4. 迁移 conversations/messages/report/run 查询接口，所有 SQL 显式加 `_openid/user_id`。当前 conversations、messages、reports、demo-copy、workbench-runs 和报告闭环已完成，PATCH、archive 后续再迁。
 5. 迁移 quota 事务。当前 Tencent-13 已新增 quota 基础闭环，后续仍需单独验证 MySQL transaction + 行锁并发扣减。
-6. 迁移 Agent Run SSE。Tencent-21 已将 CloudBase 函数内的 data tools 改为直接读取 CloudBase MySQL `teaching_metrics`，Tencent-22 已新增轻量 model gateway，Tencent-24 已新增 preview 阶段幂等、`003_agent_run_idempotency.sql` 跨实例唯一约束和 quota CAS 扣减，Tencent-28 已将 `knowledge_qa` 迁到 CloudBase MySQL `knowledge_search`；后续仍需做 EdgeOne Preview 线上回归和旧链路删除前回滚窗口验证。
-7. 旧 Vercel/Supabase 主体代码已在 Tencent-29B 删除，后续继续做 EdgeOne 线上回归和残留文案清理。
+6. 迁移 Agent Run SSE。CloudBase 函数内的 data tools 直接读取 CloudBase MySQL `teaching_metrics`，轻量 model gateway 负责模型调用，`007_agent_runs_client_run_id.sql` 提供跨实例幂等唯一约束，`knowledge_qa` 通过 CloudBase MySQL `knowledge_search` 执行受控检索；后续仍需做 EdgeOne Preview 线上回归。
+7. 后续继续做 EdgeOne 线上回归和 CloudBase 运行时 smoke。

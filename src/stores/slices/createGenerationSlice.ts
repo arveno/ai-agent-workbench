@@ -179,44 +179,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     get().clearChatDraft();
     void get().runMockPrompt(trimmedPrompt);
   },
-  regenerateFromAssistantMessage: (assistantMessageId) => {
-    const state = get();
-    const currentSession = state.sessions.find((session) => session.id === state.currentSessionId);
-
-    if (!currentSession) {
-      return;
-    }
-
-    const assistantIndex = currentSession.messages.findIndex(
-      (message) => message.id === assistantMessageId && message.role === 'assistant'
-    );
-
-    if (assistantIndex <= 0) {
-      return;
-    }
-
-    for (let index = assistantIndex - 1; index >= 0; index -= 1) {
-      const candidateMessage = currentSession.messages[index];
-
-      if (candidateMessage.role !== 'user') {
-        continue;
-      }
-
-      const prompt = candidateMessage.content.trim();
-
-      if (!prompt) {
-        return;
-      }
-
-      void get().runMockPrompt(prompt);
-      return;
-    }
-  },
-  setRealModelNotice: (notice) => {
-    set({
-      realModelNotice: notice,
-    });
-  },
   runMockPrompt: async (prompt) => {
     const trimmedPrompt = prompt.trim();
 
@@ -437,9 +399,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
 
     await streamMockReplyForRun();
   },
-  setAssistantStream: (assistantStream) => {
-    set({ assistantStream });
-  },
   runAgentStepsPreview: async (runId) => {
     const isCurrentRun = () => {
       const current = get();
@@ -519,35 +478,6 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     startMockStep(MOCK_RUN_STEP_IDS.waitConfirmation, '等待用户确认');
     completeMockStep(MOCK_RUN_STEP_IDS.waitConfirmation, 0);
     startMockStep(MOCK_RUN_STEP_IDS.generateConclusion, '生成最终结论');
-  },
-  triggerMockError: () => {
-    const currentRun = get().currentRun;
-
-    set((state) => ({
-      generationStatus: 'error',
-      errorMessage: '数据查询服务暂时不可用，请稍后重试。',
-      realModelNotice: '',
-      assistantStream: {
-        ...state.assistantStream,
-        status: state.assistantStream.status === 'streaming' ? 'stopped' : state.assistantStream.status,
-      },
-    }));
-
-    if (currentRun?.mode === 'mock' && currentRun.status === 'running') {
-      get().applyRunEvent({
-        type: 'run_failed',
-        runId: currentRun.id,
-        errorMessage: '数据查询服务暂时不可用，请稍后重试。',
-      });
-    }
-  },
-  retryCurrentTask: async () => {
-    set({
-      errorMessage: undefined,
-      realModelNotice: '',
-    });
-
-    await get().runMockPrompt(get().currentPrompt);
   },
   generateReportForRun: (runId) => {
     const normalizedRunId = runId.trim();
@@ -735,11 +665,5 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     if (shouldStopMockRun) {
       get().applyRunEvent(createMockRunStoppedEvent(currentRun.id));
     }
-  },
-  regenerate: async () => {
-    await get().runMockPrompt(get().currentPrompt);
-  },
-  startAssistantStream: async () => {
-    await get().runMockPrompt(get().currentPrompt);
   },
 });
