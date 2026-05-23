@@ -170,7 +170,7 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-runs.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-agent-run-stream` 依赖 `_shared`。部署 Tencent-24 版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/003_agent_run_idempotency.sql`，为 `agent_runs(user_id, runtime_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入本地 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、轻量 model gateway 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
+`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入本地 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、轻量 model gateway 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
 cd tencent/functions

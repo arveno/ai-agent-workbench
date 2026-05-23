@@ -62,7 +62,7 @@ The Tencent-21 `real` path is:
 1. Authenticate request and resolve `currentUser`.
 2. Read and validate `conversationId`.
 3. Check idempotency by `user_id + clientRunId` when `clientRunId` is provided. Existing runs return a `run_reused` SSE event and do not consume quota or write trace rows again.
-4. Insert `agent_runs(status = pending)` first. Migration `003_agent_run_idempotency.sql` adds the hard unique boundary on `(user_id, runtime_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
+4. Insert `agent_runs(status = pending)` first. Migration `007_agent_runs_client_run_id.sql` adds the hard unique boundary on `(user_id, client_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
 5. Consume one Agent Run quota with a compare-and-set update and create `agent_run_usage(status = started)`.
 6. Attach `usage_id` to the pending run, mark it `running`, and update the conversation latest run.
 7. Run planner.
@@ -87,8 +87,8 @@ If the client disconnects, the function stops writing later SSE events, marks th
 Tencent-24 adds service-side idempotency for `POST /api/agent/run/stream`:
 
 - `user_id + clientRunId` is the idempotency key when `clientRunId` is provided.
-- A duplicate request that finds an existing `agent_runs.runtime_run_id` for the current user returns `run_reused` over SSE and does not consume quota, create another run, write another assistant message, or replay `run_events` / `tool_invocations`.
-- Migration `003_agent_run_idempotency.sql` must be executed before deploying this Tencent-24 function. It adds `UNIQUE KEY uk_agent_runs_user_runtime_run (user_id, runtime_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
+- A duplicate request that finds an existing `agent_runs.client_run_id` for the current user returns `run_reused` over SSE and does not consume quota, create another run, write another assistant message, or replay `run_events` / `tool_invocations`.
+- Migration `007_agent_runs_client_run_id.sql` must be executed before deploying this function. It adds `UNIQUE KEY uk_agent_runs_user_client_run (user_id, client_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
 - The function inserts a pending run before quota consumption. If the insert hits the unique key, it queries the existing run and returns `run_reused` instead of treating the duplicate as a 500.
 - A same-process in-flight guard reduces duplicate work from double clicks and local retries before the first run row is visible.
 - If `clientRunId` is missing, the function still runs with a generated id and records `clientRunIdMissing = true` in run metadata, but full idempotency is not possible.
@@ -135,7 +135,7 @@ This mode uses a fixed mock tool result and fixed conclusion text. It remains us
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
 - `conclusionSource = "mock"` is used by fixed mock verification data.
 - `knowledge_qa` runs the controlled `knowledge_search` tool against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`. It uses keyword scoring in the function and never lets the model execute SQL directly.
-- DB `run_id` / `agent_runs.id` is the canonical run relationship. `clientRunId` is used for frontend pending state, idempotency, and request tracing; assistant message metadata no longer writes a new `runtimeRunId`. `agent_runs.runtime_run_id` remains a backend idempotency compatibility field, not a business relationship.
+- `runId` / `agent_runs.id` is the only business run relationship. `clientRunId` / `agent_runs.client_run_id` is used for frontend pending state, idempotency, duplicate request handling, and request tracing.
 
 ## Environment Variables
 

@@ -39,7 +39,7 @@ Run reads are filtered by:
 ```txt
 agent_runs._openid = currentUser.openid
 agent_runs.user_id = currentUser.userId
-agent_runs.id = runId OR agent_runs.runtime_run_id = runId
+agent_runs.id = runId
 ```
 
 Supporting rows are filtered by `_openid`, `user_id`, `run_id`, and `conversation_id` before returning.
