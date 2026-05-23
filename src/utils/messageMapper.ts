@@ -70,7 +70,7 @@ export function workbenchMessageToMessageCreateInput(message: WorkbenchMessage):
   const metadata: Record<string, unknown> = {};
 
   if (message.runId && !runId) {
-    metadata.runtimeRunId = message.runId;
+    metadata.clientRunId = message.runId;
   }
 
   return {

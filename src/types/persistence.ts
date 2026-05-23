@@ -324,7 +324,6 @@ export interface ReportArtifactCreateInput {
   conversationId: string;
   title: string;
   contentMarkdown: string;
-  runtimeRunId?: string | null;
   metadata?: JsonObject;
 }
 

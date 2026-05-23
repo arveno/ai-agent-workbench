@@ -393,17 +393,10 @@ function readReportSourcesFromMetadata(metadata) {
   return metadata.sources.map(normalizeReportSource).filter((source) => source !== null);
 }
 
-function createReportMetadata(metadata, runId, runtimeRunId, sourceSnapshot) {
+function createReportMetadata(metadata, sourceSnapshot) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
-  const metadataRuntimeRunId = readQueryString(nextMetadata.runtimeRunId);
 
-  if (!metadataRuntimeRunId || metadataRuntimeRunId === runId) {
-    delete nextMetadata.runtimeRunId;
-  }
-
-  if (runtimeRunId && runtimeRunId !== runId) {
-    nextMetadata.runtimeRunId = runtimeRunId;
-  }
+  delete nextMetadata.runtimeRunId;
 
   const reportSources = Array.isArray(sourceSnapshot?.sources) ? sourceSnapshot.sources : [];
   nextMetadata.sources = reportSources;
@@ -667,10 +660,6 @@ async function createReportStateMarker(db, currentUser, conversationId, params, 
     metadata.runId = runId;
   }
 
-  if (runtimeRunId && runtimeRunId !== runId) {
-    metadata.runtimeRunId = runtimeRunId;
-  }
-
   if (!runId && !runtimeRunId) {
     return null;
   }
@@ -736,7 +725,7 @@ async function createReport(currentUser, body) {
   const runId = toUuidOrNull(body.runId);
   const runtimeRunId = readRuntimeRunId(body, requestMetadata);
   const sourceSnapshot = await readRunSourceSnapshot(db, currentUser, conversationId, runId);
-  const metadata = createReportMetadata(requestMetadata, runId, runtimeRunId, sourceSnapshot);
+  const metadata = createReportMetadata(requestMetadata, sourceSnapshot);
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,

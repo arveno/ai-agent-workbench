@@ -24,26 +24,12 @@ async function readPersistenceResponse<TData>(
   return readWorkbenchPersistenceResponse(response, fallbackMessage);
 }
 
-function normalizeRuntimeRunId(runtimeRunId: string | null | undefined, runId: string): string | undefined {
-  const normalizedRuntimeRunId = runtimeRunId?.trim();
-  return normalizedRuntimeRunId && normalizedRuntimeRunId !== runId ? normalizedRuntimeRunId : undefined;
-}
-
 function createReportArtifactRequestMetadata(
   metadata: ReportArtifactCreateInput['metadata'],
-  runId: string,
-  runtimeRunId: string | undefined,
 ): ReportArtifactCreateInput['metadata'] {
   const nextMetadata = { ...(metadata ?? {}) };
-  const metadataRuntimeRunId = typeof nextMetadata.runtimeRunId === 'string' ? nextMetadata.runtimeRunId.trim() : '';
 
-  if (!metadataRuntimeRunId || metadataRuntimeRunId === runId) {
-    delete nextMetadata.runtimeRunId;
-  }
-
-  if (runtimeRunId) {
-    nextMetadata.runtimeRunId = runtimeRunId;
-  }
+  delete nextMetadata.runtimeRunId;
 
   return nextMetadata;
 }
@@ -73,8 +59,7 @@ export async function createRunReportArtifact(
 ): Promise<WorkbenchPersistenceResponse<ReportArtifactCreateResult>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
-    const runtimeRunId = normalizeRuntimeRunId(input.runtimeRunId, runId);
-    const metadata = createReportArtifactRequestMetadata(input.metadata, runId, runtimeRunId);
+    const metadata = createReportArtifactRequestMetadata(input.metadata);
     const response = await requestCloudBasePrivateApi(buildApiPath('/api/workbench/reports'), {
       method: 'POST',
       headers: {
@@ -83,7 +68,6 @@ export async function createRunReportArtifact(
       body: JSON.stringify({
         conversationId: input.conversationId,
         runId,
-        runtimeRunId,
         title: input.title,
         contentMarkdown: input.contentMarkdown,
         status: 'generated',

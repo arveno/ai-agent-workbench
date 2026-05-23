@@ -568,7 +568,6 @@ async function consumeQuota(db, currentUser, runId, runtimeRunId, source = 'clou
         source,
         runId,
         clientRunId: runtimeRunId || null,
-        runtimeRunId,
       }),
     });
 
@@ -910,7 +909,7 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
         modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
         modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
         agentMode: 'real',
-        runtimeRunId: context.runtimeRunId,
+        clientRunId: context.clientRunId || null,
       }),
     });
     assertNoQueryError(insertResult);
