@@ -147,6 +147,26 @@ pnpm cloudbase:smoke -- --base-url <cloudbase-api-base-url> --token <token>
 - report 生成和刷新恢复正常。
 - usage / quota 不报错。
 
+### Report Source 自动化 Smoke
+
+Report Source 自动化 smoke 是部署后验收脚本，用于验证 `run_sources -> POST /api/workbench/reports -> report_artifacts.metadata.sources/sourceCount/sourceLineage -> GET /api/workbench/reports` 闭环。
+
+脚本会自动创建 smoke conversation，执行一个 RAG / `knowledge_search` Agent Run，解析 SSE 取得 DB `runId`，创建 report，并校验 `sources`、`sourceCount` 和 `sourceLineage=run_sources`。脚本不需要手动拼 `conversationId` / `runId`，也不自动登录；CloudBase token 由执行者传入。
+
+推荐命令：
+
+```bash
+pnpm smoke:report-source -- --token "<cloudbase-token>"
+```
+
+可选覆盖：
+
+```bash
+pnpm smoke:report-source -- --base-url "<base-url>" --token "<cloudbase-token>" --timeout-ms 120000
+```
+
+成功输出 `Smoke PASS`，并打印 `conversationId`、`runId`、`usageId`、`assistantMessageId`、`reportId`、`sourceCount` 和前 3 条 source 摘要。失败输出 `Smoke FAIL`、`failedStep`、HTTP 状态、响应摘要和关键 debug ID。该脚本会真实写入 smoke conversation、Agent Run、usage、assistant message 和 report artifact，只应在部署后验收时使用。
+
 ### 函数运行配置
 
 函数级运行配置维护在 `tencent/cloudbase-functions.config.json` 的 `functions.<name>` 下。当前 POC 推荐：
