@@ -360,7 +360,7 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
             displayName: '知识检索',
             status: 'success',
             inputSummary: 'query=warning_count 平均分 教学风险，topK=3',
-            outputSummary: '命中 2 条知识片段，retrievedChunkCount=2。',
+            outputSummary: '知识库命中 2 条来源。',
             elapsedMs: 190,
           },
         ],

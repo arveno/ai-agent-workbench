@@ -186,7 +186,7 @@ export function getRagEmptyStateLabel(run: RunSnapshot | null): RagEmptyStateLab
   if (!run) {
     return {
       title: '暂无 RAG 来源',
-      description: '发送涉及知识检索的问题后，这里会展示 retrievedChunkCount、来源片段和引用信息。',
+      description: '发送涉及知识检索的问题后，这里会展示命中片段数、来源片段和引用信息。',
     };
   }
 

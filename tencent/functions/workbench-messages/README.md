@@ -82,7 +82,7 @@ Supported fields:
 - `role`: required. Allowed values are `user`, `assistant`, and `system`.
 - `kind`: optional, defaults to `text`. Allowed values are `text`, `tool_summary`, `report`, `error`, and `system_notice`.
 - `content`: required non-empty string.
-- `runId`: optional UUID. Non-UUID runtime IDs are ignored at DB column level and should stay in `metadata.runtimeRunId`.
+- `runId`: optional UUID. It must be the canonical DB `agent_runs.id`; non-UUID pending/client IDs should stay in `metadata.clientRunId`.
 - `clientMessageId`: optional idempotency key.
 - `status`: optional, defaults to `completed`. Allowed values are `pending`, `streaming`, `completed`, and `failed`.
 - `metadata`: optional object.

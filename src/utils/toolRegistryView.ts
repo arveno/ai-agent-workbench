@@ -69,7 +69,7 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     usedInRunTrace: true,
     description: '通过 CloudBase MySQL 的 knowledge_documents / knowledge_chunks 做受控检索，返回可引用来源片段。',
     inputSummary: 'query, topK',
-    outputSummary: 'retrievedChunkCount, sources, citations, score',
+    outputSummary: '命中片段数, 来源片段, 引用, 分数',
   },
   {
     id: 'report_generate',

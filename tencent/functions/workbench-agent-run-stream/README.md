@@ -135,7 +135,7 @@ This mode uses a fixed mock tool result and fixed conclusion text. It remains us
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
 - `conclusionSource = "mock"` is used by fixed mock verification data.
 - `knowledge_qa` runs the controlled `knowledge_search` tool against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`. It uses keyword scoring in the function and never lets the model execute SQL directly.
-- The assistant message metadata records `source`, `conclusionSource`, `fallbackReason`, `selectedModelId`, `modelProvider`, `modelName`, `tokenUsage`, `latencyMs`, `modelErrorType`, `modelHttpStatus`, `modelErrorMessage`, `agentMode`, and `runtimeRunId`.
+- DB `run_id` / `agent_runs.id` is the canonical run relationship. `clientRunId` is used for frontend pending state, idempotency, and request tracing; assistant message metadata no longer writes a new `runtimeRunId`. `agent_runs.runtime_run_id` remains a backend idempotency compatibility field, not a business relationship.
 
 ## Environment Variables
 
