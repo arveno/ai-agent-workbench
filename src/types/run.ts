@@ -105,7 +105,6 @@ export interface RunPlanSnapshot {
 export interface RunSnapshot {
   id: string;
   clientRunId?: string;
-  runtimeRunId?: string;
   displayRunId?: string;
   isCanonicalRun?: boolean;
   missingDbRunId?: boolean;

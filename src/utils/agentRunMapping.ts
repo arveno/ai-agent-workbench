@@ -97,7 +97,6 @@ export function createAgentPendingRunStartedEvent(params: {
     run: {
       id: params.runId,
       clientRunId: params.runId,
-      runtimeRunId: params.runId,
       displayRunId: params.runId,
       sessionId: params.sessionId,
       mode: 'agent',

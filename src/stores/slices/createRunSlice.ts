@@ -241,18 +241,8 @@ function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId
     conclusionNotice: run?.conclusionNotice ?? null,
     toolNames: run?.toolInvocations.map((tool) => tool.toolName || tool.toolId) ?? [],
   };
-  const runtimeRunId = run?.runtimeRunId?.trim();
-
-  if (runtimeRunId && runtimeRunId !== runId) {
-    metadata.runtimeRunId = runtimeRunId;
-  }
 
   return metadata;
-}
-
-function getReportArtifactRuntimeRunId(run: RunSnapshot | null | undefined, runId: string): string {
-  const runtimeRunId = run?.runtimeRunId?.trim();
-  return runtimeRunId && runtimeRunId !== runId ? runtimeRunId : '';
 }
 
 function cacheRunInSession(
@@ -922,7 +912,6 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         conversationId: params.conversationId,
         title: params.title,
         contentMarkdown: params.contentMarkdown,
-        runtimeRunId: getReportArtifactRuntimeRunId(run, params.runId),
         metadata: createReportArtifactMetadata(run, params.runId),
       },
     );

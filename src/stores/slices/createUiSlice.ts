@@ -59,9 +59,7 @@ function getRunIdForClientRun(state: WorkbenchStore, clientRunId: string): strin
 
   if (
     currentRun?.mode === 'agent' &&
-    (currentRun.id === clientRunId ||
-      currentRun.clientRunId === clientRunId ||
-      currentRun.runtimeRunId === clientRunId)
+    (currentRun.id === clientRunId || currentRun.clientRunId === clientRunId)
   ) {
     return currentRun.id;
   }

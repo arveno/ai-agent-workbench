@@ -242,7 +242,7 @@ function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
 
 function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   RunSnapshot,
-  'id' | 'clientRunId' | 'runtimeRunId' | 'displayRunId'
+  'id' | 'clientRunId' | 'displayRunId'
 > {
   const runId = record.id;
   const runtimeRunId = record.runtime_run_id ?? undefined;
@@ -251,7 +251,6 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   return {
     id: runId,
     clientRunId,
-    runtimeRunId,
     displayRunId: runId,
   };
 }
