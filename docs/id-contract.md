@@ -12,15 +12,13 @@
 
 ## 2. 当前问题摘要
 
-当前最大风险是 `runId` / `clientRunId` / `runtimeRunId` 三轨混用，以及 `canonicalRunId` 过渡字段被长期化：
+当前最大风险是 canonical `runId` 已收敛后发生回归，以及 `runtimeRunId` 边界被再次扩散：
 
-- `currentRun.id` / `RunSnapshot.id` 当前可能代表 `clientRunId` 或 `runtimeRunId`，但 DB 主关系使用 `agent_runs.id`。
-- `canonicalRunId` 可能被误用为另一个长期主 ID，而不是迁移期过渡字段。
-- `message.runId`、DB `messages.run_id`、`metadata.runtimeRunId` 不一致。
-- `report_artifacts.run_id` 可能为 null，靠 `metadata.runtimeRunId` 兜底。
-- `agent_run_usage.run_id` 不是严格 FK，可能保存 `runtimeRunId`。
-- SSE live event 被前端改写 `runId`，导致 live event 与 persisted event 语义不同。
-- source / RAG 缺少独立 retrieval / run lineage。
+- `canonicalRunId` 已完成 runtime 代码清理，不再作为当前迁移字段使用，后续只作为历史迁移字段和禁止回归项。
+- `runId` / `clientRunId` / `runtimeRunId` 的语义仍需防止重新混用。
+- `message.runId`、DB `messages.run_id`、`report_artifacts.run_id`、usage 关联和 `metadata.runtimeRunId` 必须继续以 DB `runId` 优先。
+- `runtimeRunId` 仍只允许服务后端 idempotency、`agent_runs.runtime_run_id` 和旧数据 fallback 边界。
+- Source / RAG lineage 的 source / retrieval 主关系必须绑定 canonical `runId`，细则见 `docs/source-lineage.md`。
 - Evaluation 如果现在继续推进，会继承并固化 ID 双轨问题。
 
 这些问题会影响 Run Trace、Run Overview、Report、Source、Usage、Evaluation 对同一 Agent Run 的一致理解。
@@ -29,7 +27,7 @@
 
 1. canonical `runId` = DB `agent_runs.id`，长期唯一主身份是 `RunSnapshot.id` / `agent_runs.id`。
 2. `clientRunId` = 前端请求幂等 / pending key，不作为主外键。
-3. `canonicalRunId` = Phase 2B / 2C 迁移期过渡字段，不是长期字段。
+3. `canonicalRunId` = 已完成 runtime 代码清理的历史迁移字段，不是当前迁移字段，禁止回归。
 4. `runtimeRunId` = 兼容读取 / metadata / 幂等相关字段，不作为 UI 主 ID，不作为主外键，不进入长期业务主链路。
 5. 如果需要展示短 ID，使用 `displayRunId`。
 6. 旧数据可以短期按 `runtimeRunId` 兼容读取，但新数据不得继续把 `runtimeRunId` 当主关系。
@@ -39,7 +37,7 @@
 
 ## 4. 无历史包袱与单轨目标
 
-本项目没有需要长期兼容的大规模历史数据包袱。`runtimeRunId` / `canonicalRunId` 这类过渡字段只能服务迁移期，不能作为长期业务模型扩展点。
+本项目没有需要长期兼容的大规模历史数据包袱。`canonicalRunId` 已完成 runtime 代码清理，不能回归为业务模型字段；`runtimeRunId` 只能服务后端 idempotency、`agent_runs.runtime_run_id` 和旧数据 fallback 边界，不能作为长期业务模型扩展点。
 
 迁移完成后，业务主链路必须回到单轨字段语义：
 
@@ -60,7 +58,7 @@
 | `messageId` | 消息主 ID。DB 消息对应 `messages.id`，UI 消息当前可能使用 client message id。 | 后端 DB 或前端创建消息。 | 是 | DB `messages.id` 可以；前端临时 id 不可以。 | 可以 | 否 | 可以 | 禁止把前端临时 message id 当作 DB 主键。 |
 | `clientMessageId` | 前端消息幂等 ID。 | 前端创建 message 时生成。 | 是，写入 `messages.client_message_id`。 | 否 | 不作为主展示 ID；可用于调试。 | 是 | 可以 | 禁止作为 message -> run 或 message -> conversation 主关系。 |
 | `runId` | Agent Run canonical ID，只能指 DB `agent_runs.id`。 | 后端创建 `agent_runs` 时生成。 | 是 | 是，是 run 相关对象主关系。 | 可以，通常展示短格式。 | 否 | 是 | 禁止指代 `clientRunId` 或 `runtimeRunId`。 |
-| `canonicalRunId` | Phase 2B / 2C 迁移期过渡字段，用于在 `RunSnapshot.id` 语义尚未完全稳定时承载 DB `agent_runs.id`。 | mapper / store 迁移边界。 | 迁移期可存在于前端模型；不应作为长期 DB 字段。 | 否，长期主关系必须直接使用 `runId` / `RunSnapshot.id`。 | 否 | 否 | 仅迁移期 | 禁止作为另一个长期主 ID；禁止 component 或业务逻辑长期依赖。 |
+| `canonicalRunId` | 历史迁移字段，曾用于 `RunSnapshot.id` 语义未稳定时承载 DB `agent_runs.id`。 | 已完成 runtime 代码清理。 | 否，不应作为当前字段恢复。 | 否，主关系必须直接使用 `runId` / `RunSnapshot.id`。 | 否 | 否 | 否 | 禁止回归为新字段、兜底链或业务逻辑依赖。 |
 | `clientRunId` | 前端创建 run 前生成的请求幂等 / pending key。 | 前端发起 run 时生成。 | 可以写入 `agent_runs.runtime_run_id` 或 metadata。 | 否 | 仅调试或 pending 状态可见。 | 是 | 可以 | 禁止作为 run_events / messages / reports / usage 的主外键；禁止用于已持久化 run 的业务关系。 |
 | `runtimeRunId` | 迁移期兼容 ID，当前通常等于 `clientRunId`。 | 后端从 `clientRunId` 派生或从旧数据读取。 | 是，存在于 `agent_runs.runtime_run_id` 或 metadata。 | 否 | 不作为 UI 主 ID；仅旧数据调试辅助。 | 可以用于旧请求幂等 | 是 | 禁止作为 `currentRun.id`、`RunSnapshot.id`、新数据主关系或 component 业务判断依据。 |
 | `displayRunId` | UI 展示用短 ID。 | mapper / ViewModel 生成。 | 否 | 否 | 是 | 否 | 否 | 禁止参与持久化、查询、外键、幂等。 |
@@ -73,7 +71,7 @@
 
 - `runId`：只能指 DB `agent_runs.id`。
 - `clientRunId`：前端创建 run 前生成，用于 pending 状态、请求幂等、断线前临时关联。
-- `canonicalRunId`：Phase 2B / 2C 迁移期过渡字段，用于在 `RunSnapshot.id` 语义尚未完全稳定时承载 DB `agent_runs.id`。
+- `canonicalRunId`：历史迁移字段，已完成 runtime 代码清理，不再作为当前迁移字段使用。
 - `runtimeRunId`：迁移期兼容读取 / metadata / 幂等相关字段，当前通常等于 `clientRunId`。
 - `displayRunId`：UI 展示用，可以来自 `runId` 短格式；旧数据迁移期可显示 `runtimeRunId` 短格式，但不能参与持久化关系。
 - `currentRun.id`：目标语义是 canonical `runId`。
@@ -82,7 +80,7 @@
 
 新代码不得再让 `runId` 同时表示 DB run ID、client request ID 和 runtime compatibility ID。
 
-当 live path 和 refresh path 均已确认 `RunSnapshot.id = agent_runs.id` 后，`canonicalRunId` 应视为冗余字段。后续应通过文档更新和代码治理删除 `canonicalRunId`，不允许 component 或业务逻辑长期依赖它，新代码不得把它当作另一个长期主 ID。
+`canonicalRunId` 已完成 runtime 代码清理。后续不得恢复 `RunSnapshot.canonicalRunId`、metadata `canonicalRunId` 或 `canonicalRunId || runtimeRunId || id` 这类兜底链。
 
 `runtimeRunId` 不得作为业务主关系，不应长期进入 `RunSnapshot` 主结构，除非明确用于边界层兼容。如果项目确认无历史数据需要兼容，应逐步将 `runtimeRunId` 限制到后端字段 / mapper 内部兜底，并从前端业务模型中移除。`metadata.runtimeRunId` 只能作为旧数据兜底，不得优先于 DB `run_id`。
 
@@ -98,17 +96,17 @@ type RunSnapshot = {
 }
 ```
 
-`canonicalRunId` 不属于长期目标字段。`runtimeRunId` 不属于长期业务主模型字段。如果短期仍存在 `runtimeRunId` / `canonicalRunId`，必须标记为 migration-only，并明确删除条件。
+`canonicalRunId` 不属于当前字段，发现残留默认删除或标记为历史兼容问题。`runtimeRunId` 不属于长期业务主模型字段；如果短期仍存在，必须标记为 compatibility-only，并明确删除条件。
 
 ## 8. 迁移字段退出条件
 
-本节定义 `canonicalRunId` / `runtimeRunId` / `metadata.runtimeRunId` 的退出边界。删除迁移字段前必须先确认本节条件，避免把仍服务 pending、幂等或旧数据恢复的字段误删。
+本节定义历史 `canonicalRunId` 禁止回归边界，以及 `runtimeRunId` / `metadata.runtimeRunId` 的保留边界。删除或收口字段前必须先确认本节条件，避免把仍服务 pending、幂等或旧数据恢复的字段误删。
 
-### 8.1 canonicalRunId 退出条件
+### 8.1 canonicalRunId 已清理边界
 
-`canonicalRunId` 是 Phase 2B / 2C 迁移期字段，只用于 `RunSnapshot.id` 语义尚未完全稳定时承载 DB `agent_runs.id`。
+`canonicalRunId` 是历史迁移字段，runtime 代码清理已完成，不再作为当前迁移字段使用。
 
-当 live path 和 refresh path 均满足 `RunSnapshot.id = agent_runs.id` 后，`canonicalRunId` 应视为冗余字段。第一批可删除范围：
+后续不得恢复：
 
 - `RunSnapshot.canonicalRunId` 类型字段。
 - `runPersistenceMapper` 中的 `canonicalRunId` 输出。
@@ -116,9 +114,9 @@ type RunSnapshot = {
 - `createRunSlice` 中 report metadata 的 `canonicalRunId`。
 - `workbench-reports` skipped marker metadata 中的 `canonicalRunId`。
 
-删除后，所有业务主关系统一使用 `id` / `runId`，且二者必须指向 DB `agent_runs.id`。如果需要表示“缺少后端 DB runId”，不能通过 `canonicalRunId` 表示，应使用明确错误状态或 `nonCanonical` / `missingCanonicalRunId` 这类显式标记；不得把 `clientRunId` 静默提升为 canonical `runId`。
+所有业务主关系统一使用 `id` / `runId`，且二者必须指向 DB `agent_runs.id`。如果需要表示“缺少后端 DB runId”，不能通过 `canonicalRunId` 表示，应使用明确错误状态或 `nonCanonical` / `missingCanonicalRunId` 这类显式标记；不得把 `clientRunId` 静默提升为 canonical `runId`。
 
-删除 `canonicalRunId` 不得影响 `clientRunId` / `runtimeRunId` 的合法用途。`clientRunId` 仍可用于 pending / idempotency，`runtimeRunId` 仍可用于后端幂等和旧数据兼容边界。
+`canonicalRunId` 清理不得影响 `clientRunId` / `runtimeRunId` 的合法用途。`clientRunId` 仍可用于 pending / idempotency，`runtimeRunId` 仍可用于后端幂等和旧数据兼容边界。
 
 ### 8.2 runtimeRunId 保留边界
 
@@ -147,12 +145,12 @@ type RunSnapshot = {
 
 长期目标是只在 mapper / backend 边界处理 `metadata.runtimeRunId`，不让它进入 component / ViewModel，也不让 UI 依赖它判断业务关系。
 
-### 8.4 Phase 2E 后续阶段
+### 8.4 已完成阶段摘要
 
-- Phase 2E-2A：补充 ID 迁移字段退出条件文档。
-- Phase 2E-3：删除 `canonicalRunId`。
-- Phase 2E-4：收口 `runtimeRunId` 到边界层。
-- Phase 2E-5：清理 `metadata.runtimeRunId` 新写入和旧兜底策略。
+- Phase 2B / 2C 已完成 canonical `runId` 契约、类型 / mapper 和 SSE live 链路收敛。
+- `canonicalRunId` runtime 代码清理已完成，后续只作为禁止回归项审查。
+- `runtimeRunId` 继续保留在后端 idempotency、`agent_runs.runtime_run_id`、pending / `run_reused` 和 mapper / backend 旧数据 fallback 边界。
+- `metadata.runtimeRunId` 只允许作为旧数据兜底，不得新写入 DB `runId` 冒充 runtime ID。
 
 ### 8.5 禁止误删范围
 
@@ -254,7 +252,7 @@ Refresh path：
 - 新 usage 写 `runtimeRunId`。
 - 组件层直接根据 `runId` 格式判断语义。
 - 多处 mapper 各自处理 `runId` fallback。
-- `canonicalRunId` / `runtimeRunId` 在业务主链路长期存在。
+- 恢复 `canonicalRunId`，或让 `runtimeRunId` 在业务主链路长期存在。
 
 兼容读取只服务历史数据和迁移窗口，不能成为新数据写入规范。
 
@@ -276,61 +274,18 @@ Refresh path：
 - service / store 边界层为 pending run 使用 `clientRunId`。
 - UI 使用 `displayRunId`。
 
-## 13. 分阶段治理计划
+## 13. 已完成阶段摘要
 
-Phase 2B-1：ID 契约文档冻结
-
-- 新增 `docs/id-contract.md`。
-- `docs/architecture.md` / `AGENTS.md` 引用本文。
-
-Phase 2B-2：类型与 mapper 收口
-
-- `RunSnapshot` 迁移期显式拆分 `id` / `clientRunId` / `runtimeRunId` / `displayRunId`，并将 `runtimeRunId` 标记为 compatibility-only。
-- `WorkbenchMessage` 显式拆分 `id` / `clientMessageId` / `runId`。
-- `runPersistenceMapper` / `messageMapper` / `reportArtifactMapper` 对齐契约。
-
-Phase 2C：SSE live 链路 canonical runId 收敛
-
-- `run_started` 后以 DB `runId` 建立 canonical run。
-- 不再无条件重写 `event.runId` 为 `clientRunId`。
-- pending run 到 canonical run 做一次迁移。
-
-Phase 2C-3：ID 契约一致性审查
-
-- 检查代码是否符合当前 `docs/id-contract.md`。
-- 不直接删除契约允许的字段。
-- 如果发现契约本身需要简化，先修改 `docs/id-contract.md`。
-
-Phase 2C-4：ID 契约一致性修正
-
-- 只修正违反当前契约的代码。
-- 例如 DB `run_id` 优先级、silent fallback、`runtimeRunId` 写入语义错误。
-- 不直接删除 `canonicalRunId` / `runtimeRunId`。
-
-Phase 2C-5：ID 契约简化
-
-- 在文档明确 `canonicalRunId` / `runtimeRunId` 的退出条件后，再删除冗余字段和 fallback。
-- 目标是让 `RunSnapshot.id` 成为唯一 canonical `runId`。
-
-Phase 2D：Report / Usage / Source 持久化关系收敛
-
-- `report_artifacts.run_id` 写 DB `runId`。
-- `usage.run_id` 或 usage 关联写 DB `runId`。
-- source / retrieval lineage 后续补独立表或明确 mapper 契约。
-
-Phase 2E：旧兼容清理
-
-- Phase 2E-2A 先补充 ID 迁移字段退出条件文档。
-- Phase 2E-3 优先删除已冗余的 `canonicalRunId`。
-- Phase 2E-4 将 `runtimeRunId` 收口到后端幂等、pending / `run_reused` 和 mapper / backend 兼容边界。
-- Phase 2E-5 清理 `metadata.runtimeRunId` 新写入和旧兜底策略。
-- 保留必要历史数据读取兼容，直到替代策略明确。
+- Phase 2B / 2C 的 ID 契约、类型 / mapper 和 SSE live canonical `runId` 收敛已完成。
+- `canonicalRunId` runtime 代码清理已完成，后续不得作为当前迁移字段恢复。
+- Report / Source 持久化关系继续围绕 canonical `runId` 收敛，Source 细则见 `docs/source-lineage.md`。
+- `runtimeRunId` 清理不是本次目标；它仍只允许存在于后端 idempotency、`agent_runs.runtime_run_id`、pending / `run_reused` 和 mapper / backend 旧数据 fallback 边界。
 
 ## 14. 验收标准
 
 - live run 和 refresh run 的 `currentRun.id` 都指向 `agent_runs.id`。
 - `clientRunId` 独立字段存在，只用于 pending / idempotency。
-- `canonicalRunId` 如仍存在，只能标记为 migration-only，并有明确删除条件。
+- `canonicalRunId` 不得回归；如发现残留，只能作为历史兼容问题处理并默认删除。
 - `runtimeRunId` 如仍存在，只用于兼容 / metadata / 幂等相关字段，并有明确删除条件。
 - `displayRunId` 独立字段存在，只用于 UI。
 - 新 message / report / usage 不再把 runtime ID 当主关系。
@@ -344,6 +299,6 @@ ID 契约治理是为了让 Trace、Report、Source、Usage、Evaluation 都能�
 
 DB `agent_runs.id` 成为 canonical `runId`，是因为它已经是 run_events、tool_invocations、messages、report_artifacts、eval_results 等表的主关系目标。
 
-`clientRunId` 解决前端发起请求时的 pending 和幂等问题，`runtimeRunId` 只解决旧数据、metadata 和迁移期兼容问题，`canonicalRunId` 只是在 `RunSnapshot.id` 尚未稳定时的过渡字段。
+`clientRunId` 解决前端发起请求时的 pending 和幂等问题，`runtimeRunId` 只解决旧数据、metadata 和迁移期兼容问题，`canonicalRunId` 是已完成清理的历史过渡字段。
 
 完成后，live run 与 refresh run 会使用同一套 ID 语义：`RunSnapshot.id = agent_runs.id`。后续 Evaluation / Bad Case / Improvement 才能建立可信的质量闭环。

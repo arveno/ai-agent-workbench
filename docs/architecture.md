@@ -2,7 +2,7 @@
 
 本文档说明 AI Agent Workbench 的项目架构、模块职责、数据流、状态边界和前后端边界。
 
-AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。核心对象与 ID 契约见 `docs/id-contract.md`。Source / RAG Lineage 契约见 `docs/source-lineage.md`。
+AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT 见 `docs/agent-run-lifecycle.md`。核心对象与 ID 契约见 `docs/id-contract.md`。Source / RAG Lineage 契约见 `docs/source-lineage.md`。Tool Registry / Tool Governance 契约见 `docs/tool-governance.md`。
 
 本文档只描述架构设计、模块职责、数据流和前后端边界，不重复完整生命周期，不描述 Codex 执行规则，不描述协作流程，不写具体部署教程。
 
@@ -68,6 +68,7 @@ zhipu-glm-flash-free
 - component 只展示 ViewModel 和触发 action，不直接消费 raw payload，不拼接业务结论。
 - conversation / message / run / report / source / usage / evaluation 的 ID 语义必须遵守 `docs/id-contract.md`。
 - knowledge_search、RAG sources、citations、report sources、retrieval 和 source persistence 必须遵守 `docs/source-lineage.md`。
+- 工具定义、工具参数、Tool Invocation、Run Trace 工具展示和前端工具库必须遵守 `docs/tool-governance.md`。
 
 ## 3. 前端模块职责
 
@@ -186,6 +187,7 @@ SSE Events
 ```
 
 这是当前后端最高风险函数，涉及 Auth、MySQL、Model Gateway、工具链、RAG、报告和 SSE。
+其中工具链属于服务端受控工具治理范围，正式工具、参数边界、Tool Invocation 和 Run Trace 展示必须对齐 `docs/tool-governance.md`。
 
 ### `_shared/auth.js`
 
@@ -387,6 +389,8 @@ RAG 展示原则：
 - 表 / 字段 / limit 控制。
 - 模型调用。
 - 数据库访问。
+
+服务端受控工具链的正式工具清单、展示边界和参数治理以 `docs/tool-governance.md` 为准。前端工具库、Workflow 工具说明和 Run Trace formatter 不应维护独立工具事实源。
 
 模型只负责生成或规划，不拥有直接执行权限。
 

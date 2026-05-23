@@ -2,7 +2,7 @@
 
 本文档是 AI Agent Workbench 的 AI Agent Enterprise Lifecycle（AI Agent 企业级运行生命周期）SSOT。
 
-后续历史功能治理、新功能接入、Codex 任务拆解、验收、README 表达和面试讲法，都以本文档为准。`docs/architecture.md` 负责架构和边界，`docs/workflow.md` 负责协作流程，`docs/source-lineage.md` 负责 Source / RAG Lineage 契约，`AGENTS.md` 负责 Codex 代码生成硬约束。
+后续历史功能治理、新功能接入、Codex 任务拆解、验收、README 表达和面试讲法，都以本文档为准。`docs/architecture.md` 负责架构和边界，`docs/workflow.md` 负责协作流程，`docs/source-lineage.md` 负责 Source / RAG Lineage 契约，`docs/tool-governance.md` 负责 Tool Registry / Tool Governance 契约，`AGENTS.md` 负责 Codex 代码生成硬约束。
 
 ## 1. 项目定位
 
@@ -49,7 +49,7 @@ AI Agent Enterprise Lifecycle 归并为 8 个能力域：
 | A. 用户与工作区层 | Access / Identity, Workspace / Session | 用户身份、权限边界、工作区和会话归属。 |
 | B. 会话与交互层 | Input, Response | 用户输入、消息展示、交互状态和响应消费。 |
 | C. 模型与规划层 | Context / Memory / Data, Model Gateway, Intent Router, Planner / Workflow | 上下文、模型白名单、意图识别、规划和任务流。 |
-| D. 安全与工具层 | Guardrail / Approval, Tool Governance / Data Access | 工具白名单、数据访问、审批、参数和权限控制。 |
+| D. 安全与工具层 | Guardrail / Approval, Tool Governance / Data Access | 工具白名单、数据访问、审批、参数和权限控制；工具定义、参数治理、Tool Invocation 和工具展示契约见 `docs/tool-governance.md`。 |
 | E. 执行与可观察层 | Execution / Streaming, Observability / Trace | Agent Run 执行、SSE、事件、工具调用和 Trace。 |
 | F. 结果与资产层 | Artifact / Source / Report, Persistence / Lineage | 来源、报告、产物沉淀、可恢复和血缘关系。 |
 | G. 质量与改进层 | Evaluation / Quality Gate, Bad Case / Dataset, Improvement / Versioning | 评测、坏例、数据集、版本和持续改进。 |
@@ -126,6 +126,7 @@ usageId -> runId/selectedModelId/token/cost/status
 - 是否需要持久化？
 - 是否影响 Evaluation / Bad Case / Improvement？
 - 是否需要服务端受控？
+- 是否涉及工具定义、工具参数、Tool Invocation 或工具展示，并需要对齐 `docs/tool-governance.md`？
 - 是否走 Raw -> Canonical -> ViewModel -> UI？
 - 是否会产生重复入口或多轨实现？
 

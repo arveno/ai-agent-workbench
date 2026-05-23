@@ -311,7 +311,3 @@ cloudbase-workbench-agent-run-stream-package/workbench-agent-run-stream/index.js
 - `workbench-agent-run-stream` 风险最高，依赖 `_shared/auth.js`、`_shared/mysql.js`、`_shared/modelGateway.js`、CloudBase MySQL、quota、RAG 表和模型环境变量。
 - `workbench-reports` 曾出现上传形态问题，上传前重点确认根目录结构和 `_shared/auth.js`、`_shared/mysql.js` 是否在根目录 `_shared/` 下。
 - `demo-tasks`、`demo-conversations` 当前存在硬编码 CloudBase env id 风险。本阶段只提示风险，不修改业务 runtime。
-
-## Phase 2D
-
-部署后 smoke test 会在 Phase 2D 单独补充。当前文档只覆盖本地打包、上传前检查和人工上传注意事项。
