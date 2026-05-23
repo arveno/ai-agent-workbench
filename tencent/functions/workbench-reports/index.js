@@ -665,7 +665,6 @@ async function createReportStateMarker(db, currentUser, conversationId, params, 
 
   if (runId) {
     metadata.runId = runId;
-    metadata.canonicalRunId = runId;
   }
 
   if (runtimeRunId && runtimeRunId !== runId) {

@@ -54,7 +54,7 @@ function isAgentRunInProgress(state: WorkbenchStore): boolean {
   );
 }
 
-function getCanonicalRunIdForClientRun(state: WorkbenchStore, clientRunId: string): string {
+function getRunIdForClientRun(state: WorkbenchStore, clientRunId: string): string {
   const currentRun = state.currentRun;
 
   if (
@@ -291,7 +291,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
         if (assistantMessage) {
           hasAppendedFinalMessage = true;
-          const assistantRunId = getCanonicalRunIdForClientRun(get(), runId);
+          const assistantRunId = getRunIdForClientRun(get(), runId);
           get().appendAssistantMessageToCurrentSession(assistantMessage, {
             runId: assistantRunId,
             kind: 'normal',
@@ -368,7 +368,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         );
 
         if (assistantMessage) {
-          const assistantRunId = getCanonicalRunIdForClientRun(get(), runId);
+          const assistantRunId = getRunIdForClientRun(get(), runId);
           get().appendAssistantMessageToCurrentSession(assistantMessage, {
             runId: assistantRunId,
             kind: 'normal',

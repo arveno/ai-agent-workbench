@@ -80,10 +80,10 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
   if (event.type === 'run_started') {
     const eventRunId = normalizeOptionalId(event.runId);
     const eventSnapshotId = normalizeOptionalId(event.run.id);
-    const canonicalRunId =
+    const dbRunId =
       eventRunId ??
       (eventSnapshotId && eventSnapshotId !== normalizedClientRunId ? eventSnapshotId : undefined);
-    const fallbackRunId = canonicalRunId ?? eventSnapshotId ?? normalizedClientRunId;
+    const fallbackRunId = dbRunId ?? eventSnapshotId ?? normalizedClientRunId;
     const eventClientRunId =
       normalizeOptionalId(event.clientRunId) ??
       normalizeOptionalId(event.run.clientRunId) ??
@@ -104,12 +104,11 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
       run: {
         ...event.run,
         id: fallbackRunId,
-        canonicalRunId,
         clientRunId: eventClientRunId,
         runtimeRunId,
         displayRunId,
-        isCanonicalRunId: Boolean(canonicalRunId),
-        missingCanonicalRunId: !canonicalRunId,
+        isCanonicalRun: Boolean(dbRunId),
+        missingDbRunId: !dbRunId,
       },
     };
   }

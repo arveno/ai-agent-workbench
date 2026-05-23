@@ -242,18 +242,17 @@ function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
 
 function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   RunSnapshot,
-  'id' | 'canonicalRunId' | 'clientRunId' | 'runtimeRunId' | 'displayRunId'
+  'id' | 'clientRunId' | 'runtimeRunId' | 'displayRunId'
 > {
-  const canonicalRunId = record.id;
+  const runId = record.id;
   const runtimeRunId = record.runtime_run_id ?? undefined;
   const clientRunId = getMetadataString(record.metadata, 'clientRunId') || runtimeRunId;
 
   return {
-    id: canonicalRunId,
-    canonicalRunId,
+    id: runId,
     clientRunId,
     runtimeRunId,
-    displayRunId: canonicalRunId,
+    displayRunId: runId,
   };
 }
 

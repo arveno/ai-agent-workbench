@@ -236,7 +236,6 @@ function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId
   const metadata: Record<string, unknown> = {
     source: 'agent-run',
     runId,
-    canonicalRunId: runId,
     conclusionSource: run?.conclusionSource ?? null,
     fallbackReason: run?.conclusionSource === 'fallback' ? run.conclusionNotice ?? null : null,
     conclusionNotice: run?.conclusionNotice ?? null,
@@ -325,10 +324,10 @@ function getRunStartedPendingRunId(event: RunEvent, run: RunSnapshot): string | 
     return null;
   }
 
-  const canonicalRunId = (run.canonicalRunId ?? run.id).trim();
+  const runId = run.id.trim();
   const clientRunId = (run.clientRunId ?? event.clientRunId ?? '').trim();
 
-  if (!canonicalRunId || !clientRunId || canonicalRunId === clientRunId) {
+  if (!runId || !clientRunId || runId === clientRunId) {
     return null;
   }
 
