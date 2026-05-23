@@ -10,7 +10,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 function printUsage() {
   console.log(`Usage:
-  pnpm smoke:report-source -- --token <cloudbase-token> [--base-url <url>] [--profile <name>] [--prompt <text>] [--timeout-ms <ms>]
+  pnpm smoke:report-source -- --token <cloudbase-token> [--base-url <url>] [--profile <name>] [--prompt <text>] [--timeout-ms <ms>] [--verify-reuse]
 
 Examples:
   pnpm smoke:report-source -- --token "<cloudbase-token>"
@@ -19,6 +19,7 @@ Examples:
 Notes:
   - The token is required and will not be printed in full.
   - If --base-url is omitted, the script reads tencent/cloudbase-functions.config.json using --profile, defaulting to poc.
+  - --verify-reuse sends a second Agent Run request with the same conversationId and clientRunId and requires a run_reused SSE event.
   - The script creates its own smoke conversation and does not accept historical conversationId/runId.`);
 }
 
@@ -49,6 +50,7 @@ function parseArgs(argv) {
     profile: DEFAULT_PROFILE,
     prompt: DEFAULT_PROMPT,
     timeoutMs: DEFAULT_TIMEOUT_MS,
+    verifyReuse: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -90,6 +92,11 @@ function parseArgs(argv) {
     if (arg === '--timeout-ms') {
       options.timeoutMs = parsePositiveInteger(readOptionValue(argv, index, arg), arg);
       index += 1;
+      continue;
+    }
+
+    if (arg === '--verify-reuse') {
+      options.verifyReuse = true;
       continue;
     }
 
@@ -296,7 +303,7 @@ function extractAssistantMessageIdFromEvent(event) {
   return event?.assistantMessageId || event?.messageId || event?.message?.id || null;
 }
 
-function parseSseBlock(block) {
+function parseSseBlock(block, step = 'agent_run_stream') {
   const dataLines = [];
 
   for (const rawLine of block.split(/\r?\n/)) {
@@ -320,7 +327,7 @@ function parseSseBlock(block) {
   try {
     return JSON.parse(data);
   } catch (error) {
-    throw createSmokeError('agent_run_stream', {
+    throw createSmokeError(step, {
       errorCode: 'invalid_sse_json',
       responseSummary: `${error.message}; ${summarizeText(data)}`,
     });
@@ -512,6 +519,143 @@ async function runAgentStream(options, debug) {
   return streamState;
 }
 
+function isReuseSseEvent(event) {
+  return event?.type === 'run_reused' || event?.reused === true;
+}
+
+function extractReuseRunId(event) {
+  return event?.runId || event?.existingRun?.id || event?.run?.id || '';
+}
+
+function recordReuseSseEvent(state, event) {
+  if (isReuseSseEvent(event)) {
+    state.hasReuseEvent = true;
+    state.runId = extractReuseRunId(event);
+  }
+}
+
+async function verifyRunReuse(options, debug) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+  const reuseState = {
+    hasReuseEvent: false,
+    runId: '',
+  };
+
+  try {
+    const response = await fetch(buildUrl(options.baseUrl, '/api/agent/run/stream'), {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${options.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        conversationId: debug.conversationId,
+        clientRunId: debug.clientRunId,
+        prompt: options.prompt,
+        mode: 'real',
+        metadata: {
+          source: SMOKE_SOURCE,
+          tool: SMOKE_TOOL,
+          verification: 'reuse',
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok || !response.body) {
+      const text = await response.text();
+      throw createSmokeError('verify_reuse', {
+        httpStatus: response.status,
+        errorCode: response.statusText || 'stream_request_failed',
+        responseSummary: summarizeText(text),
+      });
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || '';
+
+      for (const block of blocks) {
+        const event = parseSseBlock(block, 'verify_reuse');
+
+        if (!event) {
+          continue;
+        }
+
+        if (isErrorSseEvent(event)) {
+          throw createSmokeError('verify_reuse', {
+            errorCode: event.errorCode || event.type || 'stream_error',
+            responseSummary: summarizeText(event.errorMessage || event.message || JSON.stringify(event)),
+          });
+        }
+
+        recordReuseSseEvent(reuseState, event);
+      }
+    }
+
+    const remaining = decoder.decode();
+
+    if (remaining) {
+      buffer += remaining;
+    }
+
+    if (buffer.trim()) {
+      const event = parseSseBlock(buffer, 'verify_reuse');
+
+      if (event) {
+        if (isErrorSseEvent(event)) {
+          throw createSmokeError('verify_reuse', {
+            errorCode: event.errorCode || event.type || 'stream_error',
+            responseSummary: summarizeText(event.errorMessage || event.message || JSON.stringify(event)),
+          });
+        }
+
+        recordReuseSseEvent(reuseState, event);
+      }
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw createSmokeError('verify_reuse', {
+        errorCode: 'timeout',
+        responseSummary: `Timeout after ${options.timeoutMs}ms`,
+      });
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!reuseState.hasReuseEvent) {
+    throw createSmokeError('verify_reuse', {
+      errorCode: 'missing_run_reused',
+      responseSummary: 'Second Agent Run request did not emit run_reused.',
+    });
+  }
+
+  if (reuseState.runId !== debug.runId) {
+    throw createSmokeError('verify_reuse', {
+      errorCode: 'reuse_run_id_mismatch',
+      responseSummary: `Expected reused runId=${debug.runId}, got ${reuseState.runId || '<empty>'}.`,
+    });
+  }
+
+  debug.reuseVerified = true;
+}
+
 function validateReport(step, report, expectedRunId) {
   const reportId = getReportId(report);
   const reportRunId = getReportRunId(report);
@@ -574,6 +718,7 @@ function printSuccess(debug, reportState) {
   console.log(`assistantMessageId: ${debug.assistantMessageId || ''}`);
   console.log(`reportId: ${debug.reportId}`);
   console.log(`sourceCount: ${reportState.sourceCount}`);
+  console.log(`reuseVerified: ${debug.reuseVerified ? 'true' : 'false'}`);
   console.log('firstSources:');
 
   for (const source of reportState.sources.slice(0, 3)) {
@@ -676,6 +821,7 @@ async function main() {
     usageId: '',
     assistantMessageId: '',
     reportId: '',
+    reuseVerified: false,
   };
 
   try {
@@ -687,6 +833,10 @@ async function main() {
     debug.runId = streamState.runId;
     debug.usageId = streamState.usageId;
     debug.assistantMessageId = streamState.assistantMessageId;
+
+    if (options.verifyReuse) {
+      await verifyRunReuse(options, debug);
+    }
 
     const createdReportState = await createReport(options, debug);
     const readbackReportState = await verifyReportReadback(options, debug);
