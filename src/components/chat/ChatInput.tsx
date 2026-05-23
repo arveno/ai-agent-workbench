@@ -4,6 +4,7 @@ import { buildRealAgentAvailabilityView, getRealAgentBlockedMessage } from '@/se
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { ModelProviderId } from '../../types/workbench';
+import { getModelProviderMetadata, MODEL_PROVIDER_IDS } from '../../utils/modelCatalogMetadata';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { Button } from '../ui/button';
@@ -25,28 +26,15 @@ interface ChatModeOption {
   icon: typeof icons.brand;
 }
 
-const CHAT_MODE_OPTIONS: ChatModeOption[] = [
-  {
-    id: 'mock-agent',
-    label: 'Mock 模式',
-    icon: icons.brand,
-  },
-  {
-    id: 'siliconflow-qwen-free',
-    label: 'Qwen Free',
-    icon: icons.agent,
-  },
-  {
-    id: 'siliconflow-glm-free',
-    label: 'SiliconFlow GLM',
-    icon: icons.agent,
-  },
-  {
-    id: 'zhipu-glm-flash-free',
-    label: 'Zhipu GLM Flash',
-    icon: icons.agent,
-  },
-];
+const CHAT_MODE_OPTIONS: ChatModeOption[] = MODEL_PROVIDER_IDS.map((providerId) => {
+  const metadata = getModelProviderMetadata(providerId);
+
+  return {
+    id: providerId,
+    label: metadata.shortName,
+    icon: providerId === 'mock-agent' ? icons.brand : icons.agent,
+  };
+});
 
 function getRealAgentModeStatus(status: ReturnType<typeof buildRealAgentAvailabilityView>['status']): string {
   if (status === 'available') return '可用';

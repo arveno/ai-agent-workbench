@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildRealAgentAvailabilityView, type RealAgentAvailabilityView } from '@/services/agentAccessViewModel';
 import type { ModelProviderStatusView } from '@/types/modelStatus';
+import { getModelProviderMetadata, MODEL_PROVIDER_IDS } from '@/utils/modelCatalogMetadata';
 import { buildModelProviderStatusViews } from '@/utils/modelSelectionStatus';
 import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
@@ -17,29 +18,11 @@ interface ProviderOption {
   id: ModelProviderId;
 }
 
-const PROVIDER_OPTIONS: ProviderOption[] = [
-  {
-    id: 'mock-agent',
-  },
-  {
-    id: 'siliconflow-qwen-free',
-  },
-  {
-    id: 'siliconflow-glm-free',
-  },
-  {
-    id: 'zhipu-glm-flash-free',
-  },
-];
+const PROVIDER_OPTIONS: ProviderOption[] = MODEL_PROVIDER_IDS.map((providerId) => ({
+  id: providerId,
+}));
 
 const providerLogoMap: Partial<Record<ModelProviderId, string>> = {
-};
-
-const providerFallbackTextMap: Record<ModelProviderId, string> = {
-  'mock-agent': 'Mock',
-  'siliconflow-qwen-free': 'Qwen',
-  'siliconflow-glm-free': 'GLM',
-  'zhipu-glm-flash-free': 'GLM',
 };
 
 type ModelTabId = 'all' | 'configured' | 'usable';
@@ -83,7 +66,7 @@ function ModelProviderLogo({ providerId, alt }: ModelProviderLogoProps) {
   const logoSrc = providerLogoMap[providerId];
 
   if (!logoSrc || logoLoadFailed) {
-    return <span className="model-option-logo-fallback">{providerFallbackTextMap[providerId]}</span>;
+    return <span className="model-option-logo-fallback">{getModelProviderMetadata(providerId).logoText}</span>;
   }
 
   return (

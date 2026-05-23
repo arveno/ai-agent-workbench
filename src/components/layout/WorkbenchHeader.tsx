@@ -7,7 +7,10 @@ import {
   getRunStatusTone,
   type RunStatusTone,
 } from '../../utils/runViewModel';
-import { WORKBENCH_TOOL_DEFINITIONS } from '../../utils/toolRegistryView';
+import {
+  getOfficialWorkbenchToolSummaryItems,
+  WORKBENCH_TOOL_DEFINITIONS,
+} from '../../utils/toolRegistryView';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
 import { AppIcon } from '../common/AppIcon';
@@ -92,6 +95,7 @@ export function WorkbenchHeader() {
   const serverToolCount = WORKBENCH_TOOL_DEFINITIONS.filter(
     (tool) => tool.enabled && tool.runtime === 'server' && tool.status === 'connected',
   ).length;
+  const officialToolItems = getOfficialWorkbenchToolSummaryItems();
 
   return (
     <header className="workspace-header workbench-header">
@@ -167,14 +171,7 @@ export function WorkbenchHeader() {
           tooltip={{
             title: '服务端工具库',
             description: '模型只能选择服务端白名单工具，不能直接执行 SQL。',
-            items: [
-              { label: '数据源结构读取', status: '已接入', variant: 'success' },
-              { label: '受控数据查询', status: '已接入', variant: 'success' },
-              { label: '数据聚合分析', status: '已接入', variant: 'success' },
-              { label: '图表数据生成', status: '已接入', variant: 'success' },
-              { label: '知识库检索', status: '已接入', variant: 'success' },
-              { label: '报告生成', status: '本地辅助', variant: 'info' },
-            ],
+            items: officialToolItems,
           }}
           onClick={openToolLibraryModal}
         />

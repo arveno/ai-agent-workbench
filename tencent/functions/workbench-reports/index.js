@@ -283,10 +283,6 @@ function readRunReportState(value) {
   throw new RequestError(400, 'validation_error', 'Invalid report state.');
 }
 
-function readRuntimeRunId(body, metadata) {
-  return readQueryString(body.runtimeRunId) || readQueryString(metadata.runtimeRunId);
-}
-
 function normalizeSourceType(value) {
   const sourceType = String(value || 'knowledge');
   return VALID_SOURCE_TYPES.has(sourceType) ? sourceType : 'knowledge';
@@ -417,6 +413,16 @@ function toUuidOrNull(value) {
 
   const normalizedValue = value.trim();
   return UUID_PATTERN.test(normalizedValue) ? normalizedValue : null;
+}
+
+function readRequiredRunId(value) {
+  const runId = toUuidOrNull(value);
+
+  if (!runId) {
+    throw new RequestError(400, 'validation_error', 'Canonical UUID runId is required.');
+  }
+
+  return runId;
 }
 
 function mapReport(row) {
@@ -603,66 +609,30 @@ async function fetchReportsByConversation(currentUser, conversationId) {
   };
 }
 
-async function markAgentRunReportState(db, currentUser, conversationId, params, reportState, options = {}) {
-  const runId = toUuidOrNull(params.runId);
-  const runtimeRunId = readRuntimeRunId(params, params.metadata || {});
+async function markAgentRunReportState(db, currentUser, conversationId, runId, reportState) {
+  const updateByIdResult = await db
+    .from('agent_runs')
+    .update({
+      report_state: reportState,
+    })
+    .eq('id', runId)
+    .eq('conversation_id', conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
 
-  if (!runId && !runtimeRunId) {
-    if (options.required) {
-      throw new RequestError(400, 'validation_error', 'Missing run id.');
-    }
-
-    return;
-  }
-
-  if (runId) {
-    const updateByIdResult = await db
-      .from('agent_runs')
-      .update({
-        report_state: reportState,
-      })
-      .eq('id', runId)
-      .eq('conversation_id', conversationId)
-      .eq('_openid', currentUser.openid)
-      .eq('user_id', currentUser.userId);
-
-    assertNoQueryError(updateByIdResult);
-  }
-
-  if (runtimeRunId && runtimeRunId !== runId) {
-    const updateByRuntimeResult = await db
-      .from('agent_runs')
-      .update({
-        report_state: reportState,
-      })
-      .eq('runtime_run_id', runtimeRunId)
-      .eq('conversation_id', conversationId)
-      .eq('_openid', currentUser.openid)
-      .eq('user_id', currentUser.userId);
-
-    assertNoQueryError(updateByRuntimeResult);
-  }
+  assertNoQueryError(updateByIdResult);
 }
 
-async function createReportStateMarker(db, currentUser, conversationId, params, reportState) {
+async function createReportStateMarker(db, currentUser, conversationId, runId, reportState) {
   if (reportState !== 'skipped') {
     return null;
   }
 
-  const runId = toUuidOrNull(params.runId);
-  const runtimeRunId = readRuntimeRunId(params, params.metadata || {});
   const metadata = {
     source: 'agent-run-report-state',
     reportState,
+    runId,
   };
-
-  if (runId) {
-    metadata.runId = runId;
-  }
-
-  if (!runId && !runtimeRunId) {
-    return null;
-  }
 
   const reportId = randomUUID();
   const insertResult = await db.from('report_artifacts').insert({
@@ -693,19 +663,14 @@ async function updateRunReportState(currentUser, body) {
 
   await assertConversationOwner(db, currentUser, conversationId);
 
-  const metadata = readMetadata(body.metadata);
   const reportState = readRunReportState(body.reportState);
-  const params = {
-    runId: body.runId,
-    runtimeRunId: body.runtimeRunId,
-    metadata,
-  };
+  const runId = readRequiredRunId(body.runId);
 
-  await markAgentRunReportState(db, currentUser, conversationId, params, reportState, { required: true });
-  await createReportStateMarker(db, currentUser, conversationId, params, reportState);
+  await markAgentRunReportState(db, currentUser, conversationId, runId, reportState);
+  await createReportStateMarker(db, currentUser, conversationId, runId, reportState);
 
   return {
-    runId: toUuidOrNull(body.runId) || readRuntimeRunId(params, metadata) || String(body.runId || ''),
+    runId,
     reportState,
   };
 }
@@ -722,8 +687,7 @@ async function createReport(currentUser, body) {
 
   const reportId = randomUUID();
   const requestMetadata = readMetadata(body.metadata);
-  const runId = toUuidOrNull(body.runId);
-  const runtimeRunId = readRuntimeRunId(body, requestMetadata);
+  const runId = readRequiredRunId(body.runId);
   const sourceSnapshot = await readRunSourceSnapshot(db, currentUser, conversationId, runId);
   const metadata = createReportMetadata(requestMetadata, sourceSnapshot);
   const insertPayload = {
@@ -741,17 +705,7 @@ async function createReport(currentUser, body) {
 
   const insertResult = await db.from('report_artifacts').insert(insertPayload);
   assertNoQueryError(insertResult);
-  await markAgentRunReportState(
-    db,
-    currentUser,
-    conversationId,
-    {
-      runId: body.runId,
-      runtimeRunId,
-      metadata,
-    },
-    'generated',
-  );
+  await markAgentRunReportState(db, currentUser, conversationId, runId, 'generated');
 
   const report = await fetchReportById(db, currentUser, reportId);
 

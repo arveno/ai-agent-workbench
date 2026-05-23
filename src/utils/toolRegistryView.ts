@@ -1,4 +1,11 @@
-import type { WorkbenchToolDefinition } from '@/types/toolRegistry';
+import type { WorkbenchToolDefinition, WorkbenchToolId } from '@/types/toolRegistry';
+
+export const OFFICIAL_WORKBENCH_TOOL_IDS: readonly WorkbenchToolId[] = [
+  'schema_inspect',
+  'aggregate_table',
+  'chart_render',
+  'knowledge_search',
+];
 
 export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
   {
@@ -14,20 +21,6 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     description: '读取当前数据源允许访问的 schema、表、字段和字段类型。',
     inputSummary: 'dataSourceId, allowedSchemas',
     outputSummary: 'tables, columns, columnTypes',
-  },
-  {
-    id: 'query_table',
-    name: 'query_table',
-    displayName: '受控数据查询',
-    category: 'query',
-    status: 'connected',
-    runtime: 'server',
-    riskLevel: 'medium',
-    enabled: true,
-    usedInRunTrace: true,
-    description: '按白名单表和字段执行受控查询，不开放任意 SQL。',
-    inputSummary: 'table, columns, limit',
-    outputSummary: 'rows, rowCount, elapsedMs',
   },
   {
     id: 'aggregate_table',
@@ -71,24 +64,20 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     inputSummary: 'query, topK',
     outputSummary: '命中片段数, 来源片段, 引用, 分数',
   },
-  {
-    id: 'report_generate',
-    name: 'report_generate',
-    displayName: '报告生成',
-    category: 'report',
-    status: 'mock',
-    runtime: 'mock',
-    riskLevel: 'low',
-    enabled: true,
-    usedInRunTrace: false,
-    description: '基于当前 Run 结果生成 Markdown 简版报告，目前由前端基于 currentRun 生成。',
-    inputSummary: 'runId, conclusion, toolInvocations, chartData',
-    outputSummary: 'reportMarkdown',
-  },
 ];
 
+export function normalizeWorkbenchToolId(toolId: string): WorkbenchToolId | null {
+  const normalizedToolId = toolId.trim().toLowerCase();
+  return OFFICIAL_WORKBENCH_TOOL_IDS.find((id) => id === normalizedToolId) ?? null;
+}
+
 export function getWorkbenchToolDefinition(toolId: string): WorkbenchToolDefinition | null {
-  const normalizedToolId = toolId === 'rag_search' ? 'knowledge_search' : toolId;
+  const normalizedToolId = normalizeWorkbenchToolId(toolId);
+
+  if (!normalizedToolId) {
+    return null;
+  }
+
   return WORKBENCH_TOOL_DEFINITIONS.find((tool) => tool.id === normalizedToolId || tool.name === normalizedToolId) ?? null;
 }
 
@@ -130,4 +119,42 @@ export function getToolRiskLabel(riskLevel: WorkbenchToolDefinition['riskLevel']
   }
 
   return '高风险';
+}
+
+export function getToolCategoryLabel(category: WorkbenchToolDefinition['category']): string {
+  if (category === 'schema') {
+    return 'Schema 工具';
+  }
+
+  if (category === 'analysis') {
+    return '分析工具';
+  }
+
+  if (category === 'render') {
+    return '可视化工具';
+  }
+
+  if (category === 'knowledge') {
+    return '知识工具';
+  }
+
+  if (category === 'query') {
+    return '查询工具';
+  }
+
+  return '报告工具';
+}
+
+export function getOfficialWorkbenchToolSummaryItems(): Array<{
+  label: string;
+  status: string;
+  variant: 'success';
+}> {
+  return WORKBENCH_TOOL_DEFINITIONS.filter(
+    (tool) => tool.enabled && tool.runtime === 'server' && tool.status === 'connected',
+  ).map((tool) => ({
+    label: tool.displayName,
+    status: '已接入',
+    variant: 'success',
+  }));
 }

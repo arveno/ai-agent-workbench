@@ -1,15 +1,7 @@
-import type { AgentRunResult } from '@/types/workbench';
 import type {
-  RunChartData,
   RunDataSourceSnapshot,
-  RunIntent,
   RunStartedEvent,
-  RunSnapshot,
-  RunStep,
-  RunToolInvocation,
 } from '@/types/run';
-
-type LegacyAgentProvider = 'postgresql' | 'supabase';
 
 function createCloudBaseAgentDataSource(): RunDataSourceSnapshot {
   return {
@@ -17,71 +9,6 @@ function createCloudBaseAgentDataSource(): RunDataSourceSnapshot {
     name: 'CloudBase MySQL / Agent Run',
     typeLabel: 'CloudBase MySQL',
     schema: 'public_demo',
-  };
-}
-
-function getLegacyAgentDataSource(provider: LegacyAgentProvider): RunDataSourceSnapshot {
-  return {
-    provider,
-    name: '历史数据源记录 / Agent Run',
-    typeLabel: '历史数据源',
-    schema: 'public',
-  };
-}
-
-function mapAgentIntent(agentRun: AgentRunResult): RunIntent {
-  if (agentRun.plan?.intent) {
-    return agentRun.plan.intent;
-  }
-
-  return agentRun.toolInvocations.length > 0 ? 'data_analysis' : 'unknown';
-}
-
-function mapAgentSteps(agentRun: AgentRunResult): RunStep[] {
-  return agentRun.steps.map((step) => ({
-    id: step.id,
-    title: step.title,
-    description: step.description,
-    status: step.status,
-    elapsedMs: step.elapsedMs,
-  }));
-}
-
-function mapAgentTools(agentRun: AgentRunResult): RunToolInvocation[] {
-  return agentRun.toolInvocations.map((invocation) => ({
-    id: invocation.id,
-    toolId: invocation.toolId,
-    toolName: invocation.toolId,
-    displayName: invocation.toolName,
-    status: invocation.status,
-    inputSummary: invocation.inputSummary,
-    outputSummary: invocation.outputSummary,
-    elapsedMs: invocation.elapsedMs,
-  }));
-}
-
-function mapAgentChartData(agentRun: AgentRunResult): RunChartData | undefined {
-  if (
-    !agentRun.chartData ||
-    agentRun.chartData.labels.length === 0 ||
-    agentRun.chartData.values.length === 0
-  ) {
-    return undefined;
-  }
-
-  const chartType = agentRun.chartData.chartType === 'line' ? 'line' : 'bar';
-
-  return {
-    title: agentRun.chartData.title || '数据分析结果',
-    chartType,
-    labels: agentRun.chartData.labels,
-    series: [
-      {
-        name: agentRun.chartData.title || '指标值',
-        values: agentRun.chartData.values,
-      },
-    ],
-    summary: agentRun.chartData.summary,
   };
 }
 
@@ -159,41 +86,5 @@ export function createAgentPendingRunStartedEvent(params: {
       updatedAt: timestamp,
       startedAt: timestamp,
     },
-  };
-}
-
-export function mapAgentRunResultToRunSnapshot(agentRun: AgentRunResult): RunSnapshot {
-  const intent = mapAgentIntent(agentRun);
-  const isReportAvailable = intent === 'data_analysis' && agentRun.status === 'success' && Boolean(agentRun.conclusion.trim());
-  const updatedAt = new Date().toISOString();
-
-  return {
-    id: agentRun.id,
-    displayRunId: agentRun.id,
-    mode: 'agent',
-    status: agentRun.status,
-    intent,
-    prompt: agentRun.prompt,
-    plan: {
-      intent,
-      shouldUseDataAnalysis: agentRun.plan?.shouldUseDataAnalysis ?? intent === 'data_analysis',
-      reason: agentRun.plan?.reason,
-      metric: agentRun.plan?.metric,
-      groupBy: agentRun.plan?.groupBy,
-      timeRangeLabel: agentRun.plan?.timeRange?.label,
-      comparison: agentRun.plan?.comparison,
-    },
-    dataSource: getLegacyAgentDataSource(agentRun.provider),
-    steps: mapAgentSteps(agentRun),
-    toolInvocations: mapAgentTools(agentRun),
-    chartData: mapAgentChartData(agentRun),
-    conclusion: agentRun.conclusion,
-    conclusionSource: agentRun.conclusionSource,
-    conclusionNotice: agentRun.conclusionNotice,
-    reportState: isReportAvailable ? 'pending' : 'hidden',
-    createdAt: agentRun.createdAt,
-    updatedAt,
-    completedAt: agentRun.status === 'success' || agentRun.status === 'error' ? updatedAt : undefined,
-    elapsedMs: agentRun.elapsedMs,
   };
 }

@@ -7,6 +7,7 @@ import type {
   WorkbenchMessageKind,
   WorkbenchSession,
 } from '../../types/workbench';
+import { isModelProviderId as isKnownModelProviderId } from '../../utils/modelCatalogMetadata';
 import { createSessionTitle } from '../../utils/sessionTitle';
 import { readSessionStorageJson, writeSessionStorageJson } from '../../utils/sessionStorage';
 
@@ -28,13 +29,6 @@ interface WorkbenchSessionStorageState {
   sessions: WorkbenchSession[];
   activeSessionId: string;
 }
-
-export const selectableModelIds: ModelProviderId[] = [
-  'mock-agent',
-  'siliconflow-qwen-free',
-  'siliconflow-glm-free',
-  'zhipu-glm-flash-free',
-];
 
 export function createSessionId(): string {
   return `s_${Date.now()}`;
@@ -458,7 +452,7 @@ export function delay(ms: number): Promise<void> {
 }
 
 export function isModelProviderId(value: string): value is ModelProviderId {
-  return selectableModelIds.includes(value as ModelProviderId);
+  return isKnownModelProviderId(value);
 }
 
 export function getInitialSelectedModelId(): ModelProviderId {

@@ -1,5 +1,11 @@
 import type { RunToolInvocation } from '@/types/run';
+import type { WorkbenchToolId } from '@/types/toolRegistry';
 import { getToolFailureLabel, getToolStatusLabel } from './observabilityLabels';
+import {
+  getToolCategoryLabel,
+  getWorkbenchToolDefinition,
+  normalizeWorkbenchToolId,
+} from './toolRegistryView';
 
 export interface FormattedToolInvocation {
   id: string;
@@ -12,32 +18,6 @@ export interface FormattedToolInvocation {
   failureText: string;
   elapsedText: string;
 }
-
-const TOOL_DISPLAY_NAME_MAP = {
-  schema_inspect: '数据源结构读取',
-  knowledge_search: '知识检索',
-  rag_search: '教学评价知识检索',
-  query_data: '数据查询',
-  query_table: '受控数据查询',
-  aggregate_table: '数据聚合分析',
-  chart_render: '图表数据生成',
-  report_generate: '报告生成',
-} as const;
-
-const TOOL_CATEGORY_LABEL_MAP = {
-  schema_inspect: 'Schema 工具',
-  knowledge_search: '知识工具',
-  rag_search: '知识工具',
-  query_data: '查询工具',
-  query_table: '查询工具',
-  aggregate_table: '分析工具',
-  chart_render: '可视化工具',
-  report_generate: '报告工具',
-} as const;
-
-const KNOWN_TOOL_IDS = Object.keys(TOOL_DISPLAY_NAME_MAP) as Array<keyof typeof TOOL_DISPLAY_NAME_MAP>;
-
-type KnownToolId = (typeof KNOWN_TOOL_IDS)[number];
 
 type FormatLimits = {
   input: number;
@@ -68,12 +48,20 @@ export function tryParseJsonObject(value: string): Record<string, unknown> | nul
   return null;
 }
 
-function getKnownToolId(invocation: RunToolInvocation): KnownToolId | null {
+function getKnownToolId(invocation: RunToolInvocation): WorkbenchToolId | null {
   const candidates = [invocation.toolId, invocation.toolName, invocation.displayName]
     .filter(Boolean)
     .map((value) => value.toLowerCase());
 
-  return KNOWN_TOOL_IDS.find((toolId) => candidates.some((candidate) => candidate === toolId || candidate.includes(toolId))) ?? null;
+  for (const candidate of candidates) {
+    const normalizedToolId = normalizeWorkbenchToolId(candidate);
+
+    if (normalizedToolId) {
+      return normalizedToolId;
+    }
+  }
+
+  return null;
 }
 
 function getStringField(source: Record<string, unknown> | null, key: string): string {
@@ -138,24 +126,15 @@ function extractCount(text: string, unitPattern: string): string | null {
   return match?.[1] ?? null;
 }
 
-function formatInputText(toolId: KnownToolId | null, invocation: RunToolInvocation): string {
+function formatInputText(toolId: WorkbenchToolId | null, invocation: RunToolInvocation): string {
   const inputObject = tryParseJsonObject(invocation.inputSummary);
 
   if (toolId === 'schema_inspect') {
     return '读取可访问的数据源结构。';
   }
 
-  if (toolId === 'knowledge_search' || toolId === 'rag_search') {
+  if (toolId === 'knowledge_search') {
     return '检索与本轮问题相关的知识资料。';
-  }
-
-  if (toolId === 'query_data') {
-    return '查询本轮分析所需的业务数据。';
-  }
-
-  if (toolId === 'query_table') {
-    const table = getStringField(inputObject, 'table');
-    return table ? `查询 ${table} 表中的受控字段。` : '执行受控表查询。';
   }
 
   if (toolId === 'aggregate_table') {
@@ -171,14 +150,10 @@ function formatInputText(toolId: KnownToolId | null, invocation: RunToolInvocati
     return chartType ? `生成${humanizeChartType(chartType)}数据。` : '生成图表展示数据。';
   }
 
-  if (toolId === 'report_generate') {
-    return '基于本轮 Run 结果生成报告。';
-  }
-
   return invocation.inputSummary.trim().startsWith('{') ? '执行工具调用。' : invocation.inputSummary || '执行工具调用。';
 }
 
-function formatOutputText(toolId: KnownToolId | null, invocation: RunToolInvocation): string {
+function formatOutputText(toolId: WorkbenchToolId | null, invocation: RunToolInvocation): string {
   if (invocation.status === 'error') {
     return '工具执行异常。';
   }
@@ -206,18 +181,9 @@ function formatOutputText(toolId: KnownToolId | null, invocation: RunToolInvocat
     return chartType ? `已生成${humanizeChartType(chartType)}数据。` : '已生成图表数据。';
   }
 
-  if (toolId === 'knowledge_search' || toolId === 'rag_search') {
+  if (toolId === 'knowledge_search') {
     const count = extractCount(outputText, '条');
     return count ? `已检索到 ${count} 条相关知识资料。` : '已检索到相关知识资料。';
-  }
-
-  if (toolId === 'query_table' || toolId === 'query_data') {
-    const rowCount = extractCount(outputText, '条') ?? getNumberField(outputObject, 'rowCount')?.toString();
-    return rowCount ? `已返回 ${rowCount} 条查询结果。` : '已返回查询结果。';
-  }
-
-  if (toolId === 'report_generate') {
-    return '已生成报告内容。';
   }
 
   return outputText.startsWith('{') ? '工具已执行完成。' : outputText || '工具已执行完成。';
@@ -229,10 +195,9 @@ function formatElapsedText(elapsedMs: number | undefined): string {
 
 function formatToolInvocation(invocation: RunToolInvocation, limits: FormatLimits): FormattedToolInvocation {
   const toolId = getKnownToolId(invocation);
-  const displayName = toolId
-    ? TOOL_DISPLAY_NAME_MAP[toolId]
-    : invocation.displayName || invocation.toolName;
-  const categoryLabel = toolId ? TOOL_CATEGORY_LABEL_MAP[toolId] : '工具';
+  const toolDefinition = toolId ? getWorkbenchToolDefinition(toolId) : null;
+  const displayName = (toolDefinition?.displayName ?? invocation.displayName) || invocation.toolName;
+  const categoryLabel = toolDefinition ? getToolCategoryLabel(toolDefinition.category) : '工具';
 
   return {
     id: invocation.id,

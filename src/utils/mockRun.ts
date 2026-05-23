@@ -18,7 +18,7 @@ import { createMockRagSources } from './ragSources';
 export const MOCK_RUN_STEP_IDS = {
   understandPrompt: 'understand_prompt',
   knowledgeSearch: 'knowledge_search',
-  queryData: 'query_data',
+  queryData: 'aggregate_table',
   generateChart: 'generate_chart',
   waitConfirmation: 'wait_confirmation',
   generateConclusion: 'generate_conclusion',
@@ -26,14 +26,14 @@ export const MOCK_RUN_STEP_IDS = {
 
 export const MOCK_RUN_TOOL_IDS = {
   knowledgeSearch: 'knowledge_search',
-  queryData: 'query_data',
+  queryData: 'aggregate_table',
   chartRender: 'chart_render',
 } as const;
 
 const MOCK_RUN_STEPS = [
   { id: MOCK_RUN_STEP_IDS.understandPrompt, title: '理解用户问题' },
   { id: MOCK_RUN_STEP_IDS.knowledgeSearch, title: '检索知识资料' },
-  { id: MOCK_RUN_STEP_IDS.queryData, title: '查询业务数据' },
+  { id: MOCK_RUN_STEP_IDS.queryData, title: '聚合业务数据' },
   { id: MOCK_RUN_STEP_IDS.generateChart, title: '生成分析图表' },
   { id: MOCK_RUN_STEP_IDS.waitConfirmation, title: '等待用户确认' },
   { id: MOCK_RUN_STEP_IDS.generateConclusion, title: '生成最终结论' },
@@ -201,9 +201,9 @@ export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS)
       id: MOCK_RUN_TOOL_IDS.queryData,
       toolId: MOCK_RUN_TOOL_IDS.queryData,
       toolName: MOCK_RUN_TOOL_IDS.queryData,
-      displayName: '数据查询',
+      displayName: '数据聚合分析',
       status: 'running',
-      inputSummary: '查询本月各年级成绩与出勤统计数据',
+      inputSummary: '按年级聚合本月成绩与出勤统计数据',
       outputSummary: '',
       startedAt: timestamp,
     };

@@ -1,11 +1,8 @@
 export type WorkbenchToolId =
   | 'schema_inspect'
-  | 'query_table'
   | 'aggregate_table'
   | 'chart_render'
-  | 'rag_search'
-  | 'knowledge_search'
-  | 'report_generate';
+  | 'knowledge_search';
 
 export type WorkbenchToolCategory = 'schema' | 'query' | 'analysis' | 'render' | 'knowledge' | 'report';
 

@@ -85,7 +85,7 @@ export interface RunChartData {
 }
 
 export interface RunDataSourceSnapshot {
-  provider: 'mock' | 'cloudbase_mysql' | 'postgresql' | 'supabase';
+  provider: 'mock' | 'cloudbase_mysql';
   name: string;
   typeLabel: string;
   schema?: string;

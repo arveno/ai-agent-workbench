@@ -6,7 +6,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { WorkflowStepDefinition } from '../../types/workbench';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
+import { getWorkbenchToolDisplayName } from '../../utils/toolRegistryView';
 import { PromptTemplatePanel } from './PromptTemplatePanel';
+
+const SCHEMA_TOOL_LABEL = getWorkbenchToolDisplayName('schema_inspect');
+const AGGREGATE_TOOL_LABEL = getWorkbenchToolDisplayName('aggregate_table');
+const CHART_TOOL_LABEL = getWorkbenchToolDisplayName('chart_render');
 
 const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
   {
@@ -29,7 +34,7 @@ const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
     id: 'workflow-schema',
     kind: 'schema',
     title: '读取数据源 Schema',
-    description: '通过 schema_inspect 工具读取允许访问的表、字段和字段类型。',
+    description: `通过 ${SCHEMA_TOOL_LABEL} 工具读取允许访问的表、字段和字段类型。`,
     status: 'ready',
     toolName: 'schema_inspect',
     outputSummary: 'tables, columns, columnTypes',
@@ -38,7 +43,7 @@ const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
     id: 'workflow-tool-select',
     kind: 'toolSelect',
     title: '选择工具',
-    description: '根据问题类型选择 query_table 或 aggregate_table 等受控工具。',
+    description: `根据问题类型选择 ${AGGREGATE_TOOL_LABEL} 等受控工具。`,
     status: 'ready',
     outputSummary: 'selectedTools',
   },
@@ -48,14 +53,14 @@ const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
     title: '执行工具',
     description: '执行受控查询或聚合，禁止任意 SQL，必须遵守表白名单和 LIMIT。',
     status: 'ready',
-    toolName: 'query_table / aggregate_table',
+    toolName: 'aggregate_table',
     outputSummary: 'rows, aggregates, elapsedMs',
   },
   {
     id: 'workflow-chart',
     kind: 'chart',
     title: '生成图表数据',
-    description: '通过 chart_render 将查询结果转换为前端图表结构。',
+    description: `通过 ${CHART_TOOL_LABEL} 将聚合结果转换为前端图表结构。`,
     status: 'ready',
     toolName: 'chart_render',
     outputSummary: 'chartConfig, summary',

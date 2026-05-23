@@ -6,6 +6,7 @@ import type {
   ConversationVisibility,
 } from './persistence';
 import type { RunEvent, RunSnapshot } from './run';
+import type { ModelProviderId } from '../utils/modelCatalogMetadata';
 
 export type SessionId = string;
 
@@ -50,6 +51,8 @@ export type {
   WorkbenchToolRuntime,
   WorkbenchToolStatus,
 } from './toolRegistry';
+
+export type { ModelProviderId } from '../utils/modelCatalogMetadata';
 
 export type TaskId = string;
 export type KnowledgeSourceId = string;
@@ -130,18 +133,10 @@ export type CapabilityStatus =
   | 'fallback'
   | 'error'
   | 'disabled';
-export type ModelProviderId =
-  | 'mock-agent'
-  | 'siliconflow-qwen-free'
-  | 'siliconflow-glm-free'
-  | 'zhipu-glm-flash-free';
 export type ModelProvider = ModelProviderId;
 export type ModelTestStatus = 'idle' | 'testing' | 'success' | 'error';
 export type DataSourceProviderId = 'mysql';
 export type DataSourceConnectionStatus = 'idle' | 'connected' | 'disconnected' | 'testing' | 'error';
-export type LegacyAgentDataSourceProviderId = 'postgresql' | 'supabase';
-export type ToolRiskLevel = 'low' | 'medium' | 'high';
-export type ToolStatus = 'enabled' | 'disabled' | 'comingSoon';
 export type WorkflowStepStatus = 'ready' | 'running' | 'done' | 'waiting' | 'disabled';
 export type WorkflowStepKind =
   | 'input'
@@ -185,17 +180,6 @@ export interface DataSourceTableSchema {
   columns: DataSourceColumnSchema[];
 }
 
-export interface AgentToolDefinition {
-  id: string;
-  name: string;
-  description: string;
-  status: ToolStatus;
-  riskLevel: ToolRiskLevel;
-  category: 'schema' | 'query' | 'analysis' | 'render' | 'knowledge' | 'report';
-  inputSummary: string;
-  outputSummary: string;
-}
-
 export interface WorkflowStepDefinition {
   id: string;
   kind: WorkflowStepKind;
@@ -206,88 +190,7 @@ export interface WorkflowStepDefinition {
   outputSummary?: string;
 }
 
-export type AgentRunStatus = 'running' | 'success' | 'error';
-export type AgentRunPlanIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported';
 export type ReportActionState = 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
-
-export type AgentRunStepStatus = 'pending' | 'running' | 'success' | 'error';
-
-export interface AgentRunStep {
-  id: string;
-  title: string;
-  status: AgentRunStepStatus;
-  description?: string;
-  elapsedMs?: number;
-}
-
-export interface AgentToolInvocationResult {
-  id: string;
-  toolId: string;
-  toolName: string;
-  status: 'success' | 'error';
-  inputSummary: string;
-  outputSummary: string;
-  elapsedMs: number;
-}
-
-export interface AgentRunChartData {
-  title: string;
-  chartType: 'bar' | 'line';
-  labels: string[];
-  values: number[];
-  summary: string;
-}
-
-export type AgentConclusionSource = 'model' | 'fallback';
-
-export interface AgentRunPlanView {
-  intent: AgentRunPlanIntent;
-  shouldUseDataAnalysis: boolean;
-  reason: string;
-  metric?: 'avg_score' | 'attendance_rate' | 'homework_completion_rate' | 'abnormal_count';
-  groupBy?: 'subject' | 'metric_month';
-  timeRange?: {
-    type: 'month' | 'latest_available_month' | 'none';
-    month?: string;
-    label?: string;
-  };
-  comparison?: 'none' | 'previous_month';
-}
-
-export interface AgentRunResult {
-  id: string;
-  status: AgentRunStatus;
-  prompt: string;
-  provider: LegacyAgentDataSourceProviderId;
-  plan?: AgentRunPlanView;
-  steps: AgentRunStep[];
-  toolInvocations: AgentToolInvocationResult[];
-  chartData?: AgentRunChartData;
-  conclusion: string;
-  conclusionSource: AgentConclusionSource;
-  conclusionNotice?: string;
-  createdAt: string;
-  elapsedMs: number;
-}
-
-export interface AgentRunSuccessResponse {
-  ok: true;
-  run: AgentRunResult;
-}
-
-export interface AgentRunErrorResponse {
-  ok: false;
-  errorMessage: string;
-}
-
-export type AgentRunResponse = AgentRunSuccessResponse | AgentRunErrorResponse;
-
-export interface ModelProviderOption {
-  id: ModelProviderId;
-  name: string;
-  description: string;
-  status: 'active' | 'available' | 'reserved';
-}
 
 export interface AssistantStreamState {
   content: string;
