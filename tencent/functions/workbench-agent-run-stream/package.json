@@ -8,6 +8,9 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@cloudbase/node-sdk": "^3.10.1"
+    "@cloudbase/node-sdk": "^3.10.1",
+    "@langchain/core": "1.1.44",
+    "@langchain/langgraph": "1.2.9",
+    "zod": "4.2.0"
   }
 }

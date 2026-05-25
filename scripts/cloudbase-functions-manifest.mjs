@@ -20,7 +20,7 @@ const functionDefinitions = [
   ['workbench-quota', ['auth.js', 'mysql.js']],
   ['workbench-runs', ['auth.js', 'mysql.js']],
   ['workbench-evaluations', ['auth.js', 'mysql.js']],
-  ['workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js']],
+  ['workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js', 'langgraphRuntime.js']],
 ];
 
 export const manifests = functionDefinitions.map(([name, sharedFiles]) => createManifest(name, sharedFiles));

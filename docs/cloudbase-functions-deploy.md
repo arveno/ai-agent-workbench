@@ -162,6 +162,7 @@ cloudbase-workbench-agent-run-stream-package/workbench-agent-run-stream/index.js
   - `_shared/auth.js`
   - `_shared/mysql.js`
   - `_shared/modelGateway.js`
+  - `_shared/langgraphRuntime.js`
 
 检查脚本必须校验需要的 `_shared` 文件是否存在，并提示 demo 函数误带 `_shared`。
 
