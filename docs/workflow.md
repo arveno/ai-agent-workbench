@@ -92,6 +92,17 @@ Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset
 - 涉及 Agent Runtime、Model、Tool、RAG、Trace 或 Evaluation 的任务必须遵守 LangGraph / LangChain / LangSmith 终态职责。
 - 不在旧 runtime 旁新增 LangChain 旁路包装层，不保留 old/new 双轨执行。
 
+### 3.1 Issue / PR 粒度
+
+- 一个 Issue 代表一个完整任务闭环，不代表一个小步骤。
+- 一个 Issue 可以包含多个子任务和多次 commit。
+- 一个 PR 是该 Issue 的承载，不是每次 CI 通过就立刻合并。
+- 只有当 Issue 的完整任务闭环被明确验收通过后，才合并 PR。
+- Review 后发现需要补充时，继续在同一个分支 / 同一个 PR 上追加修改；只有范围变化时才新建 Issue。
+- 不按单个小动作、单个文件修改或单个 commit 拆 Issue / PR。
+- 只读审查类 Issue 可以不建分支、不建 PR，只在 Issue 评论沉淀结论。
+- 长期事实源变更或代码变更必须通过任务分支和 PR。
+
 ## 4. 变更门禁
 
 以下任务必须先只读审查，不直接改代码：
@@ -188,11 +199,24 @@ Review / 辅助验收时必须检查：
 - smoke test 输出，如涉及部署。
 - 不确定的地方。
 
-## 9. 提交规则
+## 9. Commit / Push Gate
 
 - 变更通过分支和 PR 承载，不直接改 main。
 - PR 必须关联 Issue。
-- 一个阶段或一个小闭环对应一次 PR / 提交。
+- Codex 默认不得自动 commit、push、创建 PR 或更新 PR。
+- Codex 完成文件修改后，必须先停在本地 diff 阶段。
+- Codex 必须先输出 Review Packet 和本地 review 命令。
+- 用户通过本地命令检查改动后，明确确认“可以提交”“可以 push”“可以创建 PR”或“可以更新 PR”，Codex 才能继续对应动作。
+- 默认本地 review 命令：
+
+```text
+git diff --stat
+git diff
+git status --short
+```
+
+- 已存在 PR 的任务追加改动后，也必须先停在本地 diff 阶段，不得自动 push 更新 PR。
+- 该门禁目标是让用户先在本地 review，而不是被迫去 GitHub PR 页面看代码。
 - 不混入无关文件。
 - 提交前先看 `git diff --stat` 和 `git status --short`。
 - 工作区已有未提交代码时，只能显式 `git add` 本阶段文件，不能 `git add .`。
