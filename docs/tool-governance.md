@@ -15,7 +15,7 @@
 
 工具治理目标是让服务端执行、参数白名单、持久化、Trace 展示和前端工具库展示回到同一条主链路。
 
-长期终态下，正式服务端工具必须向 LangChain Tool / Structured Tool 收敛，并由 LangGraph runtime 调度。当前自研工具执行链路只作为待替换旧链路，不得在其旁边新增 LangChain wrapper 旁路。
+当前正式服务端工具已收敛到 LangChain Tool / Structured Tool 边界，并由 LangGraph runtime 调度。不得在主链路旁新增旧工具链、LangChain wrapper 旁路或 old/new 双轨兼容。
 
 ## 2. 正式工具清单
 
@@ -30,7 +30,7 @@
 
 `report_generate` 归属 Artifact / Report API，不是当前 Agent Run 内部 Tool Invocation 主工具。
 
-Evaluation 相关能力后置，不纳入当前正式 Tool Registry。
+Evaluation 相关能力不纳入当前正式 Tool Registry；Evaluation 主事实源和 LangSmith feedback 语义由 Evaluation 链路承载。
 
 ## 3. legacy / planned / mock 边界
 

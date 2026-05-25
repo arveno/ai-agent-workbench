@@ -17,7 +17,7 @@
 
 目标是让 Chat、Run Trace、Source Panel、Report、Evaluation 消费同一份标准化 Source model。
 
-长期终态下，RAG 能力必须向 LangChain Retriever / Document / metadata / citation 链路收敛，并由 LangGraph runtime 调度。当前自研检索和打分逻辑只作为待替换旧链路，不得在其旁边新增 LangChain RAG 旁路。
+当前 RAG 能力已收敛到 LangChain Retriever / Document / metadata / citation 输出边界，并由 LangGraph runtime 调度。`retrieval_logs` / `run_sources` 仍是主事实源；不得在主链路旁新增旧 RAG 链或 LangChain RAG 旁路。
 
 ## 2. 主事实源
 

@@ -14,29 +14,30 @@ EdgeOne / Vite
   -> CloudBase MySQL
 ```
 
-长期模型链路：
+当前模型链路：
 
 ```text
 selectedModelId
   -> model catalog
-  -> LangChain model layer
+  -> _shared/modelGateway.js
   -> provider client
   -> modelTrace / tokenUsage / latency / fallbackReason
 ```
 
-前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
+长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
 
-长期 Agent Runtime 链路：
+当前 Agent Runtime 链路：
 
 ```text
 CloudBase HTTP Function
   -> LangGraph graph runtime
-  -> LangChain Model / Tool / Retriever
+  -> LangChain Tool / Retriever
+  -> model catalog / _shared/modelGateway.js
   -> LangSmith Trace / Evaluation
   -> CloudBase MySQL persistence
 ```
 
-当前自研 imperative runtime 和 `_shared/modelGateway.js` 只作为待替换旧链路，不作为长期终态。后续重构必须单轨替换，不允许在旧 runtime 旁新增 LangChain 旁路包装层。
+Agent Run 主入口、Tool、Retriever 和 Trace / Evaluation 语义已进入 LangGraph / LangChain / LangSmith 边界。`_shared/modelGateway.js` 仍是当前模型调用边界，不再扩展为新模型平台；后续迁入 LangChain model layer 时必须单轨替换，不允许新增旁路包装层或 old/new 双轨兼容。
 
 ## 2. 核心执行链路
 
@@ -56,7 +57,7 @@ Agent Run 是执行中心。Chat、Run Trace、Report、Source Panel、Evaluatio
 
 ### 2.1 LangGraph Runtime 运行态契约
 
-LangGraph Run State 是后续 Agent Runtime 的唯一运行态容器。核心 state 必须覆盖：
+LangGraph Run State 是当前 Agent Runtime 的运行态容器。核心 state 必须覆盖：
 
 ```text
 identity:
@@ -79,7 +80,7 @@ external:
 
 - `runId` 只能指 DB `agent_runs.id`，是 Agent Run 相关对象的 canonical 主关系。
 - `conversationId`、`clientMessageId`、`clientRunId` 语义以 `docs/id-contract.md` 为准，不能被 LangGraph / LangSmith 外部 ID 替代。
-- `selectedModelId` 是模型选择输入，后续由 LangChain model layer 解析到 provider client，前端不得传 provider / model / apiKeyEnv。
+- `selectedModelId` 是模型选择输入，当前由 model catalog / `_shared/modelGateway.js` 解析到 provider client；长期迁入 LangChain model layer 时，前端仍不得传 provider / model / apiKeyEnv。
 - tool / RAG / model / report / fallback / usage 状态必须能映射到 canonical Run Trace、Source、Report 和 Usage 对象。
 - LangGraph thread / checkpoint / node id 和 LangSmith trace id 只能作为外部恢复、观测或调试 ID，不得作为业务主外键。
 
@@ -99,7 +100,7 @@ Graph node 粒度必须服务生命周期和可观察性：不能把 planner、R
 
 ### 2.3 Stream Event 映射契约
 
-后续 LangGraph stream event 必须在后端边界标准化，再进入现有 SSE / Run Trace 链路：
+LangGraph stream event 必须在后端边界标准化，再进入现有 SSE / Run Trace 链路：
 
 ```text
 LangGraph raw stream event
@@ -146,16 +147,18 @@ LangSmith 是长期 Trace / Evaluation / Observability 标准平台，项目可�
 - Project `runId` 映射 LangSmith trace / run 的 external metadata，LangSmith trace id 不替代 canonical `runId`。
 - Run Trace UI 展示的步骤、工具、source、model、token、latency、fallback、error 必须能对应 LangSmith trace 语义。
 - LangSmith 不可用时，Run Trace 必须明确显示 trace 未上报或上报失败，不得伪装真实 LangSmith trace。
-- Evaluation 后续应向 LangSmith dataset / example / run / feedback / experiment 语义靠拢，但项目 `eval_results.run_id` 仍绑定 canonical `runId`。
+- Evaluation 向 LangSmith dataset / example / run / feedback / experiment 语义靠拢，但项目 `eval_results.run_id` 仍绑定 canonical `runId`。
 - Bad Case / Dataset 后续可以引用 LangSmith 外部 ID，但项目质量闭环主关系仍以 DB run / source / evaluation 对象为准。
 
 ### 2.6 旧 runtime 删除与迁移边界
 
-后续代码迁移必须以单轨替换为目标：
+当前迁移边界：
 
-- `workbench-agent-run-stream` 内手写 planner / tool chain / RAG / model streaming 应被 LangGraph graph nodes 替换，同一阶段删除旧编排逻辑。
-- `_shared/modelGateway.js` 不再扩展为新模型平台；模型调用应迁入 LangChain model layer 后删除旧 gateway 调用链。
-- 当前 mock / real / fallback 必须收敛为明确状态：Mock 只能用于显式 demo / seed / 测试路径，Real 走 LangGraph + LangChain，Fallback 必须写明 `fallbackReason` / `modelErrorType`，不得伪装真实模型结果。
+- `workbench-agent-run-stream` 主入口已进入 LangGraph runtime，不保留旧 runtime 与 LangGraph 长期双轨。
+- 正式 Tool 已进入 LangChain Tool / Structured Tool 边界，`tool_invocations` 仍是主事实源。
+- `knowledge_search` 已进入 LangChain Retriever / Document 输出边界，`retrieval_logs` / `run_sources` 仍是 Source Lineage 主事实源。
+- `_shared/modelGateway.js` 不再扩展为新模型平台；模型调用迁入 LangChain model layer 后删除旧 gateway 调用链。
+- 当前 mock / real / fallback 必须收敛为明确状态：Mock 只能用于显式 demo / seed / 测试路径，Real 走 LangGraph + LangChain Tool / Retriever，Fallback 必须写明 `fallbackReason` / `modelErrorType`，不得伪装真实模型结果。
 - 前端 Run Trace mapper / ViewModel 可以保留，但只能消费 canonical event / snapshot；凡是依赖旧 raw payload、旧字段 fallback 或重复 formatter 的代码必须删除或改写。
 - Report artifact 链路保留 `report_artifacts` 主事实源；如 report 在 graph 内生成，graph 只产出标准化 report state，持久化仍回到 report 主关系。
 - Source lineage 链路保留 `retrieval_logs` / `run_sources` 主事实源；LangChain Document 必须在 lineage 边界标准化，不能作为 UI 或 Report 主来源。
@@ -269,14 +272,15 @@ Auth
 Quota
 Conversation / Message
 LangGraph Runtime
-LangChain Tool / Retriever / Model
+LangChain Tool / Retriever
+Model Gateway
 Conclusion
 Report Pending
 Run Persistence
 SSE Events
 ```
 
-该函数承担服务端安全边界、Run 创建、SSE 输出和持久化边界。长期终态下，Agent 编排必须进入 LangGraph；模型、工具和 RAG 能力必须进入 LangChain。当前函数内手写 planner / tool chain / RAG / model streaming 属于待替换旧链路。
+该函数承担服务端安全边界、Run 创建、SSE 输出和持久化边界。当前 Agent 编排进入 LangGraph；正式 Tool 和 RAG 能力进入 LangChain Tool / Retriever；模型调用仍通过 model catalog / `_shared/modelGateway.js`，后续迁入 LangChain model layer 时单轨替换。
 
 ## 6. 共享后端模块
 
@@ -290,7 +294,7 @@ SSE Events
 
 ### `_shared/modelGateway.js`
 
-当前共享模型网关是旧链路：
+当前共享模型网关是模型调用边界：
 
 ```text
 selectedModelId
