@@ -24,7 +24,7 @@ selectedModelId
   -> modelTrace / tokenUsage / latency / fallbackReason
 ```
 
-长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
+长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。W2 已开始建立 `_shared/langchainModelLayer.js` 作为新边界；在 Agent Run 主调用切换前，`_shared/modelGateway.js` 仍是当前执行边界。
 
 当前 Agent Runtime 链路：
 
@@ -306,7 +306,7 @@ selectedModelId
   -> tokenUsage / latency / fallbackReason
 ```
 
-长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。后续不得继续扩展 `_shared/modelGateway.js` 为新的模型平台。
+长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。W2 最小边界为 `_shared/langchainModelLayer.js`，承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。后续不得继续扩展 `_shared/modelGateway.js` 为新的模型平台。
 
 ## 7. 核心对象关系
 
