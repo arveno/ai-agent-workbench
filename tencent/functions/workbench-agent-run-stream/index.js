@@ -108,6 +108,12 @@ const {
   parseJsonArray,
   parseJsonObject,
 } = loadSharedModule('mysql');
+const {
+  LANGGRAPH_RUNTIME_VERSION,
+  NODE_PLANNING,
+  NODE_PROCESSING,
+  runLangGraphAgentRuntime,
+} = loadSharedModule('langgraphRuntime');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -606,6 +612,9 @@ async function finishUsage(db, currentUser, usageId, status, errorCode, metadata
 function createAgentRunMetadata(context, extra = {}) {
   return {
     source: 'cloudbase-agent-run-real',
+    runtime: context.langGraphRuntime || LANGGRAPH_RUNTIME_VERSION,
+    langGraphThreadId: context.langGraphThreadId || null,
+    langGraphCheckpointId: context.langGraphFinalState?.externalIds?.langGraphCheckpointId || null,
     clientRunId: context.clientRunId,
     clientRunIdMissing: Boolean(context.clientRunIdMissing),
     provider: context.provider || 'mock',
@@ -3567,6 +3576,188 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   return conclusion;
 }
 
+function createLangGraphRuntimeInput(context) {
+  return {
+    runId: context.runId,
+    conversationId: context.conversationId,
+    clientRunId: context.clientRunId,
+    selectedModelId: context.selectedModelId,
+    userInput: context.prompt,
+    langGraphThreadId: context.langGraphThreadId,
+  };
+}
+
+async function runLangGraphPlanningNode(db, currentUser, context, res, disconnect) {
+  const plannerStart = Date.now();
+  await persistAndWriteRawEvent(
+    db,
+    currentUser,
+    context,
+    res,
+    disconnect,
+    createRunEvent('step_started', context, {
+      stepId: 'step_intent',
+      title: '理解用户问题',
+      description: '正在判断用户意图、分析目标和是否需要访问数据源。',
+      startedAt: nowIso(),
+      metadata: {
+        runtime: LANGGRAPH_RUNTIME_VERSION,
+        langGraphNode: NODE_PLANNING,
+      },
+    }),
+  );
+
+  const planned = await planAgentRun(context.prompt);
+  context.plan = planned.plan;
+  context.intent = planned.plan.intent;
+  context.planSnapshot = planToRunSnapshot(planned.plan);
+
+  if (planned.plan.intent === 'knowledge_qa') {
+    context.dataSourceSnapshot = getKnowledgeDataSourceSnapshot();
+  }
+
+  context.steps = [
+    createRunStep('step_intent', '理解用户问题', 'success', `intent=${planned.plan.intent}，reason=${planned.plan.reason}`),
+  ];
+
+  await persistAndWriteRawEvent(
+    db,
+    currentUser,
+    context,
+    res,
+    disconnect,
+    createRunEvent('step_completed', context, {
+      stepId: 'step_intent',
+      completedAt: nowIso(),
+      elapsedMs: Math.max(Date.now() - plannerStart, 1),
+      plannerSource: planned.plannerSource,
+      fallbackReason: planned.fallbackReason,
+      metadata: {
+        runtime: LANGGRAPH_RUNTIME_VERSION,
+        langGraphNode: NODE_PLANNING,
+      },
+    }),
+  );
+
+  return {
+    normalizedIntent: planned.plan.intent,
+    normalizedPlan: [context.planSnapshot],
+    plan: planned.plan,
+    planSnapshot: context.planSnapshot,
+    dataSourceSnapshot: context.dataSourceSnapshot,
+    externalIds: {
+      langGraphThreadId: context.langGraphThreadId,
+      langGraphCheckpointId: null,
+      langGraphNodeId: NODE_PLANNING,
+      langSmithTraceId: null,
+    },
+  };
+}
+
+async function runLangGraphProcessingNode(db, currentUser, context, res, disconnect) {
+  let conclusion = '';
+
+  if (context.plan.intent === 'capability_intro') {
+    conclusion = buildCapabilityIntroConclusion();
+    context.conclusionSource = 'fallback';
+    context.fallbackReason = 'local_capability_intro';
+    await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+      conclusion,
+      conclusionSource: 'fallback',
+      conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
+      fallbackReason: context.fallbackReason,
+      ...createModelEventMetadata(context, {
+        conclusionSource: 'fallback',
+        fallbackReason: context.fallbackReason,
+      }),
+    });
+  } else if (context.plan.intent === 'unsupported') {
+    conclusion = buildUnsupportedConclusion();
+    context.conclusionSource = 'fallback';
+    context.fallbackReason = 'local_unsupported';
+    await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+      conclusion,
+      conclusionSource: 'fallback',
+      conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
+      fallbackReason: context.fallbackReason,
+      ...createModelEventMetadata(context, {
+        conclusionSource: 'fallback',
+        fallbackReason: context.fallbackReason,
+      }),
+    });
+  } else if (context.plan.intent === 'knowledge_qa') {
+    const ragContext = await runKnowledgeQaSearch(db, currentUser, context, res, disconnect);
+    context.conclusionStartedAt = Date.now();
+    conclusion = await generateKnowledgeConclusion(db, currentUser, context, res, disconnect, ragContext);
+  } else {
+    const toolContext = await runRealDataAnalysis(db, currentUser, context, res, disconnect);
+    context.conclusionStartedAt = Date.now();
+    conclusion = await generateRealConclusion(db, currentUser, context, res, disconnect, toolContext);
+    context.reportState = 'pending';
+    await persistAndWriteRawEvent(
+      db,
+      currentUser,
+      context,
+      res,
+      disconnect,
+      createRunEvent('report_pending', context, {
+        metadata: {
+          runtime: LANGGRAPH_RUNTIME_VERSION,
+          langGraphNode: NODE_PROCESSING,
+        },
+      }),
+    );
+  }
+
+  const finalAgentConclusion = context.agentConclusion || setCanonicalConclusion(
+    context,
+    conclusion,
+    context.conclusionSource || 'fallback',
+  );
+  conclusion = finalAgentConclusion.markdownText;
+  context.conclusion = conclusion;
+
+  return {
+    responseText: conclusion,
+    conclusionSource: context.conclusionSource || 'fallback',
+    fallbackReason: context.fallbackReason,
+    modelResponseState: {
+      status: 'completed',
+      conclusionSource: context.conclusionSource || 'fallback',
+      fallbackReason: context.fallbackReason,
+      modelTrace: context.modelTrace || null,
+    },
+    toolInvocationState: {
+      status: Object.keys(context.toolInvocationIds || {}).length > 0 ? 'completed' : 'not_invoked',
+      toolInvocationIds: context.toolInvocationIds || {},
+    },
+    ragSourceState: {
+      status: context.plan.intent === 'knowledge_qa' ? 'completed' : 'not_invoked',
+    },
+    reportState: {
+      status: context.reportState || 'hidden',
+    },
+    externalIds: {
+      langGraphThreadId: context.langGraphThreadId,
+      langGraphCheckpointId: null,
+      langGraphNodeId: NODE_PROCESSING,
+      langSmithTraceId: null,
+    },
+  };
+}
+
+async function runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect) {
+  const runtimeResult = await runLangGraphAgentRuntime(createLangGraphRuntimeInput(context), {
+    planning: () => runLangGraphPlanningNode(db, currentUser, context, res, disconnect),
+    processing: () => runLangGraphProcessingNode(db, currentUser, context, res, disconnect),
+  });
+
+  context.langGraphRuntime = runtimeResult.runtime;
+  context.langGraphFinalState = runtimeResult.finalState;
+
+  return runtimeResult.finalState.responseText || context.conclusion || '';
+}
+
 async function runRealAgentFlow(req, res, currentUser, body) {
   const db = getDb();
   const conversationId = readRequiredString(body.conversationId, 'Missing conversation id.');
@@ -3593,6 +3784,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     usageFinished: false,
     eventSeq: 0,
     agentMode: 'real',
+    langGraphRuntime: LANGGRAPH_RUNTIME_VERSION,
+    langGraphThreadId: `agent-run:${runId}`,
+    langGraphFinalState: null,
     createdAt: nowIso(),
     intent: 'unknown',
     plan: null,
@@ -3669,167 +3863,73 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     startSseResponse(res);
 
     try {
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      {
-        type: 'run_started',
-        runId: context.runId,
-        run: createRunSnapshot(context),
-        usageId: context.usageId,
-        clientRunId: context.clientRunId,
-        conversationId: context.conversationId,
-      },
-    );
-
-    const plannerStart = Date.now();
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      createRunEvent('step_started', context, {
-        stepId: 'step_intent',
-        title: '理解用户问题',
-        description: '正在判断用户意图、分析目标和是否需要访问数据源。',
-        startedAt: nowIso(),
-      }),
-    );
-    const planned = await planAgentRun(context.prompt);
-    context.plan = planned.plan;
-    context.intent = planned.plan.intent;
-    context.planSnapshot = planToRunSnapshot(planned.plan);
-    if (planned.plan.intent === 'knowledge_qa') {
-      context.dataSourceSnapshot = getKnowledgeDataSourceSnapshot();
-    }
-    context.steps = [
-      createRunStep('step_intent', '理解用户问题', 'success', `intent=${planned.plan.intent}，reason=${planned.plan.reason}`),
-    ];
-
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      createRunEvent('step_completed', context, {
-        stepId: 'step_intent',
-        completedAt: nowIso(),
-        elapsedMs: Math.max(Date.now() - plannerStart, 1),
-        plannerSource: planned.plannerSource,
-        fallbackReason: planned.fallbackReason,
-      }),
-    );
-    let conclusion = '';
-
-    if (planned.plan.intent === 'capability_intro') {
-      conclusion = buildCapabilityIntroConclusion();
-      context.conclusionSource = 'fallback';
-      context.fallbackReason = 'local_capability_intro';
-      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
-        conclusion,
-        conclusionSource: 'fallback',
-        conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
-        fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context, {
-          conclusionSource: 'fallback',
-          fallbackReason: context.fallbackReason,
-        }),
-      });
-    } else if (planned.plan.intent === 'unsupported') {
-      conclusion = buildUnsupportedConclusion();
-      context.conclusionSource = 'fallback';
-      context.fallbackReason = 'local_unsupported';
-      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
-        conclusion,
-        conclusionSource: 'fallback',
-        conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
-        fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context, {
-          conclusionSource: 'fallback',
-          fallbackReason: context.fallbackReason,
-        }),
-      });
-    } else if (planned.plan.intent === 'knowledge_qa') {
-      const ragContext = await runKnowledgeQaSearch(db, currentUser, context, res, disconnect);
-      context.conclusionStartedAt = Date.now();
-      conclusion = await generateKnowledgeConclusion(db, currentUser, context, res, disconnect, ragContext);
-    } else {
-      const toolContext = await runRealDataAnalysis(db, currentUser, context, res, disconnect);
-      context.conclusionStartedAt = Date.now();
-      conclusion = await generateRealConclusion(db, currentUser, context, res, disconnect, toolContext);
-      context.reportState = 'pending';
       await persistAndWriteRawEvent(
         db,
         currentUser,
         context,
         res,
         disconnect,
-        createRunEvent('report_pending', context, {}),
+        {
+          type: 'run_started',
+          runId: context.runId,
+          run: createRunSnapshot(context),
+          usageId: context.usageId,
+          clientRunId: context.clientRunId,
+          conversationId: context.conversationId,
+        },
       );
-    }
 
-    const finalAgentConclusion = context.agentConclusion || setCanonicalConclusion(
-      context,
-      conclusion,
-      context.conclusionSource || 'fallback',
-    );
-  conclusion = finalAgentConclusion.markdownText;
-    context.conclusion = conclusion;
-    assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
-      source: context.conclusionSource,
-      fallbackReason: context.fallbackReason,
-      agentConclusion: context.agentConclusion,
-      ...(context.assistantMessageMetadata || {}),
-      ...createModelEventMetadata(context, context.modelDiagnostics),
-    });
-    const elapsedMs = Math.max(Date.now() - startedAt, 1);
-    await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
-      conclusionSource: context.conclusionSource,
-      chartData: context.chartData || {},
-      reportState: context.reportState,
-    });
-
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      createRunEvent('run_completed', context, {
-        completedAt: nowIso(),
-        elapsedMs,
-        assistantMessageId,
-        conclusionSource: context.conclusionSource,
+      const conclusion = await runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect);
+      assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
+        source: context.conclusionSource,
         fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context, context.modelDiagnostics),
-      }),
-    );
-
-    try {
-      await finishUsage(db, currentUser, context.usageId, 'completed', null, {
-        source: 'cloudbase-agent-run-real',
-        runId: context.runId,
-        assistantMessageId,
-        conclusionSource: context.conclusionSource,
-        fallbackReason: context.fallbackReason,
+        agentConclusion: context.agentConclusion,
+        ...(context.assistantMessageMetadata || {}),
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
-      context.usageFinished = true;
-    } catch (finishError) {
-      console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
-    }
+      const elapsedMs = Math.max(Date.now() - startedAt, 1);
+      await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
+        conclusionSource: context.conclusionSource,
+        chartData: context.chartData || {},
+        reportState: context.reportState,
+      });
 
-    didComplete = true;
-    disconnect.finish();
+      await persistAndWriteRawEvent(
+        db,
+        currentUser,
+        context,
+        res,
+        disconnect,
+        createRunEvent('run_completed', context, {
+          completedAt: nowIso(),
+          elapsedMs,
+          assistantMessageId,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          ...createModelEventMetadata(context, context.modelDiagnostics),
+        }),
+      );
 
-    if (!res.writableEnded && !res.destroyed) {
-      res.end();
-    }
+      try {
+        await finishUsage(db, currentUser, context.usageId, 'completed', null, {
+          source: 'cloudbase-agent-run-real',
+          runId: context.runId,
+          assistantMessageId,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          ...createModelEventMetadata(context, context.modelDiagnostics),
+        });
+        context.usageFinished = true;
+      } catch (finishError) {
+        console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
+      }
+
+      didComplete = true;
+      disconnect.finish();
+
+      if (!res.writableEnded && !res.destroyed) {
+        res.end();
+      }
     } catch (error) {
       const disconnected = error && error.errorCode === 'client_disconnected';
       const finalStatus = disconnected ? 'stopped' : 'failed';
@@ -3841,10 +3941,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
       }
 
       try {
-      await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
-        source: 'cloudbase-agent-run-real',
-        runId: context.runId,
-      });
+        await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
+          source: 'cloudbase-agent-run-real',
+          runId: context.runId,
+        });
         context.usageFinished = true;
       } catch (cleanupError) {
         console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
