@@ -2,6 +2,10 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { Document } = require('@langchain/core/documents');
+const { BaseRetriever } = require('@langchain/core/retrievers');
+const { tool } = require('@langchain/core/tools');
+const { z } = require('zod');
 
 const PORT = Number(process.env.PORT || 9000);
 const HOST = '0.0.0.0';
@@ -1371,6 +1375,109 @@ function normalizeGroupBy(value) {
   return ['subject', 'grade', 'month'].includes(value) ? value : 'subject';
 }
 
+const ToolTimeRangeInputSchema = z.object({
+  type: z.enum(['none', 'month', 'latest_available_month']).optional().default('none'),
+  month: z.string().optional(),
+  label: z.string().optional(),
+}).optional().default({ type: 'none' });
+
+const SchemaInspectInputSchema = z.object({
+  includeColumns: z.boolean().optional().default(true),
+});
+
+const AggregateTableInputSchema = z.object({
+  metric: z.enum(['avg_score', 'attendance_rate', 'homework_completion_rate', 'warning_count']).optional(),
+  groupBy: z.enum(['subject', 'grade', 'month']).optional(),
+  limit: z.number().int().min(1).max(MAX_TOOL_ROWS).optional().default(MAX_TOOL_ROWS),
+  timeRange: ToolTimeRangeInputSchema,
+  comparison: z.enum(['none', 'previous_month']).optional().default('none'),
+});
+
+const ChartRenderInputSchema = z.object({
+  title: z.string().optional(),
+  chartType: z.enum(['bar']).optional().default('bar'),
+  labelKey: z.enum(['dimension']).optional().default('dimension'),
+  valueKey: z.enum(['value']).optional().default('value'),
+  metric: z.enum(['avg_score', 'attendance_rate', 'homework_completion_rate', 'warning_count']).optional(),
+  groupBy: z.enum(['subject', 'grade', 'month']).optional(),
+  rows: z.array(z.object({}).passthrough()).optional().default([]),
+});
+
+const KnowledgeSearchInputSchema = z.object({
+  prompt: z.string(),
+  topK: z.number().int().min(1).max(5).optional().default(5),
+});
+
+function normalizeToolLimit(value, max = MAX_TOOL_ROWS) {
+  const normalizedLimit = normalizeNumber(value, max);
+  return Math.max(1, Math.min(normalizedLimit || max, max));
+}
+
+function normalizeToolTimeRange(value) {
+  if (!isRecord(value)) {
+    return { type: 'none' };
+  }
+
+  if (value.type === 'month' && /^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(value.month || '')) {
+    return {
+      type: 'month',
+      month: value.month,
+      label: readOptionalString(value.label) || createMonthLabel(value.month),
+    };
+  }
+
+  if (value.type === 'latest_available_month') {
+    return {
+      type: 'latest_available_month',
+      label: readOptionalString(value.label) || '最新可用月份',
+    };
+  }
+
+  return { type: 'none' };
+}
+
+function normalizeSchemaInspectInput(input) {
+  return {
+    includeColumns: isRecord(input) ? input.includeColumns !== false : true,
+  };
+}
+
+function normalizeAggregateTableInput(input) {
+  const rawInput = isRecord(input) ? input : {};
+
+  return {
+    metric: normalizeMetric(rawInput.metric),
+    groupBy: normalizeGroupBy(rawInput.groupBy),
+    limit: normalizeToolLimit(rawInput.limit),
+    timeRange: normalizeToolTimeRange(rawInput.timeRange),
+    comparison: rawInput.comparison === 'previous_month' ? 'previous_month' : 'none',
+  };
+}
+
+function normalizeChartRenderInput(input) {
+  const rawInput = isRecord(input) ? input : {};
+  const rows = Array.isArray(rawInput.rows) ? rawInput.rows.filter(isRecord).slice(0, MAX_TOOL_ROWS) : [];
+
+  return {
+    title: readOptionalString(rawInput.title) || '教学质量指标图表',
+    chartType: 'bar',
+    labelKey: 'dimension',
+    valueKey: 'value',
+    metric: normalizeMetric(rawInput.metric),
+    groupBy: normalizeGroupBy(rawInput.groupBy),
+    rows,
+  };
+}
+
+function normalizeKnowledgeSearchInput(input) {
+  const rawInput = isRecord(input) ? input : {};
+
+  return {
+    prompt: readOptionalString(rawInput.prompt) || '',
+    topK: Math.max(1, Math.min(Number(rawInput.topK) || 5, 5)),
+  };
+}
+
 function normalizePlan(rawPlan, fallback) {
   if (!isRecord(rawPlan)) {
     return fallback;
@@ -1443,7 +1550,8 @@ function normalizeCellValue(value) {
   return String(value);
 }
 
-function inspectSchema() {
+function inspectSchema(input = {}) {
+  const normalizedInput = normalizeSchemaInspectInput(input);
   const columns = [
     { columnName: 'id', dataType: 'VARCHAR(36)', description: '演示数据行 ID。' },
     { columnName: 'month', dataType: 'VARCHAR(20)', description: '统计月份，格式为 YYYY-MM。' },
@@ -1469,7 +1577,7 @@ function inspectSchema() {
         schema: 'public_demo',
         tableName: 'teaching_metrics',
         description: 'CloudBase MySQL 公开教学质量演示数据源。',
-        columns,
+        columns: normalizedInput.includeColumns ? columns : [],
       },
     ],
   };
@@ -1687,6 +1795,43 @@ function renderChart(input) {
     summary: labels.length
       ? `已生成 ${labels.length} 个数据点，图表类型为 ${input.chartType}。`
       : '没有可用于图表渲染的有效数据点。',
+  };
+}
+
+function createLangChainToolRegistry(db) {
+  return {
+    schema_inspect: tool(
+      async (input) => inspectSchema(normalizeSchemaInspectInput(input)),
+      {
+        name: 'schema_inspect',
+        description: 'Read the allowed CloudBase MySQL teaching_metrics schema.',
+        schema: SchemaInspectInputSchema,
+      },
+    ),
+    aggregate_table: tool(
+      async (input) => aggregateTable(db, normalizeAggregateTableInput(input)),
+      {
+        name: 'aggregate_table',
+        description: 'Aggregate whitelisted teaching metrics from CloudBase MySQL.',
+        schema: AggregateTableInputSchema,
+      },
+    ),
+    chart_render: tool(
+      async (input) => renderChart(normalizeChartRenderInput(input)),
+      {
+        name: 'chart_render',
+        description: 'Create canonical chart data from normalized aggregate rows.',
+        schema: ChartRenderInputSchema,
+      },
+    ),
+    knowledge_search: tool(
+      async (input) => searchKnowledgeBase(db, normalizeKnowledgeSearchInput(input)),
+      {
+        name: 'knowledge_search',
+        description: 'Retrieve whitelisted CloudBase knowledge chunks and return canonical source candidates.',
+        schema: KnowledgeSearchInputSchema,
+      },
+    ),
   };
 }
 
@@ -2008,6 +2153,120 @@ function createContentPreview(content) {
   return normalizedContent.length > 180 ? `${normalizedContent.slice(0, 179)}…` : normalizedContent;
 }
 
+function createKnowledgeDocumentFromScoredChunk(item, index) {
+  const citationLabel = `[S${index + 1}]`;
+  const updatedAt = item.chunk.updated_at || item.document.updated_at || null;
+  const rawScore = item.score;
+
+  return new Document({
+    pageContent: item.chunk.content,
+    metadata: {
+      provider: 'knowledge_search',
+      retrieverProvider: 'langchain_retriever',
+      documentId: item.document.id,
+      documentTitle: item.document.title,
+      category: item.document.category,
+      chunkId: item.chunk.id,
+      chunkTitle: item.chunk.title,
+      chunkIndex: item.chunk.chunk_index,
+      keywords: item.chunk.keywords,
+      score: Number((rawScore / 20).toFixed(4)),
+      rawScore,
+      citationLabel,
+      updatedAt,
+    },
+  });
+}
+
+class CloudBaseKnowledgeRetriever extends BaseRetriever {
+  constructor(fields) {
+    super({
+      tags: ['workbench', 'knowledge_search'],
+      metadata: {
+        provider: 'knowledge_search',
+        retrieverProvider: 'langchain_retriever',
+      },
+    });
+    this.db = fields.db;
+    this.topK = Math.max(1, Math.min(Number(fields.topK) || 5, 5));
+    this.lastSearchStats = {
+      terms: [],
+      totalMatches: 0,
+    };
+  }
+
+  get lc_namespace() {
+    return ['ai-agent-workbench', 'retrievers'];
+  }
+
+  async _getRelevantDocuments(query) {
+    let documents;
+    let chunks;
+
+    try {
+      [documents, chunks] = await Promise.all([
+        fetchKnowledgeDocuments(this.db),
+        fetchKnowledgeChunks(this.db),
+      ]);
+    } catch (error) {
+      throw toRagToolError(error);
+    }
+
+    const enabledDocuments = documents.filter(
+      (document) => document.is_enabled && (document.visibility === 'demo' || document.visibility === 'system'),
+    );
+    const documentById = new Map(enabledDocuments.map((document) => [document.id, document]));
+
+    if (enabledDocuments.length === 0 || chunks.length === 0) {
+      throw new DataToolError('rag_empty', 'CloudBase knowledge base is empty.');
+    }
+
+    const prompt = readOptionalString(query);
+    const terms = extractKnowledgeSearchTerms(prompt);
+    const scoredChunks = chunks
+      .filter((chunk) => documentById.has(chunk.document_id))
+      .map((chunk) => {
+        const document = documentById.get(chunk.document_id);
+        return {
+          document,
+          chunk,
+          score: scoreKnowledgeChunk(prompt, terms, document, chunk),
+        };
+      })
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.chunk.chunk_index - right.chunk.chunk_index);
+
+    this.lastSearchStats = {
+      terms,
+      totalMatches: scoredChunks.length,
+    };
+
+    return scoredChunks.slice(0, this.topK).map(createKnowledgeDocumentFromScoredChunk);
+  }
+}
+
+function mapKnowledgeDocumentToMatchedChunk(document, index) {
+  const metadata = isRecord(document.metadata) ? document.metadata : {};
+  const content = String(document.pageContent || '');
+
+  return {
+    id: String(metadata.chunkId || ''),
+    documentId: String(metadata.documentId || ''),
+    documentTitle: String(metadata.documentTitle || ''),
+    category: String(metadata.category || ''),
+    title: String(metadata.chunkTitle || ''),
+    content,
+    contentPreview: createContentPreview(content),
+    keywords: Array.isArray(metadata.keywords)
+      ? metadata.keywords.map((keyword) => String(keyword || '').trim()).filter(Boolean)
+      : [],
+    score: typeof metadata.score === 'number' ? metadata.score : Number(metadata.score) || 0,
+    rawScore: typeof metadata.rawScore === 'number' ? metadata.rawScore : Number(metadata.rawScore) || 0,
+    citationLabel: String(metadata.citationLabel || `[S${index + 1}]`),
+    updatedAt: metadata.updatedAt ? String(metadata.updatedAt) : null,
+  };
+}
+
 function toRunRagSources(searchResult, params = {}) {
   return createRunSourcesFromSearchResult(searchResult, {
     runId: params.runId ?? '',
@@ -2046,6 +2305,7 @@ function createRunSourcesFromSearchResult(searchResult, params) {
       createdAt: params.createdAt,
       metadata: {
         provider: 'knowledge_search',
+        retrieverProvider: 'langchain_retriever',
         sourceName: 'CloudBase MySQL 知识库',
         documentTitle: chunk.documentTitle || null,
         chunkTitle: chunk.title || null,
@@ -2076,6 +2336,7 @@ async function persistKnowledgeSearchLineage(db, currentUser, context, searchInp
     metadata: JSON.stringify({
       source: 'cloudbase-agent-run-real',
       provider: 'knowledge_search',
+      retrieverProvider: 'langchain_retriever',
       topK: Number(searchInput.topK) || null,
       terms: Array.isArray(searchResult.terms) ? searchResult.terms : [],
       totalMatches: Number(searchResult.totalMatches) || 0,
@@ -2127,66 +2388,23 @@ async function persistKnowledgeSearchLineage(db, currentUser, context, searchInp
 }
 
 async function searchKnowledgeBase(db, input) {
-  let documents;
-  let chunks;
-
-  try {
-    [documents, chunks] = await Promise.all([
-      fetchKnowledgeDocuments(db),
-      fetchKnowledgeChunks(db),
-    ]);
-  } catch (error) {
-    throw toRagToolError(error);
-  }
-
-  const enabledDocuments = documents.filter(
-    (document) => document.is_enabled && (document.visibility === 'demo' || document.visibility === 'system'),
-  );
-  const documentById = new Map(enabledDocuments.map((document) => [document.id, document]));
-
-  if (enabledDocuments.length === 0 || chunks.length === 0) {
-    throw new DataToolError('rag_empty', 'CloudBase knowledge base is empty.');
-  }
-
-  const prompt = readOptionalString(input.prompt);
-  const terms = extractKnowledgeSearchTerms(prompt);
-  const scoredChunks = chunks
-    .filter((chunk) => documentById.has(chunk.document_id))
-    .map((chunk) => {
-      const document = documentById.get(chunk.document_id);
-      return {
-        document,
-        chunk,
-        score: scoreKnowledgeChunk(prompt, terms, document, chunk),
-      };
-    })
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score || left.chunk.chunk_index - right.chunk.chunk_index);
-
-  const topK = Math.max(1, Math.min(Number(input.topK) || 5, 5));
-  const topMatches = scoredChunks.slice(0, topK).map((item, index) => ({
-    id: item.chunk.id,
-    documentId: item.document.id,
-    documentTitle: item.document.title,
-    category: item.document.category,
-    title: item.chunk.title,
-    content: item.chunk.content,
-    contentPreview: createContentPreview(item.chunk.content),
-    keywords: item.chunk.keywords,
-    score: Number((item.score / 20).toFixed(4)),
-    rawScore: item.score,
-    citationLabel: `[S${index + 1}]`,
-    updatedAt: item.chunk.updated_at || item.document.updated_at || null,
-  }));
+  const searchInput = normalizeKnowledgeSearchInput(input);
+  const retriever = new CloudBaseKnowledgeRetriever({
+    db,
+    topK: searchInput.topK,
+  });
+  const documents = await retriever.invoke(searchInput.prompt);
+  const topMatches = documents.map(mapKnowledgeDocumentToMatchedChunk);
 
   return {
-    query: prompt,
-    terms,
-    totalMatches: scoredChunks.length,
+    query: searchInput.prompt,
+    terms: retriever.lastSearchStats.terms,
+    totalMatches: retriever.lastSearchStats.totalMatches,
     matchedChunks: topMatches,
     retrievedChunkCount: topMatches.length,
     topTitles: topMatches.map((chunk) => chunk.title),
     sourceDocumentIds: [...new Set(topMatches.map((chunk) => chunk.documentId))],
+    retrieverProvider: 'langchain_retriever',
   };
 }
 
@@ -2715,6 +2933,8 @@ async function createToolInvocationRecord(db, currentUser, context, params) {
     metadata: JSON.stringify({
       source: 'cloudbase-agent-run-real',
       runtimeToolId: params.runtimeToolId,
+      toolRuntime: 'langchain_structured_tool',
+      langChainToolName: params.langChainToolName || params.toolName,
     }),
   });
 
@@ -2909,6 +3129,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
     displayName: params.displayName,
     input: params.input,
     inputSummary: params.inputSummary,
+    langChainToolName: params.langChainTool?.name || params.toolName,
   });
   context.toolInvocationIds = context.toolInvocationIds || {};
   context.toolInvocationIds[params.runtimeToolId] = toolInvocationId;
@@ -2935,7 +3156,11 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
   }
 
   try {
-    const output = await params.execute();
+    if (!params.langChainTool || typeof params.langChainTool.invoke !== 'function') {
+      throw new Error(`LangChain Tool is not registered: ${params.toolName}`);
+    }
+
+    const output = await params.langChainTool.invoke(params.input || {});
     const elapsedMs = Math.max(Date.now() - startedAt, 1);
     await updateToolInvocationRecord(db, currentUser, toolInvocationId, {
       status: 'completed',
@@ -2945,6 +3170,8 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
       metadata: {
         source: 'cloudbase-agent-run-real',
         runtimeToolId: params.runtimeToolId,
+        toolRuntime: 'langchain_structured_tool',
+        langChainToolName: params.langChainTool.name || params.toolName,
         runId: context.runId,
       },
     });
@@ -2983,6 +3210,8 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
       metadata: {
         source: 'cloudbase-agent-run-real',
         runtimeToolId: params.runtimeToolId,
+        toolRuntime: 'langchain_structured_tool',
+        langChainToolName: params.langChainTool?.name || params.toolName,
         runId: context.runId,
         fallbackReason,
       },
@@ -3008,6 +3237,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
 async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
   const plan = context.plan;
   const toolStart = Date.now();
+  const langChainTools = createLangChainToolRegistry(db);
 
   try {
     await persistAndWriteRawEvent(
@@ -3029,7 +3259,7 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       displayName: '数据源结构读取',
       input: { includeColumns: true },
       inputSummary: 'includeColumns=true',
-      execute: () => inspectSchema(),
+      langChainTool: langChainTools.schema_inspect,
       outputSummary: (output) => `读取 ${output.tableCount} 张表`,
     });
     await persistAndWriteRawEvent(
@@ -3074,7 +3304,7 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       displayName: '数据聚合分析',
       input: aggregateInput,
       inputSummary: JSON.stringify(aggregateInput),
-      execute: () => aggregateTable(db, aggregateInput),
+      langChainTool: langChainTools.aggregate_table,
       outputSummary: (output) => output.totalRecords > 0 ? `读取 ${output.totalRecords} 条记录，返回 ${output.rowCount} 条聚合结果` : '未找到可聚合的数据',
     });
     await persistAndWriteRawEvent(
@@ -3117,13 +3347,9 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       runtimeToolId: 'chart_render',
       toolName: 'chart_render',
       displayName: '图表数据生成',
-      input: {
-        title: chartInput.title,
-        chartType: chartInput.chartType,
-        rowCount: chartInput.rows.length,
-      },
+      input: chartInput,
       inputSummary: JSON.stringify({ title: chartInput.title, rowCount: chartInput.rows.length }),
-      execute: async () => renderChart(chartInput),
+      langChainTool: langChainTools.chart_render,
       outputSummary: (output) => output.summary,
     });
     context.chartData = toRunChartData(chartResult);
@@ -3323,6 +3549,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
 
 async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
   const searchStart = Date.now();
+  const langChainTools = createLangChainToolRegistry(db);
 
   try {
     await persistAndWriteRawEvent(
@@ -3349,7 +3576,7 @@ async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
       displayName: '知识库检索',
       input: searchInput,
       inputSummary: JSON.stringify(searchInput),
-      execute: () => searchKnowledgeBase(db, searchInput),
+      langChainTool: langChainTools.knowledge_search,
       outputSummary: (output) => output.retrievedChunkCount > 0
         ? `检索到 ${output.retrievedChunkCount} 条相关知识片段`
         : '未找到相关知识片段',

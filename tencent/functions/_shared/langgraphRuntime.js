@@ -66,12 +66,10 @@ function createInitialAgentRunState(input) {
     planSnapshot: {},
     dataSourceSnapshot: null,
     toolInvocationState: {
-      status: 'deferred',
-      reason: 'tool_migration_is_follow_up_issue',
+      status: 'managed_by_langchain_tools',
     },
     ragSourceState: {
-      status: 'deferred',
-      reason: 'retriever_migration_is_follow_up_issue',
+      status: 'managed_by_langchain_retriever',
     },
     modelResponseState: {
       status: 'not_started',
@@ -150,7 +148,9 @@ function describeLangGraphRuntimeBoundary() {
     keep: [
       'CloudBase HTTP Function keeps Auth, quota, message persistence, run persistence and SSE HTTP boundary.',
       'Frontend continues to consume canonical SSE / Run Trace events only.',
-      'Formal Tool / Retriever / LangSmith migrations remain separate follow-up issues.',
+      'Formal Tool calls run through LangChain Structured Tool definitions and keep tool_invocations as the source of truth.',
+      'knowledge_search runs through a LangChain Retriever / Document boundary and keeps retrieval_logs / run_sources as the source of truth.',
+      'LangSmith integration remains a separate follow-up issue.',
     ],
     deleteLater: [
       'Old hand-written Agent Run entry orchestration after LangGraph owns the main entry.',
