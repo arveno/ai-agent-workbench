@@ -1,0 +1,89 @@
+name: Architecture Change
+description: 架构变更任务，用于先明确事实源、目标架构、迁移策略和退出条件。
+title: "[Architecture] "
+labels:
+  - architecture
+body:
+  - type: markdown
+    attributes:
+      value: |
+        架构变更必须先对齐 `AGENTS.md` 和对应 `docs/*` 事实源。若需要改变长期契约，先更新事实源文档，再改代码。
+  - type: textarea
+    id: related_docs
+    attributes:
+      label: 关联文档
+      description: 列出必须读取或需要变更的事实源文档。
+      placeholder: |
+        - docs/workflow.md
+        - docs/architecture.md
+        - docs/agent-run-lifecycle.md
+        - docs/id-contract.md
+        - docs/tool-governance.md
+        - docs/source-lineage.md
+        - docs/cloudbase-functions-deploy.md
+    validations:
+      required: true
+  - type: textarea
+    id: current_problem
+    attributes:
+      label: 当前问题
+      description: 描述当前架构问题、重复链路、职责错位或事实源缺口。
+    validations:
+      required: true
+  - type: textarea
+    id: target_architecture
+    attributes:
+      label: 目标架构
+      description: 描述目标主链路、职责边界、数据流和对象关系。
+      placeholder: |
+        目标链路：
+        Raw -> Canonical -> ViewModel -> UI
+    validations:
+      required: true
+  - type: textarea
+    id: impact_scope
+    attributes:
+      label: 影响范围
+      description: 列出涉及的生命周期节点、核心对象、前端模块、后端函数、数据库、Source、Tool 或部署边界。
+    validations:
+      required: true
+  - type: textarea
+    id: migration_strategy
+    attributes:
+      label: 迁移策略
+      description: 描述如何删除旧链路、合并重复逻辑、收敛职责边界，以及每一步的验收方式。
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 明确不做
+      description: 明确本次架构变更不处理的范围，避免阶段混杂。
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: 风险点
+      description: 列出对主链路、数据一致性、部署、运行时和回归验证的风险。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 验收标准
+      description: 列出架构变更完成后的检查项。
+      placeholder: |
+        - 没有新旧链路并存
+        - 没有旧字段 fallback
+        - component 不消费 raw payload
+        - lint / build 通过
+    validations:
+      required: true
+  - type: textarea
+    id: rollback_or_exit
+    attributes:
+      label: 回滚或退出条件
+      description: 描述何时停止推进、如何回滚、或哪些条件满足后可退出迁移。
+    validations:
+      required: true

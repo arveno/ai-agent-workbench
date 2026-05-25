@@ -1,0 +1,74 @@
+name: Bug Fix
+description: 缺陷修复任务，用于锁定问题、复现路径、修复边界和验证方式。
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 问题现象
+      description: 描述用户看到的错误、日志、页面状态或数据异常。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 提供稳定复现路径、账号状态、输入、环境和预期前置条件。
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望表现
+      description: 描述修复后用户、数据、Trace 或接口应表现出的状态。
+    validations:
+      required: true
+  - type: textarea
+    id: impact_scope
+    attributes:
+      label: 影响范围
+      description: 列出涉及的生命周期节点、核心对象、页面、函数、数据库、Source、Tool 或部署边界。
+    validations:
+      required: true
+  - type: textarea
+    id: fix_boundary
+    attributes:
+      label: 修复边界
+      description: 明确允许修改的文件、模块和最小修复策略。
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 明确不做
+      description: 明确本次修复不做的重构、扩展、兼容链路或配置变更。
+      placeholder: |
+        - 不做无关重构
+        - 不新增无关依赖
+        - 不修改未确认的数据库字段
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 验收标准
+      description: 列出缺陷修复完成后的判定标准。
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: 验证方式
+      description: 列出命令、手动步骤、截图、日志、Network 或 smoke 验证要求。
+      placeholder: |
+        - pnpm lint
+        - pnpm build
+        - 手动复现验证：
+    validations:
+      required: true

@@ -1,0 +1,94 @@
+name: Phase Task
+description: 阶段任务或功能任务，用于明确目标、边界、架构约束和验收方式。
+title: "[Phase] "
+labels:
+  - phase-task
+body:
+  - type: markdown
+    attributes:
+      value: |
+        使用本模板前，请先按 `AGENTS.md` 与 `docs/workflow.md` 判断任务阶段、边界和事实源。
+  - type: textarea
+    id: lifecycle_nodes
+    attributes:
+      label: 生命周期节点
+      description: 对齐 `docs/agent-run-lifecycle.md`，列出涉及的节点、能力域和核心对象。
+      placeholder: |
+        例如：
+        - 节点：11 Observability / Trace
+        - 能力域：E. 执行与可观察层
+        - 核心对象：Run / Tool Invocation
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 描述当前状态、触发原因和已知上下文。
+    validations:
+      required: true
+  - type: textarea
+    id: goals
+    attributes:
+      label: 目标
+      description: 列出本阶段必须完成的可验收结果。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 修改范围
+      description: 明确允许修改的目录、文件或模块。
+      placeholder: |
+        允许修改：
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 明确不做
+      description: 明确本任务禁止修改或不解决的事项。
+      placeholder: |
+        明确不做：
+        - 不修改未列入范围的文件
+        - 不新增无关依赖
+        - 不修改数据库字段
+    validations:
+      required: true
+  - type: textarea
+    id: architecture_constraints
+    attributes:
+      label: 架构约束
+      description: 列出必须遵守的架构、ID、Source、Tool、部署或数据流约束。
+      placeholder: |
+        - 数据链路遵守 Raw -> Canonical -> ViewModel -> UI
+        - component 不解析 raw / metadata / legacy 字段
+        - 不新增双轨实现或旧字段 fallback
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 验收标准
+      description: 列出完成判定标准，尽量使用可检查项。
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: 风险点
+      description: 列出已知风险、可能影响范围和需要验收时重点关注的点。
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: 验证方式
+      description: 列出需要执行的命令、手动验证步骤、截图或 smoke 要求。
+      placeholder: |
+        - pnpm lint
+        - pnpm build
+        - 手动验证：
+    validations:
+      required: true
