@@ -170,6 +170,14 @@ knowledge_search
 - 无来源时必须保留明确空态或 `noSourceReason`。
 - 旧 run 没有 `run_sources` 时，不得从 raw event 假装完整 lineage。
 
+LangGraph Retriever node 契约：
+
+- retriever node 调度 LangChain Retriever / Document，但输出必须标准化为 `RetrievalLog` 和 `RunSource`。
+- LangChain Document 的 `pageContent`、`metadata`、score、citation 信息只在 lineage 边界解析一次。
+- retriever node 的 stream / trace event 只能作为 Run Trace 事件来源，不能替代 `retrieval_logs` / `run_sources` 主事实源。
+- LangGraph checkpoint id、retriever run id 或 LangSmith trace id 只能进入 metadata / debug，不能作为 source / retrieval 主关系。
+- 无命中、权限拒绝、检索错误和 fallback 必须写入明确 `noSourceReason` 或 error / fallback 状态。
+
 ## 8. Report / Trace / Evaluation 关系
 
 Chat：

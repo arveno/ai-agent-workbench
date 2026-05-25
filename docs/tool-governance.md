@@ -87,6 +87,15 @@ UI 只能消费 mapper / ViewModel 后的标准结构，不能把 `tool_invocati
 
 LangChain Tool 的 name / args / output 必须映射到同一条 `tool_invocations` 主链路。不得为 LangChain 工具另建一套独立展示字段、独立 formatter 或独立 trace 事实源。
 
+LangGraph tool node 契约：
+
+- tool node 只能调度正式 Tool Registry 中的服务端工具。
+- LangChain Tool schema、服务端参数白名单和 `tool_invocations.input` 的标准化结果必须一致。
+- tool node 产出的 started / completed / failed 状态必须映射为 canonical `run_events` 和 `tool_invocations.status`。
+- LangGraph tool call id 或 LangSmith tool run id 只能进入 metadata / debug，不能替代 `tool_invocations.id` 或 `run_id`。
+- tool node 失败必须进入 Run Trace，并保留明确 error / fallback 状态。
+- 不允许在旧工具链旁新增 LangChain Tool wrapper / adapter 旁路。
+
 ## 6. `knowledge_search` Source 契约
 
 `knowledge_search` 必须遵守 `docs/source-lineage.md`：

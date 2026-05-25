@@ -51,6 +51,32 @@
 
 当前自研 imperative Agent Runtime 是待替换旧链路，不作为长期终态。后续代码任务必须单轨替换，不允许在旧 runtime 旁新增 LangChain 旁路或 old/new 双轨兼容。
 
+## 2.2 LangGraph 运行态归位
+
+后续 Agent Run 的运行态必须归位为 LangGraph graph state / node / edge / checkpoint / stream event，具体架构契约见 `docs/architecture.md`。
+
+生命周期映射：
+
+| 运行态概念 | 归位节点 | 契约 |
+| --- | --- | --- |
+| LangGraph Run State | Input, Context / Memory / Data, Planner / Workflow, Execution / Streaming, Artifact / Source / Report, Audit / Governance / Cost | 持有 runId、conversationId、clientMessageId、clientRunId、selectedModelId、input、plan、tool、source、model、report、error、fallback、usage 和 external trace/checkpoint 状态。 |
+| Graph Node | Intent Router, Planner / Workflow, Tool Governance / Data Access, Execution / Streaming, Artifact / Source / Report | planner / intent、context / RAG、tool execution、model call / streaming、report artifact、final response、error / fallback 必须按业务边界拆分。 |
+| Graph Edge | Planner / Workflow, Execution / Streaming | 表达生命周期依赖、分支和错误路径，不表达 UI 布局或无业务意义的细碎步骤。 |
+| Stream Event | Execution / Streaming, Observability / Trace | LangGraph raw event 必须在后端映射为项目 canonical SSE / Run Trace event，前端不直接消费 raw event。 |
+| Checkpoint | Persistence / Lineage, Operation / Deployment | LangGraph checkpoint / thread / node id 仅作为外部恢复或观测 ID，不替代 DB run / event / source / report 主关系。 |
+| LangSmith Trace / Evaluation | Observability / Trace, Evaluation / Quality Gate, Bad Case / Dataset | LangSmith trace / dataset / feedback / experiment 语义作为长期标准；项目 UI 和 DB 主关系可以保留。 |
+
+## 2.3 运行态迁移边界
+
+迁移 Agent Runtime 时必须遵守：
+
+- CloudBase HTTP Function 保留 Auth、user context、conversation/message 权限、run creation / idempotency、quota / usage、SSE HTTP 和持久化边界。
+- Agent Run 内部 planner、RAG、tool、model streaming、report decision、final response、error / fallback 编排迁入 LangGraph。
+- Model、Tool、Retriever 能力迁入 LangChain，不继续扩展旧 `_shared/modelGateway.js` 或自研工具/RAG 调度链。
+- Run Trace / Source / Report / Usage / Evaluation 的业务主关系继续绑定 canonical `runId`。
+- 迁移时删除被替代旧逻辑，不保留 runtime wrapper / adapter / old-new 双轨兼容。
+- Mock、Real、Fallback 必须是明确状态，不能用 fallback 或 mock 伪装 real provider 结果。
+
 ## 3. 核心对象归位
 
 功能必须绑定到明确对象：
@@ -107,6 +133,14 @@ Intent Router / Planner / Tool Governance / Trace / Artifact / Persistence
   -> Bad Case / Dataset
   -> Improvement / Versioning
 ```
+
+后续代码 Issue 建议按完整闭环拆分，不拆成无独立验收价值的小任务：
+
+1. LangGraph Runtime Skeleton 最小闭环：建立 graph state / node / edge / event mapping / checkpoint metadata 的最小 run，完成 run_started -> planning -> response -> run_completed 的持久化和 SSE 闭环。
+2. Agent Run 主入口切换到 LangGraph：让 `workbench-agent-run-stream` 的内部编排单轨进入 LangGraph，并删除被替代的手写 planner / model streaming 主链路。
+3. LangChain Tool / Retriever 迁移：把正式 Tool Registry 和 `knowledge_search` 迁到 LangChain Tool / Retriever，同时保持 `tool_invocations`、`retrieval_logs`、`run_sources` 主事实源。
+4. LangSmith Trace / Evaluation 接入：建立 LangSmith trace 上报、失败显式状态、Evaluation dataset / feedback / experiment 语义映射。
+5. 删除旧 runtime 和 mock/basic 残留：清理旧 `_shared/modelGateway.js` 调用链、legacy tool/RAG alias、mock/basic fallback 残留和旧 raw payload formatter。
 
 ## 6. 历史功能处理规则
 
