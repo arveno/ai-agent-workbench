@@ -10,7 +10,7 @@
 - `canonicalRunId` 是已退出的历史迁移字段，禁止回归。
 - `runtimeRunId` / `runtime_run_id` 是旧命名，禁止进入当前运行时代码。
 - 所有执行后资产必须绑定 canonical `runId`。
-- LangGraph checkpoint / thread / node id 和 LangSmith trace / run id 只能作为外部观测或恢复 ID，不替代 canonical `runId`。
+- LangGraph checkpoint / thread / node id 和 LangSmith trace / run id 只能作为外部观测或恢复 ID，不替代 canonical `runId` 或任何业务主外键。
 - 组件和业务 UI 不得自行判断 ID 格式。
 - 不保留 `idA || idB` 类型兜底作为常态逻辑。
 
@@ -31,7 +31,18 @@
 | `reportId` | Report Artifact ID，对应 `report_artifacts.id`。 | 后端 report 函数。 | 是 | report 自身主键；report -> run 必须靠 canonical `runId`。 | 可以 | 否 | 禁止通过 `metadata.runtimeRunId` 绑定 run。 |
 | `sourceId` / `retrievalId` | Source 或 RAG retrieval 的 lineage ID。 | RAG 工具、retrieval log 或 mapper。 | 是 | 绑定 canonical `runId`、conversationId、toolInvocationId。 | 可以 | 否 | 禁止只把 source 当展示数组而无 lineage。 |
 | `evaluationId` / `caseId` | Evaluation result / case ID。 | Evaluation 后端 / DB。 | 是 | `eval_results.run_id` 绑定 canonical `runId`；`case_id` 绑定 case。 | 可以 | 否 | 禁止在 ID 双轨未清理时扩展 Evaluation。 |
-| `langGraphCheckpointId` / `langSmithTraceId` | 外部 runtime / observability ID。 | LangGraph / LangSmith。 | 可进入 metadata 或专用字段，视后续契约决定。 | 否，不能替代业务主关系。 | 调试可见 | 否 | 禁止作为 messages / reports / sources / usage / evaluation 主外键。 |
+| `langGraphThreadId` / `langGraphCheckpointId` / `langGraphNodeId` / `langSmithTraceId` / `langSmithRunId` | 外部 runtime / observability ID。 | LangGraph / LangSmith。 | 可进入 metadata；如需查询或恢复能力，必须先通过文档和 migration 增加专用字段。 | 否，不能替代业务主关系。 | 调试可见 | 否 | 禁止作为 messages / reports / sources / usage / evaluation 主外键。 |
+
+## 2.1 外部 Runtime ID 边界
+
+LangGraph / LangSmith 外部 ID 的长期边界：
+
+- `agent_runs.id` 仍是 Agent Run canonical `runId`。
+- LangGraph thread / checkpoint / node id 可以记录在 `agent_runs.metadata`、`run_events.payload` 或调试 metadata 中，用于恢复、排障和外部 trace 对齐。
+- LangSmith trace / run id 可以记录在 run / event / evaluation metadata 中，用于跳转、上报状态和外部观测。
+- 如果需要按外部 ID 查询、恢复或建立唯一约束，必须先更新本文档并新增数据库 migration，不能临时用 metadata 字符串扫描替代正式字段。
+- 外部 ID 不能进入 `messages.run_id`、`report_artifacts.run_id`、`run_sources.run_id`、`retrieval_logs.run_id`、`tool_invocations.run_id`、`agent_run_usage.run_id` 或 `eval_results.run_id`。
+- 外部 ID 不能作为 `clientRunId`、`displayRunId`、`runtimeRunId` 或 `canonicalRunId` 的兼容兜底。
 
 ## 3. Run ID 契约
 
