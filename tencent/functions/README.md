@@ -25,6 +25,7 @@
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
 | `_shared/modelGateway.js` | 当前模型调用边界；后续迁入 LangChain model layer 时单轨替换，不扩展为长期模型平台。 |
+| `_shared/langchainModelLayer.js` | W2 新建 LangChain Model Layer 最小边界；Agent Run 主调用切换前不替代 `_shared/modelGateway.js`。 |
 | `_shared/langgraphRuntime.js` | LangGraph Run State / node / edge / canonical event mapper 边界。 |
 | `_shared/langsmithObservability.js` | LangSmith Trace / Evaluation 上报边界；失败或未配置时显式返回状态。 |
 
@@ -177,7 +178,7 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-runs.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。当前 Agent Run 主链路进入 LangGraph runtime；正式工具通过 LangChain Tool / Structured Tool 执行，`knowledge_search` 通过 LangChain Retriever / Document 输出边界；模型调用仍暂时走 `_shared/modelGateway.js`，后续迁入 LangChain model layer 时单轨替换。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`、`@langchain/core`、`@langchain/langgraph` 和 `zod`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
+`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。当前 Agent Run 主链路进入 LangGraph runtime；正式工具通过 LangChain Tool / Structured Tool 执行，`knowledge_search` 通过 LangChain Retriever / Document 输出边界；模型调用仍暂时走 `_shared/modelGateway.js`。W2 已新增 `_shared/langchainModelLayer.js` 作为后续单轨替换边界，但本任务不切换主调用。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`、`@langchain/core`、`@langchain/langgraph`、`@langchain/openai` 和 `zod`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
 cd tencent/functions
@@ -185,7 +186,7 @@ stage="$HOME/Desktop/cloudbase-workbench-agent-run-stream-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
 cp workbench-agent-run-stream/index.js workbench-agent-run-stream/package.json workbench-agent-run-stream/scf_bootstrap workbench-agent-run-stream/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js _shared/langgraphRuntime.js _shared/langsmithObservability.js "$stage/_shared/"
+cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js _shared/langchainModelLayer.js _shared/langgraphRuntime.js _shared/langsmithObservability.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-agent-run-stream.zip index.js package.json README.md scf_bootstrap _shared)
 ```
@@ -311,6 +312,7 @@ node --check tencent/functions/workbench-quota/index.js
 node --check tencent/functions/workbench-agent-run-stream/index.js
 node --check tencent/functions/workbench-evaluations/index.js
 node --check tencent/functions/_shared/modelGateway.js
+node --check tencent/functions/_shared/langchainModelLayer.js
 node --check tencent/functions/_shared/langgraphRuntime.js
 node --check tencent/functions/_shared/langsmithObservability.js
 ```
@@ -401,7 +403,7 @@ curl -N -i -X POST \
 - `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
 - `workbench-runs` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只读 `agent_runs` / `run_events` / `tool_invocations`，用于刷新页面或切换会话后的 Run Trace 恢复，不写 quota、messages 或 run 事件。
 - `workbench-evaluations` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取和写入 `eval_results`，并通过 `_shared/langsmithObservability.js` 对齐 LangSmith feedback 语义，不让 LangSmith 外部 ID 替代 canonical `runId`。
-- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js`、`_shared/modelGateway.js`、`_shared/langgraphRuntime.js` 与 `_shared/langsmithObservability.js` 执行 CloudBase Agent Run 流式链路。主链路进入 LangGraph runtime，Tool / Retriever 进入 LangChain 边界，模型调用仍暂时通过 `_shared/modelGateway.js`。
+- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js`、`_shared/modelGateway.js`、`_shared/langchainModelLayer.js`、`_shared/langgraphRuntime.js` 与 `_shared/langsmithObservability.js` 执行 CloudBase Agent Run 流式链路。主链路进入 LangGraph runtime，Tool / Retriever 进入 LangChain 边界；模型主调用仍暂时通过 `_shared/modelGateway.js`，后续 W2 任务单轨切换到 `_shared/langchainModelLayer.js`。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。

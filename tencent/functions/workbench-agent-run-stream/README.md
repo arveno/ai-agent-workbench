@@ -75,7 +75,7 @@ The current path is:
    - `chart_render`
 10. For `knowledge_qa`, execute `knowledge_search` through LangChain Retriever / Document against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
 11. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
-12. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
+12. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured. W2 adds `_shared/langchainModelLayer.js` as the future single-track replacement boundary, but this function does not switch the main model call until the dedicated migration task.
 13. Fall back explicitly when the model provider is not configured, MySQL tables are missing, queries fail, no rows are returned, no knowledge chunks match, or the model provider fails.
 14. Insert one assistant `messages` row with source metadata, skipping insert when the same `run_id` already has an assistant message.
 15. Mark `agent_runs(status = completed)`.
@@ -130,7 +130,7 @@ If quota consumption fails after the pending run is inserted, the function keeps
 
 Do not hard-code keys or connection strings in source code.
 
-Model Gateway reads the selected model from `selectedModelId`, checks it against the catalog whitelist, and maps it to SiliconFlow / Zhipu OpenAI-compatible API settings. Required provider keys:
+Model Gateway and the W2 LangChain Model Layer read the selected model from `selectedModelId`, check it against the server-side catalog whitelist, and map it to SiliconFlow / Zhipu OpenAI-compatible API settings. Required provider keys:
 
 ```txt
 SILICONFLOW_API_KEY=...
@@ -156,7 +156,7 @@ Agent Run data tools use CloudBase MySQL through the CloudBase function runtime,
 
 Model and LangSmith keys must be CloudBase function environment variables only. Do not put `SILICONFLOW_API_KEY`, `ZHIPU_API_KEY`, `LANGSMITH_API_KEY`, or `LANGCHAIN_API_KEY` in EdgeOne / frontend `VITE_*` variables.
 
-When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/modelGateway.js` is intentionally lightweight: it only wraps OpenAI-compatible chat completions and normalized diagnostics, not an enterprise model platform.
+When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/modelGateway.js` remains the current execution boundary; `_shared/langchainModelLayer.js` is the W2 boundary for the next single-track migration.
 
 Fallback reasons used by the real data-analysis path:
 
@@ -306,6 +306,7 @@ Syntax check:
 node --check tencent/functions/_shared/langgraphRuntime.js
 node --check tencent/functions/_shared/langsmithObservability.js
 node --check tencent/functions/_shared/modelGateway.js
+node --check tencent/functions/_shared/langchainModelLayer.js
 node --check tencent/functions/workbench-agent-run-stream/index.js
 ```
 
