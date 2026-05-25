@@ -15,6 +15,8 @@
 
 工具治理目标是让服务端执行、参数白名单、持久化、Trace 展示和前端工具库展示回到同一条主链路。
 
+长期终态下，正式服务端工具必须向 LangChain Tool / Structured Tool 收敛，并由 LangGraph runtime 调度。当前自研工具执行链路只作为待替换旧链路，不得在其旁边新增 LangChain wrapper 旁路。
+
 ## 2. 正式工具清单
 
 当前 Agent Run 内部正式服务端工具只包括：
@@ -45,6 +47,7 @@ Evaluation 相关能力后置，不纳入当前正式 Tool Registry。
 - 模型不能直接执行 SQL。
 - 前端不能直接执行工具。
 - 工具调用必须由服务端受控。
+- LangChain Tool schema 必须与服务端白名单、参数标准化和 Tool Invocation 契约一致。
 - 服务端负责 Auth、数据访问、白名单、参数标准化和错误归类。
 - 表名、字段名、metric、groupBy 必须来自白名单或服务端 normalize。
 - 不允许由模型或前端透传任意表名、字段名或 SQL。
@@ -82,6 +85,8 @@ Evaluation 相关能力后置，不纳入当前正式 Tool Registry。
 
 UI 只能消费 mapper / ViewModel 后的标准结构，不能把 `tool_invocations.output` 或 `run_events.payload` 当主视图数据源。
 
+LangChain Tool 的 name / args / output 必须映射到同一条 `tool_invocations` 主链路。不得为 LangChain 工具另建一套独立展示字段、独立 formatter 或独立 trace 事实源。
+
 ## 6. `knowledge_search` Source 契约
 
 `knowledge_search` 必须遵守 `docs/source-lineage.md`：
@@ -113,10 +118,12 @@ Workflow 工具说明必须区分：
 禁止：
 
 - 新增工具绕过服务端白名单。
+- 在旧工具链旁新增 LangChain 旁路工具链。
 - 前端直接执行工具。
 - 模型输出任意 SQL 或任意表字段后直接执行。
 - 多处维护工具中文名、category、icon、风险说明。
 - Run Trace formatter 维护独立工具事实源。
+- LangChain Tool 展示绕过统一 Tool Registry ViewModel。
 - Workflow 文案把策略阶段写成真实工具。
 - Evaluation expected tools 使用 legacy / mock / planned 工具。
 - `report_generate` 被表达为 Agent Run 内部 Tool Invocation。

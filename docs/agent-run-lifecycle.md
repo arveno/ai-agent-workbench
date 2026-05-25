@@ -41,6 +41,16 @@
 | G. 质量与改进层 | Evaluation / Quality Gate, Bad Case / Dataset, Improvement / Versioning | 评测、坏例、数据集、版本和持续改进。 |
 | H. 工程与治理层 | Operation / Deployment, Audit / Governance / Cost | 部署、运行、审计、成本和治理闭环。 |
 
+## 2.1 终态技术归位
+
+| 终态组件 | 归位节点 | 契约 |
+| --- | --- | --- |
+| LangGraph | Intent Router, Planner / Workflow, Execution / Streaming, Persistence / Lineage | 长期 Agent Runtime / Graph 编排核心。Agent Run 生命周期应收敛为 graph state / node / edge / checkpoint / stream event。 |
+| LangChain | Context / Memory / Data, Model Gateway, Tool Governance / Data Access | 长期 Model / Tool / RAG 能力层。模型、工具和检索不得长期散落在手写 provider fetch 或自研工具调用中。 |
+| LangSmith | Observability / Trace, Evaluation / Quality Gate, Bad Case / Dataset | 长期 Trace / Evaluation / Observability 标准平台。项目 UI 可以展示 trace，但 trace/eval 语义必须向 LangSmith 对齐。 |
+
+当前自研 imperative Agent Runtime 是待替换旧链路，不作为长期终态。后续代码任务必须单轨替换，不允许在旧 runtime 旁新增 LangChain 旁路或 old/new 双轨兼容。
+
 ## 3. 核心对象归位
 
 功能必须绑定到明确对象：
@@ -105,6 +115,7 @@ Intent Router / Planner / Tool Governance / Trace / Artifact / Persistence
 - 删除：不服务当前主链路的死代码、旧兼容逻辑、废弃入口和多轨实现默认删除。
 - 升级：有价值但对象绑定不完整的功能，升级为 Run 中心、服务端受控、可追踪、可持久化的实现。
 - 后置：依赖未完成的下游能力先后置，不用局部功能抢跑替代主链路。
+- 终态替换：涉及 Agent Runtime、Model、Tool、RAG、Trace 或 Evaluation 的旧模块，按 LangGraph / LangChain / LangSmith 主链路重写后删除旧代码，不保留长期兼容层。
 
 ## 7. 验收标准
 
@@ -113,6 +124,7 @@ Intent Router / Planner / Tool Governance / Trace / Artifact / Persistence
 - Run 是执行中心。
 - 模型调用、工具调用、数据访问和权限由后端控制。
 - Trace 能展示关键事件、工具调用、模型状态、错误、fallback 和 usage。
+- Trace / Evaluation 语义向 LangSmith 对齐，LangSmith 不可用时不得伪装真实 trace。
 - Response、Source、Report、Artifact、Lineage 能持久化并恢复。
 - Mock / Real / Fallback 边界清楚。
 - 架构数据分层未被破坏。
