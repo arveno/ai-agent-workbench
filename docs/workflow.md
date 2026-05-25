@@ -20,7 +20,7 @@ ChatGPT 可辅助判断、拆解、解释和复盘：
 - 判断涉及的核心对象、ID、Source、Tool、部署或数据库边界。
 - 辅助整理 Issue、Codex 指令、PR 风险和验收意见。
 
-ChatGPT 不是稳定流程的必需控制点。流程控制由 Issue、PR、CI、main ruleset 和仓库事实源完成。
+ChatGPT 不作为任务准入、执行和合并的必需控制器。流程控制由 Issue、PR、CI、main ruleset 和仓库事实源完成。
 
 ### Codex
 
@@ -37,10 +37,10 @@ Codex 负责执行：
 
 Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset 门禁。
 
-- Issue 是任务事实源。
-- PR 是变更容器和审查入口。
+- Issue 模板、生命周期节点、目标、范围、明确不做和验收标准决定任务准入。
+- PR 是变更容器和审查入口，按 PR Template、CI、main ruleset 和必要 Review 完成审查。
 - CI 的 Lint and Build 是基础质量门禁。
-- main 分支受 ruleset 保护，必须通过 PR 且 CI 通过后才能合并。
+- main 分支受 ruleset 保护，必须通过 PR 且 CI 通过后才能合并，最终合并由用户决定。
 
 ## 2. 事实源与任务边界
 
@@ -48,7 +48,7 @@ Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset
 - Issue 是当前任务事实源。
 - prompt 只能补充执行上下文，不能覆盖 Issue 或已冻结文档。
 - 对话用于讨论、解释和复盘，不能成为流程稳定性的依赖。
-- Codex 只能在 Issue 和 prompt 共同允许的范围内执行。
+- Codex 执行边界由 Issue、`AGENTS.md` 和相关事实源约束，只能在 Issue 和 prompt 共同允许的范围内执行。
 
 如果 prompt 与仓库文档冲突，停止执行并报告冲突。需要改变长期规则时，先更新对应事实源文档，再按新事实源执行代码任务。
 
