@@ -37,8 +37,9 @@ Codex 负责执行：
 
 Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset 门禁。
 
-- Issue 模板、生命周期节点、目标、范围、明确不做和验收标准决定任务准入。
+- Issue 是任务事实源，Issue 模板、生命周期节点、目标、范围、明确不做和验收标准决定任务准入。
 - PR 是变更容器和审查入口，按 PR Template、CI、main ruleset 和必要 Review 完成审查。
+- Codex PR Review 只作为辅助审查建议来源，不替代 Issue、PR Template、CI 或 main ruleset。
 - CI 的 Lint and Build 是基础质量门禁。
 - main 分支受 ruleset 保护，必须通过 PR 且 CI 通过后才能合并，最终合并由用户决定。
 
@@ -75,7 +76,7 @@ Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset
   -> Codex 在 Issue 边界内小步执行
   -> PR 关联 Issue 并按 PR Template 自检
   -> CI 执行 Lint and Build
-  -> Review 检查 diff、验证结果和风险
+  -> Review 检查 diff、验证结果和风险，Codex PR Review 可作为辅助建议
   -> main ruleset 要求 PR + CI 通过后合并
 ```
 
@@ -164,6 +165,7 @@ Review / 辅助验收时必须检查：
 - lint / build / smoke 是否按任务要求执行并通过。
 - PR 是否关联 Issue 并按 PR Template 自检。
 - CI Lint and Build 是否通过。
+- Codex PR Review 如触发，是否仅作为辅助建议处理。
 - 是否可以进入 Review / Merge。
 
 ## 8. 用户贴回内容
