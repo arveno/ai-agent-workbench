@@ -23,7 +23,7 @@
 - LangGraph 是长期 Agent Runtime / Graph 编排核心。
 - LangChain 是长期 Model / Tool / RAG 能力层。
 - LangSmith 是长期 Trace / Evaluation / Observability 标准平台。
-- 当前自研 imperative Agent Runtime 只作为待替换旧链路，不作为长期终态。
+- 当前 Agent Run 主链路已进入 LangGraph runtime；不得恢复自研 imperative runtime、basic / mock 主线或旧 runtime 旁路。
 - 后续不得在旧 runtime 旁新增 LangChain 包装层或旁路执行链。
 - 不做无关重构。
 - 不新增无关依赖。
@@ -99,20 +99,23 @@ component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 
 selectedModelId -> model catalog -> LangChain model layer -> provider client
 ```
 
+当前状态：Agent Run 主链路已进入 LangGraph runtime；正式 Tool / Retriever 已进入 LangChain Tool / Retriever 边界；模型调用仍暂时通过 `_shared/modelGateway.js`，后续迁入 LangChain model layer 时必须单轨替换。
+
 要求：
 
 - 前端只传 `selectedModelId`。
 - 前端不得出现模型 API Key、baseURL、provider 密钥配置。
 - 后端通过 catalog 白名单解析 provider / model / apiKeyEnv。
 - 模型调用、工具定义和 RAG 能力向 LangChain Model / Tool / Retriever 收敛。
-- 当前 `_shared/modelGateway.js` 属于待替换旧链路，不得扩展成新的长期平台。
+- 当前 `_shared/modelGateway.js` 只作为模型调用边界保留，不得扩展成新的长期模型平台。
 
 禁止：
 
 - 恢复 Groq runtime。
 - 恢复 `modelProvider: 'groq'`。
 - 恢复前端 provider / model 透传链路。
-- 绕过 catalog 和 LangChain 能力层直接调用模型。
+- 绕过 catalog、当前 `_shared/modelGateway.js` 或后续 LangChain model layer 直接调用模型。
+- 绕过 LangChain Tool / Retriever 边界新增旧工具链或旧 RAG 链。
 - 在旧 runtime 旁边新增 LangChain wrapper / adapter 旁路。
 - 为兼容旧代码保留 old/new 双轨字段或 fallback 链。
 

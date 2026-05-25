@@ -19,8 +19,8 @@ const functionDefinitions = [
   ['workbench-demo-copy', ['auth.js', 'mysql.js']],
   ['workbench-quota', ['auth.js', 'mysql.js']],
   ['workbench-runs', ['auth.js', 'mysql.js']],
-  ['workbench-evaluations', ['auth.js', 'mysql.js']],
-  ['workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js', 'langgraphRuntime.js']],
+  ['workbench-evaluations', ['auth.js', 'mysql.js', 'langsmithObservability.js']],
+  ['workbench-agent-run-stream', ['auth.js', 'mysql.js', 'modelGateway.js', 'langgraphRuntime.js', 'langsmithObservability.js']],
 ];
 
 export const manifests = functionDefinitions.map(([name, sharedFiles]) => createManifest(name, sharedFiles));

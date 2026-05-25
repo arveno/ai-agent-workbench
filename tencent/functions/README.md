@@ -1,6 +1,6 @@
 # CloudBase HTTP Functions
 
-本目录保存当前 CloudBase HTTP Functions 实现。当前包含公开 demo templates 只读接口、CloudBase Auth helper、conversations / messages / reports / demo-copy / quota / runs 基础闭环函数，以及 Agent Run 流式函数。`workbench-agent-run-stream` 的 `real` data tools 直接读取 CloudBase MySQL `teaching_metrics` 和 `knowledge_documents` / `knowledge_chunks`；模型链路通过前端 `selectedModelId`、服务端 catalog 白名单和 `_shared/modelGateway.js` 调用 SiliconFlow / Zhipu OpenAI-compatible API。
+本目录保存当前 CloudBase HTTP Functions 实现。当前包含公开 demo templates 只读接口、CloudBase Auth helper、conversations / messages / reports / demo-copy / quota / runs / evaluations 基础闭环函数，以及 Agent Run 流式函数。`workbench-agent-run-stream` 主链路已进入 LangGraph runtime；正式 Tool / Retriever 已进入 LangChain Tool / Retriever 边界并读取 CloudBase MySQL `teaching_metrics`、`knowledge_documents` 和 `knowledge_chunks`；模型链路仍通过前端 `selectedModelId`、服务端 catalog 白名单和 `_shared/modelGateway.js` 调用 SiliconFlow / Zhipu OpenAI-compatible API。Trace / Evaluation 语义已对齐 LangSmith，但 LangSmith 外部 ID 不替代 canonical `runId` 或项目主事实源。
 
 ## 函数
 
@@ -14,7 +14,9 @@
 | `workbench-reports` | `/api/workbench/reports` | 开启 | 校验会话归属后读取和保存当前用户私有报告。 |
 | `workbench-demo-copy` | `/api/workbench/demo-copy` | 开启 | 复制公开示例会话模板为当前用户私有会话。 |
 | `workbench-quota` | `/api/workbench/quota` | 开启 | 查询本月 Agent Run 额度，并通过 `POST body.action` 消耗额度或完成 usage。 |
-| `workbench-agent-run-stream` | `/api/agent/run/stream` | 开启 | CloudBase Agent Run 流式验证；保留 `basic` mock 路径，`real` 路径直接读取 CloudBase MySQL `teaching_metrics`。 |
+| `workbench-runs` | `/api/workbench/runs` | 开启 | 只读恢复当前用户的 Agent Run、Run Trace 和 Tool Invocation。 |
+| `workbench-evaluations` | `/api/workbench/evaluations` | 开启 | 读取和写入 Evaluation / Bad Case，并按 LangSmith feedback 语义上报。 |
+| `workbench-agent-run-stream` | `/api/agent/run/stream` | 开启 | CloudBase Agent Run SSE 主入口；内部编排进入 LangGraph runtime，Tool / Retriever 进入 LangChain 边界。 |
 
 ## 共享 helper
 
@@ -22,8 +24,11 @@
 | --- | --- |
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
+| `_shared/modelGateway.js` | 当前模型调用边界；后续迁入 LangChain model layer 时单轨替换，不扩展为长期模型平台。 |
+| `_shared/langgraphRuntime.js` | LangGraph Run State / node / edge / canonical event mapper 边界。 |
+| `_shared/langsmithObservability.js` | LangSmith Trace / Evaluation 上报边界；失败或未配置时显式返回状态。 |
 
-后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota` 和 `workbench-agent-run-stream` 已按该方式实现基础验证；当前不替换前端 `authStore`。
+后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 已按该方式实现基础验证；当前不替换前端 `authStore`。
 
 ## CloudBase 函数环境变量
 
@@ -41,11 +46,13 @@ CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 - `workbench-reports`
 - `workbench-demo-copy`
 - `workbench-quota`
+- `workbench-runs`
 - `workbench-agent-run-stream`
+- `workbench-evaluations`
 
 这是 CloudBase 函数运行时环境变量，用于 `@cloudbase/node-sdk` 初始化 `app.rdb()`。不要写入代码，不要写入前端，不要配置到 EdgeOne，也不要加 `VITE_` 前缀。EdgeOne 只配置前端公开的 `VITE_*` 变量；本地 Vite proxy 可继续使用 `CLOUDBASE_PROXY_TARGET`，但它不是 CloudBase 函数变量。
 
-`workbench-agent-run-stream` 的模型 Key 也只放 CloudBase 函数环境变量。`SILICONFLOW_API_KEY` / `ZHIPU_API_KEY` 不放 EdgeOne / 前端 `VITE_*` 变量。
+`workbench-agent-run-stream` 的模型 Key 也只放 CloudBase 函数环境变量。`SILICONFLOW_API_KEY` / `ZHIPU_API_KEY` 不放 EdgeOne / 前端 `VITE_*` 变量。LangSmith Key 只允许配置到服务端 CloudBase 函数环境变量，不能进入 `VITE_*` 或前端 bundle。
 
 不迁移：
 
@@ -170,7 +177,7 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-runs.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。`body.mode = "basic"` 保留固定 mock 基础闭环；默认或 `body.mode = "real"` 会接入本地 planner、CloudBase MySQL `teaching_metrics` 受控 data tools、轻量 model gateway 和明确 fallback。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
+`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。当前 Agent Run 主链路进入 LangGraph runtime；正式工具通过 LangChain Tool / Structured Tool 执行，`knowledge_search` 通过 LangChain Retriever / Document 输出边界；模型调用仍暂时走 `_shared/modelGateway.js`，后续迁入 LangChain model layer 时单轨替换。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`、`@langchain/core`、`@langchain/langgraph` 和 `zod`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
 cd tencent/functions
@@ -178,7 +185,7 @@ stage="$HOME/Desktop/cloudbase-workbench-agent-run-stream-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
 cp workbench-agent-run-stream/index.js workbench-agent-run-stream/package.json workbench-agent-run-stream/scf_bootstrap workbench-agent-run-stream/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js "$stage/_shared/"
+cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js _shared/langgraphRuntime.js _shared/langsmithObservability.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-agent-run-stream.zip index.js package.json README.md scf_bootstrap _shared)
 ```
@@ -193,7 +200,20 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs` 和 `workbench-agent-run-stream` 的 zip 根目录都应包含：
+`workbench-evaluations` 依赖 `_shared`。只使用固定路由 `/api/workbench/evaluations`，路径透传关闭；它读取和写入 Evaluation / Bad Case 结果，保留 `eval_results.run_id` 和项目 Evaluation 表作为主事实源，并通过 `_shared/langsmithObservability.js` 按 LangSmith feedback 语义上报。打包说明使用 Git Bash：
+
+```bash
+cd tencent/functions
+stage="$HOME/Desktop/cloudbase-workbench-evaluations-package"
+rm -rf "$stage"
+mkdir -p "$stage/_shared"
+cp workbench-evaluations/index.js workbench-evaluations/package.json workbench-evaluations/scf_bootstrap workbench-evaluations/README.md "$stage/"
+cp _shared/mysql.js _shared/auth.js _shared/langsmithObservability.js "$stage/_shared/"
+chmod +x "$stage/scf_bootstrap"
+(cd "$stage" && zip -r workbench-evaluations.zip index.js package.json README.md scf_bootstrap _shared)
+```
+
+`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 的 zip 根目录都应包含：
 
 ```txt
 _shared/
@@ -203,7 +223,7 @@ README.md
 scf_bootstrap
 ```
 
-`workbench-agent-run-stream` 的 `real` 模式通过 CloudBase 函数运行时、`@cloudbase/node-sdk` 和 `app.rdb()` 访问 CloudBase MySQL。当前模型链路由前端 `selectedModelId` 进入 `_shared/modelGateway.js`，通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
+`workbench-agent-run-stream` 通过 CloudBase 函数运行时、`@cloudbase/node-sdk` 和 `app.rdb()` 访问 CloudBase MySQL。Agent Run 主链路进入 LangGraph runtime；Tool / Retriever 进入 LangChain Tool / Retriever 边界。当前模型链路由前端 `selectedModelId` 进入 `_shared/modelGateway.js`，通过 catalog 白名单映射到 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
 所有依赖 `_shared/mysql.js` 的函数都需要先在 CloudBase 函数环境变量中配置 `CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d`；EdgeOne 不需要也不应配置该变量。
 
@@ -223,7 +243,15 @@ ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
 MODEL_GATEWAY_TIMEOUT_MS=30000
 ```
 
-模型 Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run data tools 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台。
+LangSmith 可选配置：
+
+```txt
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=ai-agent-workbench
+LANGSMITH_TIMEOUT_MS=3000
+```
+
+模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/modelGateway.js` 只是轻量 OpenAI-compatible chat completions helper，不是企业级模型平台；后续迁入 LangChain model layer 时单轨替换。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -281,7 +309,10 @@ node --check tencent/functions/workbench-reports/index.js
 node --check tencent/functions/workbench-demo-copy/index.js
 node --check tencent/functions/workbench-quota/index.js
 node --check tencent/functions/workbench-agent-run-stream/index.js
+node --check tencent/functions/workbench-evaluations/index.js
 node --check tencent/functions/_shared/modelGateway.js
+node --check tencent/functions/_shared/langgraphRuntime.js
+node --check tencent/functions/_shared/langsmithObservability.js
 ```
 
 `workbench-conversations` 线上验证建议：
@@ -347,16 +378,16 @@ curl -i https://<your-domain>/api/agent/run/stream
 curl -N -i -X POST \
   -H "Authorization: Bearer <cloudbase-token>" \
   -H "Content-Type: application/json" \
-  -d "{\"prompt\":\"测试提示词\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-basic-run\",\"mode\":\"basic\"}" \
+  -d "{\"prompt\":\"分析本月教学质量数据，找出异常指标\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-langgraph-data-run\"}" \
   https://<your-domain>/api/agent/run/stream
 curl -N -i -X POST \
   -H "Authorization: Bearer <cloudbase-token>" \
   -H "Content-Type: application/json" \
-  -d "{\"prompt\":\"分析本月教学质量数据，找出异常指标\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-real-run\",\"mode\":\"real\"}" \
+  -d "{\"prompt\":\"基于知识库回答教学质量评价口径\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-langgraph-rag-run\"}" \
   https://<your-domain>/api/agent/run/stream
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。`mode = "basic"` 应以 SSE 格式输出固定基础闭环事件，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。`mode = "real"` 数据分析问题应输出 planner、`schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `provider`、`model`、`modelErrorType`、`modelHttpStatus`。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `007_agent_runs_client_run_id.sql` 已先执行。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。有效请求应以 SSE 格式输出 LangGraph runtime 映射后的 canonical events，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。数据分析问题应输出 `schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `provider`、`model`、`modelErrorType`、`modelHttpStatus`。LangSmith 未配置或上报失败时 metadata 应显式记录未上报 / 上报失败。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `007_agent_runs_client_run_id.sql` 已先执行。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
 
 ## 安全说明
 
@@ -369,7 +400,8 @@ curl -N -i -X POST \
 - `workbench-demo-copy` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取公开 demo 模板并写入当前用户私有 `conversations` / `messages`，不写 reports、Agent Run、SSE 或 quota。
 - `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
 - `workbench-runs` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只读 `agent_runs` / `run_events` / `tool_invocations`，用于刷新页面或切换会话后的 Run Trace 恢复，不写 quota、messages 或 run 事件。
-- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js` 与 `_shared/modelGateway.js` 验证 CloudBase Agent Run 流式链路。`basic` 模式为固定 mock 基础闭环，`real` 模式接入本地 planner、受控 data tools、SiliconFlow / Zhipu OpenAI-compatible model gateway 和明确 fallback，但仍不切换前端正式调用。
+- `workbench-evaluations` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取和写入 `eval_results`，并通过 `_shared/langsmithObservability.js` 对齐 LangSmith feedback 语义，不让 LangSmith 外部 ID 替代 canonical `runId`。
+- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js`、`_shared/modelGateway.js`、`_shared/langgraphRuntime.js` 与 `_shared/langsmithObservability.js` 执行 CloudBase Agent Run 流式链路。主链路进入 LangGraph runtime，Tool / Retriever 进入 LangChain 边界，模型调用仍暂时通过 `_shared/modelGateway.js`。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。

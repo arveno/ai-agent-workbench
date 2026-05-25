@@ -50,6 +50,7 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
+  'metadata',
   'created_at',
 ].join(',');
 
@@ -81,6 +82,10 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonArray, parseJsonObject } = loadSharedModule('mysql');
+const {
+  extractLangSmithTraceFromMetadata,
+  submitLangSmithEvaluationFeedback,
+} = loadSharedModule('langsmithObservability');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -661,6 +666,17 @@ async function createResult(currentUser, body) {
   }
 
   const resultId = randomUUID();
+  const runMetadata = run ? parseJsonObject(run.metadata) : {};
+  const langSmithEvaluation = await submitLangSmithEvaluationFeedback({
+    evaluationId: resultId,
+    runId: run ? String(run.id ?? '') : null,
+    conversationId: payload.conversationId || runConversationId,
+    caseId: payload.caseId,
+    verdict: payload.verdict,
+    badCaseReason: payload.badCaseReason,
+    humanNote: payload.humanNote,
+    langSmithTrace: extractLangSmithTraceFromMetadata(runMetadata),
+  });
   const insertPayload = {
     id: resultId,
     _openid: currentUser.openid,
@@ -680,6 +696,7 @@ async function createResult(currentUser, body) {
       ...payload.metadata,
       source: 'workbench-evaluation',
       resultVersion: 1,
+      langSmithEvaluation,
     }),
   };
 

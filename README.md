@@ -1,6 +1,6 @@
 # AI Agent Workbench / AI 应用工作台
 
-AI Agent Workbench 是一个面向 AI 应用场景的前端工作台，围绕会话、登录、模型调用、Agent Run、Run Trace、报告生成、RAG 来源和部署验证组织完整的应用链路。
+AI Agent Workbench 是一个面向 AI 应用场景的前端工作台，围绕会话、登录、模型调用、Agent Run、Run Trace、报告生成、RAG 来源、Evaluation 和部署验证组织完整的应用链路。
 
 当前版本聚焦 AI 应用前端工作台的核心链路、验证流程和工程边界。
 
@@ -14,7 +14,9 @@ AI Agent Workbench 是一个面向 AI 应用场景的前端工作台，围绕会
 - ChatGPT 式会话与 B 端数据分析工作流结合。
 - Agent Run SSE、Run Trace、工具调用、模型观测和报告产物。
 - CloudBase 单轨后端：Auth、HTTP Functions、MySQL、RAG 和 quota。
-- Model Gateway：前端只提交 `selectedModelId`，服务端统一校验和调用国内模型 Provider。
+- LangGraph Runtime：Agent Run 主链路的 graph state / node / edge / stream event 编排。
+- LangChain 能力层：正式 Tool / Structured Tool 和 Retriever / Document 边界。
+- LangSmith 语义对齐：Trace / Evaluation / Observability 外部平台，不替代项目主事实源。
 
 当前主要业务场景是教学质量数据分析，例如 `warning_count` 指标解释、月度分析、异常指标说明、教学评价制度问答和报告生成。
 
@@ -33,15 +35,19 @@ CloudBase MySQL
   ↓
 CloudBase workbench-agent-run-stream
   ↓
-_shared/modelGateway.js
+LangGraph runtime
   ↓
-model catalog 白名单校验
+LangChain Tool / Structured Tool
+  ↓
+LangChain Retriever / Document
+  ↓
+model catalog / _shared/modelGateway.js
   ↓
 SiliconFlow / Zhipu OpenAI-compatible API
   ↓
-modelTrace / tokenUsage / latency / fallbackReason
+LangSmith trace / evaluation metadata
   ↓
-Run Trace / Reports / RAG
+canonical Run Trace / Tool Invocation / Source Lineage / Reports / Evaluation
 ```
 
 Vercel、Supabase 和 Groq 只作为历史迁移来源保留在少量阶段记录中，不是当前运行主线。当前 runtime 不再使用 Groq，也没有 Groq 环境变量配置要求。
@@ -50,7 +56,7 @@ Vercel、Supabase 和 Groq 只作为历史迁移来源保留在少量阶段记�
 
 ## 模型链路
 
-前端只传 `selectedModelId`。服务端通过 model catalog 白名单解析 `provider`、`model`、`apiKeyEnv`，再统一进入 `_shared/modelGateway.js` 调用 OpenAI-compatible Provider。模型 Key 只放在 CloudBase 函数环境变量中，不进入浏览器。
+前端只传 `selectedModelId`。服务端通过 model catalog 白名单解析 `provider`、`model`、`apiKeyEnv`，当前进入 `_shared/modelGateway.js` 调用 OpenAI-compatible Provider。模型 Key 只放在 CloudBase 函数环境变量中，不进入浏览器。
 
 当前模型选项：
 
@@ -78,11 +84,13 @@ MODEL_GATEWAY_TIMEOUT_MS=30000
 
 ## Mock / Real / Fallback 边界
 
-- Mock：模拟模式和稳定验证路径，不调用真实模型，不消耗模型 token。
-- Real：登录后通过 CloudBase private API 触发真实 Agent Run，并由 SiliconFlow / Zhipu Provider 生成模型结论。
+- Mock：只用于前端预置示例、demo seed 或明确验证路径，不伪装为真实 Agent Run。
+- Real：登录后通过 CloudBase private API 触发 Agent Run，主链路进入 LangGraph runtime，并由 LangChain Tool / Retriever 访问受控数据和知识库。
 - Fallback：模型不可用、模型未配置、任务不支持或数据工具不可用时，服务端用明确 fallback 结果收口。
 
 Fallback 不能伪装成真实模型结果。Run Trace 和 assistant message metadata 会记录并呈现 `conclusionSource`、`fallbackReason`、`modelErrorType`、`provider`、`model`、`tokenUsage` 和 `latencyMs` 等观测字段。
+
+项目主事实源仍是 canonical `runId`、`run_events`、`tool_invocations`、`retrieval_logs`、`run_sources`、`report_artifacts` 和 `eval_results`。LangGraph / LangSmith 外部 ID 只能进入 metadata / debug，不替代业务主外键。
 
 ---
 
@@ -92,12 +100,13 @@ Fallback 不能伪装成真实模型结果。Run Trace 和 assistant message met
 - 预置示例任务和示例会话。
 - CloudBase 登录、会话恢复、消息恢复。
 - 多模型选择与 `selectedModelId` 单链路提交。
-- Agent Run SSE。
+- Agent Run SSE，主链路进入 LangGraph runtime。
 - Run Trace、事件恢复和工具调用记录。
 - 模型 `provider` / `model` / `tokenUsage` / `latency` 观测。
-- teaching_metrics 数据分析工具：`schema_inspect`、`aggregate_table`、`chart_render`。
+- LangChain Tool / Structured Tool：`schema_inspect`、`aggregate_table`、`chart_render`、`knowledge_search`。
 - 报告生成、保存、读取和刷新恢复。
-- RAG / `knowledge_search`，基于 CloudBase MySQL `knowledge_documents` / `knowledge_chunks`。
+- LangChain Retriever / Document 输出边界，基于 CloudBase MySQL `knowledge_documents` / `knowledge_chunks`。
+- LangSmith Trace / Evaluation 语义映射，未配置或失败时显式记录状态。
 - Quota consume / finish 和 Agent Run 幂等保护。
 - CloudBase 函数本地打包与包结构检查。
 - CloudBase 手动上传说明。
@@ -117,6 +126,9 @@ Fallback 不能伪装成真实模型结果。Run Trace 和 assistant message met
 - CloudBase Auth
 - CloudBase HTTP Functions
 - CloudBase MySQL
+- LangGraph
+- LangChain
+- LangSmith
 - Model Gateway / OpenAI-compatible Provider
 
 ---
@@ -146,9 +158,12 @@ CloudBase 函数环境变量：
 CLOUDBASE_ENV_ID=ai-agent-workbench-poc-d6731923d
 SILICONFLOW_API_KEY=
 ZHIPU_API_KEY=
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=ai-agent-workbench
+LANGSMITH_TIMEOUT_MS=3000
 ```
 
-所有依赖 `tencent/functions/_shared/mysql.js` 的函数都需要 `CLOUDBASE_ENV_ID`。模型 Key 只需要配置到涉及模型调用的 CloudBase 函数环境中。
+所有依赖 `tencent/functions/_shared/mysql.js` 的函数都需要 `CLOUDBASE_ENV_ID`。模型 Key 只需要配置到涉及模型调用的 CloudBase 函数环境中。LangSmith Key 只允许配置到服务端 CloudBase 函数环境中，不能进入 `VITE_*` 或前端 bundle。
 
 ---
 
@@ -235,7 +250,7 @@ pnpm cloudbase:smoke -- --base-url <CloudBase_HTTP_Functions_Base_URL> --token <
 6. 提问：请分析本月教学质量数据，重点说明 warning_count 的含义，并给出一句结论。
 7. 查看聊天结果
 8. 查看右侧 Run Trace
-9. 查看 provider / model / tokenUsage / latency
+9. 查看 provider / model / tokenUsage / latency / LangSmith 上报状态
 10. 生成报告
 11. 刷新页面，确认会话、消息、Run Trace 和报告恢复
 ```
@@ -258,9 +273,12 @@ report_artifacts
 agent_run_usage
 knowledge_documents
 knowledge_chunks
+retrieval_logs
+run_sources
+eval_results
 ```
 
-这些表分别承担会话恢复、消息恢复、Run Trace 恢复、工具调用记录、报告 artifact、quota audit 和 RAG 知识来源。
+这些表分别承担会话恢复、消息恢复、Run Trace 恢复、工具调用记录、报告 artifact、quota audit、RAG 知识来源、Source Lineage 和 Evaluation 主事实源。
 
 ---
 
@@ -272,7 +290,7 @@ knowledge_chunks
 - 真实模型测试会消耗 token / quota。
 - 手机浏览器适配后续继续补。
 - CI/CD、自动上传和 migration 自动化后置。
-- RAG 仍是小规模 MySQL 关键词检索闭环，不是完整知识库后台。
+- RAG 已进入 LangChain Retriever / Document 输出边界，但仍是小规模 CloudBase MySQL 知识库，不是完整知识库后台。
 - 暂无完整 Admin UI、多租户 Workspace、成本面板和监控告警。
 
 ---
@@ -282,9 +300,9 @@ knowledge_chunks
 - 当前版本功能回归。
 - 代码规范化与目录结构收口。
 - Token Usage / Cost Analysis。
-- Observability / Guardrail 标准化。
+- Guardrail 标准化。
 - Model Compare。
-- Planner / Intent Router。
 - Tool Calling Schema Validation。
-- RAG Pipeline / Evaluation。
+- LangChain model layer 收敛。
+- Evaluation 数据集 / bad case 闭环增强。
 - 移动端浏览器适配。

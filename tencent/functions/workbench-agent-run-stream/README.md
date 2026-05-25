@@ -2,7 +2,9 @@
 
 CloudBase HTTP Function for the current Agent Run stream path.
 
-This function keeps the Tencent-14 fixed `basic` mode and updates the `real` mode to read CloudBase MySQL `teaching_metrics` and public demo knowledge tables directly through `@cloudbase/node-sdk` / `app.rdb()`. It verifies the CloudBase Agent Run path with Auth, conversation ownership, quota, `agent_runs`, `run_events`, `tool_invocations`, assistant message persistence, SSE output, planner, controlled data tools, controlled knowledge search, lightweight model gateway conclusion generation, and explicit fallback.
+This function owns the authenticated Agent Run SSE entry. The current main path creates the canonical run, consumes quota, enters LangGraph runtime, executes LangChain Tool / Structured Tool and LangChain Retriever / Document boundaries, persists canonical `run_events`, `tool_invocations`, `retrieval_logs`, `run_sources`, assistant message metadata, and records LangSmith trace status as external observability metadata.
+
+The canonical `runId` remains `agent_runs.id`. LangGraph checkpoint/thread ids and LangSmith trace/run ids are metadata only and never replace `runId`, message/report/source/usage/evaluation foreign keys, or project persistence facts.
 
 Report generation remains a separate artifact API; this function only owns Agent Run streaming and persistence.
 
@@ -33,7 +35,7 @@ Body:
   "prompt": "分析本月教学质量数据，找出异常指标",
   "conversationId": "current-private-conversation-id",
   "clientRunId": "optional-client-run-id",
-  "mode": "real"
+  "selectedModelId": "siliconflow-qwen-free"
 }
 ```
 
@@ -42,9 +44,9 @@ Fields:
 - `conversationId` is required.
 - `prompt` is optional; the function uses a teaching-data analysis prompt when omitted.
 - `clientRunId` is optional; the function generates one when omitted.
-- `mode = "basic"` keeps the Tencent-14 fixed mock loop.
-- Any other `mode`, including omitted `mode`, uses the Tencent-21 `real` path.
-- `provider` is ignored in Tencent-21. Real data tools always read CloudBase MySQL `teaching_metrics`.
+- `selectedModelId` is optional; the service resolves it through the server-side model catalog.
+- `mode` is not a runtime switch. The public entry always uses the current Agent Run path.
+- `provider` is ignored. Data tools read CloudBase MySQL through server-side allowlists.
 
 The function reuses `_shared/auth.js` to get `currentUser`, then checks:
 
@@ -55,9 +57,9 @@ user_id = currentUser.userId
 visibility = private
 ```
 
-## Real Mode
+## Current Agent Run Path
 
-The Tencent-21 `real` path is:
+The current path is:
 
 1. Authenticate request and resolve `currentUser`.
 2. Read and validate `conversationId`.
@@ -65,13 +67,13 @@ The Tencent-21 `real` path is:
 4. Insert `agent_runs(status = pending)` first. Migration `007_agent_runs_client_run_id.sql` adds the hard unique boundary on `(user_id, client_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
 5. Consume one Agent Run quota with a compare-and-set update and create `agent_run_usage(status = started)`.
 6. Attach `usage_id` to the pending run, mark it `running`, and update the conversation latest run.
-7. Run planner.
-8. Stream and persist `run_events`.
-9. For `data_analysis`, execute the controlled CloudBase MySQL tool chain:
+7. Start LangSmith trace when server-side LangSmith config is available; otherwise record explicit not-configured / failed status.
+8. Enter LangGraph runtime and map graph node progress to canonical SSE / Run Trace events.
+9. For `data_analysis`, execute the controlled LangChain Tool chain:
    - `schema_inspect`
    - `aggregate_table`
    - `chart_render`
-10. For `knowledge_qa`, execute `knowledge_search` against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
+10. For `knowledge_qa`, execute `knowledge_search` through LangChain Retriever / Document against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
 11. Persist `tool_invocations` with `tool_name`, `status`, `input`, `output`, `elapsed_ms`, and metadata.
 12. Use `_shared/modelGateway.js` to generate the conclusion when a model provider is configured.
 13. Fall back explicitly when the model provider is not configured, MySQL tables are missing, queries fail, no rows are returned, no knowledge chunks match, or the model provider fails.
@@ -108,34 +110,21 @@ The update is requested with `count = "exact"` and retried on compare failure. `
 
 If quota consumption fails after the pending run is inserted, the function keeps the run row and marks it `failed` with `quota_exceeded` or `quota_consume_failed`. This avoids deleting the idempotency record and gives operators an audit trail; no usage row or assistant message is written in that case.
 
-## Basic Mode
-
-`mode = "basic"` preserves the Tencent-14 fixed loop:
-
-```txt
-run_started
-step_started
-tool_started
-tool_completed
-conclusion_delta
-conclusion_completed
-run_completed
-```
-
-This mode uses a fixed mock tool result and fixed conclusion text. It remains useful for checking CloudBase SSE, quota, run persistence, event persistence, and assistant message persistence without external model or data-source dependencies.
-
 ## Mock / Real / Fallback Boundary
 
-- `basic` mode is a fixed mock verification path and records `source = cloudbase-agent-run-basic-loop`.
-- `real` mode calls the local planner rules and the controlled data tools. It never lets a model execute SQL directly.
+- Mock data belongs to frontend demo / seed / explicit validation paths only. This function does not expose a long-lived `basic` mock runtime switch.
+- Real Agent Run enters LangGraph runtime and executes LangChain Tool / Retriever boundaries. It never lets a model execute SQL directly.
 - `schema_inspect` returns a fixed schema description for `teaching_metrics`.
 - `aggregate_table` reads `teaching_metrics` through CloudBase MySQL and aggregates in JavaScript by month, grade, or subject.
 - `chart_render` converts aggregate results into chart config and series data; it does not render an image.
 - `conclusionSource = "model"` means `_shared/modelGateway.js` generated the final conclusion through the selected catalog model.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
-- `conclusionSource = "mock"` is used by fixed mock verification data.
-- `knowledge_qa` runs the controlled `knowledge_search` tool against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`. It uses keyword scoring in the function and never lets the model execute SQL directly.
+- `conclusionSource = "mock"` is reserved for explicit mock/demo data and must not be emitted as a real provider result.
+- `knowledge_qa` runs the controlled `knowledge_search` tool through LangChain Retriever / Document against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
 - `runId` / `agent_runs.id` is the only business run relationship. `clientRunId` / `agent_runs.client_run_id` is used for frontend pending state, idempotency, duplicate request handling, and request tracing.
+- `tool_invocations` remains the Tool Invocation fact source.
+- `retrieval_logs` / `run_sources` remain the Source Lineage fact sources.
+- LangSmith trace / run ids are external observability ids in metadata only.
 
 ## Environment Variables
 
@@ -157,12 +146,15 @@ SILICONFLOW_MODEL_QWEN=Qwen/Qwen2.5-7B-Instruct
 SILICONFLOW_MODEL_GLM=THUDM/GLM-4-9B-0414
 ZHIPU_MODEL_GLM_FLASH=glm-4-flash-250414
 MODEL_GATEWAY_TIMEOUT_MS=30000
+LANGSMITH_API_KEY=...
+LANGSMITH_PROJECT=ai-agent-workbench
+LANGSMITH_TIMEOUT_MS=3000
 CLOUDBASE_ENV_ID / TCB_ENV_ID Provided by CloudBase runtime or deployment config.
 ```
 
 Agent Run data tools use CloudBase MySQL through the CloudBase function runtime, `@cloudbase/node-sdk`, and `app.rdb()`.
 
-Model keys must be CloudBase function environment variables only. Do not put `SILICONFLOW_API_KEY` or `ZHIPU_API_KEY` in EdgeOne / frontend `VITE_*` variables.
+Model and LangSmith keys must be CloudBase function environment variables only. Do not put `SILICONFLOW_API_KEY`, `ZHIPU_API_KEY`, `LANGSMITH_API_KEY`, or `LANGCHAIN_API_KEY` in EdgeOne / frontend `VITE_*` variables.
 
 When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/modelGateway.js` is intentionally lightweight: it only wraps OpenAI-compatible chat completions and normalized diagnostics, not an enterprise model platform.
 
@@ -288,19 +280,12 @@ This function uses CAS-style atomic quota update plus migration `007_agent_runs_
 
 ## Package
 
-Upload a source package only. Do not include `node_modules`, and do not submit or upload `package-lock.json`. Enable CloudBase automatic dependency installation. This function depends on `@cloudbase/node-sdk`.
+Upload a source package only. Do not include `node_modules`, and do not submit or upload `package-lock.json`. Enable CloudBase automatic dependency installation.
 
-Because this function uses shared helpers, stage the source package in a Desktop temporary directory and include `_shared` in the zip. Use Git Bash:
+Use the repo package script:
 
 ```bash
-cd tencent/functions
-stage="$HOME/Desktop/cloudbase-workbench-agent-run-stream-package"
-rm -rf "$stage"
-mkdir -p "$stage/_shared"
-cp workbench-agent-run-stream/index.js workbench-agent-run-stream/package.json workbench-agent-run-stream/scf_bootstrap workbench-agent-run-stream/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js _shared/modelGateway.js "$stage/_shared/"
-chmod +x "$stage/scf_bootstrap"
-(cd "$stage" && zip -r workbench-agent-run-stream.zip index.js package.json README.md scf_bootstrap _shared)
+pnpm cloudbase:package -- --function workbench-agent-run-stream --out ./.cloudbase-packages --clean --check
 ```
 
 Zip root must contain:
@@ -318,6 +303,8 @@ scf_bootstrap
 Syntax check:
 
 ```bash
+node --check tencent/functions/_shared/langgraphRuntime.js
+node --check tencent/functions/_shared/langsmithObservability.js
 node --check tencent/functions/_shared/modelGateway.js
 node --check tencent/functions/workbench-agent-run-stream/index.js
 ```
@@ -329,12 +316,7 @@ curl -i https://<your-domain>/api/agent/run/stream
 curl -N -i -X POST \
   -H "Authorization: Bearer <cloudbase-token>" \
   -H "Content-Type: application/json" \
-  -d "{\"prompt\":\"测试提示词\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-basic-run\",\"mode\":\"basic\"}" \
-  https://<your-domain>/api/agent/run/stream
-curl -N -i -X POST \
-  -H "Authorization: Bearer <cloudbase-token>" \
-  -H "Content-Type: application/json" \
-  -d "{\"prompt\":\"分析本月教学质量数据，找出异常指标\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-real-run\",\"mode\":\"real\"}" \
+  -d "{\"prompt\":\"分析本月教学质量数据，找出异常指标\",\"conversationId\":\"<conversation-id>\",\"clientRunId\":\"manual-langgraph-run\",\"selectedModelId\":\"siliconflow-qwen-free\"}" \
   https://<your-domain>/api/agent/run/stream
 ```
 
@@ -342,14 +324,14 @@ Expected result:
 
 - Without token: CloudBase gateway returns `401 MISSING_CREDENTIALS`.
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
-- `mode = "basic"` streams the fixed Tencent-14 event sequence.
-- `mode = "real"` streams `schema_inspect` / `aggregate_table` / `chart_render` tool completions, chart, conclusion, and completion events where available.
-- If the model provider succeeds after data tools succeed, the real mode returns `conclusionSource = "model"` with `selectedModelId`, `provider`, `model`, `tokenUsage`, and `latencyMs`.
-- If the model provider fails after data tools succeed, the real mode returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
+- Current Agent Run streams LangGraph-backed canonical events, including `schema_inspect` / `aggregate_table` / `chart_render` or `knowledge_search` tool completions where applicable.
+- If the model provider succeeds after data tools succeed, the run returns `conclusionSource = "model"` with `selectedModelId`, `provider`, `model`, `tokenUsage`, and `latencyMs`.
+- If the model provider fails after data tools succeed, the run returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
 - `conclusion_completed` and `run_completed` include `provider`, `model`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
+- LangSmith trace status is explicit in metadata: started, completed, not configured, failed, or timed out.
 - `quotaUsed` increases for `demo_user`.
 - `messages` contains the assistant message.
-- `agent_runs`, `run_events`, and `tool_invocations` contain records for the run.
+- `agent_runs`, `run_events`, `tool_invocations`, and when RAG is used `retrieval_logs` / `run_sources`, contain records for the run.
 - Existing `demo-tasks`, `demo-conversations`, `auth-me`, `workbench-conversations`, `workbench-messages`, `workbench-reports`, `workbench-demo-copy`, and `workbench-quota` routes are unaffected.
 
 Logs must not include token, secrets, connection strings, or full internal stacks.

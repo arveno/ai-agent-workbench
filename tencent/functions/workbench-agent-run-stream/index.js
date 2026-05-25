@@ -2,6 +2,10 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { Document } = require('@langchain/core/documents');
+const { BaseRetriever } = require('@langchain/core/retrievers');
+const { tool } = require('@langchain/core/tools');
+const { z } = require('zod');
 
 const PORT = Number(process.env.PORT || 9000);
 const HOST = '0.0.0.0';
@@ -108,6 +112,19 @@ const {
   parseJsonArray,
   parseJsonObject,
 } = loadSharedModule('mysql');
+const {
+  LANGGRAPH_RUNTIME_VERSION,
+  NODE_PLANNING,
+  NODE_PROCESSING,
+  runLangGraphAgentRuntime,
+} = loadSharedModule('langgraphRuntime');
+const {
+  completeLangSmithTrace,
+  createLangSmithTraceState,
+  failLangSmithTrace,
+  startLangSmithTrace,
+  toPublicLangSmithTrace,
+} = loadSharedModule('langsmithObservability');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -476,7 +493,7 @@ async function ensureMonthlyQuota(db, currentUser) {
     quota_used: 0,
     period_start: period.periodStart,
     period_end: period.periodEnd,
-    metadata: JSON.stringify({ source: 'agent-run-basic-loop' }),
+    metadata: JSON.stringify({ source: 'cloudbase-agent-run-real' }),
   };
 
   try {
@@ -604,12 +621,22 @@ async function finishUsage(db, currentUser, usageId, status, errorCode, metadata
 }
 
 function createAgentRunMetadata(context, extra = {}) {
+  const langSmithTrace = toPublicLangSmithTrace(context.langSmithTrace);
+
   return {
     source: 'cloudbase-agent-run-real',
+    runtime: context.langGraphRuntime || LANGGRAPH_RUNTIME_VERSION,
+    langGraphThreadId: context.langGraphThreadId || null,
+    langGraphCheckpointId: context.langGraphFinalState?.externalIds?.langGraphCheckpointId || null,
+    langSmithTraceId: langSmithTrace.traceId,
+    langSmithRunId: langSmithTrace.runId,
+    langSmithTraceStatus: langSmithTrace.status,
+    langSmithProjectName: langSmithTrace.projectName,
+    langSmithTrace,
     clientRunId: context.clientRunId,
     clientRunIdMissing: Boolean(context.clientRunIdMissing),
-    provider: context.provider || 'mock',
-    dataProvider: context.provider || 'mock',
+    provider: context.provider || 'cloudbase_mysql',
+    dataProvider: context.provider || 'cloudbase_mysql',
     selectedModelId: context.selectedModelId || null,
     modelTrace: context.modelTrace || null,
     conclusionSource: context.conclusionSource || null,
@@ -633,7 +660,7 @@ async function createAgentRun(db, currentUser, context, options = {}) {
       intent: context.intent || 'unknown',
       prompt: context.prompt,
       plan: JSON.stringify(context.planSnapshot || {}),
-      data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || { source: 'mock' }),
+      data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || getDataSourceSnapshot()),
       chart_data: JSON.stringify({}),
       conclusion: null,
       conclusion_source: null,
@@ -739,10 +766,7 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
       conclusion,
       conclusion_source: options.conclusionSource || context.conclusionSource || 'fallback',
       report_state: options.reportState || context.reportState || 'hidden',
-      chart_data: JSON.stringify(options.chartData || {
-        type: 'mock_summary',
-        assistantMessageId,
-      }),
+      chart_data: JSON.stringify(options.chartData || {}),
       metadata: JSON.stringify(createAgentRunMetadata(context, {
         assistantMessageId,
         modelTrace: context.modelTrace || null,
@@ -1265,7 +1289,7 @@ function pickTimeRangeFromPrompt(prompt) {
   return { type: 'none' };
 }
 
-function fallbackPlanAgentRun(prompt) {
+function createRuleBasedPlan(prompt) {
   const normalizedPrompt = prompt.trim();
   const lowerPrompt = normalizedPrompt.toLowerCase();
   const explicitMonth = extractExplicitMonth(normalizedPrompt);
@@ -1362,58 +1386,114 @@ function normalizeGroupBy(value) {
   return ['subject', 'grade', 'month'].includes(value) ? value : 'subject';
 }
 
-function normalizePlan(rawPlan, fallback) {
-  if (!isRecord(rawPlan)) {
-    return fallback;
+const ToolTimeRangeInputSchema = z.object({
+  type: z.enum(['none', 'month', 'latest_available_month']).optional().default('none'),
+  month: z.string().optional(),
+  label: z.string().optional(),
+}).optional().default({ type: 'none' });
+
+const SchemaInspectInputSchema = z.object({
+  includeColumns: z.boolean().optional().default(true),
+});
+
+const AggregateTableInputSchema = z.object({
+  metric: z.enum(['avg_score', 'attendance_rate', 'homework_completion_rate', 'warning_count']).optional(),
+  groupBy: z.enum(['subject', 'grade', 'month']).optional(),
+  limit: z.number().int().min(1).max(MAX_TOOL_ROWS).optional().default(MAX_TOOL_ROWS),
+  timeRange: ToolTimeRangeInputSchema,
+  comparison: z.enum(['none', 'previous_month']).optional().default('none'),
+});
+
+const ChartRenderInputSchema = z.object({
+  title: z.string().optional(),
+  chartType: z.enum(['bar']).optional().default('bar'),
+  labelKey: z.enum(['dimension']).optional().default('dimension'),
+  valueKey: z.enum(['value']).optional().default('value'),
+  metric: z.enum(['avg_score', 'attendance_rate', 'homework_completion_rate', 'warning_count']).optional(),
+  groupBy: z.enum(['subject', 'grade', 'month']).optional(),
+  rows: z.array(z.object({}).passthrough()).optional().default([]),
+});
+
+const KnowledgeSearchInputSchema = z.object({
+  prompt: z.string(),
+  topK: z.number().int().min(1).max(5).optional().default(5),
+});
+
+function normalizeToolLimit(value, max = MAX_TOOL_ROWS) {
+  const normalizedLimit = normalizeNumber(value, max);
+  return Math.max(1, Math.min(normalizedLimit || max, max));
+}
+
+function normalizeToolTimeRange(value) {
+  if (!isRecord(value)) {
+    return { type: 'none' };
   }
 
-  const intent = ['capability_intro', 'data_analysis', 'knowledge_qa', 'unsupported'].includes(rawPlan.intent)
-    ? rawPlan.intent
-    : fallback.intent;
-
-  if (intent !== 'data_analysis') {
+  if (value.type === 'month' && /^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(value.month || '')) {
     return {
-      intent,
-      shouldUseDataAnalysis: false,
-      reason: readOptionalString(rawPlan.reason) || fallback.reason,
+      type: 'month',
+      month: value.month,
+      label: readOptionalString(value.label) || createMonthLabel(value.month),
     };
   }
 
-  let timeRange = fallback.timeRange || { type: 'none' };
-
-  if (isRecord(rawPlan.timeRange)) {
-    if (rawPlan.timeRange.type === 'month' && /^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(rawPlan.timeRange.month || '')) {
-      timeRange = {
-        type: 'month',
-        month: rawPlan.timeRange.month,
-        label: readOptionalString(rawPlan.timeRange.label) || createMonthLabel(rawPlan.timeRange.month),
-      };
-    } else if (rawPlan.timeRange.type === 'latest_available_month') {
-      timeRange = {
-        type: 'latest_available_month',
-        label: readOptionalString(rawPlan.timeRange.label) || '最新可用月份',
-      };
-    } else if (rawPlan.timeRange.type === 'none') {
-      timeRange = { type: 'none' };
-    }
+  if (value.type === 'latest_available_month') {
+    return {
+      type: 'latest_available_month',
+      label: readOptionalString(value.label) || '最新可用月份',
+    };
   }
 
+  return { type: 'none' };
+}
+
+function normalizeSchemaInspectInput(input) {
   return {
-    intent,
-    shouldUseDataAnalysis: true,
-    reason: readOptionalString(rawPlan.reason) || fallback.reason,
-    metric: normalizeMetric(rawPlan.metric || fallback.metric),
-    groupBy: normalizeGroupBy(rawPlan.groupBy || fallback.groupBy),
-    timeRange,
-    comparison: rawPlan.comparison === 'previous_month' ? 'previous_month' : 'none',
+    includeColumns: isRecord(input) ? input.includeColumns !== false : true,
+  };
+}
+
+function normalizeAggregateTableInput(input) {
+  const rawInput = isRecord(input) ? input : {};
+
+  return {
+    metric: normalizeMetric(rawInput.metric),
+    groupBy: normalizeGroupBy(rawInput.groupBy),
+    limit: normalizeToolLimit(rawInput.limit),
+    timeRange: normalizeToolTimeRange(rawInput.timeRange),
+    comparison: rawInput.comparison === 'previous_month' ? 'previous_month' : 'none',
+  };
+}
+
+function normalizeChartRenderInput(input) {
+  const rawInput = isRecord(input) ? input : {};
+  const rows = Array.isArray(rawInput.rows) ? rawInput.rows.filter(isRecord).slice(0, MAX_TOOL_ROWS) : [];
+
+  return {
+    title: readOptionalString(rawInput.title) || '教学质量指标图表',
+    chartType: 'bar',
+    labelKey: 'dimension',
+    valueKey: 'value',
+    metric: normalizeMetric(rawInput.metric),
+    groupBy: normalizeGroupBy(rawInput.groupBy),
+    rows,
+  };
+}
+
+function normalizeKnowledgeSearchInput(input) {
+  const rawInput = isRecord(input) ? input : {};
+
+  return {
+    prompt: readOptionalString(rawInput.prompt) || '',
+    topK: Math.max(1, Math.min(Number(rawInput.topK) || 5, 5)),
   };
 }
 
 async function planAgentRun(prompt) {
-  const fallback = fallbackPlanAgentRun(prompt);
+  const plan = createRuleBasedPlan(prompt);
   return {
-    plan: fallback,
-    plannerSource: 'local_rules',
+    plan,
+    plannerSource: 'langgraph_local_rules',
     fallbackReason: null,
   };
 }
@@ -1434,7 +1514,8 @@ function normalizeCellValue(value) {
   return String(value);
 }
 
-function inspectSchema() {
+function inspectSchema(input = {}) {
+  const normalizedInput = normalizeSchemaInspectInput(input);
   const columns = [
     { columnName: 'id', dataType: 'VARCHAR(36)', description: '演示数据行 ID。' },
     { columnName: 'month', dataType: 'VARCHAR(20)', description: '统计月份，格式为 YYYY-MM。' },
@@ -1460,7 +1541,7 @@ function inspectSchema() {
         schema: 'public_demo',
         tableName: 'teaching_metrics',
         description: 'CloudBase MySQL 公开教学质量演示数据源。',
-        columns,
+        columns: normalizedInput.includeColumns ? columns : [],
       },
     ],
   };
@@ -1678,6 +1759,43 @@ function renderChart(input) {
     summary: labels.length
       ? `已生成 ${labels.length} 个数据点，图表类型为 ${input.chartType}。`
       : '没有可用于图表渲染的有效数据点。',
+  };
+}
+
+function createLangChainToolRegistry(db) {
+  return {
+    schema_inspect: tool(
+      async (input) => inspectSchema(normalizeSchemaInspectInput(input)),
+      {
+        name: 'schema_inspect',
+        description: 'Read the allowed CloudBase MySQL teaching_metrics schema.',
+        schema: SchemaInspectInputSchema,
+      },
+    ),
+    aggregate_table: tool(
+      async (input) => aggregateTable(db, normalizeAggregateTableInput(input)),
+      {
+        name: 'aggregate_table',
+        description: 'Aggregate whitelisted teaching metrics from CloudBase MySQL.',
+        schema: AggregateTableInputSchema,
+      },
+    ),
+    chart_render: tool(
+      async (input) => renderChart(normalizeChartRenderInput(input)),
+      {
+        name: 'chart_render',
+        description: 'Create canonical chart data from normalized aggregate rows.',
+        schema: ChartRenderInputSchema,
+      },
+    ),
+    knowledge_search: tool(
+      async (input) => searchKnowledgeBase(db, normalizeKnowledgeSearchInput(input)),
+      {
+        name: 'knowledge_search',
+        description: 'Retrieve whitelisted CloudBase knowledge chunks and return canonical source candidates.',
+        schema: KnowledgeSearchInputSchema,
+      },
+    ),
   };
 }
 
@@ -1999,6 +2117,120 @@ function createContentPreview(content) {
   return normalizedContent.length > 180 ? `${normalizedContent.slice(0, 179)}…` : normalizedContent;
 }
 
+function createKnowledgeDocumentFromScoredChunk(item, index) {
+  const citationLabel = `[S${index + 1}]`;
+  const updatedAt = item.chunk.updated_at || item.document.updated_at || null;
+  const rawScore = item.score;
+
+  return new Document({
+    pageContent: item.chunk.content,
+    metadata: {
+      provider: 'knowledge_search',
+      retrieverProvider: 'langchain_retriever',
+      documentId: item.document.id,
+      documentTitle: item.document.title,
+      category: item.document.category,
+      chunkId: item.chunk.id,
+      chunkTitle: item.chunk.title,
+      chunkIndex: item.chunk.chunk_index,
+      keywords: item.chunk.keywords,
+      score: Number((rawScore / 20).toFixed(4)),
+      rawScore,
+      citationLabel,
+      updatedAt,
+    },
+  });
+}
+
+class CloudBaseKnowledgeRetriever extends BaseRetriever {
+  constructor(fields) {
+    super({
+      tags: ['workbench', 'knowledge_search'],
+      metadata: {
+        provider: 'knowledge_search',
+        retrieverProvider: 'langchain_retriever',
+      },
+    });
+    this.db = fields.db;
+    this.topK = Math.max(1, Math.min(Number(fields.topK) || 5, 5));
+    this.lastSearchStats = {
+      terms: [],
+      totalMatches: 0,
+    };
+  }
+
+  get lc_namespace() {
+    return ['ai-agent-workbench', 'retrievers'];
+  }
+
+  async _getRelevantDocuments(query) {
+    let documents;
+    let chunks;
+
+    try {
+      [documents, chunks] = await Promise.all([
+        fetchKnowledgeDocuments(this.db),
+        fetchKnowledgeChunks(this.db),
+      ]);
+    } catch (error) {
+      throw toRagToolError(error);
+    }
+
+    const enabledDocuments = documents.filter(
+      (document) => document.is_enabled && (document.visibility === 'demo' || document.visibility === 'system'),
+    );
+    const documentById = new Map(enabledDocuments.map((document) => [document.id, document]));
+
+    if (enabledDocuments.length === 0 || chunks.length === 0) {
+      throw new DataToolError('rag_empty', 'CloudBase knowledge base is empty.');
+    }
+
+    const prompt = readOptionalString(query);
+    const terms = extractKnowledgeSearchTerms(prompt);
+    const scoredChunks = chunks
+      .filter((chunk) => documentById.has(chunk.document_id))
+      .map((chunk) => {
+        const document = documentById.get(chunk.document_id);
+        return {
+          document,
+          chunk,
+          score: scoreKnowledgeChunk(prompt, terms, document, chunk),
+        };
+      })
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.chunk.chunk_index - right.chunk.chunk_index);
+
+    this.lastSearchStats = {
+      terms,
+      totalMatches: scoredChunks.length,
+    };
+
+    return scoredChunks.slice(0, this.topK).map(createKnowledgeDocumentFromScoredChunk);
+  }
+}
+
+function mapKnowledgeDocumentToMatchedChunk(document, index) {
+  const metadata = isRecord(document.metadata) ? document.metadata : {};
+  const content = String(document.pageContent || '');
+
+  return {
+    id: String(metadata.chunkId || ''),
+    documentId: String(metadata.documentId || ''),
+    documentTitle: String(metadata.documentTitle || ''),
+    category: String(metadata.category || ''),
+    title: String(metadata.chunkTitle || ''),
+    content,
+    contentPreview: createContentPreview(content),
+    keywords: Array.isArray(metadata.keywords)
+      ? metadata.keywords.map((keyword) => String(keyword || '').trim()).filter(Boolean)
+      : [],
+    score: typeof metadata.score === 'number' ? metadata.score : Number(metadata.score) || 0,
+    rawScore: typeof metadata.rawScore === 'number' ? metadata.rawScore : Number(metadata.rawScore) || 0,
+    citationLabel: String(metadata.citationLabel || `[S${index + 1}]`),
+    updatedAt: metadata.updatedAt ? String(metadata.updatedAt) : null,
+  };
+}
+
 function toRunRagSources(searchResult, params = {}) {
   return createRunSourcesFromSearchResult(searchResult, {
     runId: params.runId ?? '',
@@ -2037,6 +2269,7 @@ function createRunSourcesFromSearchResult(searchResult, params) {
       createdAt: params.createdAt,
       metadata: {
         provider: 'knowledge_search',
+        retrieverProvider: 'langchain_retriever',
         sourceName: 'CloudBase MySQL 知识库',
         documentTitle: chunk.documentTitle || null,
         chunkTitle: chunk.title || null,
@@ -2067,6 +2300,7 @@ async function persistKnowledgeSearchLineage(db, currentUser, context, searchInp
     metadata: JSON.stringify({
       source: 'cloudbase-agent-run-real',
       provider: 'knowledge_search',
+      retrieverProvider: 'langchain_retriever',
       topK: Number(searchInput.topK) || null,
       terms: Array.isArray(searchResult.terms) ? searchResult.terms : [],
       totalMatches: Number(searchResult.totalMatches) || 0,
@@ -2118,66 +2352,23 @@ async function persistKnowledgeSearchLineage(db, currentUser, context, searchInp
 }
 
 async function searchKnowledgeBase(db, input) {
-  let documents;
-  let chunks;
-
-  try {
-    [documents, chunks] = await Promise.all([
-      fetchKnowledgeDocuments(db),
-      fetchKnowledgeChunks(db),
-    ]);
-  } catch (error) {
-    throw toRagToolError(error);
-  }
-
-  const enabledDocuments = documents.filter(
-    (document) => document.is_enabled && (document.visibility === 'demo' || document.visibility === 'system'),
-  );
-  const documentById = new Map(enabledDocuments.map((document) => [document.id, document]));
-
-  if (enabledDocuments.length === 0 || chunks.length === 0) {
-    throw new DataToolError('rag_empty', 'CloudBase knowledge base is empty.');
-  }
-
-  const prompt = readOptionalString(input.prompt);
-  const terms = extractKnowledgeSearchTerms(prompt);
-  const scoredChunks = chunks
-    .filter((chunk) => documentById.has(chunk.document_id))
-    .map((chunk) => {
-      const document = documentById.get(chunk.document_id);
-      return {
-        document,
-        chunk,
-        score: scoreKnowledgeChunk(prompt, terms, document, chunk),
-      };
-    })
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score || left.chunk.chunk_index - right.chunk.chunk_index);
-
-  const topK = Math.max(1, Math.min(Number(input.topK) || 5, 5));
-  const topMatches = scoredChunks.slice(0, topK).map((item, index) => ({
-    id: item.chunk.id,
-    documentId: item.document.id,
-    documentTitle: item.document.title,
-    category: item.document.category,
-    title: item.chunk.title,
-    content: item.chunk.content,
-    contentPreview: createContentPreview(item.chunk.content),
-    keywords: item.chunk.keywords,
-    score: Number((item.score / 20).toFixed(4)),
-    rawScore: item.score,
-    citationLabel: `[S${index + 1}]`,
-    updatedAt: item.chunk.updated_at || item.document.updated_at || null,
-  }));
+  const searchInput = normalizeKnowledgeSearchInput(input);
+  const retriever = new CloudBaseKnowledgeRetriever({
+    db,
+    topK: searchInput.topK,
+  });
+  const documents = await retriever.invoke(searchInput.prompt);
+  const topMatches = documents.map(mapKnowledgeDocumentToMatchedChunk);
 
   return {
-    query: prompt,
-    terms,
-    totalMatches: scoredChunks.length,
+    query: searchInput.prompt,
+    terms: retriever.lastSearchStats.terms,
+    totalMatches: retriever.lastSearchStats.totalMatches,
     matchedChunks: topMatches,
     retrievedChunkCount: topMatches.length,
     topTitles: topMatches.map((chunk) => chunk.title),
     sourceDocumentIds: [...new Set(topMatches.map((chunk) => chunk.documentId))],
+    retrieverProvider: 'langchain_retriever',
   };
 }
 
@@ -2706,6 +2897,8 @@ async function createToolInvocationRecord(db, currentUser, context, params) {
     metadata: JSON.stringify({
       source: 'cloudbase-agent-run-real',
       runtimeToolId: params.runtimeToolId,
+      toolRuntime: 'langchain_structured_tool',
+      langChainToolName: params.langChainToolName || params.toolName,
     }),
   });
 
@@ -2900,6 +3093,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
     displayName: params.displayName,
     input: params.input,
     inputSummary: params.inputSummary,
+    langChainToolName: params.langChainTool?.name || params.toolName,
   });
   context.toolInvocationIds = context.toolInvocationIds || {};
   context.toolInvocationIds[params.runtimeToolId] = toolInvocationId;
@@ -2926,7 +3120,11 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
   }
 
   try {
-    const output = await params.execute();
+    if (!params.langChainTool || typeof params.langChainTool.invoke !== 'function') {
+      throw new Error(`LangChain Tool is not registered: ${params.toolName}`);
+    }
+
+    const output = await params.langChainTool.invoke(params.input || {});
     const elapsedMs = Math.max(Date.now() - startedAt, 1);
     await updateToolInvocationRecord(db, currentUser, toolInvocationId, {
       status: 'completed',
@@ -2936,6 +3134,8 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
       metadata: {
         source: 'cloudbase-agent-run-real',
         runtimeToolId: params.runtimeToolId,
+        toolRuntime: 'langchain_structured_tool',
+        langChainToolName: params.langChainTool.name || params.toolName,
         runId: context.runId,
       },
     });
@@ -2974,6 +3174,8 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
       metadata: {
         source: 'cloudbase-agent-run-real',
         runtimeToolId: params.runtimeToolId,
+        toolRuntime: 'langchain_structured_tool',
+        langChainToolName: params.langChainTool?.name || params.toolName,
         runId: context.runId,
         fallbackReason,
       },
@@ -2999,6 +3201,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
 async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
   const plan = context.plan;
   const toolStart = Date.now();
+  const langChainTools = createLangChainToolRegistry(db);
 
   try {
     await persistAndWriteRawEvent(
@@ -3020,7 +3223,7 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       displayName: '数据源结构读取',
       input: { includeColumns: true },
       inputSummary: 'includeColumns=true',
-      execute: () => inspectSchema(),
+      langChainTool: langChainTools.schema_inspect,
       outputSummary: (output) => `读取 ${output.tableCount} 张表`,
     });
     await persistAndWriteRawEvent(
@@ -3065,7 +3268,7 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       displayName: '数据聚合分析',
       input: aggregateInput,
       inputSummary: JSON.stringify(aggregateInput),
-      execute: () => aggregateTable(db, aggregateInput),
+      langChainTool: langChainTools.aggregate_table,
       outputSummary: (output) => output.totalRecords > 0 ? `读取 ${output.totalRecords} 条记录，返回 ${output.rowCount} 条聚合结果` : '未找到可聚合的数据',
     });
     await persistAndWriteRawEvent(
@@ -3108,13 +3311,9 @@ async function runRealDataAnalysis(db, currentUser, context, res, disconnect) {
       runtimeToolId: 'chart_render',
       toolName: 'chart_render',
       displayName: '图表数据生成',
-      input: {
-        title: chartInput.title,
-        chartType: chartInput.chartType,
-        rowCount: chartInput.rows.length,
-      },
+      input: chartInput,
       inputSummary: JSON.stringify({ title: chartInput.title, rowCount: chartInput.rows.length }),
-      execute: async () => renderChart(chartInput),
+      langChainTool: langChainTools.chart_render,
       outputSummary: (output) => output.summary,
     });
     context.chartData = toRunChartData(chartResult);
@@ -3314,6 +3513,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
 
 async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
   const searchStart = Date.now();
+  const langChainTools = createLangChainToolRegistry(db);
 
   try {
     await persistAndWriteRawEvent(
@@ -3340,7 +3540,7 @@ async function runKnowledgeQaSearch(db, currentUser, context, res, disconnect) {
       displayName: '知识库检索',
       input: searchInput,
       inputSummary: JSON.stringify(searchInput),
-      execute: () => searchKnowledgeBase(db, searchInput),
+      langChainTool: langChainTools.knowledge_search,
       outputSummary: (output) => output.retrievedChunkCount > 0
         ? `检索到 ${output.retrievedChunkCount} 条相关知识片段`
         : '未找到相关知识片段',
@@ -3567,6 +3767,192 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   return conclusion;
 }
 
+function createLangGraphRuntimeInput(context) {
+  return {
+    runId: context.runId,
+    conversationId: context.conversationId,
+    clientRunId: context.clientRunId,
+    selectedModelId: context.selectedModelId,
+    userInput: context.prompt,
+    langGraphThreadId: context.langGraphThreadId,
+    langSmithTraceId: context.langSmithTrace?.traceId || null,
+    langSmithRunId: context.langSmithTrace?.runId || null,
+  };
+}
+
+async function runLangGraphPlanningNode(db, currentUser, context, res, disconnect) {
+  const plannerStart = Date.now();
+  await persistAndWriteRawEvent(
+    db,
+    currentUser,
+    context,
+    res,
+    disconnect,
+    createRunEvent('step_started', context, {
+      stepId: 'step_intent',
+      title: '理解用户问题',
+      description: '正在判断用户意图、分析目标和是否需要访问数据源。',
+      startedAt: nowIso(),
+      metadata: {
+        runtime: LANGGRAPH_RUNTIME_VERSION,
+        langGraphNode: NODE_PLANNING,
+      },
+    }),
+  );
+
+  const planned = await planAgentRun(context.prompt);
+  context.plan = planned.plan;
+  context.intent = planned.plan.intent;
+  context.planSnapshot = planToRunSnapshot(planned.plan);
+
+  if (planned.plan.intent === 'knowledge_qa') {
+    context.dataSourceSnapshot = getKnowledgeDataSourceSnapshot();
+  }
+
+  context.steps = [
+    createRunStep('step_intent', '理解用户问题', 'success', `intent=${planned.plan.intent}，reason=${planned.plan.reason}`),
+  ];
+
+  await persistAndWriteRawEvent(
+    db,
+    currentUser,
+    context,
+    res,
+    disconnect,
+    createRunEvent('step_completed', context, {
+      stepId: 'step_intent',
+      completedAt: nowIso(),
+      elapsedMs: Math.max(Date.now() - plannerStart, 1),
+      plannerSource: planned.plannerSource,
+      fallbackReason: planned.fallbackReason,
+      metadata: {
+        runtime: LANGGRAPH_RUNTIME_VERSION,
+        langGraphNode: NODE_PLANNING,
+      },
+    }),
+  );
+
+  return {
+    normalizedIntent: planned.plan.intent,
+    normalizedPlan: [context.planSnapshot],
+    plan: planned.plan,
+    planSnapshot: context.planSnapshot,
+    dataSourceSnapshot: context.dataSourceSnapshot,
+    externalIds: {
+      langGraphThreadId: context.langGraphThreadId,
+      langGraphCheckpointId: null,
+      langGraphNodeId: NODE_PLANNING,
+      langSmithTraceId: context.langSmithTrace?.traceId || null,
+      langSmithRunId: context.langSmithTrace?.runId || null,
+    },
+  };
+}
+
+async function runLangGraphProcessingNode(db, currentUser, context, res, disconnect) {
+  let conclusion = '';
+
+  if (context.plan.intent === 'capability_intro') {
+    conclusion = buildCapabilityIntroConclusion();
+    context.conclusionSource = 'fallback';
+    context.fallbackReason = 'local_capability_intro';
+    await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+      conclusion,
+      conclusionSource: 'fallback',
+      conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
+      fallbackReason: context.fallbackReason,
+      ...createModelEventMetadata(context, {
+        conclusionSource: 'fallback',
+        fallbackReason: context.fallbackReason,
+      }),
+    });
+  } else if (context.plan.intent === 'unsupported') {
+    conclusion = buildUnsupportedConclusion();
+    context.conclusionSource = 'fallback';
+    context.fallbackReason = 'local_unsupported';
+    await streamStaticConclusion(db, currentUser, context, res, disconnect, {
+      conclusion,
+      conclusionSource: 'fallback',
+      conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
+      fallbackReason: context.fallbackReason,
+      ...createModelEventMetadata(context, {
+        conclusionSource: 'fallback',
+        fallbackReason: context.fallbackReason,
+      }),
+    });
+  } else if (context.plan.intent === 'knowledge_qa') {
+    const ragContext = await runKnowledgeQaSearch(db, currentUser, context, res, disconnect);
+    context.conclusionStartedAt = Date.now();
+    conclusion = await generateKnowledgeConclusion(db, currentUser, context, res, disconnect, ragContext);
+  } else {
+    const toolContext = await runRealDataAnalysis(db, currentUser, context, res, disconnect);
+    context.conclusionStartedAt = Date.now();
+    conclusion = await generateRealConclusion(db, currentUser, context, res, disconnect, toolContext);
+    context.reportState = 'pending';
+    await persistAndWriteRawEvent(
+      db,
+      currentUser,
+      context,
+      res,
+      disconnect,
+      createRunEvent('report_pending', context, {
+        metadata: {
+          runtime: LANGGRAPH_RUNTIME_VERSION,
+          langGraphNode: NODE_PROCESSING,
+        },
+      }),
+    );
+  }
+
+  const finalAgentConclusion = context.agentConclusion || setCanonicalConclusion(
+    context,
+    conclusion,
+    context.conclusionSource || 'fallback',
+  );
+  conclusion = finalAgentConclusion.markdownText;
+  context.conclusion = conclusion;
+
+  return {
+    responseText: conclusion,
+    conclusionSource: context.conclusionSource || 'fallback',
+    fallbackReason: context.fallbackReason,
+    modelResponseState: {
+      status: 'completed',
+      conclusionSource: context.conclusionSource || 'fallback',
+      fallbackReason: context.fallbackReason,
+      modelTrace: context.modelTrace || null,
+    },
+    toolInvocationState: {
+      status: Object.keys(context.toolInvocationIds || {}).length > 0 ? 'completed' : 'not_invoked',
+      toolInvocationIds: context.toolInvocationIds || {},
+    },
+    ragSourceState: {
+      status: context.plan.intent === 'knowledge_qa' ? 'completed' : 'not_invoked',
+    },
+    reportState: {
+      status: context.reportState || 'hidden',
+    },
+    externalIds: {
+      langGraphThreadId: context.langGraphThreadId,
+      langGraphCheckpointId: null,
+      langGraphNodeId: NODE_PROCESSING,
+      langSmithTraceId: context.langSmithTrace?.traceId || null,
+      langSmithRunId: context.langSmithTrace?.runId || null,
+    },
+  };
+}
+
+async function runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect) {
+  const runtimeResult = await runLangGraphAgentRuntime(createLangGraphRuntimeInput(context), {
+    planning: () => runLangGraphPlanningNode(db, currentUser, context, res, disconnect),
+    processing: () => runLangGraphProcessingNode(db, currentUser, context, res, disconnect),
+  });
+
+  context.langGraphRuntime = runtimeResult.runtime;
+  context.langGraphFinalState = runtimeResult.finalState;
+
+  return runtimeResult.finalState.responseText || context.conclusion || '';
+}
+
 async function runRealAgentFlow(req, res, currentUser, body) {
   const db = getDb();
   const conversationId = readRequiredString(body.conversationId, 'Missing conversation id.');
@@ -3593,6 +3979,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     usageFinished: false,
     eventSeq: 0,
     agentMode: 'real',
+    langGraphRuntime: LANGGRAPH_RUNTIME_VERSION,
+    langGraphThreadId: `agent-run:${runId}`,
+    langGraphFinalState: null,
+    langSmithTrace: null,
     createdAt: nowIso(),
     intent: 'unknown',
     plan: null,
@@ -3610,6 +4000,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     toolInvocations: [],
     toolInvocationIds: {},
   };
+  context.langSmithTrace = createLangSmithTraceState(context);
   const idempotencyKey = providedClientRunId ? createIdempotencyKey(currentUser, clientRunId) : null;
 
   if (!providedClientRunId) {
@@ -3669,170 +4060,125 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     startSseResponse(res);
 
     try {
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      {
-        type: 'run_started',
-        runId: context.runId,
-        run: createRunSnapshot(context),
-        usageId: context.usageId,
-        clientRunId: context.clientRunId,
-        conversationId: context.conversationId,
-      },
-    );
-
-    const plannerStart = Date.now();
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      createRunEvent('step_started', context, {
-        stepId: 'step_intent',
-        title: '理解用户问题',
-        description: '正在判断用户意图、分析目标和是否需要访问数据源。',
-        startedAt: nowIso(),
-      }),
-    );
-    const planned = await planAgentRun(context.prompt);
-    context.plan = planned.plan;
-    context.intent = planned.plan.intent;
-    context.planSnapshot = planToRunSnapshot(planned.plan);
-    if (planned.plan.intent === 'knowledge_qa') {
-      context.dataSourceSnapshot = getKnowledgeDataSourceSnapshot();
-    }
-    context.steps = [
-      createRunStep('step_intent', '理解用户问题', 'success', `intent=${planned.plan.intent}，reason=${planned.plan.reason}`),
-    ];
-
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      createRunEvent('step_completed', context, {
-        stepId: 'step_intent',
-        completedAt: nowIso(),
-        elapsedMs: Math.max(Date.now() - plannerStart, 1),
-        plannerSource: planned.plannerSource,
-        fallbackReason: planned.fallbackReason,
-      }),
-    );
-    let conclusion = '';
-
-    if (planned.plan.intent === 'capability_intro') {
-      conclusion = buildCapabilityIntroConclusion();
-      context.conclusionSource = 'fallback';
-      context.fallbackReason = 'local_capability_intro';
-      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
-        conclusion,
-        conclusionSource: 'fallback',
-        conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
-        fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context, {
-          conclusionSource: 'fallback',
-          fallbackReason: context.fallbackReason,
-        }),
+      context.langSmithTrace = await startLangSmithTrace(context.langSmithTrace, {
+        prompt: context.prompt,
+        startedAt: context.createdAt,
+        metadata: {
+          runtime: context.langGraphRuntime,
+          runLifecycle: 'agent_run',
+          provider: context.provider,
+        },
       });
-    } else if (planned.plan.intent === 'unsupported') {
-      conclusion = buildUnsupportedConclusion();
-      context.conclusionSource = 'fallback';
-      context.fallbackReason = 'local_unsupported';
-      await streamStaticConclusion(db, currentUser, context, res, disconnect, {
-        conclusion,
-        conclusionSource: 'fallback',
-        conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
-        fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context, {
-          conclusionSource: 'fallback',
-          fallbackReason: context.fallbackReason,
-        }),
-      });
-    } else if (planned.plan.intent === 'knowledge_qa') {
-      const ragContext = await runKnowledgeQaSearch(db, currentUser, context, res, disconnect);
-      context.conclusionStartedAt = Date.now();
-      conclusion = await generateKnowledgeConclusion(db, currentUser, context, res, disconnect, ragContext);
-    } else {
-      const toolContext = await runRealDataAnalysis(db, currentUser, context, res, disconnect);
-      context.conclusionStartedAt = Date.now();
-      conclusion = await generateRealConclusion(db, currentUser, context, res, disconnect, toolContext);
-      context.reportState = 'pending';
+
       await persistAndWriteRawEvent(
         db,
         currentUser,
         context,
         res,
         disconnect,
-        createRunEvent('report_pending', context, {}),
+        {
+          type: 'run_started',
+          runId: context.runId,
+          run: createRunSnapshot(context),
+          usageId: context.usageId,
+          clientRunId: context.clientRunId,
+          conversationId: context.conversationId,
+          metadata: {
+            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          },
+        },
       );
-    }
 
-    const finalAgentConclusion = context.agentConclusion || setCanonicalConclusion(
-      context,
-      conclusion,
-      context.conclusionSource || 'fallback',
-    );
-  conclusion = finalAgentConclusion.markdownText;
-    context.conclusion = conclusion;
-    assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
-      source: context.conclusionSource,
-      fallbackReason: context.fallbackReason,
-      agentConclusion: context.agentConclusion,
-      ...(context.assistantMessageMetadata || {}),
-      ...createModelEventMetadata(context, context.modelDiagnostics),
-    });
-    const elapsedMs = Math.max(Date.now() - startedAt, 1);
-    await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
-      conclusionSource: context.conclusionSource,
-      chartData: context.chartData || {},
-      reportState: context.reportState,
-    });
-
-    await persistAndWriteRawEvent(
-      db,
-      currentUser,
-      context,
-      res,
-      disconnect,
-      createRunEvent('run_completed', context, {
-        completedAt: nowIso(),
-        elapsedMs,
-        assistantMessageId,
-        conclusionSource: context.conclusionSource,
+      const conclusion = await runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect);
+      assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
+        source: context.conclusionSource,
         fallbackReason: context.fallbackReason,
-        ...createModelEventMetadata(context, context.modelDiagnostics),
-      }),
-    );
-
-    try {
-      await finishUsage(db, currentUser, context.usageId, 'completed', null, {
-        source: 'cloudbase-agent-run-real',
-        runId: context.runId,
-        assistantMessageId,
-        conclusionSource: context.conclusionSource,
-        fallbackReason: context.fallbackReason,
+        agentConclusion: context.agentConclusion,
+        ...(context.assistantMessageMetadata || {}),
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
-      context.usageFinished = true;
-    } catch (finishError) {
-      console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
-    }
+      const elapsedMs = Math.max(Date.now() - startedAt, 1);
+      context.langSmithTrace = await completeLangSmithTrace(context.langSmithTrace, {
+        outputs: {
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          reportState: context.reportState,
+          elapsedMs,
+        },
+        metadata: {
+          runtime: context.langGraphRuntime,
+          intent: context.intent,
+          reportState: context.reportState,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          modelTrace: context.modelTrace || null,
+        },
+      });
+      await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
+        conclusionSource: context.conclusionSource,
+        chartData: context.chartData || {},
+        reportState: context.reportState,
+      });
 
-    didComplete = true;
-    disconnect.finish();
+      await persistAndWriteRawEvent(
+        db,
+        currentUser,
+        context,
+        res,
+        disconnect,
+        createRunEvent('run_completed', context, {
+          completedAt: nowIso(),
+          elapsedMs,
+          assistantMessageId,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          metadata: {
+            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          },
+          ...createModelEventMetadata(context, context.modelDiagnostics),
+        }),
+      );
 
-    if (!res.writableEnded && !res.destroyed) {
-      res.end();
-    }
+      try {
+        await finishUsage(db, currentUser, context.usageId, 'completed', null, {
+          source: 'cloudbase-agent-run-real',
+          runId: context.runId,
+          assistantMessageId,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          ...createModelEventMetadata(context, context.modelDiagnostics),
+        });
+        context.usageFinished = true;
+      } catch (finishError) {
+        console.error('[workbench-agent-run-stream] usage finish completed failed', sanitizeLogMessage(finishError.message));
+      }
+
+      didComplete = true;
+      disconnect.finish();
+
+      if (!res.writableEnded && !res.destroyed) {
+        res.end();
+      }
     } catch (error) {
       const disconnected = error && error.errorCode === 'client_disconnected';
       const finalStatus = disconnected ? 'stopped' : 'failed';
+
+      context.langSmithTrace = await failLangSmithTrace(context.langSmithTrace, {
+        error,
+        outputs: {
+          finalStatus,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+        },
+        metadata: {
+          runtime: context.langGraphRuntime,
+          intent: context.intent,
+          finalStatus,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+        },
+      });
 
       try {
         await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
@@ -3841,10 +4187,11 @@ async function runRealAgentFlow(req, res, currentUser, body) {
       }
 
       try {
-      await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
-        source: 'cloudbase-agent-run-real',
-        runId: context.runId,
-      });
+        await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
+          source: 'cloudbase-agent-run-real',
+          runId: context.runId,
+          langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+        });
         context.usageFinished = true;
       } catch (cleanupError) {
         console.error('[workbench-agent-run-stream] usage cleanup failed', sanitizeLogMessage(cleanupError.message));
@@ -3853,6 +4200,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
       if (!disconnected && !res.writableEnded && !res.destroyed) {
         const failEvent = createRunEvent('run_failed', context, {
           errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
+          metadata: {
+            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          },
         });
 
         try {
@@ -3875,6 +4225,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
+          langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
         });
         context.usageFinished = true;
       } catch (finishError) {

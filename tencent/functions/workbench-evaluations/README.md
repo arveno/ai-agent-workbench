@@ -2,6 +2,8 @@
 
 CloudBase HTTP Function for Workbench Evaluation / Bad Case review.
 
+`eval_results` remains the project Evaluation fact source. LangSmith feedback / dataset / experiment semantics are external observability metadata and never replace canonical `runId`, `caseId`, or `eval_results.id`.
+
 ## Route
 
 Configure one fixed CloudBase HTTP route with path passthrough disabled:
@@ -53,6 +55,13 @@ Evaluation results store compact summaries only:
 - `metadata`
 
 The function rejects obvious raw fields such as `runEvents`, `toolRawPayload`, `rawToolInput`, and `rawToolOutput`. It does not copy raw `run_events`, raw tool input, or raw tool output into `eval_results`.
+
+## LangSmith Boundary
+
+- LangSmith feedback is submitted server-side only when configured.
+- `LANGSMITH_API_KEY` / `LANGCHAIN_API_KEY` must stay in CloudBase function environment variables and must not enter frontend `VITE_*` variables.
+- LangSmith unavailable, not configured, failed, or timed out states are recorded explicitly in result metadata.
+- LangSmith trace / run / feedback ids are external ids only; they do not replace `eval_results.run_id`, `eval_results.case_id`, or project Evaluation relationships.
 
 ## Package
 

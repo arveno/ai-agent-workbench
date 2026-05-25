@@ -1,0 +1,69 @@
+name: PR Template Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'stage/**'
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  pr-template-check:
+    name: PR Template Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR body
+        env:
+          PR_BODY_JSON: ${{ toJson(github.event.pull_request.body) }}
+        run: |
+          node <<'NODE'
+          const requiredSections = [
+            '# 关联 Issue',
+            '# 本次目标',
+            '# 修改范围',
+            '# 明确不做',
+            '# 主要改动',
+            '# 架构自检清单',
+            '# 验证结果',
+            '# 风险点',
+            '# 后续建议',
+          ];
+
+          const body = JSON.parse(process.env.PR_BODY_JSON || '""') || '';
+          const errors = [];
+          const bodyLines = body
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+          for (const section of requiredSections) {
+            if (!bodyLines.includes(section)) {
+              errors.push(`Missing required PR template section: ${section}`);
+            }
+          }
+
+          if (/- \[ \]/.test(body)) {
+            errors.push('PR body contains unfinished checkbox: - [ ]');
+          }
+
+          if (!/- \[[xX]\]/.test(body)) {
+            errors.push('PR body must contain at least one completed checkbox: - [x] or - [X]');
+          }
+
+          if (errors.length > 0) {
+            console.error('PR Template Check failed:');
+            for (const error of errors) {
+              console.error(`- ${error}`);
+            }
+            process.exit(1);
+          }
+
+          console.log('PR Template Check passed.');
+          NODE
