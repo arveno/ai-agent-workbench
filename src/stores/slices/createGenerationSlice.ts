@@ -547,7 +547,9 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
 
     if (get().isPersistentMode && reportConversationId && reportContentToPersist) {
       if (reportMessageToPersist) {
-        void get().persistMessageToConversation(reportConversationId, reportMessageToPersist);
+        void get().persistMessageToConversation(reportConversationId, reportMessageToPersist, {
+          persistedRunId: normalizedRunId,
+        });
       }
 
       if (shouldPersistReportArtifact) {

@@ -1,29 +1,9 @@
 import type { StateCreator } from 'zustand';
 import { streamAgentRunAnalysis } from '../../services/agentRunStreamApi';
-import type { RunConclusionSource, UiSlice, WorkbenchStore } from '../../types/workbench';
+import type { UiSlice, WorkbenchStore } from '../../types/workbench';
 import { createAgentPendingRunStartedEvent } from '../../utils/agentRunMapping';
 import { createRunId } from '../../utils/run';
 import { useAuthStore } from '../authStore';
-
-function buildAgentConclusionMessage(conclusion: string, notice?: string): string {
-  const normalizedConclusion = conclusion.trim();
-
-  if (!normalizedConclusion) {
-    return '';
-  }
-
-  const normalizedNotice = notice?.trim();
-
-  return [
-    '### 真实 Agent 分析结果',
-    '',
-    normalizedConclusion,
-    '',
-    normalizedNotice
-      ? `> 提示：${normalizedNotice}`
-      : '本次分析已通过数据源、工具调用和模型总结完成，右侧可查看执行步骤与工具结果。',
-  ].join('\n');
-}
 
 function createAgentRunRequestId(): string {
   return `agent_request_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -52,19 +32,6 @@ function isAgentRunInProgress(state: WorkbenchStore): boolean {
     Boolean(state.activeAgentRunRequestId) ||
     (state.currentRun?.mode === 'agent' && state.currentRun.status === 'running')
   );
-}
-
-function getRunIdForClientRun(state: WorkbenchStore, clientRunId: string): string | undefined {
-  const currentRun = state.currentRun;
-
-  if (
-    currentRun?.mode === 'agent' &&
-    (currentRun.id === clientRunId || currentRun.clientRunId === clientRunId)
-  ) {
-    return currentRun.id;
-  }
-
-  return undefined;
 }
 
 function withDemoFallbackHint(message: string): string {
@@ -164,11 +131,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       prompt,
       sessionId,
     });
-    let finalConclusion = '';
-    let finalConclusionSource: RunConclusionSource = 'fallback';
-    let finalConclusionNotice: string | undefined;
     let hasFailed = false;
-    let hasAppendedFinalMessage = false;
 
     if (state.currentRun?.mode === 'agent' && state.currentRun.status === 'running') {
       get().applyRunEvent({
@@ -181,12 +144,15 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       previousAbortController?.abort();
 
       const userMessage = get().appendUserMessageToCurrentSession(prompt, {
-        runId,
         kind: 'normal',
       });
 
       if (userMessage && get().isPersistentMode) {
-        void get().persistMessageToConversation(sessionId, userMessage);
+        await get().persistMessageToConversation(sessionId, userMessage);
+      }
+
+      if (get().currentSessionId !== sessionId) {
+        return;
       }
 
       get().applyRunEvent(pendingRunEvent);
@@ -238,13 +204,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
           get().applyRunEvent(normalizedEvent);
 
-          if (normalizedEvent.type === 'conclusion_completed') {
-            finalConclusion = normalizedEvent.conclusion;
-            finalConclusionSource = normalizedEvent.conclusionSource;
-            finalConclusionNotice = normalizedEvent.conclusionNotice;
-            return;
-          }
-
           if (normalizedEvent.type === 'report_pending') {
             set({
               currentReportRunId: normalizedEvent.runId,
@@ -282,18 +241,8 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
           activeAgentRunAbortController: null,
         });
 
-        const assistantMessage = buildAgentConclusionMessage(
-          finalConclusion,
-          finalConclusionSource === 'fallback' ? finalConclusionNotice : undefined
-        );
-
-        if (assistantMessage) {
-          hasAppendedFinalMessage = true;
-          const assistantRunId = getRunIdForClientRun(get(), runId);
-          get().appendAssistantMessageToCurrentSession(assistantMessage, {
-            runId: assistantRunId,
-            kind: 'normal',
-          });
+        if (get().isPersistentMode) {
+          await get().loadPersistentMessagesForSession(sessionId);
         }
 
         return;
@@ -352,27 +301,6 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     } finally {
       agentRunStartInFlight = false;
       void useAuthStore.getState().refreshAgentAccess();
-
-      if (
-        get().activeAgentRunRequestId === requestId &&
-        get().currentSessionId === sessionId &&
-        finalConclusion.trim() &&
-        !hasFailed &&
-        !hasAppendedFinalMessage
-      ) {
-        const assistantMessage = buildAgentConclusionMessage(
-          finalConclusion,
-          finalConclusionSource === 'fallback' ? finalConclusionNotice : undefined
-        );
-
-        if (assistantMessage) {
-          const assistantRunId = getRunIdForClientRun(get(), runId);
-          get().appendAssistantMessageToCurrentSession(assistantMessage, {
-            runId: assistantRunId,
-            kind: 'normal',
-          });
-        }
-      }
     }
   },
 });

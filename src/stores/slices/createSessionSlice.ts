@@ -79,16 +79,6 @@ function isPersistentStateCompatibleWithAuthContext(
   return shouldUseCloudBaseForPersistentState(persistentUserId);
 }
 
-function shouldSkipCloudBaseAgentAssistantPersist(
-  message: WorkbenchMessage,
-): boolean {
-  return (
-    message.role === 'assistant' &&
-    message.kind === 'normal' &&
-    Boolean(message.runId?.startsWith('agent_run_'))
-  );
-}
-
 function getConversationModeForSelectedModel(selectedModelId: WorkbenchStore['selectedModelId']): ConversationMode {
   return selectedModelId === 'mock-agent' ? 'mock' : 'agent';
 }
@@ -1222,7 +1212,7 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
 
     return nextSession.id;
   },
-  persistMessageToConversation: async (conversationId, message) => {
+  persistMessageToConversation: async (conversationId, message, options) => {
     const authContext = getPersistenceAuthContext({
       allowCloudBasePersistence: shouldUseCloudBaseForPersistentState(get().persistentUserId),
     });
@@ -1231,17 +1221,11 @@ export const createSessionSlice: StateCreator<WorkbenchStore, [], [], SessionSli
       return;
     }
 
-    if (shouldSkipCloudBaseAgentAssistantPersist(message)) {
-      set({
-        messagesError: null,
-        persistenceError: null,
-      });
-      return;
-    }
-
     const result = await createConversationMessage(
       conversationId,
-      workbenchMessageToMessageCreateInput(message),
+      workbenchMessageToMessageCreateInput(message, {
+        persistedRunId: options?.persistedRunId ?? null,
+      }),
     );
 
     if (!result.ok) {

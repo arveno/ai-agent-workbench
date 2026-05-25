@@ -1,7 +1,9 @@
 import type { MessageCreateInput, MessageKind, MessageRecord, MessageRole } from '@/types/persistence';
 import type { WorkbenchMessage, WorkbenchMessageKind } from '@/types/workbench';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+interface MessageCreateOptions {
+  persistedRunId?: string | null;
+}
 
 function toTimestamp(value: string): number {
   const timestamp = Date.parse(value);
@@ -36,14 +38,6 @@ function workbenchKindToMessageKind(kind: WorkbenchMessageKind): MessageKind {
   return 'text';
 }
 
-function toPersistableRunId(runId: string | undefined): string | null {
-  if (!runId) {
-    return null;
-  }
-
-  return UUID_PATTERN.test(runId) ? runId : null;
-}
-
 export function messageRecordToWorkbenchMessage(record: MessageRecord): WorkbenchMessage {
   const runId = record.run_id?.trim() || null;
   const clientMessageId = record.client_message_id ?? record.id;
@@ -63,8 +57,11 @@ export function messageRecordToWorkbenchMessage(record: MessageRecord): Workbenc
   return message;
 }
 
-export function workbenchMessageToMessageCreateInput(message: WorkbenchMessage): MessageCreateInput {
-  const runId = toPersistableRunId(message.runId);
+export function workbenchMessageToMessageCreateInput(
+  message: WorkbenchMessage,
+  options: MessageCreateOptions = {},
+): MessageCreateInput {
+  const runId = options.persistedRunId?.trim() || null;
   const clientMessageId = message.clientMessageId ?? message.id;
 
   return {

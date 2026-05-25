@@ -45,6 +45,23 @@ function hasReportMessage(messages: WorkbenchMessage[], runId: string): boolean 
   );
 }
 
+function getCurrentRunAnchorMessageId(
+  messages: WorkbenchMessage[],
+  currentRun: RunSnapshot | null,
+): string | null {
+  if (!currentRun) {
+    return null;
+  }
+
+  const hasBoundMessage = messages.some((message) => message.runId === currentRun.id);
+
+  if (hasBoundMessage) {
+    return null;
+  }
+
+  return [...messages].reverse().find((message) => message.role === 'user')?.id ?? null;
+}
+
 function createRunFollowUpBlocks(params: {
   run: RunSnapshot;
   currentRun: RunSnapshot | null;
@@ -104,6 +121,7 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
   const insertedReportConfirmRunIds = new Set<string>();
   const insertedErrorRunIds = new Set<string>();
   const insertedStoppedRunIds = new Set<string>();
+  const currentRunAnchorMessageId = getCurrentRunAnchorMessageId(session.messages, currentRun);
 
   for (const message of session.messages) {
     const run = getRunForMessage(message, session, currentRun);
@@ -122,14 +140,16 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
       message: displayMessage,
     });
 
-    if (!run) {
+    const followUpRun = run ?? (message.id === currentRunAnchorMessageId ? currentRun : null);
+
+    if (!followUpRun) {
       continue;
     }
 
     if (message.role === 'user') {
       blocks.push(
         ...createRunFollowUpBlocks({
-          run,
+          run: followUpRun,
           currentRun,
           messages: session.messages,
           insertedStreamingRunIds,
@@ -142,17 +162,17 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
     if (
       message.role === 'assistant' &&
       message.kind === 'normal' &&
-      message.runId === run.id &&
-      shouldShowReportConfirm(run) &&
-      !hasReportMessage(session.messages, run.id) &&
-      !insertedReportConfirmRunIds.has(run.id)
+      message.runId === followUpRun.id &&
+      shouldShowReportConfirm(followUpRun) &&
+      !hasReportMessage(session.messages, followUpRun.id) &&
+      !insertedReportConfirmRunIds.has(followUpRun.id)
     ) {
       blocks.push({
         type: 'report_confirm',
-        id: `report_confirm:${run.id}`,
-        run,
+        id: `report_confirm:${followUpRun.id}`,
+        run: followUpRun,
       });
-      insertedReportConfirmRunIds.add(run.id);
+      insertedReportConfirmRunIds.add(followUpRun.id);
     }
   }
 
