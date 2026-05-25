@@ -493,7 +493,7 @@ async function ensureMonthlyQuota(db, currentUser) {
     quota_used: 0,
     period_start: period.periodStart,
     period_end: period.periodEnd,
-    metadata: JSON.stringify({ source: 'agent-run-basic-loop' }),
+    metadata: JSON.stringify({ source: 'cloudbase-agent-run-real' }),
   };
 
   try {
@@ -635,8 +635,8 @@ function createAgentRunMetadata(context, extra = {}) {
     langSmithTrace,
     clientRunId: context.clientRunId,
     clientRunIdMissing: Boolean(context.clientRunIdMissing),
-    provider: context.provider || 'mock',
-    dataProvider: context.provider || 'mock',
+    provider: context.provider || 'cloudbase_mysql',
+    dataProvider: context.provider || 'cloudbase_mysql',
     selectedModelId: context.selectedModelId || null,
     modelTrace: context.modelTrace || null,
     conclusionSource: context.conclusionSource || null,
@@ -660,7 +660,7 @@ async function createAgentRun(db, currentUser, context, options = {}) {
       intent: context.intent || 'unknown',
       prompt: context.prompt,
       plan: JSON.stringify(context.planSnapshot || {}),
-      data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || { source: 'mock' }),
+      data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || getDataSourceSnapshot()),
       chart_data: JSON.stringify({}),
       conclusion: null,
       conclusion_source: null,
@@ -766,10 +766,7 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
       conclusion,
       conclusion_source: options.conclusionSource || context.conclusionSource || 'fallback',
       report_state: options.reportState || context.reportState || 'hidden',
-      chart_data: JSON.stringify(options.chartData || {
-        type: 'mock_summary',
-        assistantMessageId,
-      }),
+      chart_data: JSON.stringify(options.chartData || {}),
       metadata: JSON.stringify(createAgentRunMetadata(context, {
         assistantMessageId,
         modelTrace: context.modelTrace || null,
@@ -1292,7 +1289,7 @@ function pickTimeRangeFromPrompt(prompt) {
   return { type: 'none' };
 }
 
-function fallbackPlanAgentRun(prompt) {
+function createRuleBasedPlan(prompt) {
   const normalizedPrompt = prompt.trim();
   const lowerPrompt = normalizedPrompt.toLowerCase();
   const explicitMonth = extractExplicitMonth(normalizedPrompt);
@@ -1492,58 +1489,11 @@ function normalizeKnowledgeSearchInput(input) {
   };
 }
 
-function normalizePlan(rawPlan, fallback) {
-  if (!isRecord(rawPlan)) {
-    return fallback;
-  }
-
-  const intent = ['capability_intro', 'data_analysis', 'knowledge_qa', 'unsupported'].includes(rawPlan.intent)
-    ? rawPlan.intent
-    : fallback.intent;
-
-  if (intent !== 'data_analysis') {
-    return {
-      intent,
-      shouldUseDataAnalysis: false,
-      reason: readOptionalString(rawPlan.reason) || fallback.reason,
-    };
-  }
-
-  let timeRange = fallback.timeRange || { type: 'none' };
-
-  if (isRecord(rawPlan.timeRange)) {
-    if (rawPlan.timeRange.type === 'month' && /^(19\d{2}|20\d{2})-(0[1-9]|1[0-2])$/.test(rawPlan.timeRange.month || '')) {
-      timeRange = {
-        type: 'month',
-        month: rawPlan.timeRange.month,
-        label: readOptionalString(rawPlan.timeRange.label) || createMonthLabel(rawPlan.timeRange.month),
-      };
-    } else if (rawPlan.timeRange.type === 'latest_available_month') {
-      timeRange = {
-        type: 'latest_available_month',
-        label: readOptionalString(rawPlan.timeRange.label) || '最新可用月份',
-      };
-    } else if (rawPlan.timeRange.type === 'none') {
-      timeRange = { type: 'none' };
-    }
-  }
-
-  return {
-    intent,
-    shouldUseDataAnalysis: true,
-    reason: readOptionalString(rawPlan.reason) || fallback.reason,
-    metric: normalizeMetric(rawPlan.metric || fallback.metric),
-    groupBy: normalizeGroupBy(rawPlan.groupBy || fallback.groupBy),
-    timeRange,
-    comparison: rawPlan.comparison === 'previous_month' ? 'previous_month' : 'none',
-  };
-}
-
 async function planAgentRun(prompt) {
-  const fallback = fallbackPlanAgentRun(prompt);
+  const plan = createRuleBasedPlan(prompt);
   return {
-    plan: fallback,
-    plannerSource: 'local_rules',
+    plan,
+    plannerSource: 'langgraph_local_rules',
     fallbackReason: null,
   };
 }
