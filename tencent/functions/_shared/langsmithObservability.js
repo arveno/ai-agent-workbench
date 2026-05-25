@@ -5,6 +5,8 @@ const TRACE_RUN_NAME = 'workbench_agent_run';
 const EVALUATION_DATASET_NAME = 'ai-agent-workbench-eval-cases';
 const EVALUATION_EXPERIMENT_NAME = 'workbench-evaluation';
 const EVALUATION_FEEDBACK_KEY = 'workbench_evaluation_verdict';
+const DEFAULT_LANGSMITH_TIMEOUT_MS = 3000;
+const MAX_LANGSMITH_TIMEOUT_MS = 30000;
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -31,10 +33,54 @@ function truncate(value, maxLength = 500) {
   return stringValue.length > maxLength ? stringValue.slice(0, maxLength) : stringValue;
 }
 
+function readLangSmithTimeoutMs() {
+  const parsed = Number(process.env.LANGSMITH_TIMEOUT_MS);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return DEFAULT_LANGSMITH_TIMEOUT_MS;
+  }
+
+  return Math.min(parsed, MAX_LANGSMITH_TIMEOUT_MS);
+}
+
+function createTimeoutError(reason, timeoutMs) {
+  const error = new Error(`LangSmith request timed out after ${timeoutMs}ms.`);
+  error.name = 'LangSmithTimeoutError';
+  error.code = reason;
+  error.timeoutMs = timeoutMs;
+  return error;
+}
+
+async function withLangSmithTimeout(operation, timeoutReason) {
+  const timeoutMs = readLangSmithTimeoutMs();
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(createTimeoutError(timeoutReason, timeoutMs));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+function getFailureReason(error, fallbackReason) {
+  return typeof error?.code === 'string' && error.code.endsWith('_timeout') ? error.code : fallbackReason;
+}
+
 function normalizeError(error, fallbackType = 'langsmith_request_failed') {
   return {
-    errorType: String(error?.name || error?.code || fallbackType),
+    errorType: String(error?.code || error?.name || fallbackType),
     errorMessage: truncate(error?.message || error || fallbackType),
+    timeoutMs: Number.isInteger(error?.timeoutMs) ? error.timeoutMs : null,
   };
 }
 
@@ -132,6 +178,7 @@ function toPublicLangSmithTrace(traceState) {
     completedAt: state.completedAt || null,
     errorType: state.errorType || null,
     errorMessage: state.errorMessage || null,
+    timeoutMs: Number.isInteger(state.timeoutMs) ? state.timeoutMs : null,
     externalReference: isRecord(state.externalReference) ? state.externalReference : {},
   };
 }
@@ -167,7 +214,7 @@ async function startLangSmithTrace(traceState, params = {}) {
 
   try {
     const client = createLangSmithClient(config.projectName);
-    await client.createRun({
+    await withLangSmithTimeout(() => client.createRun({
       id: runId,
       name: params.runName || TRACE_RUN_NAME,
       run_type: 'chain',
@@ -180,7 +227,7 @@ async function startLangSmithTrace(traceState, params = {}) {
         metadata: createTraceMetadata(baseState, params.metadata),
       },
       tags: Array.isArray(params.tags) ? params.tags : ['agent-run', 'langgraph'],
-    });
+    }), 'trace_start_timeout');
 
     return {
       ...baseState,
@@ -198,7 +245,7 @@ async function startLangSmithTrace(traceState, params = {}) {
     return {
       ...baseState,
       status: 'failed',
-      reason: 'trace_start_failed',
+      reason: getFailureReason(error, 'trace_start_failed'),
       projectName: config.projectName,
       traceId: null,
       runId: null,
@@ -219,13 +266,13 @@ async function completeLangSmithTrace(traceState, params = {}) {
 
   try {
     const client = createLangSmithClient(baseState.projectName || DEFAULT_PROJECT_NAME);
-    await client.updateRun(baseState.runId, {
+    await withLangSmithTimeout(() => client.updateRun(baseState.runId, {
       outputs: params.outputs || {},
       end_time: new Date(completedAt),
       extra: {
         metadata: createTraceMetadata(baseState, params.metadata),
       },
-    });
+    }), 'trace_update_timeout');
 
     return {
       ...baseState,
@@ -239,7 +286,7 @@ async function completeLangSmithTrace(traceState, params = {}) {
     return {
       ...baseState,
       status: 'failed',
-      reason: 'trace_update_failed',
+      reason: getFailureReason(error, 'trace_update_failed'),
       completedAt,
       ...normalized,
     };
@@ -258,7 +305,7 @@ async function failLangSmithTrace(traceState, params = {}) {
 
   try {
     const client = createLangSmithClient(baseState.projectName || DEFAULT_PROJECT_NAME);
-    await client.updateRun(baseState.runId, {
+    await withLangSmithTimeout(() => client.updateRun(baseState.runId, {
       error: failure.errorMessage,
       end_time: new Date(completedAt),
       outputs: params.outputs || {},
@@ -269,7 +316,7 @@ async function failLangSmithTrace(traceState, params = {}) {
           errorMessage: failure.errorMessage,
         }),
       },
-    });
+    }), 'trace_update_timeout');
 
     return {
       ...baseState,
@@ -283,7 +330,7 @@ async function failLangSmithTrace(traceState, params = {}) {
     return {
       ...baseState,
       status: 'failed',
-      reason: 'trace_error_update_failed',
+      reason: getFailureReason(error, 'trace_error_update_failed'),
       completedAt,
       ...normalized,
     };
@@ -322,6 +369,7 @@ function createEvaluationMetadata(params = {}) {
     projectName: params.projectName || DEFAULT_PROJECT_NAME,
     errorType: params.errorType || null,
     errorMessage: params.errorMessage || null,
+    timeoutMs: Number.isInteger(params.timeoutMs) ? params.timeoutMs : null,
     externalReference: {
       workbenchEvaluationId: params.evaluationId || null,
       workbenchRunId: params.runId || null,
@@ -359,7 +407,7 @@ async function submitLangSmithEvaluationFeedback(params = {}) {
 
   try {
     const client = createLangSmithClient(config.projectName);
-    const feedback = await client.createFeedback(trace.runId, EVALUATION_FEEDBACK_KEY, {
+    const feedback = await withLangSmithTimeout(() => client.createFeedback(trace.runId, EVALUATION_FEEDBACK_KEY, {
       score: scoreVerdict(params.verdict),
       value: params.verdict || 'unknown',
       comment: [params.badCaseReason, params.humanNote].filter(Boolean).join('\n\n') || undefined,
@@ -371,7 +419,7 @@ async function submitLangSmithEvaluationFeedback(params = {}) {
         workbenchRunId: params.runId || null,
         evalCaseId: params.caseId || null,
       },
-    });
+    }), 'feedback_timeout');
 
     return createEvaluationMetadata({
       ...params,
@@ -386,7 +434,7 @@ async function submitLangSmithEvaluationFeedback(params = {}) {
     return createEvaluationMetadata({
       ...params,
       status: 'failed',
-      reason: 'feedback_failed',
+      reason: getFailureReason(error, 'feedback_failed'),
       projectName: config.projectName,
       langSmithTraceId: trace.traceId || null,
       langSmithRunId: trace.runId || null,
