@@ -7,6 +7,7 @@
 - 文档是长期事实源。
 - Tracking Issue 是阶段 / 主线事实源。
 - 普通 Issue 是当前工作单元事实源。
+- PR 是真实代码、CI、ChatGPT Review 和用户 Review 的入口。
 - prompt 只能补充执行上下文，不能覆盖 Issue 或已冻结文档。
 - 对话用于讨论、解释和复盘，不能成为流程稳定性的依赖。
 - 需要改变长期规则时，先更新对应事实源文档，再执行代码任务。
@@ -28,12 +29,12 @@
 ### 用户
 
 - 定义需求、范围、优先级和验收标准。
-- 本地 review diff 后决定是否允许 commit。
-- 决定何时 push、创建 PR 和 merge。
+- Review PR、CI、ChatGPT Review 和必要本地结果。
+- 决定是否 merge。
 
 ### ChatGPT
 
-- 只作为可选辅助，用于判断、拆解、解释和复盘。
+- 只作为可选辅助，用于判断、拆解、解释和 Review。
 - 可以辅助整理 Issue、PR 风险和验收意见。
 - 不作为任务准入、执行或合并的流程控制器。
 
@@ -41,12 +42,13 @@
 
 - 在 Issue 和事实源边界内执行。
 - 修改文件、运行验证、输出 Review Packet。
-- 本地 commit 前必须停下给用户 review diff。
-- 不在未授权时 push、创建 PR 或 merge。
+- 可以自动 commit、push 到任务分支，并创建 / 更新 PR。
+- 不允许自动 merge。
+- 不允许 push main。
 
 ### Git / GitHub
 
-- Git 记录本地过程。
+- Git 记录任务分支过程。
 - GitHub 承载 Issue、PR、CI、Review 和 main ruleset。
 - CI 是基础质量门禁，不替代人工验收。
 - main 分支必须通过 PR、CI 和 main ruleset 后才能合并。
@@ -54,65 +56,53 @@
 ## 3. 层级
 
 ```text
-阶段 = Tracking Issue
-Tracking Issue = 普通 Issue + checklist + 关联子 Issue
-普通 Issue = 阶段下可独立验收的工作单元
-Commit = 本地过程记录
-PR = 阶段性发布 / 合并入口
+Tracking Issue = 阶段主线
+普通 Issue = 可独立验收的工作单元
+任务分支 = 普通 Issue 的代码承载
+PR = CI / ChatGPT / 用户 Review 入口
+Merge = 用户最终决策
 ```
 
 规则：
 
-- Tracking Issue 管理阶段目标、范围、子任务、完成标准和进度。
-- 普通 Issue 不等于小步骤，也不应大到覆盖整个阶段。
-- 普通 Issue 可以包含多个子任务和多次本地 commit。
-- 普通 Issue 完成标准必须清楚、可验收。
+- 一个阶段一个 Tracking Issue。
+- 一个普通 Issue 默认一个任务分支。
+- 一个普通 Issue 默认一个 PR。
+- 一个 PR 可以多次 push 修正。
 - 不按单个小动作、单个文件修改或单个 commit 拆 Issue / PR。
-- PR 不强制一个 Issue 一个 PR。
-- 一个 PR 可以包含一个或多个相关 Issue。
 - 只有范围明显变化时，才新建 Issue / PR。
 - 只读审查类 Issue 可以不建分支、不建 PR，只在 Issue 评论沉淀结论。
 - 长期事实源变更或代码变更最终必须通过 PR 进入 main。
 
-## 4. Local-first 流程
+## 4. PR-first 自动化 Review 流程
 
 ```text
-Tracking Issue 确认阶段主线
-  -> 普通 Issue 定义可独立验收工作单元
-  -> Codex 读取 Issue 和必要事实源
-  -> Codex 在边界内自动执行和验证
-  -> 本地 review checkpoint
-  -> 用户确认后本地 commit
-  -> 阶段稳定或用户明确要求后 push / 创建 PR
-  -> PR 关联相关 Issue 并按 PR Template 自检
-  -> CI / Review / main ruleset
+Tracking Issue
+  -> 普通 Issue
+  -> 任务分支
+  -> Codex 自动执行
+  -> commit
+  -> push 到任务分支
+  -> 创建 / 更新 PR
+  -> CI / ChatGPT Review / 用户 Review
   -> 用户决定是否 merge
+  -> 更新 Tracking Issue
 ```
 
-核心规则：
+固定规则：
 
-```text
-Codex 可以自动执行，但本地 commit 前必须给轻量 review checkpoint；push、PR、merge 只在阶段稳定或用户明确要求时执行。
-```
-
-本地 review checkpoint：
-
-```text
-git diff --stat
-git diff
-git status --short
-```
-
-要求：
-
-- Codex 修改文件并完成验证后，先停在本地 diff review。
-- 用户确认后，Codex 才能 commit 并继续后续已授权流程。
-- 多个 Issue / 多个本地 commit 可以先在本地推进。
-- 不要求每个 Issue 都 push / PR。
-- push、创建 PR、更新 PR 或 merge 不是每步默认动作。
-- 同一阶段后续需要补充时，继续在同一个分支 / 同一个 PR 上追加；只有范围明显变化时才新建 Issue / PR。
+- Codex 必须先读取关联 Issue 和必要事实源。
+- Codex 在 Issue 边界内自动执行和验证。
+- Codex 可以自动 commit、push 到任务分支，并创建 / 更新 PR。
+- Codex 不允许自动 merge。
+- Codex 不允许 push main。
+- PR 必须关联相关 Issue，并按 PR Template 自检。
+- CI 通过不等于可以 merge。
+- ChatGPT Review 和 Codex Review 只是辅助审查，不替代用户验收。
+- 最终 merge 必须由用户决定。
+- merge 后更新 Tracking Issue。
 - 不混入无关文件。
-- 工作区已有未提交代码时，只能显式 `git add` 本阶段文件，不能 `git add .`。
+- 工作区已有未提交代码时，只能显式 `git add` 本任务文件，不能 `git add .`。
 
 ## 5. 任务准入
 
@@ -131,7 +121,7 @@ Codex 指令必须明确：
 参考事实源
 验证命令
 输出格式
-本地 commit 前 review 要求
+PR / merge 边界
 ```
 
 ## 6. 变更门禁
@@ -168,6 +158,7 @@ Review / 辅助验收必须检查：
 - lint / build / smoke 是否按任务要求执行并通过。
 - PR 是否关联相关 Issue 并按 PR Template 自检。
 - CI Lint and Build 是否通过。
+- 用户是否明确验收完整任务闭环。
 
 Merge 规则：
 

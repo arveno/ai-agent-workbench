@@ -178,7 +178,7 @@ selectedModelId
 
 禁止：
 
-- 自动提交。
+- 未按 Issue 或 prompt 授权自动 commit、push、创建 / 更新 PR；自动 merge；push main。
 - 处理 stash。
 - 全项目格式化。
 - 新增无关依赖。
