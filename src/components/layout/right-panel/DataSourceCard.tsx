@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import { getRunStatusLabel, getRunStatusTone } from '../../../utils/runViewModel';
+import { createRunDataSourceViewModel, getRunStatusLabel, getRunStatusTone } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
@@ -32,7 +32,6 @@ export function DataSourceCard() {
     );
   }
 
-  const dataSource = currentRun.dataSource;
   const hasDataSourceAccess = shouldShowDataSource(currentRun.intent, currentRun.toolInvocations.length);
 
   if (!hasDataSourceAccess) {
@@ -55,14 +54,7 @@ export function DataSourceCard() {
     );
   }
 
-  const metaItems = [
-    { label: '数据源名称', value: dataSource?.name ?? '未记录' },
-    { label: '底层类型', value: dataSource?.typeLabel ?? '-' },
-    { label: '数据源标识', value: dataSource?.provider ?? '-' },
-    { label: 'Schema', value: dataSource?.schema ?? '-' },
-    { label: '表数量', value: typeof dataSource?.tableCount === 'number' ? String(dataSource.tableCount) : '-' },
-    { label: 'Run 状态', value: getRunStatusLabel(currentRun.status) },
-  ];
+  const dataSourceView = createRunDataSourceViewModel(currentRun);
 
   return (
     <Card size="sm" className="right-card right-section">
@@ -72,7 +64,7 @@ export function DataSourceCard() {
             <AppIcon icon={icons.database} size={16} />
             <span>数据源使用</span>
           </CardTitle>
-          <CardDescription>{dataSource?.typeLabel ?? '当前 Run 使用的数据源上下文'}</CardDescription>
+          <CardDescription>{dataSourceView.description}</CardDescription>
         </div>
         <Badge variant="outline" className={`run-status-badge run-status-badge-${getRunStatusTone(currentRun.status)}`}>
           {getRunStatusLabel(currentRun.status)}
@@ -86,13 +78,13 @@ export function DataSourceCard() {
               <AppIcon icon={icons.database} size={14} />
             </span>
             <div>
-              <div className="datasource-name">{dataSource?.name ?? 'Run 数据源'}</div>
-              <div className="datasource-subtitle">{dataSource?.typeLabel ?? '当前 Run 使用的数据源上下文'}</div>
+              <div className="datasource-name">{dataSourceView.name}</div>
+              <div className="datasource-subtitle">{dataSourceView.subtitle}</div>
             </div>
           </div>
 
           <div className="datasource-meta-grid">
-            {metaItems.map((item) => (
+            {dataSourceView.metaItems.map((item) => (
               <div key={item.label}>
                 <div className="datasource-meta-label">{item.label}</div>
                 <div className="datasource-meta-value">{item.value}</div>

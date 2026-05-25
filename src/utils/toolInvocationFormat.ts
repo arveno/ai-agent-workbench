@@ -49,19 +49,7 @@ export function tryParseJsonObject(value: string): Record<string, unknown> | nul
 }
 
 function getKnownToolId(invocation: RunToolInvocation): WorkbenchToolId | null {
-  const candidates = [invocation.toolId, invocation.toolName, invocation.displayName]
-    .filter(Boolean)
-    .map((value) => value.toLowerCase());
-
-  for (const candidate of candidates) {
-    const normalizedToolId = normalizeWorkbenchToolId(candidate);
-
-    if (normalizedToolId) {
-      return normalizedToolId;
-    }
-  }
-
-  return null;
+  return normalizeWorkbenchToolId(invocation.toolId);
 }
 
 function getStringField(source: Record<string, unknown> | null, key: string): string {

@@ -18,9 +18,9 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     riskLevel: 'low',
     enabled: true,
     usedInRunTrace: true,
-    description: '读取当前数据源允许访问的 schema、表、字段和字段类型。',
-    inputSummary: 'dataSourceId, allowedSchemas',
-    outputSummary: 'tables, columns, columnTypes',
+    description: '读取当前数据源允许访问的结构、对象和字段类型。',
+    inputSummary: '数据源访问范围',
+    outputSummary: '受控数据对象与字段结构',
   },
   {
     id: 'aggregate_table',
@@ -33,8 +33,8 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     enabled: true,
     usedInRunTrace: true,
     description: '对教学指标进行受控聚合，支持时间范围、指标和维度约束。',
-    inputSummary: 'metric, groupBy, timeRange, comparison, limit',
-    outputSummary: 'aggregates, chartData, elapsedMs',
+    inputSummary: '指标、分组、时间范围、限制条数',
+    outputSummary: '聚合结果、图表数据、耗时',
   },
   {
     id: 'chart_render',
@@ -47,8 +47,8 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     enabled: true,
     usedInRunTrace: true,
     description: '将查询或聚合结果转换为前端可渲染的图表数据结构。',
-    inputSummary: 'rows, chartType, labelKey, valueKey',
-    outputSummary: 'chartData, summary',
+    inputSummary: '聚合结果、图表类型、展示字段',
+    outputSummary: '图表数据与摘要',
   },
   {
     id: 'knowledge_search',
@@ -60,7 +60,7 @@ export const WORKBENCH_TOOL_DEFINITIONS: WorkbenchToolDefinition[] = [
     riskLevel: 'low',
     enabled: true,
     usedInRunTrace: true,
-    description: '通过 CloudBase MySQL 的 knowledge_documents / knowledge_chunks 做受控检索，返回可引用来源片段。',
+    description: '通过服务端受控知识库做检索，返回可引用来源片段。',
     inputSummary: 'query, topK',
     outputSummary: '命中片段数, 来源片段, 引用, 分数',
   },
@@ -123,7 +123,7 @@ export function getToolRiskLabel(riskLevel: WorkbenchToolDefinition['riskLevel']
 
 export function getToolCategoryLabel(category: WorkbenchToolDefinition['category']): string {
   if (category === 'schema') {
-    return 'Schema 工具';
+    return '结构工具';
   }
 
   if (category === 'analysis') {

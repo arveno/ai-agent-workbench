@@ -236,7 +236,7 @@ function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId
     conclusionSource: run?.conclusionSource ?? null,
     fallbackReason: run?.conclusionSource === 'fallback' ? run.conclusionNotice ?? null : null,
     conclusionNotice: run?.conclusionNotice ?? null,
-    toolNames: run?.toolInvocations.map((tool) => tool.toolName || tool.toolId) ?? [],
+    toolNames: run?.toolInvocations.map((tool) => tool.toolName) ?? [],
   };
 
   return metadata;

@@ -1,4 +1,5 @@
 import type { RunSnapshot } from '@/types/run';
+import { createRunDataSourceViewModel } from './runViewModel';
 import { formatToolInvocationForInspector } from './toolInvocationFormat';
 
 function formatDataSource(run: RunSnapshot): string {
@@ -6,10 +7,10 @@ function formatDataSource(run: RunSnapshot): string {
     return '本次未访问数据源。';
   }
 
-  const schemaText = run.dataSource.schema ? `，Schema：${run.dataSource.schema}` : '';
-  const tableText = typeof run.dataSource.tableCount === 'number' ? `，表数量：${run.dataSource.tableCount}` : '';
+  const dataSourceView = createRunDataSourceViewModel(run);
+  const scopeItem = dataSourceView.metaItems.find((item) => item.label === '访问范围');
 
-  return `${run.dataSource.name}（${run.dataSource.typeLabel}${schemaText}${tableText}）`;
+  return `${dataSourceView.name}（${dataSourceView.subtitle}，${scopeItem?.value ?? '服务端受控范围'}）`;
 }
 
 function formatToolLines(run: RunSnapshot): string {

@@ -116,7 +116,7 @@ function formatReadAt(readAt?: string): string {
 
 function getSchemaSummary(provider: DataSourceProvider, schemaState?: DataSourceProviderSchemaRuntimeState): string {
   if (schemaState?.status === 'success' && schemaState.schemas && schemaState.schemas.length > 0) {
-    return schemaState.schemas.join(', ');
+    return `${schemaState.schemas.length} 个受控范围`;
   }
 
   if (provider.meta.schemas && provider.meta.schemas.length > 0) {
@@ -148,7 +148,7 @@ function getUpdatedAt(provider: DataSourceProvider, schemaState?: DataSourceProv
 
 function getReadSchemaButtonLabel(schemaState?: DataSourceProviderSchemaRuntimeState): string {
   if (!schemaState || schemaState.status === 'idle') {
-    return '读取 Schema';
+    return '读取范围';
   }
 
   if (schemaState.status === 'loading') {
@@ -160,18 +160,18 @@ function getReadSchemaButtonLabel(schemaState?: DataSourceProviderSchemaRuntimeS
 
 function getSchemaStatusLabel(schemaState?: DataSourceProviderSchemaRuntimeState): string {
   if (!schemaState || schemaState.status === 'idle') {
-    return 'Schema 未读取';
+    return '访问范围未读取';
   }
 
   if (schemaState.status === 'loading') {
-    return 'Schema 读取中';
+    return '访问范围读取中';
   }
 
   if (schemaState.status === 'success') {
-    return 'Schema 读取成功';
+    return '访问范围读取成功';
   }
 
-  return 'Schema 读取失败';
+  return '访问范围读取失败';
 }
 
 function getSchemaStatusClassName(schemaState?: DataSourceProviderSchemaRuntimeState): string {
@@ -190,12 +190,12 @@ function getSchemaStatusClassName(schemaState?: DataSourceProviderSchemaRuntimeS
   return 'datasource-badge datasource-badge-muted';
 }
 
-function getPreviewTableNames(schemaState?: DataSourceProviderSchemaRuntimeState): string[] {
+function getPreviewDataObjects(schemaState?: DataSourceProviderSchemaRuntimeState): string[] {
   if (schemaState?.status !== 'success' || !schemaState.tables || schemaState.tables.length === 0) {
     return [];
   }
 
-  return schemaState.tables.slice(0, 5).map((table) => table.tableName);
+  return schemaState.tables.slice(0, 5).map((_, index) => `受控对象 ${index + 1}`);
 }
 
 function getHiddenTableCount(schemaState?: DataSourceProviderSchemaRuntimeState): number {
@@ -207,7 +207,7 @@ function getHiddenTableCount(schemaState?: DataSourceProviderSchemaRuntimeState)
 }
 
 function getEnvironmentModeLabel(connectionMode: string): string {
-  return connectionMode === 'Server Env' ? '服务端环境变量' : connectionMode;
+  return connectionMode === 'Server Env' ? '服务端托管' : connectionMode;
 }
 
 export function DataSourceProviderCard({
@@ -234,7 +234,7 @@ export function DataSourceProviderCard({
       ? '重新测试'
       : '测试连接';
   const readSchemaButtonLabel = getReadSchemaButtonLabel(schemaState);
-  const previewTableNames = getPreviewTableNames(schemaState);
+  const previewDataObjects = getPreviewDataObjects(schemaState);
   const hiddenTableCount = getHiddenTableCount(schemaState);
 
   return (
@@ -271,19 +271,19 @@ export function DataSourceProviderCard({
       <CardContent className="datasource-provider-card-content">
         <div className="datasource-provider-meta">
           <div className="datasource-provider-meta-item">
-            <span className="datasource-provider-meta-label">连接方式</span>
+            <span className="datasource-provider-meta-label">访问边界</span>
             <span className="datasource-provider-meta-value">{getEnvironmentModeLabel(provider.meta.connectionMode)}</span>
           </div>
           <div className="datasource-provider-meta-item">
-            <span className="datasource-provider-meta-label">数据库</span>
+            <span className="datasource-provider-meta-label">数据域</span>
             <span className="datasource-provider-meta-value">{provider.meta.database ?? '-'}</span>
           </div>
           <div className="datasource-provider-meta-item">
-            <span className="datasource-provider-meta-label">Schema</span>
+            <span className="datasource-provider-meta-label">可访问范围</span>
             <span className="datasource-provider-meta-value">{schemaText}</span>
           </div>
           <div className="datasource-provider-meta-item">
-            <span className="datasource-provider-meta-label">表数量</span>
+            <span className="datasource-provider-meta-label">受控对象</span>
             <span className="datasource-provider-meta-value">{tableCountText}</span>
           </div>
           <div className="datasource-provider-meta-item">
@@ -305,7 +305,7 @@ export function DataSourceProviderCard({
             {typeof runtimeState?.elapsedMs === 'number' ? <em>{runtimeState.elapsedMs}ms</em> : null}
           </div>
           <div className="datasource-provider-status-row">
-            <span>Schema 状态</span>
+            <span>访问范围状态</span>
             <strong>{getSchemaStatusLabel(schemaState)}</strong>
             {typeof schemaState?.elapsedMs === 'number' ? <em>{schemaState.elapsedMs}ms</em> : null}
           </div>
@@ -358,18 +358,18 @@ export function DataSourceProviderCard({
             {schemaState.message}
           </p>
         ) : null}
-        {previewTableNames.length > 0 ? (
+        {previewDataObjects.length > 0 ? (
           <div className="datasource-provider-table-summary">
-            <div className="datasource-provider-table-summary-title">已读取表</div>
+            <div className="datasource-provider-table-summary-title">已读取对象</div>
             <ul className="datasource-provider-table-list">
-              {previewTableNames.map((tableName) => (
-                <li key={tableName} className="datasource-provider-table-item">
-                  {tableName}
+              {previewDataObjects.map((objectName) => (
+                <li key={objectName} className="datasource-provider-table-item">
+                  {objectName}
                 </li>
               ))}
               {hiddenTableCount > 0 ? (
                 <li className="datasource-provider-table-item datasource-provider-table-more">
-                  等 {hiddenTableCount} 张表
+                  等 {hiddenTableCount} 个对象
                 </li>
               ) : null}
             </ul>

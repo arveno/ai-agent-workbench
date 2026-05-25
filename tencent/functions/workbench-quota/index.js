@@ -7,6 +7,13 @@ const PORT = Number(process.env.PORT || 9000);
 const HOST = '0.0.0.0';
 const MAX_BODY_BYTES = 1024 * 1024;
 const DEFAULT_QUOTA_LIMIT = 20;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const AGENT_RUN_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+].join(',');
 
 const QUOTA_COLUMNS = [
   'id',
@@ -175,6 +182,20 @@ function readMetadata(value) {
   return isRecord(value) ? value : {};
 }
 
+function readCanonicalRunId(value) {
+  const runId = typeof value === 'string' ? value.trim() : '';
+
+  if (!runId) {
+    throw new RequestError(400, 'validation_error', 'Missing canonical runId.');
+  }
+
+  if (!UUID_PATTERN.test(runId)) {
+    throw new RequestError(400, 'validation_error', 'runId must be a canonical Agent Run UUID.');
+  }
+
+  return runId;
+}
+
 function readBodyAction(body) {
   const action = typeof body.action === 'string' ? body.action.trim() : '';
 
@@ -271,6 +292,10 @@ function hasExpectedQuotaOwner(row, currentUser) {
 }
 
 function hasExpectedUsageOwner(row, currentUser) {
+  return String(row._openid ?? '') === currentUser.openid && String(row.user_id ?? '') === currentUser.userId;
+}
+
+function hasExpectedAgentRunOwner(row, currentUser) {
   return String(row._openid ?? '') === currentUser.openid && String(row.user_id ?? '') === currentUser.userId;
 }
 
@@ -387,6 +412,20 @@ async function fetchUsageById(db, currentUser, usageId) {
   return rows.length > 0 ? mapUsage(rows[0]) : null;
 }
 
+async function fetchAgentRunById(db, currentUser, runId) {
+  const result = await db
+    .from('agent_runs')
+    .select(AGENT_RUN_COLUMNS)
+    .eq('id', runId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedAgentRunOwner(row, currentUser));
+  return rows.length > 0 ? rows[0] : null;
+}
+
 async function readQuota(currentUser) {
   const db = getDb();
   const quota = await ensureMonthlyQuota(db, currentUser);
@@ -398,6 +437,13 @@ async function readQuota(currentUser) {
 
 async function consumeQuota(currentUser, body) {
   const db = getDb();
+  const runId = readCanonicalRunId(body.runId);
+  const agentRun = await fetchAgentRunById(db, currentUser, runId);
+
+  if (!agentRun) {
+    throw new RequestError(404, 'not_found', 'Canonical Agent Run was not found.');
+  }
+
   let updatedQuota = await ensureMonthlyQuota(db, currentUser);
 
   if (!isAdmin(currentUser)) {
@@ -432,7 +478,7 @@ async function consumeQuota(currentUser, body) {
       id: usageId,
       _openid: currentUser.openid,
       user_id: currentUser.userId,
-      run_id: toNullableString(body.runId),
+      run_id: runId,
       quota_type: 'agent_run',
       status: 'started',
       metadata: JSON.stringify(readMetadata(body.metadata)),

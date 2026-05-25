@@ -333,12 +333,12 @@ curl -i -H "Authorization: Bearer <cloudbase-token>" "https://<your-domain>/api/
 ```bash
 curl -i https://<your-domain>/api/workbench/quota
 curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/workbench/quota
-curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"consume\",\"runId\":\"manual-test\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
+curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"consume\",\"runId\":\"<canonical-agent-run-id>\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
 curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"finish\",\"usageId\":\"<usage-id>\",\"status\":\"completed\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
 curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/workbench/quota
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。读取额度应返回 `ok: true` 和 `quota`；`POST` 缺少或传入非法 `action` 应返回 `validation_error`；`action = "consume"` 应返回 `usageId` 和更新后的 `quota`；`action = "finish"` 应返回更新后的 `usage`；再次读取额度时，`demo_user` 的 `quotaUsed` 应变化。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports` 或 `workbench-demo-copy`。Tencent-24 使用 `quota_used = oldQuotaUsed` 的 CAS 条件更新和 `count = "exact"` 做原子扣减重试；当前仍未新增 MySQL transaction / 行锁。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。读取额度应返回 `ok: true` 和 `quota`；`POST` 缺少或传入非法 `action` 应返回 `validation_error`；`action = "consume"` 必须传入当前用户已存在的 canonical Agent Run UUID，并应返回 `usageId` 和更新后的 `quota`；`action = "finish"` 应返回更新后的 `usage`；再次读取额度时，`demo_user` 的 `quotaUsed` 应变化。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports` 或 `workbench-demo-copy`。Tencent-24 使用 `quota_used = oldQuotaUsed` 的 CAS 条件更新和 `count = "exact"` 做原子扣减重试；当前仍未新增 MySQL transaction / 行锁。
 
 `workbench-agent-run-stream` 线上验证建议：
 

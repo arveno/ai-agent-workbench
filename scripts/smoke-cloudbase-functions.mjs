@@ -404,11 +404,11 @@ function getModelObservation(summary) {
   const payload = event?.payload || {};
   const modelTrace = payload.modelTrace || {};
   const observation = {
-    selectedModelId: payload.selectedModelId ?? modelTrace.selectedModelId ?? null,
-    provider: payload.provider ?? modelTrace.provider ?? null,
-    model: payload.model ?? modelTrace.model ?? null,
-    tokenUsage: payload.tokenUsage ?? modelTrace.tokenUsage ?? null,
-    latencyMs: payload.latencyMs ?? modelTrace.latencyMs ?? null,
+    selectedModelId: modelTrace.selectedModelId ?? null,
+    provider: modelTrace.provider ?? null,
+    model: modelTrace.model ?? null,
+    tokenUsage: modelTrace.tokenUsage ?? null,
+    latencyMs: modelTrace.latencyMs ?? null,
     fallbackReason: payload.fallbackReason ?? modelTrace.fallbackReason ?? null,
     modelErrorType: payload.modelErrorType ?? modelTrace.modelErrorType ?? null,
     conclusionSource: payload.conclusionSource ?? modelTrace.conclusionSource ?? null,

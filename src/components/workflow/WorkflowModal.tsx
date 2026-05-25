@@ -33,11 +33,11 @@ const WORKFLOW_STEPS: WorkflowStepDefinition[] = [
   {
     id: 'workflow-schema',
     kind: 'schema',
-    title: '读取数据源 Schema',
-    description: `通过 ${SCHEMA_TOOL_LABEL} 工具读取允许访问的表、字段和字段类型。`,
+    title: '读取数据源结构',
+    description: `通过 ${SCHEMA_TOOL_LABEL} 工具读取允许访问的数据对象和字段类型。`,
     status: 'ready',
     toolName: 'schema_inspect',
-    outputSummary: 'tables, columns, columnTypes',
+    outputSummary: '数据对象、字段、字段类型',
   },
   {
     id: 'workflow-tool-select',
@@ -133,7 +133,7 @@ function getWorkflowInputSummary(step: WorkflowStepDefinition): string {
   }
 
   if (step.kind === 'schema') {
-    return 'dataSourceId, allowedSchemas';
+    return '数据源访问范围';
   }
 
   if (step.kind === 'toolSelect') {

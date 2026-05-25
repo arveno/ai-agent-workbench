@@ -18,7 +18,6 @@ import { icons } from '../common/iconMap';
 import { HeaderCapabilityButton } from './HeaderCapabilityButton';
 
 const DEFAULT_HEADER_TITLE = '新聊天';
-const DATA_SOURCE_TABLES = 'teaching_metrics、knowledge_documents、knowledge_chunks';
 
 function getGenerationLabel(status: GenerationStatus): string {
   if (status === 'streaming') {
@@ -147,16 +146,15 @@ export function WorkbenchHeader() {
           icon={icons.database}
           label="数据源"
           tone="success"
-          title={`CloudBase MySQL 已作为主数据源接入；可用表：${DATA_SOURCE_TABLES}。用于数据分析、RAG 检索和报告生成。`}
+          title="服务端受控数据源已接入，用于数据分析、RAG 检索和报告生成。"
           ariaLabel="数据源：受控访问"
           tooltip={{
-            title: 'CloudBase MySQL 受控访问',
-            description: '数据读取通过 CloudBase HTTP Functions 和服务端工具执行，前端不保存数据库连接串。',
+            title: '服务端受控数据源',
+            description: '数据读取通过服务端白名单工具执行，前端不保存数据库连接串。',
             items: [
-              { label: 'CloudBase MySQL', status: '已连接', variant: 'success' },
-              { label: 'teaching_metrics', status: '已接入', variant: 'success' },
-              { label: 'knowledge_documents', status: '已接入', variant: 'success' },
-              { label: 'knowledge_chunks', status: '已接入', variant: 'success' },
+              { label: '教学质量数据域', status: '已接入', variant: 'success' },
+              { label: '知识检索数据域', status: '已接入', variant: 'success' },
+              { label: '报告来源链路', status: '已接入', variant: 'success' },
             ],
           }}
           onClick={openDataSourceModal}

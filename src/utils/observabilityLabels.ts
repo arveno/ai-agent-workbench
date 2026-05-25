@@ -17,7 +17,7 @@ const FALLBACK_REASON_LABELS: Record<string, string> = {
   auth_unavailable: '鉴权服务暂不可用。',
   cloudbase_unavailable: 'CloudBase 服务暂不可用。',
   data_empty: '数据源未返回可用于生成结论的结果。',
-  data_table_not_found: 'CloudBase MySQL 未找到教学指标表。',
+  data_table_not_found: '服务端教学质量数据源未返回指标结构。',
   data_tool_query_failed: '数据工具查询失败。',
   db_error: '持久化服务或数据库访问异常。',
   invalid_model: '所选模型不在可用模型白名单内。',
@@ -51,9 +51,9 @@ const MODEL_ERROR_LABELS: Record<string, string> = {
   model_forbidden: '模型访问被拒绝',
   model_not_configured: '模型未配置',
   model_timeout: '模型调用超时',
-  provider_bad_response: 'Provider 响应异常',
-  provider_error: 'Provider 调用异常',
-  rate_limited: 'Provider 限流',
+  provider_bad_response: '模型服务响应异常',
+  provider_error: '模型服务调用异常',
+  rate_limited: '模型服务限流',
 };
 
 function normalizeCode(value: string | null | undefined): string {

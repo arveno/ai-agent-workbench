@@ -10,18 +10,18 @@ import { DataSourceProviderCard } from './DataSourceProviderCard';
 const DATA_SOURCE_PROVIDERS: DataSourceProvider[] = [
   {
     id: 'mysql',
-    name: 'CloudBase MySQL',
-    description: '当前正式数据上下文，由 CloudBase HTTP Functions 受控访问。',
-    relationHint: 'Agent Run 的 teaching_metrics 数据工具和 knowledge_search 均读取 CloudBase MySQL。',
+    name: '教学质量数据源',
+    description: '当前正式数据上下文，由服务端受控工具访问。',
+    relationHint: 'Agent Run 的数据分析工具和知识检索均读取服务端受控数据源。',
     demoBadgeText: '当前主线数据源',
     status: 'connected',
     enabled: true,
     meta: {
-      connectionMode: 'CloudBase HTTP Functions',
-      database: 'CloudBase MySQL',
-      schemas: ['teaching_metrics', 'knowledge_documents', 'knowledge_chunks'],
+      connectionMode: '服务端受控访问',
+      database: '教学质量与知识库数据域',
+      schemas: ['教学质量指标', '知识库文档', '知识库片段'],
       tableCount: 3,
-      rowCountLabel: '由 CloudBase seed 与业务表提供',
+      rowCountLabel: '由业务 seed 与运行数据提供',
       updatedAt: undefined,
     },
   },
@@ -44,7 +44,7 @@ const DATA_SOURCE_TABS: DataSourceTabDefinition[] = [
   {
     id: 'connected',
     label: '当前主线',
-    description: '当前 CloudBase 主线已经接入的数据源。',
+    description: '当前主线已经接入的服务端受控数据源。',
   },
 ];
 
@@ -103,7 +103,7 @@ export function DataSourceModal() {
               查看 Agent 可用的数据上下文。当前不是完整数据源 CRUD，只展示服务端受控数据源，前端不保存数据库连接串。
             </p>
             <p className="datasource-modal-relation-note">
-              说明：数据分析、RAG 检索和报告生成都通过 CloudBase HTTP Functions 与服务端工具访问 CloudBase MySQL。
+              说明：数据分析、RAG 检索和报告生成都通过服务端白名单工具访问当前数据源。
             </p>
           </div>
           <Button
@@ -121,9 +121,9 @@ export function DataSourceModal() {
         <div className="datasource-modal-body">
           <Card className="datasource-modal-info-card" size="sm">
             <CardContent className="datasource-modal-info-content">
-              <p>当前主线使用 CloudBase MySQL，Agent Run 的数据分析和 RAG 检索均通过受控函数读取。</p>
+              <p>当前主线使用服务端受控数据源，Agent Run 的数据分析和 RAG 检索均通过受控函数读取。</p>
               <p>前端不保存数据库连接串，也不直接连接数据库。</p>
-              <p>模型只提出工具意图，实际查询由 CloudBase HTTP Functions、服务端白名单工具和权限校验控制。</p>
+              <p>模型只提出工具意图，实际查询由服务端白名单工具和权限校验控制。</p>
             </CardContent>
           </Card>
 

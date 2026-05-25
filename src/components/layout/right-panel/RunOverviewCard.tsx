@@ -70,9 +70,9 @@ function getModelTraceItems(modelTraceView: ModelTraceViewModel | null): RunOver
   }
 
   return [
-    { label: '模型 ID', value: modelTraceView.selectedModelIdLabel },
-    { label: '模型服务商', value: modelTraceView.providerLabel },
-    { label: '模型名称', value: modelTraceView.modelLabel },
+    { label: '模型入口', value: modelTraceView.selectedModelIdLabel },
+    { label: '模型边界', value: modelTraceView.providerLabel },
+    { label: '模型路径', value: modelTraceView.modelLabel },
     { label: '模型耗时', value: modelTraceView.latencyLabel },
     { label: 'Token 状态', value: modelTraceView.tokenUsageStatus },
     { label: '输入 Tokens', value: modelTraceView.promptTokensLabel },

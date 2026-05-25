@@ -6,9 +6,8 @@ import type {
 function createCloudBaseAgentDataSource(): RunDataSourceSnapshot {
   return {
     provider: 'cloudbase_mysql',
-    name: 'CloudBase MySQL / Agent Run',
-    typeLabel: 'CloudBase MySQL',
-    schema: 'public_demo',
+    name: '教学质量数据源',
+    typeLabel: '服务端受控数据源',
   };
 }
 
@@ -55,7 +54,7 @@ export function createAgentPendingRunStartedEvent(params: {
         },
         {
           id: 'read_schema',
-          title: '读取数据源 Schema',
+          title: '读取数据源结构',
           description: '等待 Planner 确认是否需要读取数据源结构。',
           status: 'pending',
         },

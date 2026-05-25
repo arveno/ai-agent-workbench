@@ -1,5 +1,6 @@
 import type {
   RunConclusionSource,
+  RunDataSourceSnapshot,
   RunEvent,
   RunIntent,
   RunMode,
@@ -17,6 +18,16 @@ import {
 } from './observabilityLabels';
 
 export type RunStatusTone = 'muted' | 'active' | 'success' | 'warning' | 'danger';
+
+export interface RunDataSourceViewModel {
+  name: string;
+  subtitle: string;
+  description: string;
+  metaItems: Array<{
+    label: string;
+    value: string;
+  }>;
+}
 
 export function getRunModeLabel(mode: RunMode): string {
   return mode === 'mock' ? '公开演示模式（Mock）' : '真实 Agent';
@@ -133,4 +144,44 @@ export function getRunTitle(run: RunSnapshot | null): string {
   }
 
   return run.mode === 'mock' ? 'Mock Run' : 'Agent Run';
+}
+
+function getDataSourceBusinessName(run: Pick<RunSnapshot, 'mode' | 'intent'>): string {
+  if (run.mode === 'mock') {
+    return '演示数据源';
+  }
+
+  if (run.intent === 'knowledge_qa') {
+    return '知识检索数据源';
+  }
+
+  return '教学质量数据源';
+}
+
+function getDataSourceSubtitle(run: Pick<RunSnapshot, 'mode'>): string {
+  return run.mode === 'mock' ? '本地演示数据' : '服务端受控数据源';
+}
+
+function getDataSourceScope(source: RunDataSourceSnapshot | undefined): string {
+  if (typeof source?.tableCount === 'number' && source.tableCount > 0) {
+    return `${source.tableCount} 个受控数据对象`;
+  }
+
+  return '服务端受控范围';
+}
+
+export function createRunDataSourceViewModel(
+  run: Pick<RunSnapshot, 'mode' | 'intent' | 'status' | 'dataSource'>,
+): RunDataSourceViewModel {
+  return {
+    name: getDataSourceBusinessName(run),
+    subtitle: getDataSourceSubtitle(run),
+    description: run.dataSource ? getDataSourceSubtitle(run) : '当前 Run 使用的数据源上下文',
+    metaItems: [
+      { label: '数据源名称', value: getDataSourceBusinessName(run) },
+      { label: '访问方式', value: getDataSourceSubtitle(run) },
+      { label: '访问范围', value: getDataSourceScope(run.dataSource) },
+      { label: 'Run 状态', value: getRunStatusLabel(run.status) },
+    ],
+  };
 }

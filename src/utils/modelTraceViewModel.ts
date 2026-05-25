@@ -15,8 +15,28 @@ export interface ModelTraceViewModel {
   conclusionSourceLabel: string;
 }
 
-function formatText(value: string | null | undefined): string {
-  return value?.trim() || '-';
+function getSelectedModelLabel(modelTrace: RunModelTrace): string {
+  if (modelTrace.selectedModelId === 'mock-agent' || modelTrace.conclusionSource === 'mock') {
+    return '演示模型';
+  }
+
+  return modelTrace.selectedModelId ? '真实模型' : '-';
+}
+
+function getProviderBoundaryLabel(modelTrace: RunModelTrace): string {
+  if (modelTrace.selectedModelId === 'mock-agent' || modelTrace.conclusionSource === 'mock') {
+    return '本地模拟';
+  }
+
+  return modelTrace.selectedModelId ? '服务端受控' : '-';
+}
+
+function getModelPathLabel(modelTrace: RunModelTrace): string {
+  if (modelTrace.selectedModelId === 'mock-agent' || modelTrace.conclusionSource === 'mock') {
+    return '公开演示路径';
+  }
+
+  return modelTrace.selectedModelId ? 'Model Gateway 白名单模型' : '-';
 }
 
 function formatNumber(value: number | null | undefined, suffix = ''): string {
@@ -46,7 +66,7 @@ function getTokenUsageStatus(
     return 'Fallback 不适用';
   }
 
-  return 'Provider 未返回';
+  return '模型服务未返回';
 }
 
 export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined): ModelTraceViewModel | null {
@@ -55,9 +75,9 @@ export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined)
   }
 
   return {
-    selectedModelIdLabel: formatText(modelTrace.selectedModelId),
-    providerLabel: formatText(modelTrace.provider),
-    modelLabel: formatText(modelTrace.model),
+    selectedModelIdLabel: getSelectedModelLabel(modelTrace),
+    providerLabel: getProviderBoundaryLabel(modelTrace),
+    modelLabel: getModelPathLabel(modelTrace),
     latencyLabel: formatNumber(modelTrace.latencyMs, 'ms'),
     promptTokensLabel: formatNumber(modelTrace.tokenUsage?.promptTokens),
     completionTokensLabel: formatNumber(modelTrace.tokenUsage?.completionTokens),

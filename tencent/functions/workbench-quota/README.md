@@ -76,13 +76,14 @@ Body:
 ```json
 {
   "action": "consume",
-  "runId": "optional-runtime-run-id",
+  "runId": "<canonical-agent-run-id>",
   "metadata": {}
 }
 ```
 
 Rules:
 
+- `runId` is required, must be a canonical Agent Run UUID, and must already exist in `agent_runs` for the current user.
 - `admin` users do not increase `quota_used`, but still create an `agent_run_usage` record.
 - `demo_user` users consume one quota when `quota_used < quota_limit`.
 - Tencent-24 uses a compare-and-set update with `count = "exact"`: update only succeeds when `quota_used` is still the value that was just read; compare failures are retried.
@@ -200,7 +201,7 @@ Online checks after deployment:
 ```bash
 curl -i https://<your-domain>/api/workbench/quota
 curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/workbench/quota
-curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"consume\",\"runId\":\"manual-test\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
+curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"consume\",\"runId\":\"<canonical-agent-run-id>\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
 curl -i -X POST -H "Authorization: Bearer <cloudbase-token>" -H "Content-Type: application/json" -d "{\"action\":\"finish\",\"usageId\":\"<usage-id>\",\"status\":\"completed\",\"metadata\":{\"source\":\"curl\"}}" https://<your-domain>/api/workbench/quota
 curl -i -H "Authorization: Bearer <cloudbase-token>" https://<your-domain>/api/workbench/quota
 ```
@@ -209,7 +210,7 @@ Expected result:
 
 - Without token: CloudBase gateway returns `401 MISSING_CREDENTIALS`.
 - Reading quota returns `ok: true` and `quota`.
-- Consuming quota returns `ok: true`, `usageId`, and updated quota.
+- Consuming quota with a canonical Agent Run ID owned by the current user returns `ok: true`, `usageId`, and updated quota.
 - Concurrent consumes should not move `quota_used` past `quota_limit`; compare failures retry or return `quota_consume_failed`.
 - Finishing usage returns `ok: true` and updated usage.
 - A later quota read shows `quotaUsed` changed for `demo_user`.
