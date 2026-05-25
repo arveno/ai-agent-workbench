@@ -2028,6 +2028,7 @@ function createRunSourcesFromSearchResult(searchResult, params) {
       documentId: chunk.documentId || undefined,
       chunkId: chunk.id || undefined,
       citationLabel,
+      sourceOrder: index + 1,
       title: normalizeSourceTitle(chunk.documentTitle),
       preview: chunk.contentPreview || '',
       score: typeof chunk.score === 'number' ? chunk.score : undefined,

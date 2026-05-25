@@ -41,28 +41,10 @@ function truncateSnippet(value: string): string {
   return `${normalizedValue.slice(0, 139)}…`;
 }
 
-function getMetadataString(metadata: Record<string, unknown> | undefined, key: string): string {
-  const value = metadata?.[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
-}
-
-function getMetadataBoolean(metadata: Record<string, unknown> | undefined, key: string): boolean {
-  return metadata?.[key] === true;
-}
-
 function sourceToView(source: RunSource, runMode: RunSnapshot['mode']): RagSourceView {
-  const legacySource = source as RunSource & {
-    documentTitle?: string;
-    contentPreview?: string;
-    sourceName?: string;
-    isMock?: boolean;
-  };
-  const title = source.title || legacySource.documentTitle || '未命名来源';
-  const preview = source.preview || legacySource.contentPreview || '';
-  const sourceName =
-    getMetadataString(source.metadata, 'sourceName') ||
-    legacySource.sourceName ||
-    (runMode === 'mock' ? '公开演示来源' : '教学评价制度示例知识库');
+  const title = source.title || '未命名来源';
+  const preview = source.preview || '';
+  const sourceName = runMode === 'mock' ? '公开演示来源' : '教学评价制度示例知识库';
 
   return {
     id: source.id,
@@ -72,7 +54,7 @@ function sourceToView(source: RunSource, runMode: RunSnapshot['mode']): RagSourc
     sourceName,
     scoreText: formatSourceScore(source.score),
     isUsedInAnswer: source.usedInAnswer === true,
-    isMock: runMode === 'mock' || legacySource.isMock === true || getMetadataBoolean(source.metadata, 'isMock'),
+    isMock: runMode === 'mock',
   };
 }
 

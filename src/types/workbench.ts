@@ -41,7 +41,7 @@ export type {
   RunToolStatus,
 } from './run';
 
-export type { RagSourceChunk, RunSource, RunSourceType } from './rag';
+export type { RunSource, RunSourceType } from './rag';
 
 export type {
   WorkbenchToolCategory,

@@ -292,14 +292,6 @@ function normalizeBoolean(value) {
   return value === true || value === 1 || value === '1';
 }
 
-function setOptionalString(target, key, value) {
-  const normalizedValue = toNullableString(value);
-
-  if (normalizedValue) {
-    target[key] = normalizedValue;
-  }
-}
-
 function mapRunSource(row) {
   const metadata = parseJsonObject(row.metadata);
   const sourceOrder = normalizeNumber(row.source_order);
@@ -313,6 +305,7 @@ function mapRunSource(row) {
     documentId: toNullableString(row.document_id) || undefined,
     chunkId: toNullableString(row.chunk_id) || undefined,
     citationLabel: toNullableString(row.citation_label) || undefined,
+    sourceOrder,
     title: String(row.title ?? ''),
     preview: String(row.preview ?? ''),
     score: normalizeNullableNumber(row.score) ?? undefined,
@@ -320,98 +313,20 @@ function mapRunSource(row) {
     usedInAnswer: normalizeBoolean(row.used_in_answer),
     noSourceReason: toNullableString(row.no_source_reason) || undefined,
     createdAt: normalizeDateTime(row.created_at),
-    metadata: {
-      ...metadata,
-      sourceOrder,
-    },
-  };
-}
-
-function normalizeReportSource(value) {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = toNullableString(value.id);
-  const runId = toNullableString(value.runId) || toNullableString(value.run_id);
-  const conversationId = toNullableString(value.conversationId) || toNullableString(value.conversation_id);
-  const title = toNullableString(value.title);
-  const preview = toNullableString(value.preview) || '';
-
-  if (!id) {
-    return null;
-  }
-
-  if (!runId) {
-    return null;
-  }
-
-  if (!conversationId) {
-    return null;
-  }
-
-  if (!title) {
-    return null;
-  }
-
-  const metadata = isRecord(value.metadata) ? { ...value.metadata } : {};
-  const sourceOrder = normalizeNullableNumber(value.sourceOrder ?? value.source_order ?? metadata.sourceOrder);
-
-  if (sourceOrder !== null) {
-    metadata.sourceOrder = sourceOrder;
-  }
-
-  const source = {
-    id,
-    runId,
-    conversationId,
-    title,
-    preview,
-    sourceType: normalizeSourceType(value.sourceType ?? value.source_type),
-    usedInAnswer: normalizeBoolean(value.usedInAnswer ?? value.used_in_answer),
-    createdAt: normalizeDateTime(value.createdAt ?? value.created_at),
     metadata,
   };
-
-  setOptionalString(source, 'toolInvocationId', value.toolInvocationId ?? value.tool_invocation_id);
-  setOptionalString(source, 'retrievalLogId', value.retrievalLogId ?? value.retrieval_log_id);
-  setOptionalString(source, 'documentId', value.documentId ?? value.document_id);
-  setOptionalString(source, 'chunkId', value.chunkId ?? value.chunk_id);
-  setOptionalString(source, 'citationLabel', value.citationLabel ?? value.citation_label);
-  setOptionalString(source, 'noSourceReason', value.noSourceReason ?? value.no_source_reason);
-
-  const score = normalizeNullableNumber(value.score);
-
-  if (score !== null) {
-    source.score = score;
-  }
-
-  return source;
 }
 
-function readReportSourcesFromMetadata(metadata) {
-  if (!Object.prototype.hasOwnProperty.call(metadata, 'sources')) {
-    return null;
-  }
-
-  if (!Array.isArray(metadata.sources)) {
-    return [];
-  }
-
-  return metadata.sources.map(normalizeReportSource).filter((source) => source !== null);
-}
-
-function createReportMetadata(metadata, sourceSnapshot) {
+function createReportMetadata(metadata) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
 
-  const reportSources = Array.isArray(sourceSnapshot?.sources) ? sourceSnapshot.sources : [];
-  nextMetadata.sources = reportSources;
-  nextMetadata.sourceCount = reportSources.length;
-  nextMetadata.sourceLineage = 'run_sources';
-
-  if (sourceSnapshot?.noSourceReason) {
-    nextMetadata.sourceNoSourceReason = sourceSnapshot.noSourceReason;
-  }
+  delete nextMetadata.sources;
+  delete nextMetadata.sourceCount;
+  delete nextMetadata.source_count;
+  delete nextMetadata.sourceLineage;
+  delete nextMetadata.source_lineage;
+  delete nextMetadata.sourceNoSourceReason;
+  delete nextMetadata.source_no_source_reason;
 
   return nextMetadata;
 }
@@ -447,9 +362,11 @@ function mapReport(row) {
     version: normalizeNumber(row.version),
     created_at: normalizeDateTime(row.created_at),
     updated_at: normalizeDateTime(row.updated_at),
-    metadata: parseJsonObject(row.metadata),
+    metadata: createReportMetadata(parseJsonObject(row.metadata)),
     sources: [],
     sourceCount: 0,
+    sourceLineage: 'run_sources',
+    sourceNoSourceReason: null,
   };
 }
 
@@ -546,16 +463,6 @@ async function readRunSourceSnapshot(db, currentUser, conversationId, runId) {
 }
 
 async function hydrateReportSources(db, currentUser, report) {
-  const metadataSources = readReportSourcesFromMetadata(report.metadata);
-
-  if (metadataSources !== null) {
-    return {
-      ...report,
-      sources: metadataSources,
-      sourceCount: metadataSources.length,
-    };
-  }
-
   const runId = toUuidOrNull(report.run_id);
 
   if (!runId) {
@@ -563,6 +470,8 @@ async function hydrateReportSources(db, currentUser, report) {
       ...report,
       sources: [],
       sourceCount: 0,
+      sourceLineage: 'run_sources',
+      sourceNoSourceReason: 'missing_run_id',
     };
   }
 
@@ -572,6 +481,8 @@ async function hydrateReportSources(db, currentUser, report) {
     ...report,
     sources: sourceSnapshot.sources,
     sourceCount: sourceSnapshot.sources.length,
+    sourceLineage: 'run_sources',
+    sourceNoSourceReason: sourceSnapshot.noSourceReason,
   };
 }
 
@@ -698,8 +609,7 @@ async function createReport(currentUser, body) {
   const reportId = randomUUID();
   const requestMetadata = readMetadata(body.metadata);
   const runId = readRequiredRunId(body.runId);
-  const sourceSnapshot = await readRunSourceSnapshot(db, currentUser, conversationId, runId);
-  const metadata = createReportMetadata(requestMetadata, sourceSnapshot);
+  const metadata = createReportMetadata(requestMetadata);
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,

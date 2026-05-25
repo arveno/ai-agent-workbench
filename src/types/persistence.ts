@@ -226,6 +226,8 @@ export interface ReportArtifactRecord {
   metadata: JsonObject;
   sources?: RunSource[];
   sourceCount?: number;
+  sourceLineage?: string;
+  sourceNoSourceReason?: string | null;
 }
 
 export type KnowledgeVisibility = 'private' | 'demo' | 'system';
@@ -272,30 +274,6 @@ export interface KnowledgeChunkRecord {
   created_at: string;
 }
 
-export interface RagSourceCitationRecord {
-  citationId: string;
-  chunkId: string;
-  documentId: string;
-  sourceId: string;
-  title: string;
-  sourceName: string;
-  content: string;
-  score: number;
-}
-
-export interface RagRetrievalLogRecord {
-  id: string;
-  run_id: string | null;
-  conversation_id: string;
-  user_id: string;
-  query: string;
-  top_k: number;
-  results: RagSourceCitationRecord[];
-  latency_ms: number | null;
-  created_at: string;
-  metadata: JsonObject;
-}
-
 export interface LatestRunResult {
   run: AgentRunRecord | null;
 }
@@ -306,14 +284,6 @@ export interface RunEventListResult {
 
 export interface ToolInvocationListResult {
   tools: ToolInvocationRecord[];
-}
-
-export interface RunSourceListResult {
-  sources: RunSourceRecord[];
-}
-
-export interface RagRetrievalLogListResult {
-  retrievals: RagRetrievalLogRecord[];
 }
 
 export interface ReportArtifactListResult {

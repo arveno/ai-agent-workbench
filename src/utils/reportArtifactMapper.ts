@@ -13,16 +13,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function getStringField(record: Record<string, unknown>, ...keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim();
-    }
-  }
-
-  return undefined;
+function getStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 function getNumberField(record: Record<string, unknown>, key: string): number | undefined {
@@ -46,15 +39,12 @@ function normalizeReportSource(value: unknown): RunSource | null {
   }
 
   const id = getStringField(value, 'id');
-  const runId = getStringField(value, 'runId', 'run_id');
-  const conversationId = getStringField(value, 'conversationId', 'conversation_id');
+  const runId = getStringField(value, 'runId');
+  const conversationId = getStringField(value, 'conversationId');
   const title = getStringField(value, 'title');
   const preview = getStringField(value, 'preview') ?? '';
   const metadata = isRecord(value.metadata) ? value.metadata : {};
-  const sourceOrder =
-    getNumberField(value, 'sourceOrder') ??
-    getNumberField(value, 'source_order') ??
-    getNumberField(metadata, 'sourceOrder');
+  const sourceOrder = getNumberField(value, 'sourceOrder') ?? 0;
 
   if (!id) {
     return null;
@@ -76,19 +66,19 @@ function normalizeReportSource(value: unknown): RunSource | null {
     id,
     runId,
     conversationId,
-    toolInvocationId: getStringField(value, 'toolInvocationId', 'tool_invocation_id'),
-    retrievalLogId: getStringField(value, 'retrievalLogId', 'retrieval_log_id'),
-    documentId: getStringField(value, 'documentId', 'document_id'),
-    chunkId: getStringField(value, 'chunkId', 'chunk_id'),
-    citationLabel: getStringField(value, 'citationLabel', 'citation_label'),
+    toolInvocationId: getStringField(value, 'toolInvocationId'),
+    retrievalLogId: getStringField(value, 'retrievalLogId'),
+    documentId: getStringField(value, 'documentId'),
+    chunkId: getStringField(value, 'chunkId'),
+    citationLabel: getStringField(value, 'citationLabel'),
     sourceOrder,
     title,
     preview,
     score: getNumberField(value, 'score'),
-    sourceType: normalizeSourceType(value.sourceType ?? value.source_type),
-    usedInAnswer: normalizeBoolean(value.usedInAnswer ?? value.used_in_answer),
-    noSourceReason: getStringField(value, 'noSourceReason', 'no_source_reason'),
-    createdAt: getStringField(value, 'createdAt', 'created_at') ?? '',
+    sourceType: normalizeSourceType(value.sourceType),
+    usedInAnswer: normalizeBoolean(value.usedInAnswer),
+    noSourceReason: getStringField(value, 'noSourceReason'),
+    createdAt: getStringField(value, 'createdAt') ?? '',
     metadata,
   };
 
@@ -96,23 +86,17 @@ function normalizeReportSource(value: unknown): RunSource | null {
 }
 
 function readReportSources(record: ReportArtifactRecord): RunSource[] {
-  if (Array.isArray(record.sources)) {
-    return record.sources
-      .map((source) => normalizeReportSource(source))
-      .filter((source): source is RunSource => source !== null);
+  if (!Array.isArray(record.sources)) {
+    return [];
   }
 
-  if (Array.isArray(record.metadata.sources)) {
-    return record.metadata.sources
-      .map((source) => normalizeReportSource(source))
-      .filter((source): source is RunSource => source !== null);
-  }
-
-  return [];
+  return record.sources
+    .map((source) => normalizeReportSource(source))
+    .filter((source): source is RunSource => source !== null);
 }
 
 function readReportSourceCount(record: ReportArtifactRecord, sources: RunSource[]): number {
-  const sourceCount = Number(record.sourceCount ?? record.metadata.sourceCount);
+  const sourceCount = Number(record.sourceCount);
   return Number.isFinite(sourceCount) ? sourceCount : sources.length;
 }
 

@@ -9,7 +9,7 @@ export interface RunSource {
   documentId?: string;
   chunkId?: string;
   citationLabel?: string;
-  sourceOrder?: number;
+  sourceOrder: number;
   title: string;
   preview: string;
   score?: number;
@@ -18,13 +18,4 @@ export interface RunSource {
   noSourceReason?: string;
   createdAt: string;
   metadata?: Record<string, unknown>;
-}
-
-export interface RagSourceChunk extends RunSource {
-  documentTitle?: string;
-  chunkTitle?: string;
-  contentPreview?: string;
-  sourceName?: string;
-  isMock?: boolean;
-  updatedAt?: string;
 }

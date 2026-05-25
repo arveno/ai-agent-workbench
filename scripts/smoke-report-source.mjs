@@ -243,34 +243,27 @@ function getReportRunId(report) {
   return report?.runId || report?.run_id || '';
 }
 
-function getReportMetadata(report) {
-  return report && typeof report.metadata === 'object' && report.metadata !== null ? report.metadata : {};
-}
-
 function getReportSources(report) {
-  const metadata = getReportMetadata(report);
-
   if (Array.isArray(report?.sources)) {
     return report.sources;
-  }
-
-  if (Array.isArray(metadata.sources)) {
-    return metadata.sources;
   }
 
   return [];
 }
 
 function getReportSourceCount(report) {
-  const metadata = getReportMetadata(report);
-  const count = Number(report?.sourceCount ?? report?.source_count ?? metadata.sourceCount ?? metadata.source_count);
+  const count = Number(report?.sourceCount ?? report?.source_count);
 
   return Number.isFinite(count) ? count : getReportSources(report).length;
 }
 
 function getReportSourceLineage(report) {
-  const metadata = getReportMetadata(report);
-  return report?.sourceLineage || report?.source_lineage || metadata.sourceLineage || metadata.source_lineage || '';
+  return report?.sourceLineage || report?.source_lineage || '';
+}
+
+function hasReportMetadataField(report, fieldName) {
+  const metadata = report && typeof report.metadata === 'object' && report.metadata !== null ? report.metadata : {};
+  return Object.prototype.hasOwnProperty.call(metadata, fieldName);
 }
 
 function extractReports(payload) {
@@ -684,10 +677,28 @@ function validateReport(step, report, expectedRunId) {
     });
   }
 
+  if (sourceCount !== sources.length) {
+    throw createSmokeError(step, {
+      errorCode: 'report_source_count_mismatch',
+      responseSummary: `Expected sourceCount=${sources.length}, got ${sourceCount}.`,
+    });
+  }
+
   if (sourceLineage !== 'run_sources') {
     throw createSmokeError(step, {
       errorCode: 'invalid_source_lineage',
       responseSummary: `Expected sourceLineage=run_sources, got ${sourceLineage || '<empty>'}.`,
+    });
+  }
+
+  if (
+    hasReportMetadataField(report, 'sources') ||
+    hasReportMetadataField(report, 'sourceCount') ||
+    hasReportMetadataField(report, 'source_count')
+  ) {
+    throw createSmokeError(step, {
+      errorCode: 'metadata_report_sources_present',
+      responseSummary: 'Report metadata must not contain sources/sourceCount. Use top-level report sources fields only.',
     });
   }
 
@@ -697,6 +708,8 @@ function validateReport(step, report, expectedRunId) {
     sources,
     sourceCount,
     sourceLineage,
+    metadataHasSources: false,
+    metadataHasSourceCount: false,
   };
 }
 
@@ -718,6 +731,10 @@ function printSuccess(debug, reportState) {
   console.log(`assistantMessageId: ${debug.assistantMessageId || ''}`);
   console.log(`reportId: ${debug.reportId}`);
   console.log(`sourceCount: ${reportState.sourceCount}`);
+  console.log(`sourcesLength: ${reportState.sources.length}`);
+  console.log(`sourceLineage: ${reportState.sourceLineage}`);
+  console.log(`metadataHasSources: ${reportState.metadataHasSources ? 'true' : 'false'}`);
+  console.log(`metadataHasSourceCount: ${reportState.metadataHasSourceCount ? 'true' : 'false'}`);
   console.log(`reuseVerified: ${debug.reuseVerified ? 'true' : 'false'}`);
   console.log('firstSources:');
 

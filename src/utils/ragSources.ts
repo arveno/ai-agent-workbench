@@ -10,6 +10,7 @@ export function createMockRagSources(): RunSource[] {
       documentId: 'mock_doc_1',
       chunkId: 'mock_source_1',
       citationLabel: '[S1]',
+      sourceOrder: 1,
       title: '《教学质量异常指标判定规则》',
       preview: '当平均分、出勤率、作业完成率或异常次数偏离月度基线时，应优先结合学科和班级维度定位异常来源。',
       score: 0.92,
@@ -17,10 +18,7 @@ export function createMockRagSources(): RunSource[] {
       sourceType: 'knowledge',
       createdAt: '2026-05-01',
       metadata: {
-        sourceName: '公开演示规则库',
-        chunkTitle: '异常指标识别口径',
-        isMock: true,
-        updatedAt: '2026-05-01',
+        provider: 'mock_knowledge_search',
       },
     },
     {
@@ -30,6 +28,7 @@ export function createMockRagSources(): RunSource[] {
       documentId: 'mock_doc_2',
       chunkId: 'mock_source_2',
       citationLabel: '[S2]',
+      sourceOrder: 2,
       title: '《月度成绩波动分析口径》',
       preview: '月度成绩波动需要结合历史均值、同学科分布和年级差异判断，避免只依据单个指标下结论。',
       score: 0.87,
@@ -37,10 +36,7 @@ export function createMockRagSources(): RunSource[] {
       sourceType: 'knowledge',
       createdAt: '2026-04-28',
       metadata: {
-        sourceName: '公开演示规则库',
-        chunkTitle: '成绩波动解释规则',
-        isMock: true,
-        updatedAt: '2026-04-28',
+        provider: 'mock_knowledge_search',
       },
     },
     {
@@ -50,6 +46,7 @@ export function createMockRagSources(): RunSource[] {
       documentId: 'mock_doc_3',
       chunkId: 'mock_source_3',
       citationLabel: '[S3]',
+      sourceOrder: 3,
       title: '《出勤率与成绩关联分析说明》',
       preview: '出勤率下降可能与阶段性成绩波动相关，但应结合班级、学科和作业完成率进一步交叉验证。',
       score: 0.78,
@@ -57,10 +54,7 @@ export function createMockRagSources(): RunSource[] {
       sourceType: 'knowledge',
       createdAt: '2026-04-20',
       metadata: {
-        sourceName: '公开演示规则库',
-        chunkTitle: '出勤率辅助判断',
-        isMock: true,
-        updatedAt: '2026-04-20',
+        provider: 'mock_knowledge_search',
       },
     },
   ];

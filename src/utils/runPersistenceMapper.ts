@@ -107,10 +107,6 @@ function mapSourceType(value: string): RunSourceType {
     return value;
   }
 
-  if (value === 'knowledge_base' || value === 'document' || value === 'database_note' || value === 'policy') {
-    return 'knowledge';
-  }
-
   return 'knowledge';
 }
 
@@ -229,6 +225,7 @@ function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
     documentId: toOptionalString(record.document_id),
     chunkId: toOptionalString(record.chunk_id),
     citationLabel: toOptionalString(record.citation_label),
+    sourceOrder: record.source_order,
     title: record.title,
     preview: record.preview,
     score: record.score ?? undefined,
