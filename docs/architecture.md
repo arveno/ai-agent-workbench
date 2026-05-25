@@ -14,17 +14,29 @@ EdgeOne / Vite
   -> CloudBase MySQL
 ```
 
-当前模型链路：
+长期模型链路：
 
 ```text
 selectedModelId
   -> model catalog
-  -> _shared/modelGateway.js
+  -> LangChain model layer
   -> provider client
   -> modelTrace / tokenUsage / latency / fallbackReason
 ```
 
 前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
+
+长期 Agent Runtime 链路：
+
+```text
+CloudBase HTTP Function
+  -> LangGraph graph runtime
+  -> LangChain Model / Tool / Retriever
+  -> LangSmith Trace / Evaluation
+  -> CloudBase MySQL persistence
+```
+
+当前自研 imperative runtime 和 `_shared/modelGateway.js` 只作为待替换旧链路，不作为长期终态。后续重构必须单轨替换，不允许在旧 runtime 旁新增 LangChain 旁路包装层。
 
 ## 2. 核心执行链路
 
@@ -32,9 +44,9 @@ selectedModelId
 User Input
   -> Conversation / Message
   -> Agent Run
-  -> Tool Invocation
-  -> Model Gateway
-  -> Run Trace
+  -> LangGraph state / node / edge / checkpoint / stream event
+  -> LangChain Tool / Retriever / Model
+  -> LangSmith Trace
   -> Response
   -> Report / Source
   -> Persistence
@@ -149,16 +161,15 @@ Agent Run SSE 主链路：
 Auth
 Quota
 Conversation / Message
-Intent / Capability
-Tool Chain
-Model Gateway
+LangGraph Runtime
+LangChain Tool / Retriever / Model
 Conclusion
 Report Pending
 Run Persistence
 SSE Events
 ```
 
-该函数承担服务端安全边界、模型调用、工具调用、RAG、报告状态和 SSE 编排。工具定义、参数边界和 Tool Invocation 必须遵守 `docs/tool-governance.md`。
+该函数承担服务端安全边界、Run 创建、SSE 输出和持久化边界。长期终态下，Agent 编排必须进入 LangGraph；模型、工具和 RAG 能力必须进入 LangChain。当前函数内手写 planner / tool chain / RAG / model streaming 属于待替换旧链路。
 
 ## 6. 共享后端模块
 
@@ -172,7 +183,7 @@ SSE Events
 
 ### `_shared/modelGateway.js`
 
-共享模型网关：
+当前共享模型网关是旧链路：
 
 ```text
 selectedModelId
@@ -183,6 +194,8 @@ selectedModelId
   -> request
   -> tokenUsage / latency / fallbackReason
 ```
+
+长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。后续不得继续扩展 `_shared/modelGateway.js` 为新的模型平台。
 
 ## 7. 核心对象关系
 
@@ -205,6 +218,8 @@ Conversation
 ## 8. Run Trace
 
 Run Trace 是执行过程视图，不是 raw JSON dump 面板。
+
+长期 Trace / Evaluation / Observability 语义必须向 LangSmith 对齐。项目可以保留自己的 UI 展示，但不能在 LangSmith 不可用时伪装真实 trace。
 
 默认展示：
 

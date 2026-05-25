@@ -20,6 +20,11 @@
 
 - 默认单轨实现，不新增兼容链。
 - 不保留新旧链路并存。
+- LangGraph 是长期 Agent Runtime / Graph 编排核心。
+- LangChain 是长期 Model / Tool / RAG 能力层。
+- LangSmith 是长期 Trace / Evaluation / Observability 标准平台。
+- 当前自研 imperative Agent Runtime 只作为待替换旧链路，不作为长期终态。
+- 后续不得在旧 runtime 旁新增 LangChain 包装层或旁路执行链。
 - 不做无关重构。
 - 不新增无关依赖。
 - 代码优先简洁、直接、易读，优先保证阅读路径连贯，不为拆而拆。
@@ -86,12 +91,12 @@ component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 
 - 同源数据只能标准化一次。
 - 不允许多个组件各自 formatter / parse / clean 同一份数据。
 
-## 6. Model Gateway
+## 6. Model / Tool / RAG 终态
 
-模型调用必须走：
+长期终态模型调用必须走：
 
 ```text
-selectedModelId -> model catalog -> _shared/modelGateway.js -> provider client
+selectedModelId -> model catalog -> LangChain model layer -> provider client
 ```
 
 要求：
@@ -99,14 +104,17 @@ selectedModelId -> model catalog -> _shared/modelGateway.js -> provider client
 - 前端只传 `selectedModelId`。
 - 前端不得出现模型 API Key、baseURL、provider 密钥配置。
 - 后端通过 catalog 白名单解析 provider / model / apiKeyEnv。
-- 真实模型调用统一走 `_shared/modelGateway.js`。
+- 模型调用、工具定义和 RAG 能力向 LangChain Model / Tool / Retriever 收敛。
+- 当前 `_shared/modelGateway.js` 属于待替换旧链路，不得扩展成新的长期平台。
 
 禁止：
 
 - 恢复 Groq runtime。
 - 恢复 `modelProvider: 'groq'`。
 - 恢复前端 provider / model 透传链路。
-- 绕过 modelGateway 直接调用模型。
+- 绕过 catalog 和 LangChain 能力层直接调用模型。
+- 在旧 runtime 旁边新增 LangChain wrapper / adapter 旁路。
+- 为兼容旧代码保留 old/new 双轨字段或 fallback 链。
 
 ## 7. Mock / Real / Fallback
 

@@ -63,6 +63,7 @@ Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset
 - Source / RAG lineage：`docs/source-lineage.md`
 - Tool Governance：`docs/tool-governance.md`
 - CloudBase 部署：`docs/cloudbase-functions-deploy.md`
+- LangGraph / LangChain / LangSmith 终态职责：`docs/architecture.md`
 - Codex 执行规则：`AGENTS.md`
 - PR 审核清单：`.github/pull_request_template.md`
 - 自动门禁：`.github/workflows/ci.yml` 和 main ruleset
@@ -88,6 +89,8 @@ Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset
 - 不把多个阶段混进一次执行。
 - 不用局部页面需求覆盖长期契约。
 - 不绕过 Issue / PR 边界直接改 main。
+- 涉及 Agent Runtime、Model、Tool、RAG、Trace 或 Evaluation 的任务必须遵守 LangGraph / LangChain / LangSmith 终态职责。
+- 不在旧 runtime 旁新增 LangChain 旁路包装层，不保留 old/new 双轨执行。
 
 ## 4. 变更门禁
 
@@ -159,6 +162,8 @@ Review / 辅助验收时必须检查：
 - 是否破坏 `docs/architecture.md` 定义的数据分层。
 - 是否新增多轨实现。
 - 是否新增 fallback 或让 fallback 伪装成真实结果。
+- 是否违背 LangGraph / LangChain / LangSmith 终态职责。
+- 是否在旧 runtime 旁新增 LangChain wrapper / adapter 旁路。
 - 是否新增重复字段、重复状态、重复 formatter、重复 parser。
 - 是否让 component 消费 raw payload。
 - 是否保留旧链路残留。

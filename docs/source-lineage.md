@@ -17,6 +17,8 @@
 
 目标是让 Chat、Run Trace、Source Panel、Report、Evaluation 消费同一份标准化 Source model。
 
+长期终态下，RAG 能力必须向 LangChain Retriever / Document / metadata / citation 链路收敛，并由 LangGraph runtime 调度。当前自研检索和打分逻辑只作为待替换旧链路，不得在其旁边新增 LangChain RAG 旁路。
+
 ## 2. 主事实源
 
 `retrieval_logs` / `run_sources` 是 Source Lineage 主事实源。
@@ -61,6 +63,8 @@ type RetrievalLog = {
 ```
 
 `RunSource` 表达来源片段，`RetrievalLog` 表达检索行为。两者都必须回到 canonical `runId = agent_runs.id`。
+
+LangChain `Document` 的 `pageContent`、`metadata`、score 和 citation 信息必须标准化为 `RunSource` / `RetrievalLog`。LangChain document id、retriever run id 或 LangSmith trace id 都不能替代 canonical `runId`、`toolInvocationId`、`sourceId` 或 `retrievalId`。
 
 ## 4. `retrieval_logs` 字段
 
@@ -149,6 +153,7 @@ run_sources.chunk_id -> knowledge_chunks.id
 ```text
 knowledge_search
   -> tool_invocations
+  -> LangChain Retriever / Document
   -> retrieval_logs
   -> run_sources
   -> mapper
@@ -160,6 +165,7 @@ knowledge_search
 要求：
 
 - 同一轮 `knowledge_search` 的来源数据只能标准化一次。
+- LangChain Document 只能在 mapper / lineage 边界标准化，component 不得直接读取 raw metadata。
 - Chat、Run Trace、Report、Evaluation 不各自解析 raw tool output。
 - 无来源时必须保留明确空态或 `noSourceReason`。
 - 旧 run 没有 `run_sources` 时，不得从 raw event 假装完整 lineage。
