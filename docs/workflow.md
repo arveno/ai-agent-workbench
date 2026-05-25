@@ -11,15 +11,16 @@
 - 执行需要人工完成的命令、验证和提交。
 - 对最终方案做决策。
 
-### ChatGPT
+### ChatGPT（可选辅助）
 
-ChatGPT 负责判断、拆解和验收：
+ChatGPT 可辅助判断、拆解、解释和复盘：
 
 - 判断需求价值、当前阶段和依赖顺序。
 - 按 `docs/agent-run-lifecycle.md` 做生命周期归位。
 - 判断涉及的核心对象、ID、Source、Tool、部署或数据库边界。
-- 拆解任务并生成 Codex 执行指令。
-- 验收 Codex 输出、diff、验证结果和残留风险。
+- 辅助整理 Issue、Codex 指令、PR 风险和验收意见。
+
+ChatGPT 不是稳定流程的必需控制点。流程控制由 Issue、PR、CI、main ruleset 和仓库事实源完成。
 
 ### Codex
 
@@ -27,21 +28,31 @@ Codex 负责执行：
 
 - 在明确边界内修改文件。
 - 遵守 `AGENTS.md` 和相关事实源文档。
+- 执行前读取关联 Issue。
+- 只能按 Issue 的目标、修改范围、明确不做和验收标准执行。
 - 不自动提交。
 - 输出修改文件、diff、验证结果和残留问题。
 
 ### Git / GitHub
 
-Git 负责版本记录，GitHub 负责远程同步。提交和 push 由用户手动执行。
+Git 负责版本记录。GitHub 负责 Issue、PR、CI、Review 和 main ruleset 门禁。
+
+- Issue 是任务事实源。
+- PR 是变更容器和审查入口。
+- CI 的 Lint and Build 是基础质量门禁。
+- main 分支受 ruleset 保护，必须通过 PR 且 CI 通过后才能合并。
 
 ## 2. 事实源与任务边界
 
 - 文档是长期事实源。
-- prompt 是当前任务边界。
-- 对话用于讨论、拆解和验收，不能覆盖已冻结文档。
-- Codex 只能在 prompt 允许范围内执行。
+- Issue 是当前任务事实源。
+- prompt 只能补充执行上下文，不能覆盖 Issue 或已冻结文档。
+- 对话用于讨论、解释和复盘，不能成为流程稳定性的依赖。
+- Codex 只能在 Issue 和 prompt 共同允许的范围内执行。
 
 如果 prompt 与仓库文档冲突，停止执行并报告冲突。需要改变长期规则时，先更新对应事实源文档，再按新事实源执行代码任务。
+
+没有 Issue，不进入 Codex 执行。Codex 无法读取关联 Issue 时，必须停止，不允许修改文件。需要超出 Issue 范围时，必须停止并说明原因。
 
 事实源分工：
 
@@ -52,29 +63,30 @@ Git 负责版本记录，GitHub 负责远程同步。提交和 push 由用户手
 - Tool Governance：`docs/tool-governance.md`
 - CloudBase 部署：`docs/cloudbase-functions-deploy.md`
 - Codex 执行规则：`AGENTS.md`
+- PR 审核清单：`.github/pull_request_template.md`
+- 自动门禁：`.github/workflows/ci.yml` 和 main ruleset
 
-## 3. 默认协作流程
+## 3. 默认 GitHub-native 流程
 
 ```text
-用户描述需求 / 问题
-  -> ChatGPT 判断阶段、价值和依赖
-  -> ChatGPT 做生命周期归位和对象绑定判断
-  -> 必要时安排 Codex 只读审查
-  -> ChatGPT 明确任务边界、允许范围、禁止范围和验收方式
-  -> Codex 小步执行
-  -> Codex 输出 diff、验证结果和残留风险
-  -> ChatGPT 验收
-  -> 必要时返工
-  -> 用户手动提交
+生命周期文档 / 当前主线确认任务方向
+  -> Issue 定义目标、范围、明确不做和验收标准
+  -> Codex 读取关联 Issue 和必要事实源
+  -> Codex 在 Issue 边界内小步执行
+  -> PR 关联 Issue 并按 PR Template 自检
+  -> CI 执行 Lint and Build
+  -> Review 检查 diff、验证结果和风险
+  -> main ruleset 要求 PR + CI 通过后合并
 ```
 
 原则：
 
-- 不跳过需求判断。
+- 不跳过 Issue。
 - 不跳过生命周期归位。
 - 不把不确定问题交给 Codex 自由决定。
 - 不把多个阶段混进一次执行。
 - 不用局部页面需求覆盖长期契约。
+- 不绕过 Issue / PR 边界直接改 main。
 
 ## 4. 变更门禁
 
@@ -121,6 +133,7 @@ Codex 指令应包含：
 ```text
 任务目标
 项目路径
+关联 Issue
 允许修改范围
 禁止修改范围
 参考事实源
@@ -129,13 +142,16 @@ Codex 指令应包含：
 不自动提交
 ```
 
+正式执行必须有可读取的关联 Issue。Issue 读取失败时，Codex 必须停止，不允许修改文件。
+
 涉及长期契约的任务必须指定对应文档。未指定时，Codex 应根据任务内容主动读取相关事实源。
 
 ## 7. 阶段验收
 
-ChatGPT 验收时必须检查：
+Review / 辅助验收时必须检查：
 
 - 是否符合任务目标和 prompt 边界。
+- 是否符合关联 Issue 的目标、范围、明确不做和验收标准。
 - 是否修改了禁止修改的文件。
 - 是否违反事实源文档。
 - 是否新增依赖、修改 runtime 或修改 `pnpm-lock.yaml`。
@@ -146,7 +162,9 @@ ChatGPT 验收时必须检查：
 - 是否让 component 消费 raw payload。
 - 是否保留旧链路残留。
 - lint / build / smoke 是否按任务要求执行并通过。
-- 是否可以进入用户手动提交。
+- PR 是否关联 Issue 并按 PR Template 自检。
+- CI Lint and Build 是否通过。
+- 是否可以进入 Review / Merge。
 
 ## 8. 用户贴回内容
 
@@ -165,11 +183,13 @@ ChatGPT 验收时必须检查：
 
 ## 9. 提交规则
 
-- 提交由用户手动执行。
-- 一个阶段或一个小闭环对应一次提交。
+- 变更通过分支和 PR 承载，不直接改 main。
+- PR 必须关联 Issue。
+- 一个阶段或一个小闭环对应一次 PR / 提交。
 - 不混入无关文件。
 - 提交前先看 `git diff --stat` 和 `git status --short`。
 - 工作区已有未提交代码时，只能显式 `git add` 本阶段文件，不能 `git add .`。
+- main ruleset 要求 PR 和 CI Lint and Build 通过后才能合并。
 
 提交信息使用中文 Conventional Commits：
 
