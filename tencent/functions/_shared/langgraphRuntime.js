@@ -86,7 +86,8 @@ function createInitialAgentRunState(input) {
       langGraphThreadId: readOptionalString(input?.langGraphThreadId) || `agent-run:${runId}`,
       langGraphCheckpointId: null,
       langGraphNodeId: null,
-      langSmithTraceId: null,
+      langSmithTraceId: readOptionalString(input?.langSmithTraceId),
+      langSmithRunId: readOptionalString(input?.langSmithRunId),
     },
     responseText: '',
     conclusionSource: 'none',
@@ -150,7 +151,7 @@ function describeLangGraphRuntimeBoundary() {
       'Frontend continues to consume canonical SSE / Run Trace events only.',
       'Formal Tool calls run through LangChain Structured Tool definitions and keep tool_invocations as the source of truth.',
       'knowledge_search runs through a LangChain Retriever / Document boundary and keeps retrieval_logs / run_sources as the source of truth.',
-      'LangSmith integration remains a separate follow-up issue.',
+      'LangSmith trace / run ids stay in externalIds / metadata and never replace canonical runId.',
     ],
     deleteLater: [
       'Old hand-written Agent Run entry orchestration after LangGraph owns the main entry.',

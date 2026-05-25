@@ -118,6 +118,13 @@ const {
   NODE_PROCESSING,
   runLangGraphAgentRuntime,
 } = loadSharedModule('langgraphRuntime');
+const {
+  completeLangSmithTrace,
+  createLangSmithTraceState,
+  failLangSmithTrace,
+  startLangSmithTrace,
+  toPublicLangSmithTrace,
+} = loadSharedModule('langsmithObservability');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -614,11 +621,18 @@ async function finishUsage(db, currentUser, usageId, status, errorCode, metadata
 }
 
 function createAgentRunMetadata(context, extra = {}) {
+  const langSmithTrace = toPublicLangSmithTrace(context.langSmithTrace);
+
   return {
     source: 'cloudbase-agent-run-real',
     runtime: context.langGraphRuntime || LANGGRAPH_RUNTIME_VERSION,
     langGraphThreadId: context.langGraphThreadId || null,
     langGraphCheckpointId: context.langGraphFinalState?.externalIds?.langGraphCheckpointId || null,
+    langSmithTraceId: langSmithTrace.traceId,
+    langSmithRunId: langSmithTrace.runId,
+    langSmithTraceStatus: langSmithTrace.status,
+    langSmithProjectName: langSmithTrace.projectName,
+    langSmithTrace,
     clientRunId: context.clientRunId,
     clientRunIdMissing: Boolean(context.clientRunIdMissing),
     provider: context.provider || 'mock',
@@ -3811,6 +3825,8 @@ function createLangGraphRuntimeInput(context) {
     selectedModelId: context.selectedModelId,
     userInput: context.prompt,
     langGraphThreadId: context.langGraphThreadId,
+    langSmithTraceId: context.langSmithTrace?.traceId || null,
+    langSmithRunId: context.langSmithTrace?.runId || null,
   };
 }
 
@@ -3876,7 +3892,8 @@ async function runLangGraphPlanningNode(db, currentUser, context, res, disconnec
       langGraphThreadId: context.langGraphThreadId,
       langGraphCheckpointId: null,
       langGraphNodeId: NODE_PLANNING,
-      langSmithTraceId: null,
+      langSmithTraceId: context.langSmithTrace?.traceId || null,
+      langSmithRunId: context.langSmithTrace?.runId || null,
     },
   };
 }
@@ -3968,7 +3985,8 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
       langGraphThreadId: context.langGraphThreadId,
       langGraphCheckpointId: null,
       langGraphNodeId: NODE_PROCESSING,
-      langSmithTraceId: null,
+      langSmithTraceId: context.langSmithTrace?.traceId || null,
+      langSmithRunId: context.langSmithTrace?.runId || null,
     },
   };
 }
@@ -4014,6 +4032,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     langGraphRuntime: LANGGRAPH_RUNTIME_VERSION,
     langGraphThreadId: `agent-run:${runId}`,
     langGraphFinalState: null,
+    langSmithTrace: null,
     createdAt: nowIso(),
     intent: 'unknown',
     plan: null,
@@ -4031,6 +4050,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     toolInvocations: [],
     toolInvocationIds: {},
   };
+  context.langSmithTrace = createLangSmithTraceState(context);
   const idempotencyKey = providedClientRunId ? createIdempotencyKey(currentUser, clientRunId) : null;
 
   if (!providedClientRunId) {
@@ -4090,6 +4110,16 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     startSseResponse(res);
 
     try {
+      context.langSmithTrace = await startLangSmithTrace(context.langSmithTrace, {
+        prompt: context.prompt,
+        startedAt: context.createdAt,
+        metadata: {
+          runtime: context.langGraphRuntime,
+          runLifecycle: 'agent_run',
+          provider: context.provider,
+        },
+      });
+
       await persistAndWriteRawEvent(
         db,
         currentUser,
@@ -4103,6 +4133,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           usageId: context.usageId,
           clientRunId: context.clientRunId,
           conversationId: context.conversationId,
+          metadata: {
+            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          },
         },
       );
 
@@ -4115,6 +4148,22 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
       const elapsedMs = Math.max(Date.now() - startedAt, 1);
+      context.langSmithTrace = await completeLangSmithTrace(context.langSmithTrace, {
+        outputs: {
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          reportState: context.reportState,
+          elapsedMs,
+        },
+        metadata: {
+          runtime: context.langGraphRuntime,
+          intent: context.intent,
+          reportState: context.reportState,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+          modelTrace: context.modelTrace || null,
+        },
+      });
       await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
         conclusionSource: context.conclusionSource,
         chartData: context.chartData || {},
@@ -4133,6 +4182,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           assistantMessageId,
           conclusionSource: context.conclusionSource,
           fallbackReason: context.fallbackReason,
+          metadata: {
+            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          },
           ...createModelEventMetadata(context, context.modelDiagnostics),
         }),
       );
@@ -4144,6 +4196,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           assistantMessageId,
           conclusionSource: context.conclusionSource,
           fallbackReason: context.fallbackReason,
+          langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
           ...createModelEventMetadata(context, context.modelDiagnostics),
         });
         context.usageFinished = true;
@@ -4161,6 +4214,22 @@ async function runRealAgentFlow(req, res, currentUser, body) {
       const disconnected = error && error.errorCode === 'client_disconnected';
       const finalStatus = disconnected ? 'stopped' : 'failed';
 
+      context.langSmithTrace = await failLangSmithTrace(context.langSmithTrace, {
+        error,
+        outputs: {
+          finalStatus,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+        },
+        metadata: {
+          runtime: context.langGraphRuntime,
+          intent: context.intent,
+          finalStatus,
+          conclusionSource: context.conclusionSource,
+          fallbackReason: context.fallbackReason,
+        },
+      });
+
       try {
         await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
       } catch (cleanupError) {
@@ -4171,6 +4240,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         await finishUsage(db, currentUser, context.usageId, finalStatus, disconnected ? 'client_disconnected' : 'run_failed', {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
+          langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
         });
         context.usageFinished = true;
       } catch (cleanupError) {
@@ -4180,6 +4250,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
       if (!disconnected && !res.writableEnded && !res.destroyed) {
         const failEvent = createRunEvent('run_failed', context, {
           errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
+          metadata: {
+            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          },
         });
 
         try {
@@ -4202,6 +4275,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
+          langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
         });
         context.usageFinished = true;
       } catch (finishError) {
