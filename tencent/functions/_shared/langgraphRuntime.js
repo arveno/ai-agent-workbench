@@ -154,9 +154,7 @@ function describeLangGraphRuntimeBoundary() {
       'LangSmith trace / run ids stay in externalIds / metadata and never replace canonical runId.',
     ],
     deleteLater: [
-      'Old hand-written Agent Run entry orchestration after LangGraph owns the main entry.',
       'Old modelGateway call chain after LangChain model layer is connected.',
-      'Legacy mock/basic runtime residues after LangGraph path becomes the single main runtime.',
     ],
   };
 }
