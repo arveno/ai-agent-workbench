@@ -99,11 +99,11 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const {
-  DEFAULT_REAL_MODEL_ID,
-  getModelGatewayConfig,
-  normalizeModelError,
-  streamChatCompletion,
-} = loadSharedModule('modelGateway');
+  DEFAULT_LANGCHAIN_MODEL_ID: DEFAULT_REAL_MODEL_ID,
+  getLangChainModelLayerConfig,
+  normalizeLangChainModelError,
+  streamLangChainChatCompletion,
+} = loadSharedModule('langchainModelLayer');
 const {
   assertNoQueryError,
   extractMutationCount,
@@ -1895,7 +1895,7 @@ function buildFallbackConclusion(plan, chartResult, fallbackReason) {
   if (fallbackReason === 'model_not_configured') {
     return [
       `数据工具已从 CloudBase MySQL 的 \`teaching_metrics\` 表读取并聚合教学质量数据${timeRangeLabel !== '未指定' ? `，时间范围为“${timeRangeLabel}”` : ''}。`,
-      '当前未配置模型网关，因此最终回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。',
+      '当前未配置 LangChain 模型层，因此最终回复使用结构化 fallback 结论生成，不会伪装成真实模型输出。',
       labels.length > 0 && values.length > 0
         ? `${labels[0]} 在“${metricName}”上最需要关注（约 ${Number(values[0] || 0).toFixed(2)}），建议结合年级、班级和学科继续排查。`
         : '当前工具结果没有足够数据点生成明确排序。',
@@ -2805,7 +2805,7 @@ function createModelTrace(params = {}) {
 }
 
 function createInitialModelTrace(selectedModelId) {
-  const config = getModelGatewayConfig(selectedModelId);
+  const config = getLangChainModelLayerConfig(selectedModelId);
 
   return createModelTrace({
     selectedModelId: config.selectedModelId || selectedModelId || null,
@@ -2816,7 +2816,7 @@ function createInitialModelTrace(selectedModelId) {
 }
 
 function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessage) {
-  const config = getModelGatewayConfig(selectedModelId);
+  const config = getLangChainModelLayerConfig(selectedModelId);
 
   return {
     selectedModelId: config.selectedModelId || selectedModelId || null,
@@ -2829,7 +2829,7 @@ function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessa
 }
 
 function createFailedModelDiagnostics(error) {
-  const modelError = normalizeModelError(error);
+  const modelError = normalizeLangChainModelError(error);
 
   return {
     selectedModelId: modelError.selectedModelId || null,
@@ -3379,7 +3379,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   let conclusionSource = 'fallback';
   let fallbackReason = toolContext.fallbackReason;
   let conclusionNotice = null;
-  const modelConfig = getModelGatewayConfig(context.selectedModelId);
+  const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
 
   if (fallbackReason) {
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
@@ -3407,10 +3407,10 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
     context.modelDiagnostics = createConfiguredModelDiagnostics(
       context.selectedModelId,
       fallbackReason,
-      modelConfig.configErrorMessage || 'Model gateway is not configured.',
+      modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '未配置模型网关，当前结论由本地工具结果摘要生成。';
+    conclusionNotice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
@@ -3424,7 +3424,7 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
     });
   } else {
     try {
-      const modelResult = await streamChatCompletion({
+      const modelResult = await streamLangChainChatCompletion({
         selectedModelId: context.selectedModelId,
         messages: buildConclusionMessages({
           prompt: context.prompt,
@@ -3646,7 +3646,7 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   let conclusionSource = 'fallback';
   let fallbackReason = ragContext.fallbackReason;
   let conclusionNotice = null;
-  const modelConfig = getModelGatewayConfig(context.selectedModelId);
+  const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
   const hasMatches = Boolean(ragContext.searchResult && ragContext.searchResult.retrievedChunkCount > 0);
 
   if (!hasMatches) {
@@ -3665,10 +3665,10 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
     context.modelDiagnostics = createConfiguredModelDiagnostics(
       context.selectedModelId,
       fallbackReason,
-      modelConfig.configErrorMessage || 'Model gateway is not configured.',
+      modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '未配置模型网关，当前知识回答由检索片段结构化生成。';
+    conclusionNotice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
@@ -3682,7 +3682,7 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
     });
   } else {
     try {
-      const modelResult = await streamChatCompletion({
+      const modelResult = await streamLangChainChatCompletion({
         selectedModelId: context.selectedModelId,
         messages: buildKnowledgeAnswerMessages(context, ragContext.searchResult),
         temperature: 0.2,

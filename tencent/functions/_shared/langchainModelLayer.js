@@ -484,7 +484,7 @@ function describeLangChainModelLayerBoundary() {
       'LangChain raw messages, chunks and metadata stay inside the server boundary.',
     ],
     replaceLater: [
-      'Remove _shared/modelGateway.js after Agent Run switches to streamLangChainChatCompletion.',
+      'Remove _shared/modelGateway.js during W2 cleanup after package and deployment references are gone.',
     ],
   };
 }

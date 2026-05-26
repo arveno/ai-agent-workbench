@@ -49,7 +49,7 @@
 | LangChain | Context / Memory / Data, Model Gateway, Tool Governance / Data Access | 长期 Model / Tool / RAG 能力层。模型、工具和检索不得长期散落在手写 provider fetch 或自研工具调用中。 |
 | LangSmith | Observability / Trace, Evaluation / Quality Gate, Bad Case / Dataset | 长期 Trace / Evaluation / Observability 标准平台。项目 UI 可以展示 trace，但 trace/eval 语义必须向 LangSmith 对齐。 |
 
-当前 Agent Run 主入口已进入 LangGraph runtime。正式 Tool / Retriever 已进入 LangChain 边界，Trace / Evaluation 语义已对齐 LangSmith。模型调用仍通过现有 model catalog / `_shared/modelGateway.js`，后续迁入 LangChain model layer 时必须单轨替换，不允许在旧链路旁新增 wrapper 旁路或 old/new 双轨兼容。
+当前 Agent Run 主入口已进入 LangGraph runtime。正式 Tool / Retriever 已进入 LangChain 边界，Trace / Evaluation 语义已对齐 LangSmith。模型调用已通过 model catalog 进入 `_shared/langchainModelLayer.js`，不允许在旧链路旁新增 wrapper 旁路或 old/new 双轨兼容。
 
 ## 2.2 LangGraph 运行态归位
 
@@ -72,7 +72,7 @@ Agent Runtime 边界必须遵守：
 
 - CloudBase HTTP Function 保留 Auth、user context、conversation/message 权限、run creation / idempotency、quota / usage、SSE HTTP 和持久化边界。
 - Agent Run 内部 planner、RAG、tool、model response、report decision、final response、error / fallback 编排归入 LangGraph。
-- Tool、Retriever 能力归入 LangChain；模型调用后续迁入 LangChain model layer 前，不继续扩展旧 `_shared/modelGateway.js` 为新模型平台。
+- Tool、Retriever 和模型调用能力归入 LangChain；旧 `_shared/modelGateway.js` 不继续扩展为新模型平台。
 - Run Trace / Source / Report / Usage / Evaluation 的业务主关系继续绑定 canonical `runId`。
 - 删除被替代旧逻辑，不保留 runtime wrapper / adapter / old-new 双轨兼容。
 - Mock、Real、Fallback 必须是明确状态，不能用 fallback 或 mock 伪装 real provider 结果。
@@ -140,7 +140,7 @@ W1 阶段普通 Issue 按完整闭环拆分，不拆成无独立验收价值的�
 2. Agent Run 主入口切换到 LangGraph：让 `workbench-agent-run-stream` 的内部编排单轨进入 LangGraph，并删除被替代的手写 planner / model streaming 主链路。
 3. LangChain Tool / Retriever 迁移：把正式 Tool Registry 和 `knowledge_search` 迁到 LangChain Tool / Retriever，同时保持 `tool_invocations`、`retrieval_logs`、`run_sources` 主事实源。
 4. LangSmith Trace / Evaluation 接入：建立 LangSmith trace 上报、失败显式状态、Evaluation dataset / feedback / experiment 语义映射。
-5. 删除旧 runtime 和 mock/basic 残留：清理 legacy runtime、legacy tool/RAG alias、mock/basic fallback 残留和旧 raw payload formatter；`_shared/modelGateway.js` 保留到 LangChain model layer 单轨替换任务。
+5. 删除旧 runtime 和 mock/basic 残留：清理 legacy runtime、legacy tool/RAG alias、mock/basic fallback 残留和旧 raw payload formatter；`_shared/modelGateway.js` 源文件留待 W2 清理任务删除。
 
 ## 6. 历史功能处理规则
 
