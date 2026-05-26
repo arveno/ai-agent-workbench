@@ -1,0 +1,32 @@
+name: Contract Pack Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'stage/**'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-pack-check:
+    name: Contract Pack Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Generate field registry doc
+        run: node scripts/generate-field-registry-doc.mjs
+
+      - name: Generate contract types
+        run: node scripts/generate-contract-types.mjs
+
+      - name: Verify generated contracts are committed
+        run: git diff --exit-code contracts/generated/field-registry.md contracts/generated/workbench-contract.ts

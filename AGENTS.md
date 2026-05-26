@@ -98,7 +98,7 @@ component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 
 - 新增或修改 Run / ModelTrace / Usage / CostEstimate / AgentConclusion / ReportMetadata / EvaluationMetadata 字段前，必须先更新 Contract Pack。
 - 前端可引用类型来自 `contracts/generated/workbench-contract.ts`，人读字段表来自 `contracts/generated/field-registry.md`。
 - 修改字段契约后必须重新执行生成脚本，并确保 generated 文件同步。
-- 不允许绕过 `scripts/check-data-contract.mjs` 或 `.github/workflows/data-contract-check.yml`。
+- 不允许绕过 Contract Pack 或 `.github/workflows/contract-pack-check.yml` 的 generated 一致性门禁。
 - 不允许在 architecture / lifecycle 中重复维护字段表；这些文档只能引用 `contracts/`。
 
 ## 6. Model / Tool / RAG 终态
