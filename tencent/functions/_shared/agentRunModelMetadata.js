@@ -37,11 +37,13 @@ const MODEL_METADATA_FIELDS = [
 function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
   const metadata = isRecord(runMetadata) ? runMetadata : {};
   const trace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
+  const fallbackSource = normalizeConclusionSource(fallbackConclusionSource);
 
   if (!trace) {
-    return {};
+    return fallbackSource ? { conclusionSource: fallbackSource } : {};
   }
 
+  const conclusionSource = normalizeConclusionSource(trace.conclusionSource) || fallbackSource;
   const modelTrace = {
     selectedModelId: normalizeTraceString(trace.selectedModelId),
     provider: normalizeTraceString(trace.provider),
@@ -52,9 +54,7 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
     costEstimate: readTraceObject(trace.costEstimate),
     fallbackReason: normalizeTraceString(trace.fallbackReason),
     modelErrorType: normalizeTraceString(trace.modelErrorType),
-    conclusionSource: normalizeConclusionSource(trace.conclusionSource) ||
-      normalizeConclusionSource(fallbackConclusionSource) ||
-      'none',
+    conclusionSource,
   };
   const hasModelMetadata = Boolean(
     modelTrace.selectedModelId ||
@@ -68,8 +68,15 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
     modelTrace.modelErrorType,
   );
 
-  if (!hasModelMetadata) {
+  if (!hasModelMetadata && !conclusionSource) {
     return {};
+  }
+
+  if (!hasModelMetadata) {
+    return {
+      conclusionSource,
+      modelTrace,
+    };
   }
 
   return {
