@@ -10,8 +10,18 @@ const codeExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ignoredPathParts = new Set(['node_modules', 'dist', 'build', 'coverage']);
 const isCi = process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true';
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const propertyAccessPattern = (objectName, propertyName) => {
+  const object = escapeRegExp(objectName);
+  const property = escapeRegExp(propertyName);
+  const quotedProperty = `['"]${property}['"]`;
+
+  return `\\b${object}\\s*(?:\\??\\s*\\.\\s*${property}\\b|\\??\\s*\\.\\s*\\[\\s*${quotedProperty}\\s*\\]|\\[\\s*${quotedProperty}\\s*\\])`;
+};
+
 const propertyAccess = (objectName, propertyName) =>
-  new RegExp(`\\b${objectName}\\s*\\??\\s*\\.\\s*${propertyName}\\b`);
+  new RegExp(propertyAccessPattern(objectName, propertyName));
 
 export const forbiddenPatterns = [
   { label: 'tokenUsage', regex: /\btokenUsage\b/ },
@@ -23,7 +33,7 @@ export const forbiddenPatterns = [
   { label: 'tokenUsage || usage', regex: /\btokenUsage\s*\|\|\s*usage\b/ },
   {
     label: "rawRun.conclusionSource ?? 'mock'",
-    regex: /\brawRun\s*\??\s*\.\s*conclusionSource\s*\?\?\s*['"]mock['"]/,
+    regex: new RegExp(`${propertyAccessPattern('rawRun', 'conclusionSource')}\\s*\\?\\?\\s*['"]mock['"]`),
   },
   { label: 'metadata.provider', regex: propertyAccess('metadata', 'provider') },
   { label: 'metadata.model', regex: propertyAccess('metadata', 'model') },

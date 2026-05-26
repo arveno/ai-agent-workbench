@@ -17,9 +17,34 @@ const cases = [
     labels: ['metadata.provider'],
   },
   {
+    name: 'bracket access metadata.provider',
+    code: "const provider = metadata['provider'];",
+    labels: ['metadata.provider'],
+  },
+  {
+    name: 'optional bracket access metadata.usage',
+    code: "const usage = metadata?.['usage'];",
+    labels: ['metadata.usage'],
+  },
+  {
+    name: 'optional double-quoted bracket access metadata.costEstimate',
+    code: 'const costEstimate = metadata?.["costEstimate"];',
+    labels: ['metadata.costEstimate'],
+  },
+  {
     name: 'optional chaining agentConclusion.source',
     code: 'const source = agentConclusion?.source;',
     labels: ['agentConclusion.source'],
+  },
+  {
+    name: 'bracket access agentConclusion.source',
+    code: "const source = agentConclusion['source'];",
+    labels: ['agentConclusion.source'],
+  },
+  {
+    name: 'optional bracket access modelTrace.tokenUsage',
+    code: "const usage = modelTrace?.['tokenUsage'];",
+    labels: ['modelTrace.tokenUsage', 'tokenUsage'],
   },
   {
     name: 'optional chaining rawRun.conclusionSource mock fallback',
@@ -27,11 +52,23 @@ const cases = [
     labels: ["rawRun.conclusionSource ?? 'mock'"],
   },
   {
+    name: 'optional bracket access rawRun.conclusionSource mock fallback',
+    code: "const source = rawRun?.['conclusionSource'] ?? 'mock';",
+    labels: ["rawRun.conclusionSource ?? 'mock'"],
+  },
+  {
+    name: 'bracket access rawRun.conclusionSource mock fallback',
+    code: "const source = rawRun['conclusionSource'] ?? 'mock';",
+    labels: ["rawRun.conclusionSource ?? 'mock'"],
+  },
+  {
     name: 'allowed canonical fields',
     code: `
       const view = {
         metadataProvider: metadata.providerLabel,
+        bracketProviderLabel: metadata['providerLabel'],
         source: agentConclusion?.conclusionSource,
+        bracketSource: agentConclusion['conclusionSource'],
         usage: modelTrace?.usage,
         conclusionSource: rawRun?.conclusionSource ?? 'unknown',
       };
