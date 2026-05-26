@@ -15,7 +15,7 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
   pull-requests: read
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
     name: Review Gate
     runs-on: ubuntu-latest
     steps:
-      - name: Require fresh review approval label
+      - name: Require current review approval label
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -32,100 +32,65 @@ jobs:
 
           const APPROVAL_LABEL = 'review:approved';
           const API_VERSION = '2022-11-28';
-          const MAX_EVENT_PAGES = 20;
 
           const eventPath = process.env.GITHUB_EVENT_PATH;
           const event = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
           const token = process.env.GITHUB_TOKEN;
           const repository = process.env.GITHUB_REPOSITORY;
           const pullRequest = event.pull_request || {};
+          const action = String(event.action || '');
           const labels = Array.isArray(event.pull_request?.labels)
             ? event.pull_request.labels.map((label) => String(label.name || ''))
             : [];
+          const hasApprovalLabel = labels.includes(APPROVAL_LABEL);
 
-          if (!labels.includes(APPROVAL_LABEL)) {
-            console.error('Review Gate failed: this PR needs a completed user review.');
-            console.error('After completing substantive review, manually add the `review:approved` label.');
-            console.error('Do not use PR body text as a substitute for this label.');
+          if (!token || !repository || !pullRequest.number) {
+            console.error('Review Gate failed: missing GitHub event context.');
             process.exit(1);
           }
 
-          if (!token || !repository || !pullRequest.number || !pullRequest.head?.sha) {
-            console.error('Review Gate failed: missing GitHub event context for stale label validation.');
-            process.exit(1);
-          }
-
-          async function requestJson(path) {
+          async function request(path, options = {}) {
             const response = await fetch(`https://api.github.com${path}`, {
+              ...options,
               headers: {
                 Accept: 'application/vnd.github+json',
                 Authorization: `Bearer ${token}`,
                 'X-GitHub-Api-Version': API_VERSION,
+                ...(options.headers || {}),
               },
             });
 
-            if (!response.ok) {
+            if (!response.ok && response.status !== 404) {
               const text = await response.text().catch(() => '');
               throw new Error(`GitHub API request failed ${response.status} ${response.statusText}: ${path} ${text}`);
             }
 
-            return response.json();
+            return response;
           }
 
-          async function fetchIssueEvents(issueNumber) {
-            const events = [];
-
-            for (let page = 1; page <= MAX_EVENT_PAGES; page += 1) {
-              const pageEvents = await requestJson(`/repos/${repository}/issues/${issueNumber}/events?per_page=100&page=${page}`);
-              events.push(...pageEvents);
-
-              if (!Array.isArray(pageEvents) || pageEvents.length < 100) {
-                return events;
-              }
-            }
-
-            return events;
+          async function removeApprovalLabel() {
+            const encodedLabel = encodeURIComponent(APPROVAL_LABEL);
+            await request(`/repos/${repository}/issues/${pullRequest.number}/labels/${encodedLabel}`, {
+              method: 'DELETE',
+            });
           }
 
           async function main() {
-            const commit = await requestJson(`/repos/${repository}/commits/${pullRequest.head.sha}`);
-            const headCommitAt = commit?.commit?.committer?.date || commit?.commit?.author?.date || '';
-            const headCommitTime = Date.parse(headCommitAt);
-
-            if (!Number.isFinite(headCommitTime)) {
-              console.error('Review Gate failed: cannot resolve latest PR head commit time.');
+            if (action === 'synchronize' && hasApprovalLabel) {
+              await removeApprovalLabel();
+              console.error('Review Gate failed: new commit pushed, existing review approval label was removed.');
+              console.error('User must complete review again, then manually add the `review:approved` label.');
               process.exit(1);
             }
 
-            const events = await fetchIssueEvents(pullRequest.number);
-            const latestApprovalEvent = events
-              .filter((item) => item.event === 'labeled' && item.label?.name === APPROVAL_LABEL)
-              .sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''))[0];
-
-            if (!latestApprovalEvent?.created_at) {
-              console.error('Review Gate failed: review:approved label exists, but its labeled event was not found.');
-              console.error('Remove and re-add `review:approved` after completing substantive review.');
+            if (!hasApprovalLabel) {
+              console.error('Review Gate failed: this PR needs a completed user review.');
+              console.error('After completing substantive review, manually add the `review:approved` label.');
+              console.error('Do not use PR body text as a substitute for this label.');
               process.exit(1);
             }
 
-            const approvalTime = Date.parse(latestApprovalEvent.created_at);
-
-            if (!Number.isFinite(approvalTime)) {
-              console.error('Review Gate failed: cannot resolve review:approved labeled event time.');
-              process.exit(1);
-            }
-
-            if (approvalTime < headCommitTime) {
-              console.error('Review Gate failed: review:approved label is older than the latest PR head commit.');
-              console.error(`Latest head commit time: ${headCommitAt}`);
-              console.error(`Latest review:approved label time: ${latestApprovalEvent.created_at}`);
-              console.error('User must complete review again, then remove and re-add the `review:approved` label.');
-              process.exit(1);
-            }
-
-            console.log('Review Gate passed: review:approved label is present and fresh for the latest head commit.');
-            console.log(`Latest head commit time: ${headCommitAt}`);
-            console.log(`Latest review:approved label time: ${latestApprovalEvent.created_at}`);
+            console.log('Review Gate passed: review:approved label is present.');
           }
 
           main().catch((error) => {

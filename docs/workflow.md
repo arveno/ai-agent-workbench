@@ -120,7 +120,7 @@ Tracking Issue
 - ChatGPT / 用户完成实质 Review 后，由用户手动添加 `review:approved` label。
 - 不允许用 PR body 文本替代 `review:approved` label。
 - Codex 不允许自动添加、移除或伪造 `review:approved` label。
-- `review:approved` 最近添加时间必须晚于或等于 PR 最新 head commit 时间。
+- 新 commit push 到 PR 后，Review Gate 会自动移除已有 `review:approved` label。
 - Review Gate 通过后，才进入 merge 判断。
 - 如果 PR 后续又 push 新 commit，用户必须重新完成 review，并重新添加 `review:approved` label。
 - 最终 merge 必须由用户决定。
@@ -195,7 +195,7 @@ Merge 规则：
 
 - PR 通过 CI 只是满足基础门禁，不代表可以合并。
 - PR Template Check 通过只是满足模板门禁，不代表可以合并。
-- Review Gate 通过表示 `review:approved` label 存在且未早于 PR 最新 head commit，是合并前条件之一，不代表可以自动合并。
+- Review Gate 通过表示当前 PR 存在有效 `review:approved` label，是合并前条件之一，不代表可以自动合并。
 - 只有普通 Issue 或 Tracking Issue 的完整任务闭环明确验收通过后，才可以合并对应 PR。
 - ChatGPT / Codex 可以给出是否建议合并的判断，但不能默认替用户合并。
 - 用户可以自己在 GitHub 页面合并。
