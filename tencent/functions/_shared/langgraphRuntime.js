@@ -153,9 +153,7 @@ function describeLangGraphRuntimeBoundary() {
       'knowledge_search runs through a LangChain Retriever / Document boundary and keeps retrieval_logs / run_sources as the source of truth.',
       'LangSmith trace / run ids stay in externalIds / metadata and never replace canonical runId.',
     ],
-    deleteLater: [
-      'Old modelGateway call chain after LangChain model layer is connected.',
-    ],
+    deleteLater: [],
   };
 }
 

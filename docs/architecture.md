@@ -25,7 +25,7 @@ selectedModelId
   -> modelTrace / tokenUsage / latency / fallbackReason
 ```
 
-LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。`_shared/modelGateway.js` 源文件仅作为 W2 清理前残留，不再是 Agent Run 主运行时模型调用边界。
+LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
 
 当前 Agent Runtime 链路：
 
@@ -38,7 +38,7 @@ CloudBase HTTP Function
   -> CloudBase MySQL persistence
 ```
 
-Agent Run 主入口、Tool、Retriever、Model 和 Trace / Evaluation 语义已进入 LangGraph / LangChain / LangSmith 边界。不允许恢复 `_shared/modelGateway.js` 运行时调用，不允许新增旁路包装层或 old/new 双轨兼容。
+Agent Run 主入口、Tool、Retriever、Model 和 Trace / Evaluation 语义已进入 LangGraph / LangChain / LangSmith 边界。不允许恢复旧模型网关运行时调用，不允许新增旁路包装层或 old/new 双轨兼容。
 
 ## 2. 核心执行链路
 
@@ -158,7 +158,7 @@ LangSmith 是长期 Trace / Evaluation / Observability 标准平台，项目可�
 - `workbench-agent-run-stream` 主入口已进入 LangGraph runtime，不保留旧 runtime 与 LangGraph 长期双轨。
 - 正式 Tool 已进入 LangChain Tool / Structured Tool 边界，`tool_invocations` 仍是主事实源。
 - `knowledge_search` 已进入 LangChain Retriever / Document 输出边界，`retrieval_logs` / `run_sources` 仍是 Source Lineage 主事实源。
-- `_shared/modelGateway.js` 不再扩展为新模型平台，不得作为 Agent Run runtime fallback；源文件留待 W2 清理任务删除。
+- 旧模型网关调用链已删除，不得作为 Agent Run runtime fallback。
 - 当前 mock / real / fallback 必须收敛为明确状态：Mock 只能用于显式 demo / seed / 测试路径，Real 走 LangGraph + LangChain Tool / Retriever，Fallback 必须写明 `fallbackReason` / `modelErrorType`，不得伪装真实模型结果。
 - 前端 Run Trace mapper / ViewModel 可以保留，但只能消费 canonical event / snapshot；凡是依赖旧 raw payload、旧字段 fallback 或重复 formatter 的代码必须删除或改写。
 - Report artifact 链路保留 `report_artifacts` 主事实源；如 report 在 graph 内生成，graph 只产出标准化 report state，持久化仍回到 report 主关系。
@@ -307,7 +307,7 @@ selectedModelId
   -> tokenUsage / latency / fallbackReason
 ```
 
-该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。`_shared/modelGateway.js` 源文件仍在仓库中等待 W2 清理，不得恢复为 Agent Run runtime 调用链。
+该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
 
 ## 7. 核心对象关系
 

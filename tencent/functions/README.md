@@ -24,7 +24,6 @@
 | --- | --- |
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
-| `_shared/modelGateway.js` | 旧模型调用边界源文件；不再作为 Agent Run 主运行时调用或 fallback 旁路，留待 W2 清理。 |
 | `_shared/langchainModelLayer.js` | 当前 LangChain Model Layer；承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。 |
 | `_shared/langgraphRuntime.js` | LangGraph Run State / node / edge / canonical event mapper 边界。 |
 | `_shared/langsmithObservability.js` | LangSmith Trace / Evaluation 上报边界；失败或未配置时显式返回状态。 |
@@ -252,7 +251,7 @@ LANGSMITH_PROJECT=ai-agent-workbench
 LANGSMITH_TIMEOUT_MS=3000
 ```
 
-模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界；`_shared/modelGateway.js` 源文件留待 W2 清理，不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
+模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -402,7 +401,7 @@ curl -N -i -X POST \
 - `workbench-quota` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只写 `agent_run_quota` / `agent_run_usage`，当前不接 Agent Run 或 SSE。
 - `workbench-runs` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它只读 `agent_runs` / `run_events` / `tool_invocations`，用于刷新页面或切换会话后的 Run Trace 恢复，不写 quota、messages 或 run 事件。
 - `workbench-evaluations` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它读取和写入 `eval_results`，并通过 `_shared/langsmithObservability.js` 对齐 LangSmith feedback 语义，不让 LangSmith 外部 ID 替代 canonical `runId`。
-- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js`、`_shared/langchainModelLayer.js`、`_shared/langgraphRuntime.js` 与 `_shared/langsmithObservability.js` 执行 CloudBase Agent Run 流式链路。主链路进入 LangGraph runtime，Tool / Retriever / Model 进入 LangChain 边界；`_shared/modelGateway.js` 不再作为 Agent Run runtime 调用或 fallback 旁路。
+- `workbench-agent-run-stream` 必须开启 CloudBase HTTP 路由身份认证，路径透传关闭；它复用 `_shared/auth.js`、`_shared/mysql.js`、`_shared/langchainModelLayer.js`、`_shared/langgraphRuntime.js` 与 `_shared/langsmithObservability.js` 执行 CloudBase Agent Run 流式链路。主链路进入 LangGraph runtime，Tool / Retriever / Model 进入 LangChain 边界；旧模型网关不再作为 Agent Run runtime 调用或 fallback 旁路。
 - 通过 CloudBase Node SDK 写入 MySQL `JSON` 字段前必须 `JSON.stringify(...)`；读取后再安全解析，失败时回退到 `{}` 或 `[]`。
 - 日志不要输出 token、密钥、数据库连接串或完整内部堆栈。
 - 当前 CORS 先允许 `Access-Control-Allow-Origin: *`，后续正式接入域名后可收紧。

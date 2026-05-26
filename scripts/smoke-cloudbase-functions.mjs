@@ -464,7 +464,7 @@ function getRunFailedAdvice(failedEvent, modelObservation) {
     return '';
   }
 
-  return 'local_unsupported_hint=prompt likely did not match current Agent capabilities; retry with --prompt using a supported teaching data analysis question. This is not a modelGateway or CloudBase deployment failure by itself.';
+  return 'local_unsupported_hint=prompt likely did not match current Agent capabilities; retry with --prompt using a supported teaching data analysis question. This is not a LangChain Model Layer or CloudBase deployment failure by itself.';
 }
 
 function formatEventTypes(eventTypes) {
