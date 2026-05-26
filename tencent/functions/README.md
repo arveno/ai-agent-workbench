@@ -24,7 +24,7 @@
 | --- | --- |
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
-| `_shared/langchainModelLayer.js` | 当前 LangChain Model Layer；承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。 |
+| `_shared/langchainModelLayer.js` | 当前 LangChain Model Layer；承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类契约。 |
 | `_shared/langgraphRuntime.js` | LangGraph Run State / node / edge / canonical event mapper 边界。 |
 | `_shared/langsmithObservability.js` | LangSmith Trace / Evaluation 上报边界；失败或未配置时显式返回状态。 |
 
@@ -251,7 +251,7 @@ LANGSMITH_PROJECT=ai-agent-workbench
 LANGSMITH_TIMEOUT_MS=3000
 ```
 
-模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
+模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界，并在现有 JSON metadata 中输出 canonical `usage` / `costEstimate`，不新增数据库字段；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 

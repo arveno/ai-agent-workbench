@@ -22,10 +22,10 @@ selectedModelId
   -> _shared/langchainModelLayer.js
   -> LangChain Chat Model
   -> provider client
-  -> modelTrace / tokenUsage / latency / fallbackReason
+  -> modelTrace / tokenUsage / usage / costEstimate / latency / fallbackReason
 ```
 
-LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
+LangChain model layer 承担模型调用、错误归类、canonical usage 归集和 cost estimate 标准化。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
 
 当前 Agent Runtime 链路：
 
@@ -304,10 +304,10 @@ selectedModelId
   -> model
   -> apiKeyEnv
   -> LangChain Chat Model
-  -> tokenUsage / latency / fallbackReason
+  -> tokenUsage / usage / costEstimate / latency / fallbackReason
 ```
 
-该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
+该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类契约。`tokenUsage` 保持兼容旧消费；canonical `usage` 至少包含 `promptTokens`、`completionTokens`、`totalTokens`、`usageAvailable`、`usageSource`、`usageUnavailableReason`。`costEstimate` 至少包含 `estimatedCost`、`currency`、`pricingUnit`、`isEstimated`、`pricingSource`、`costUnavailableReason`。这些字段写入现有 JSON metadata / Run Trace payload，不新增数据库字段。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
 
 ## 7. 核心对象关系
 
@@ -342,6 +342,8 @@ Run Trace 是执行过程视图，不是 raw JSON dump 面板。
 provider
 model
 tokenUsage
+usage
+costEstimate
 latency
 fallbackReason
 modelErrorType
