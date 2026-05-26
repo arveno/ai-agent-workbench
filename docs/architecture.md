@@ -352,6 +352,8 @@ conclusion summary
 
 raw payload 只进入调试详情或可展开区域。工具展示字段和工具名以 `docs/tool-governance.md` 为准。
 
+Run Trace / 右侧工作台展示模型状态时，前端必须先由 mapper 将 `modelTrace.usage` / `modelTrace.costEstimate` 标准化进入 `RunSnapshot`，再由 ViewModel 输出 provider、model、latency、token usage、cost estimate、fallback 和 model error 展示字段；组件不得直接解析 raw metadata 或 LangChain payload。
+
 ## 9. 安全边界
 
 前端禁止：

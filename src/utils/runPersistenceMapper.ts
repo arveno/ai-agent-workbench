@@ -12,8 +12,10 @@ import type {
   RunDataSourceSnapshot,
   RunEvent,
   RunIntent,
+  RunModelCostEstimate,
   RunModelTokenUsage,
   RunModelTrace,
+  RunModelUsage,
   RunPlanSnapshot,
   RunReportState,
   RunSnapshot,
@@ -148,6 +150,36 @@ function asTokenUsage(value: unknown): RunModelTokenUsage | null {
   };
 }
 
+function asModelUsage(value: unknown): RunModelUsage | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    promptTokens: getNullableNumber(value.promptTokens),
+    completionTokens: getNullableNumber(value.completionTokens),
+    totalTokens: getNullableNumber(value.totalTokens),
+    usageAvailable: value.usageAvailable === true,
+    usageSource: getNullableString(value.usageSource),
+    usageUnavailableReason: getNullableString(value.usageUnavailableReason),
+  };
+}
+
+function asCostEstimate(value: unknown): RunModelCostEstimate | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    estimatedCost: getNullableNumber(value.estimatedCost),
+    currency: getNullableString(value.currency),
+    pricingUnit: getNullableString(value.pricingUnit),
+    isEstimated: value.isEstimated === true,
+    pricingSource: getNullableString(value.pricingSource),
+    costUnavailableReason: getNullableString(value.costUnavailableReason),
+  };
+}
+
 function asModelTrace(value: unknown, fallbackConclusionSource: RunConclusionSource): RunModelTrace | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -159,6 +191,8 @@ function asModelTrace(value: unknown, fallbackConclusionSource: RunConclusionSou
     model: getNullableString(value.model),
     latencyMs: getNullableNumber(value.latencyMs),
     tokenUsage: asTokenUsage(value.tokenUsage),
+    usage: asModelUsage(value.usage),
+    costEstimate: asCostEstimate(value.costEstimate),
     fallbackReason: getNullableString(value.fallbackReason),
     modelErrorType: getNullableString(value.modelErrorType),
     conclusionSource: mapTraceConclusionSource(value.conclusionSource) || fallbackConclusionSource,
@@ -178,8 +212,19 @@ function getRunModelTrace(record: AgentRunRecord, conclusionSource: RunConclusio
   const fallbackReason = getMetadataString(record.metadata, 'fallbackReason');
   const modelErrorType = getMetadataString(record.metadata, 'modelErrorType');
   const latencyMs = getMetadataNumber(record.metadata, 'latencyMs');
+  const usage = asModelUsage(record.metadata.usage);
+  const costEstimate = asCostEstimate(record.metadata.costEstimate);
 
-  if (!selectedModelId && !provider && !model && !fallbackReason && !modelErrorType && latencyMs === null) {
+  if (
+    !selectedModelId &&
+    !provider &&
+    !model &&
+    !fallbackReason &&
+    !modelErrorType &&
+    latencyMs === null &&
+    !usage &&
+    !costEstimate
+  ) {
     return undefined;
   }
 
@@ -189,6 +234,8 @@ function getRunModelTrace(record: AgentRunRecord, conclusionSource: RunConclusio
     model: model || null,
     latencyMs,
     tokenUsage: asTokenUsage(record.metadata.tokenUsage),
+    usage,
+    costEstimate,
     fallbackReason: fallbackReason || null,
     modelErrorType: modelErrorType || null,
     conclusionSource,

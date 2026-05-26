@@ -20,12 +20,29 @@ export interface RunModelTokenUsage {
   totalTokens: number | null;
 }
 
+export interface RunModelUsage extends RunModelTokenUsage {
+  usageAvailable: boolean;
+  usageSource: string | null;
+  usageUnavailableReason: string | null;
+}
+
+export interface RunModelCostEstimate {
+  estimatedCost: number | null;
+  currency: string | null;
+  pricingUnit: string | null;
+  isEstimated: boolean;
+  pricingSource: string | null;
+  costUnavailableReason: string | null;
+}
+
 export interface RunModelTrace {
   selectedModelId: string | null;
   provider: string | null;
   model: string | null;
   latencyMs: number | null;
   tokenUsage: RunModelTokenUsage | null;
+  usage?: RunModelUsage | null;
+  costEstimate?: RunModelCostEstimate | null;
   fallbackReason: string | null;
   modelErrorType: string | null;
   conclusionSource: RunConclusionSource;
@@ -231,6 +248,8 @@ export interface RunConclusionCompletedEvent {
   agentConclusion?: AgentConclusion;
   conclusionNotice?: string;
   modelTrace?: RunModelTrace;
+  usage?: RunModelUsage | null;
+  costEstimate?: RunModelCostEstimate | null;
   fallbackReason?: string | null;
   modelErrorType?: string | null;
 }
@@ -252,6 +271,8 @@ export interface RunCompletedEvent {
   completedAt: string;
   elapsedMs?: number;
   modelTrace?: RunModelTrace;
+  usage?: RunModelUsage | null;
+  costEstimate?: RunModelCostEstimate | null;
   fallbackReason?: string | null;
   modelErrorType?: string | null;
 }

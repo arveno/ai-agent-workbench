@@ -70,14 +70,30 @@ function getModelTraceItems(modelTraceView: ModelTraceViewModel | null): RunOver
   }
 
   return [
-    { label: '模型入口', value: modelTraceView.selectedModelIdLabel },
-    { label: '模型边界', value: modelTraceView.providerLabel },
-    { label: '模型路径', value: modelTraceView.modelLabel },
+    { label: 'selectedModelId', value: modelTraceView.selectedModelIdLabel },
+    { label: 'Provider', value: modelTraceView.providerLabel },
+    { label: 'Model', value: modelTraceView.modelLabel },
     { label: '模型耗时', value: modelTraceView.latencyLabel },
-    { label: 'Token 状态', value: modelTraceView.tokenUsageStatus },
-    { label: '输入 Tokens', value: modelTraceView.promptTokensLabel },
-    { label: '输出 Tokens', value: modelTraceView.completionTokensLabel },
-    { label: '总 Tokens', value: modelTraceView.totalTokensLabel },
+    { label: 'Token 可用性', value: modelTraceView.tokenUsageStatus, wide: modelTraceView.tokenUsageStatus.length > 14 },
+    { label: 'Token 来源', value: modelTraceView.tokenUsageSourceLabel },
+    { label: 'Prompt Tokens', value: modelTraceView.promptTokensLabel },
+    { label: 'Completion Tokens', value: modelTraceView.completionTokensLabel },
+    { label: 'Total Tokens', value: modelTraceView.totalTokensLabel },
+    {
+      label: 'Token 不可用原因',
+      value: modelTraceView.usageUnavailableReasonLabel,
+      wide: modelTraceView.usageUnavailableReasonLabel !== '-',
+    },
+    { label: 'Cost 状态', value: modelTraceView.costEstimateStatusLabel, wide: true },
+    { label: 'Estimated Cost', value: modelTraceView.estimatedCostLabel },
+    { label: 'Currency', value: modelTraceView.costCurrencyLabel },
+    { label: 'Pricing Unit', value: modelTraceView.pricingUnitLabel },
+    { label: 'Pricing Source', value: modelTraceView.pricingSourceLabel },
+    {
+      label: 'Cost 不可用原因',
+      value: modelTraceView.costUnavailableReasonLabel,
+      wide: modelTraceView.costUnavailableReasonLabel !== '-',
+    },
     { label: 'Fallback', value: modelTraceView.fallbackReasonLabel },
     { label: '模型错误', value: modelTraceView.modelErrorTypeLabel },
   ];
