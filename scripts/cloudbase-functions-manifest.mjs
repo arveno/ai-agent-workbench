@@ -15,11 +15,11 @@ const functionDefinitions = [
   ['demo-conversations', []],
   ['workbench-conversations', ['auth.js', 'mysql.js']],
   ['workbench-messages', ['auth.js', 'mysql.js']],
-  ['workbench-reports', ['auth.js', 'mysql.js']],
+  ['workbench-reports', ['auth.js', 'mysql.js', 'agentRunModelMetadata.js']],
   ['workbench-demo-copy', ['auth.js', 'mysql.js']],
   ['workbench-quota', ['auth.js', 'mysql.js']],
   ['workbench-runs', ['auth.js', 'mysql.js']],
-  ['workbench-evaluations', ['auth.js', 'mysql.js', 'langsmithObservability.js']],
+  ['workbench-evaluations', ['auth.js', 'mysql.js', 'langsmithObservability.js', 'agentRunModelMetadata.js']],
   ['workbench-agent-run-stream', ['auth.js', 'mysql.js', 'langchainModelLayer.js', 'langgraphRuntime.js', 'langsmithObservability.js']],
 ];
 

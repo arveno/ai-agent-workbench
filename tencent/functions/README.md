@@ -27,6 +27,7 @@
 | `_shared/langchainModelLayer.js` | 当前 LangChain Model Layer；承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类契约。 |
 | `_shared/langgraphRuntime.js` | LangGraph Run State / node / edge / canonical event mapper 边界。 |
 | `_shared/langsmithObservability.js` | LangSmith Trace / Evaluation 上报边界；失败或未配置时显式返回状态。 |
+| `_shared/agentRunModelMetadata.js` | Report / Evaluation 复用的 Agent Run canonical `modelTrace` metadata 读取边界，只读取项目 `agent_runs.metadata.modelTrace`。 |
 
 后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 已按该方式实现基础验证；当前不替换前端 `authStore`。
 
@@ -134,7 +135,7 @@ if (Test-Path $stage) {
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
 Copy-Item workbench-reports/index.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
-Copy-Item _shared/mysql.js,_shared/auth.js -Destination (Join-Path $stage '_shared')
+Copy-Item _shared/mysql.js,_shared/auth.js,_shared/agentRunModelMetadata.js -Destination (Join-Path $stage '_shared')
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-reports.zip') -Force
 ```
 
@@ -208,7 +209,7 @@ stage="$HOME/Desktop/cloudbase-workbench-evaluations-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
 cp workbench-evaluations/index.js workbench-evaluations/package.json workbench-evaluations/scf_bootstrap workbench-evaluations/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js _shared/langsmithObservability.js "$stage/_shared/"
+cp _shared/mysql.js _shared/auth.js _shared/langsmithObservability.js _shared/agentRunModelMetadata.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-evaluations.zip index.js package.json README.md scf_bootstrap _shared)
 ```
