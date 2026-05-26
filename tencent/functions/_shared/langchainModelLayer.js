@@ -1,18 +1,19 @@
+const { ChatOpenAI } = require('@langchain/openai');
+
 const DEFAULT_SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1';
 const DEFAULT_ZHIPU_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen2.5-7B-Instruct';
 const DEFAULT_SILICONFLOW_GLM_MODEL = 'THUDM/GLM-4-9B-0414';
 const DEFAULT_ZHIPU_GLM_FLASH_MODEL = 'glm-4-flash-250414';
-const DEFAULT_REAL_MODEL_ID = 'siliconflow-qwen-free';
-const CHAT_COMPLETIONS_PATH = '/chat/completions';
+const DEFAULT_LANGCHAIN_MODEL_ID = 'siliconflow-qwen-free';
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_TOKENS = 600;
 const MAX_ERROR_MESSAGE_LENGTH = 300;
 
-class ModelGatewayError extends Error {
+class LangChainModelLayerError extends Error {
   constructor(errorType, message, options = {}) {
     super(message || errorType);
-    this.name = 'ModelGatewayError';
+    this.name = 'LangChainModelLayerError';
     this.errorType = errorType;
     this.httpStatus = Number.isInteger(options.httpStatus) ? options.httpStatus : null;
     this.selectedModelId = options.selectedModelId || null;
@@ -82,12 +83,12 @@ function createModelCatalog() {
   };
 }
 
-function getModelCatalog() {
+function getLangChainModelCatalog() {
   return Object.values(createModelCatalog()).map((item) => ({ ...item }));
 }
 
 function normalizeSelectedModelId(value) {
-  return typeof value === 'string' && value.trim() ? value.trim() : DEFAULT_REAL_MODEL_ID;
+  return typeof value === 'string' && value.trim() ? value.trim() : DEFAULT_LANGCHAIN_MODEL_ID;
 }
 
 function createUnconfiguredConfig(selectedModelId, errorType, message, base = {}) {
@@ -110,7 +111,7 @@ function createUnconfiguredConfig(selectedModelId, errorType, message, base = {}
   };
 }
 
-function getModelGatewayConfig(selectedModelId) {
+function getLangChainModelLayerConfig(selectedModelId) {
   const normalizedModelId = normalizeSelectedModelId(selectedModelId);
   const catalog = createModelCatalog();
   const catalogItem = catalog[normalizedModelId];
@@ -146,7 +147,7 @@ function getModelGatewayConfig(selectedModelId) {
       ...baseConfig,
       isConfigured: false,
       configErrorType: 'model_not_configured',
-      configErrorMessage: `Model gateway env is not configured for ${catalogItem.id}.`,
+      configErrorMessage: `LangChain model layer env is not configured for ${catalogItem.id}.`,
     };
   }
 
@@ -178,8 +179,8 @@ function sanitizeMessage(value) {
     .slice(0, MAX_ERROR_MESSAGE_LENGTH);
 }
 
-function createModelGatewayError(errorType, message, config, options = {}) {
-  return new ModelGatewayError(errorType, sanitizeMessage(message || errorType), {
+function createModelLayerError(errorType, message, config, options = {}) {
+  return new LangChainModelLayerError(errorType, sanitizeMessage(message || errorType), {
     httpStatus: options.httpStatus,
     selectedModelId: config?.selectedModelId || config?.id || null,
     provider: config?.provider || null,
@@ -190,7 +191,18 @@ function createModelGatewayError(errorType, message, config, options = {}) {
   });
 }
 
-function classifyProviderError(params = {}) {
+function readHttpStatus(error) {
+  const status = Number(
+    error?.status ||
+    error?.statusCode ||
+    error?.response?.status ||
+    error?.cause?.status ||
+    error?.cause?.statusCode,
+  );
+  return Number.isInteger(status) ? status : null;
+}
+
+function classifyModelError(params = {}) {
   const status = Number(params.httpStatus);
   const message = String(params.message || '').toLowerCase();
   const errorName = String(params.errorName || '').toLowerCase();
@@ -199,7 +211,12 @@ function classifyProviderError(params = {}) {
     return params.errorType;
   }
 
-  if (errorName === 'aborterror') {
+  if (
+    errorName === 'aborterror' ||
+    errorName.includes('timeout') ||
+    message.includes('timeout') ||
+    message.includes('timed out')
+  ) {
     return 'model_timeout';
   }
 
@@ -259,33 +276,6 @@ function classifyProviderError(params = {}) {
   return 'provider_error';
 }
 
-async function readErrorResponse(response) {
-  const contentType = response.headers.get('content-type') || '';
-
-  try {
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      const rawError = data?.error;
-      const message =
-        rawError?.message ||
-        rawError?.type ||
-        (rawError && typeof rawError === 'object' ? JSON.stringify(rawError) : rawError) ||
-        data?.message ||
-        JSON.stringify(data);
-      return String(message || response.statusText || 'Model gateway request failed.');
-    }
-
-    const text = await response.text();
-    return text.trim() || response.statusText || 'Model gateway request failed.';
-  } catch {
-    return response.statusText || 'Model gateway request failed.';
-  }
-}
-
-function buildChatCompletionsUrl(baseUrl) {
-  return `${stripTrailingSlash(baseUrl)}${CHAT_COMPLETIONS_PATH}`;
-}
-
 function normalizeTemperature(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0.2;
 }
@@ -293,16 +283,6 @@ function normalizeTemperature(value) {
 function normalizeMaxTokens(value) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) && numberValue > 0 ? Math.trunc(numberValue) : DEFAULT_MAX_TOKENS;
-}
-
-function createRequestBody(params) {
-  return JSON.stringify({
-    model: params.config.model,
-    messages: params.messages,
-    temperature: normalizeTemperature(params.temperature),
-    max_tokens: normalizeMaxTokens(params.maxTokens),
-    stream: true,
-  });
 }
 
 function normalizeUsageNumber(value) {
@@ -315,8 +295,18 @@ function normalizeTokenUsage(usage) {
     return null;
   }
 
-  const promptTokens = normalizeUsageNumber(usage.prompt_tokens ?? usage.promptTokens);
-  const completionTokens = normalizeUsageNumber(usage.completion_tokens ?? usage.completionTokens);
+  const promptTokens = normalizeUsageNumber(
+    usage.prompt_tokens ??
+    usage.promptTokens ??
+    usage.input_tokens ??
+    usage.inputTokens,
+  );
+  const completionTokens = normalizeUsageNumber(
+    usage.completion_tokens ??
+    usage.completionTokens ??
+    usage.output_tokens ??
+    usage.outputTokens,
+  );
   const totalTokens = normalizeUsageNumber(usage.total_tokens ?? usage.totalTokens);
 
   if (promptTokens === null && completionTokens === null && totalTokens === null) {
@@ -330,153 +320,109 @@ function normalizeTokenUsage(usage) {
   };
 }
 
-async function streamChatCompletion(params) {
-  const config = getModelGatewayConfig(params.selectedModelId);
+function getChunkText(chunk) {
+  const content = chunk?.content;
+
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+
+        if (part && typeof part === 'object' && typeof part.text === 'string') {
+          return part.text;
+        }
+
+        return '';
+      })
+      .join('');
+  }
+
+  return '';
+}
+
+function getChunkUsage(chunk) {
+  return normalizeTokenUsage(
+    chunk?.usage_metadata ||
+    chunk?.response_metadata?.tokenUsage ||
+    chunk?.response_metadata?.token_usage ||
+    chunk?.additional_kwargs?.usage,
+  );
+}
+
+function createChatModel(config, params = {}) {
+  return new ChatOpenAI({
+    apiKey: config.apiKey,
+    configuration: {
+      baseURL: stripTrailingSlash(config.baseUrl),
+    },
+    model: config.model,
+    temperature: normalizeTemperature(params.temperature),
+    maxTokens: normalizeMaxTokens(params.maxTokens),
+    timeout: config.timeoutMs,
+    streamUsage: true,
+  });
+}
+
+async function streamLangChainChatCompletion(params = {}) {
+  const config = getLangChainModelLayerConfig(params.selectedModelId);
 
   if (!config.isConfigured) {
-    throw createModelGatewayError(
+    throw createModelLayerError(
       config.configErrorType || 'model_not_configured',
-      config.configErrorMessage || 'Model gateway is not configured.',
+      config.configErrorMessage || 'LangChain model layer is not configured.',
       config,
     );
   }
 
   const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
-  let response;
-
-  try {
-    response = await fetch(buildChatCompletionsUrl(config.baseUrl), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: createRequestBody({
-        config,
-        messages: params.messages,
-        temperature: params.temperature,
-        maxTokens: params.maxTokens,
-      }),
-    });
-  } catch (error) {
-    clearTimeout(timeout);
-    throw createModelGatewayError(classifyProviderError({
-      errorName: error && error.name,
-      message: error && error.message,
-    }), error && error.message ? error.message : 'Model gateway fetch failed.', config, {
-      latencyMs: Math.max(Date.now() - startedAt, 1),
-    });
-  }
-
-  if (!response.ok) {
-    const errorMessage = await readErrorResponse(response);
-    clearTimeout(timeout);
-    throw createModelGatewayError(classifyProviderError({
-      httpStatus: response.status,
-      message: errorMessage,
-    }), errorMessage || response.statusText || 'Model gateway stream request failed.', config, {
-      httpStatus: response.status,
-      latencyMs: Math.max(Date.now() - startedAt, 1),
-    });
-  }
-
-  if (!response.body) {
-    clearTimeout(timeout);
-    throw createModelGatewayError('provider_bad_response', 'Model gateway stream response did not include a body.', config, {
-      httpStatus: response.status,
-      latencyMs: Math.max(Date.now() - startedAt, 1),
-    });
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+  const model = createChatModel(config, params);
   let text = '';
   let tokenUsage = null;
-  let parseFailedCount = 0;
-
-  function flushLines(isFinal = false) {
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    if (isFinal && buffer) {
-      lines.push(buffer);
-      buffer = '';
-    }
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-
-      if (!line.startsWith('data:')) {
-        continue;
-      }
-
-      const dataText = line.slice('data:'.length).trim();
-
-      if (!dataText || dataText === '[DONE]') {
-        continue;
-      }
-
-      try {
-        const event = JSON.parse(dataText);
-        const usage = normalizeTokenUsage(event?.usage);
-        const delta = event?.choices?.[0]?.delta?.content || event?.choices?.[0]?.text || '';
-
-        if (usage) {
-          tokenUsage = usage;
-        }
-
-        if (delta) {
-          text += delta;
-          if (typeof params.onDelta === 'function') {
-            params.onDelta(delta);
-          }
-        }
-      } catch {
-        parseFailedCount += 1;
-      }
-    }
-  }
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
+    const stream = await model.stream(params.messages || []);
 
-      if (done) {
-        break;
+    for await (const chunk of stream) {
+      const delta = getChunkText(chunk);
+      const usage = getChunkUsage(chunk);
+
+      if (usage) {
+        tokenUsage = usage;
       }
 
-      buffer += decoder.decode(value, { stream: true });
-      flushLines();
+      if (delta) {
+        text += delta;
+        if (typeof params.onDelta === 'function') {
+          params.onDelta(delta);
+        }
+      }
     }
-
-    buffer += decoder.decode();
-    flushLines(true);
   } catch (error) {
-    throw createModelGatewayError(classifyProviderError({
+    const httpStatus = readHttpStatus(error);
+    throw createModelLayerError(classifyModelError({
       errorName: error && error.name,
+      httpStatus,
       message: error && error.message,
-    }), error && error.message ? error.message : 'Model gateway stream read failed.', config, {
-      httpStatus: response.status,
+    }), error && error.message ? error.message : 'LangChain model layer request failed.', config, {
+      httpStatus,
       latencyMs: Math.max(Date.now() - startedAt, 1),
     });
-  } finally {
-    clearTimeout(timeout);
   }
 
   const latencyMs = Math.max(Date.now() - startedAt, 1);
 
   if (!text.trim()) {
-    throw createModelGatewayError(
+    throw createModelLayerError(
       'provider_bad_response',
-      parseFailedCount > 0
-        ? `Model gateway stream response parse failed ${parseFailedCount} time(s).`
-        : 'Model gateway stream returned empty text.',
+      'LangChain model layer returned empty text.',
       config,
-      { httpStatus: response.status, latencyMs },
+      { latencyMs },
     );
   }
 
@@ -492,8 +438,8 @@ async function streamChatCompletion(params) {
   };
 }
 
-function normalizeModelError(error) {
-  if (error instanceof ModelGatewayError) {
+function normalizeLangChainModelError(error) {
+  if (error instanceof LangChainModelLayerError) {
     return {
       selectedModelId: error.selectedModelId,
       errorType: error.errorType,
@@ -507,15 +453,17 @@ function normalizeModelError(error) {
     };
   }
 
-  const message = error && error.message ? error.message : String(error || 'Unknown model gateway error.');
+  const message = error && error.message ? error.message : String(error || 'Unknown LangChain model layer error.');
+  const httpStatus = readHttpStatus(error);
 
   return {
     selectedModelId: null,
-    errorType: classifyProviderError({
+    errorType: classifyModelError({
       errorName: error && error.name,
+      httpStatus,
       message,
     }),
-    httpStatus: null,
+    httpStatus,
     message: sanitizeMessage(message),
     provider: null,
     model: null,
@@ -525,10 +473,26 @@ function normalizeModelError(error) {
   };
 }
 
+function describeLangChainModelLayerBoundary() {
+  return {
+    runtime: 'langchain-model-layer',
+    keep: [
+      'Frontend only submits selectedModelId.',
+      'Server-side catalog resolves provider, model, apiKeyEnv, baseUrl and timeout.',
+      'Provider keys stay in CloudBase function environment variables.',
+      'Outputs keep modelTrace, tokenUsage, latencyMs, fallbackReason and modelErrorType contracts stable.',
+      'LangChain raw messages, chunks and metadata stay inside the server boundary.',
+    ],
+    replaceLater: [],
+  };
+}
+
 module.exports = {
-  DEFAULT_REAL_MODEL_ID,
-  getModelCatalog,
-  getModelGatewayConfig,
-  normalizeModelError,
-  streamChatCompletion,
+  DEFAULT_LANGCHAIN_MODEL_ID,
+  LangChainModelLayerError,
+  describeLangChainModelLayerBoundary,
+  getLangChainModelCatalog,
+  getLangChainModelLayerConfig,
+  normalizeLangChainModelError,
+  streamLangChainChatCompletion,
 };

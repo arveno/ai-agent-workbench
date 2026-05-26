@@ -41,7 +41,7 @@ LangChain Tool / Structured Tool
   ↓
 LangChain Retriever / Document
   ↓
-model catalog / _shared/modelGateway.js
+model catalog / _shared/langchainModelLayer.js
   ↓
 SiliconFlow / Zhipu OpenAI-compatible API
   ↓
@@ -56,7 +56,7 @@ Vercel、Supabase 和 Groq 只作为历史迁移来源保留在少量阶段记�
 
 ## 模型链路
 
-前端只传 `selectedModelId`。服务端通过 model catalog 白名单解析 `provider`、`model`、`apiKeyEnv`，当前进入 `_shared/modelGateway.js` 调用 OpenAI-compatible Provider。模型 Key 只放在 CloudBase 函数环境变量中，不进入浏览器。
+前端只传 `selectedModelId`。服务端通过 model catalog 白名单解析 `provider`、`model`、`apiKeyEnv`，当前进入 `_shared/langchainModelLayer.js` 调用 LangChain Chat Model 和 OpenAI-compatible Provider。模型 Key 只放在 CloudBase 函数环境变量中，不进入浏览器。
 
 当前模型选项：
 
@@ -129,7 +129,7 @@ Fallback 不能伪装成真实模型结果。Run Trace 和 assistant message met
 - LangGraph
 - LangChain
 - LangSmith
-- Model Gateway / OpenAI-compatible Provider
+- LangChain Model Layer / OpenAI-compatible Provider
 
 ---
 
