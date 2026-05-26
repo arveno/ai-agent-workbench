@@ -73,7 +73,7 @@ function mapIntent(value: string | null): RunIntent {
 }
 
 function mapConclusionSource(value: string | null): RunConclusionSource {
-  if (value === 'model' || value === 'fallback' || value === 'mock' || value === 'none') {
+  if (value === 'model' || value === 'fallback' || value === 'mock' || value === 'unknown' || value === 'none') {
     return value;
   }
 
@@ -123,6 +123,28 @@ function getNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function createUnavailableModelUsage(reason = 'model_not_invoked'): RunModelUsage {
+  return {
+    promptTokens: null,
+    completionTokens: null,
+    totalTokens: null,
+    usageAvailable: false,
+    usageSource: 'none',
+    usageUnavailableReason: reason,
+  };
+}
+
+function createUnavailableCostEstimate(reason = 'model_not_invoked'): RunModelCostEstimate {
+  return {
+    estimatedCost: null,
+    currency: null,
+    pricingUnit: null,
+    isEstimated: false,
+    pricingSource: 'none',
+    costUnavailableReason: reason,
+  };
+}
+
 function mapTraceConclusionSource(value: unknown): RunConclusionSource {
   return mapConclusionSource(getNullableString(value));
 }
@@ -163,12 +185,12 @@ function asModelTrace(value: unknown): RunModelTrace | undefined {
   }
 
   return {
-    selectedModelId: getNullableString(value.selectedModelId),
+    selectedModelId: getNullableString(value.selectedModelId) ?? 'unknown',
     provider: getNullableString(value.provider),
     model: getNullableString(value.model),
     latencyMs: getNullableNumber(value.latencyMs),
-    usage: asModelUsage(value.usage),
-    costEstimate: asCostEstimate(value.costEstimate),
+    usage: asModelUsage(value.usage) ?? createUnavailableModelUsage(),
+    costEstimate: asCostEstimate(value.costEstimate) ?? createUnavailableCostEstimate(),
     fallbackReason: getNullableString(value.fallbackReason),
     modelErrorType: getNullableString(value.modelErrorType),
     modelHttpStatus: getNullableNumber(value.modelHttpStatus),
@@ -241,7 +263,6 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
   const runIdentity = getAgentRunRecordIdentity(record);
   const conclusionSource = mapConclusionSource(record.conclusion_source);
   const agentConclusion = normalizeAgentConclusion(
-    conclusionSource,
     record.conclusion ?? '',
     record.metadata.agentConclusion as AgentConclusion | undefined,
   );
@@ -294,7 +315,6 @@ export function runPersistenceRecordsToSnapshot(params: {
   const baseSnapshot = agentRunRecordToBaseSnapshot(params.run);
   const snapshot = eventSnapshot ? { ...baseSnapshot, ...eventSnapshot } : baseSnapshot;
   const agentConclusion = normalizeAgentConclusion(
-    snapshot.conclusionSource,
     snapshot.conclusion,
     snapshot.agentConclusion,
   );

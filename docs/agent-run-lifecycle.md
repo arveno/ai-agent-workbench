@@ -1,6 +1,6 @@
 # AI Agent Enterprise Lifecycle
 
-本文档是 AI Agent Workbench 的 AI Agent Enterprise Lifecycle 事实源，只定义生命周期节点、能力域和功能归位规则。架构见 `docs/architecture.md`，ID 见 `docs/id-contract.md`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`。
+本文档是 AI Agent Workbench 的 AI Agent Enterprise Lifecycle 事实源，只定义生命周期节点、能力域和功能归位规则。架构见 `docs/architecture.md`，ID 见 `docs/id-contract.md`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`，字段契约见 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json`。
 
 ## 1. 生命周期节点
 
@@ -98,7 +98,7 @@ User
           -> Usage
 ```
 
-`Run` 是执行中心。字段定义、主关系和禁止写法以 `docs/id-contract.md` 为准，本文不定义具体 ID 字段。
+`Run` 是执行中心。字段定义、主关系和禁止写法以 `docs/id-contract.md` 为准，本文不定义具体 ID 字段。Run / modelTrace / agentConclusion / report metadata / evaluation metadata 的字段契约以 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json` 为准，本文不重复维护字段表。
 
 ## 4. 功能归位规则
 

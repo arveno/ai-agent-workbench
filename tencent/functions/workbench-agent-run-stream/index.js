@@ -2523,10 +2523,6 @@ const CONCLUSION_SECTION_FIELDS = [
 ];
 const CONCLUSION_SECTION_TITLES = CONCLUSION_SECTION_FIELDS.map((field) => field.title);
 
-function toAgentConclusionSource(source) {
-  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
-}
-
 function stripConclusionJsonFence(value) {
   return String(value || '')
     .trim()
@@ -2638,21 +2634,28 @@ function parseConclusionJson(value) {
 
 function normalizeConclusionSections(sections) {
   const normalizedSections = sections
-    .map((section) => ({
-      title: cleanConclusionText(section.title),
-      content: cleanConclusionText(section.content),
-    }))
-    .filter((section) => section.title && section.content);
+    .map((section) => {
+      const markdownText = normalizeConclusionMarkdownText(section.markdownText);
+      const plainText = cleanConclusionText(section.plainText) || createPlainTextFromMarkdown(markdownText);
+      const title = typeof section.title === 'string' ? cleanConclusionText(section.title) : '';
+
+      return {
+        ...(title ? { title } : {}),
+        markdownText,
+        plainText,
+      };
+    })
+    .filter((section) => section.markdownText || section.plainText);
 
   return normalizedSections.length > 0 ? normalizedSections : null;
 }
 
 function createConclusionPlainText(sections) {
-  return sections ? sections.map((section) => `${section.title}：${section.content}`).join('\n\n') : '';
+  return sections ? sections.map((section) => (section.title ? `${section.title}：${section.plainText}` : section.plainText)).join('\n\n') : '';
 }
 
 function createConclusionMarkdownText(sections) {
-  return sections ? sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n') : '';
+  return sections ? sections.map((section) => (section.title ? `**${section.title}**：${section.markdownText}` : section.markdownText)).join('\n\n') : '';
 }
 
 function extractConclusionSectionsFromMarkdown(value) {
@@ -2664,7 +2667,7 @@ function extractConclusionSectionsFromMarkdown(value) {
     const matchedSection = matchConclusionSectionLine(line);
 
     if (matchedSection) {
-      if (currentSection && currentSection.content.trim()) {
+      if (currentSection && (currentSection.plainText.trim() || currentSection.markdownText.trim())) {
         sections.push(currentSection);
       }
 
@@ -2673,14 +2676,18 @@ function extractConclusionSectionsFromMarkdown(value) {
     }
 
     if (currentSection && line.trim()) {
+      const markdownText = normalizeConclusionMarkdownText(line);
+      const plainText = cleanConclusionText(line);
+
       currentSection = {
         ...currentSection,
-        content: [currentSection.content, cleanConclusionText(line)].filter(Boolean).join(' '),
+        markdownText: [currentSection.markdownText, markdownText].filter(Boolean).join('\n'),
+        plainText: [currentSection.plainText, plainText].filter(Boolean).join(' '),
       };
     }
   }
 
-  if (currentSection && currentSection.content.trim()) {
+  if (currentSection && (currentSection.plainText.trim() || currentSection.markdownText.trim())) {
     sections.push(currentSection);
   }
 
@@ -2721,10 +2728,15 @@ function normalizeParsedConclusion(value) {
   }
 
   const sections = normalizeConclusionSections(
-    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => ({
-      title,
-      content: stringifyConclusionValue(getConclusionFieldValue(value, keys)),
-    })),
+    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => {
+      const fieldValue = getConclusionFieldValue(value, keys);
+
+      return {
+        title,
+        markdownText: stringifyConclusionMarkdownValue(fieldValue),
+        plainText: stringifyConclusionValue(fieldValue),
+      };
+    }),
   );
 
   if (sections) {
@@ -2754,9 +2766,12 @@ function matchConclusionSectionLine(line) {
   const labelMatch = line.match(labelPattern);
 
   if (labelMatch) {
+    const sectionText = labelMatch[2] || '';
+
     return {
       title: labelMatch[1],
-      content: labelMatch[2] || '',
+      markdownText: normalizeConclusionMarkdownText(sectionText),
+      plainText: cleanConclusionText(sectionText),
     };
   }
 
@@ -2765,7 +2780,8 @@ function matchConclusionSectionLine(line) {
   if (headingMatch) {
     return {
       title: headingMatch[1],
-      content: '',
+      markdownText: '',
+      plainText: '',
     };
   }
 
@@ -2787,7 +2803,7 @@ function normalizeAgentNotice(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function normalizeAgentConclusion(source, rawText, notice) {
+function normalizeAgentConclusion(rawText, notice) {
   const rawValue = typeof rawText === 'string' ? rawText.trim() : '';
   const parsedJson = rawValue ? parseConclusionJson(rawValue) : null;
   const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
@@ -2796,7 +2812,6 @@ function normalizeAgentConclusion(source, rawText, notice) {
   const normalizedNotice = normalizeAgentNotice(notice);
 
   return {
-    source: toAgentConclusionSource(source),
     markdownText,
     plainText,
     ...(normalized.sections ? { sections: normalized.sections } : {}),
@@ -2806,7 +2821,7 @@ function normalizeAgentConclusion(source, rawText, notice) {
 }
 
 function setCanonicalConclusion(context, rawText, source, notice) {
-  const agentConclusion = normalizeAgentConclusion(source, rawText, notice);
+  const agentConclusion = normalizeAgentConclusion(rawText, notice);
 
   context.agentConclusion = agentConclusion;
   context.conclusion = agentConclusion.markdownText;
@@ -2831,7 +2846,7 @@ function createModelTrace(params = {}) {
   });
 
   return {
-    selectedModelId: params.selectedModelId || null,
+    selectedModelId: params.selectedModelId || 'unknown',
     provider: params.provider || null,
     model: params.model || null,
     latencyMs: normalizeModelTraceNumber(params.latencyMs),
@@ -2849,7 +2864,7 @@ function createInitialModelTrace(selectedModelId) {
   const config = getLangChainModelLayerConfig(selectedModelId);
 
   return createModelTrace({
-    selectedModelId: config.selectedModelId || selectedModelId || null,
+    selectedModelId: config.selectedModelId || selectedModelId || 'unknown',
     provider: config.provider || null,
     model: config.model || null,
     billingType: config.billingType || null,
@@ -2863,7 +2878,7 @@ function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessa
   const config = getLangChainModelLayerConfig(selectedModelId);
 
   return {
-    selectedModelId: config.selectedModelId || selectedModelId || null,
+    selectedModelId: config.selectedModelId || selectedModelId || 'unknown',
     provider: config.provider || null,
     model: config.model || null,
     billingType: config.billingType || null,
@@ -2879,7 +2894,7 @@ function createFailedModelDiagnostics(error) {
   const modelError = normalizeLangChainModelError(error);
 
   return {
-    selectedModelId: modelError.selectedModelId || null,
+    selectedModelId: modelError.selectedModelId || 'unknown',
     provider: modelError.provider || null,
     model: modelError.model || null,
     billingType: modelError.billingType || null,
@@ -2900,7 +2915,7 @@ function createModelEventMetadata(context, diagnostics = {}) {
   const modelErrorType = diagnostics.modelErrorType ?? existingTrace.modelErrorType ?? null;
   const conclusionSource = diagnostics.conclusionSource || context?.conclusionSource || existingTrace.conclusionSource || 'none';
   const modelTrace = createModelTrace({
-    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || null,
+    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || 'unknown',
     provider: diagnostics.provider || existingTrace.provider || null,
     model: diagnostics.model || existingTrace.model || null,
     latencyMs: normalizeModelTraceNumber(diagnostics.latencyMs) ?? existingTrace.latencyMs ?? null,

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/report-metadata.schema.json",
+  "title": "ReportMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId"],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Canonical runId owning the report."
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "Single inherited model trace object. Do not expand model fields at metadata top level."
+    },
+    "langSmithTraceId": {
+      "type": ["string", "null"],
+      "description": "External observability id. It does not replace canonical runId."
+    }
+  }
+}

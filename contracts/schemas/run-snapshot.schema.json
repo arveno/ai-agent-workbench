@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/run-snapshot.schema.json",
+  "title": "RunSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conversationId",
+    "status",
+    "conclusionSource",
+    "modelTrace",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Canonical runId. It only points to DB agent_runs.id."
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "Conversation owning the run."
+    },
+    "clientRunId": {
+      "type": ["string", "null"],
+      "description": "Pending and idempotency id. It is not a business foreign key."
+    },
+    "displayRunId": {
+      "type": ["string", "null"],
+      "description": "UI-only short id."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "completed", "failed", "cancelled"],
+      "description": "Canonical run status."
+    },
+    "conclusionSource": {
+      "type": "string",
+      "enum": ["model", "fallback", "mock", "unknown", "none"],
+      "description": "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock."
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "agentConclusion": {
+      "anyOf": [
+        { "$ref": "agent-conclusion.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "usageId": {
+      "type": ["string", "null"],
+      "description": "Usage record id when persisted."
+    },
+    "reportId": {
+      "type": ["string", "null"],
+      "description": "Report artifact id when generated."
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "Run creation timestamp."
+    },
+    "updatedAt": {
+      "type": "string",
+      "description": "Run update timestamp."
+    }
+  }
+}

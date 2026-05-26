@@ -1,4 +1,4 @@
-import type { AgentConclusionSection, AgentConclusionSource, RunConclusionSource, RunSnapshot } from '@/types/run';
+import type { AgentConclusionSection, RunConclusionSource, RunSnapshot } from '@/types/run';
 
 export interface ConclusionSectionView {
   title: string;
@@ -10,7 +10,7 @@ export interface ConclusionViewModel {
   plainText: string;
   compactSections: ConclusionSectionView[];
   compactMarkdownText: string;
-  source: AgentConclusionSource;
+  source: RunConclusionSource;
   notice: string | null;
 }
 
@@ -22,13 +22,9 @@ function normalizeText(value: string | null | undefined): string {
   return typeof value === 'string' ? value.replace(/\\n/g, '\n').trim() : '';
 }
 
-function toConclusionSource(source: AgentConclusionSource | RunConclusionSource | undefined): AgentConclusionSource {
-  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
-}
-
 function normalizeSection(section: AgentConclusionSection): ConclusionSectionView | null {
   const title = normalizeText(section.title);
-  const content = normalizeText(section.content);
+  const content = normalizeText(section.plainText) || normalizeText(section.markdownText);
 
   if (!title || !content) {
     return null;
@@ -91,7 +87,7 @@ export function createConclusionViewModel(run: RunSnapshot): ConclusionViewModel
     compactSections,
     compactMarkdownText:
       compactSections.length > 0 ? createMarkdownFromSections(compactSections) : createCompactMarkdownText(fullMarkdownText, plainText),
-    source: toConclusionSource(conclusion?.source ?? run.conclusionSource),
+    source: run.modelTrace?.conclusionSource ?? run.conclusionSource,
     notice: normalizeText(conclusion?.notice) || null,
   };
 }

@@ -10,7 +10,7 @@ export type RunStepStatus = 'pending' | 'running' | 'success' | 'error' | 'skipp
 
 export type RunToolStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
 
-export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
+export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'unknown' | 'none';
 
 export type RunReportState = 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
 
@@ -36,12 +36,12 @@ export interface RunModelCostEstimate {
 }
 
 export interface RunModelTrace {
-  selectedModelId: string | null;
+  selectedModelId: string;
   provider: string | null;
   model: string | null;
   latencyMs: number | null;
-  usage: RunModelUsage | null;
-  costEstimate: RunModelCostEstimate | null;
+  usage: RunModelUsage;
+  costEstimate: RunModelCostEstimate;
   fallbackReason: string | null;
   modelErrorType: string | null;
   modelHttpStatus?: number | null;
@@ -49,15 +49,13 @@ export interface RunModelTrace {
   conclusionSource: RunConclusionSource;
 }
 
-export type AgentConclusionSource = 'model' | 'fallback' | 'mock';
-
 export interface AgentConclusionSection {
-  title: string;
-  content: string;
+  title?: string | null;
+  markdownText: string;
+  plainText: string;
 }
 
 export interface AgentConclusion {
-  source: AgentConclusionSource;
   markdownText: string;
   plainText: string;
   sections?: AgentConclusionSection[];
