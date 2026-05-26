@@ -19,12 +19,13 @@ EdgeOne / Vite
 ```text
 selectedModelId
   -> model catalog
-  -> _shared/modelGateway.js
+  -> _shared/langchainModelLayer.js
+  -> LangChain Chat Model
   -> provider client
   -> modelTrace / tokenUsage / latency / fallbackReason
 ```
 
-长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。W2 已开始建立 `_shared/langchainModelLayer.js` 作为新边界；在 Agent Run 主调用切换前，`_shared/modelGateway.js` 仍是当前执行边界。
+LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。`_shared/modelGateway.js` 源文件仅作为 W2 清理前残留，不再是 Agent Run 主运行时模型调用边界。
 
 当前 Agent Runtime 链路：
 
@@ -32,12 +33,12 @@ selectedModelId
 CloudBase HTTP Function
   -> LangGraph graph runtime
   -> LangChain Tool / Retriever
-  -> model catalog / _shared/modelGateway.js
+  -> model catalog / _shared/langchainModelLayer.js
   -> LangSmith Trace / Evaluation
   -> CloudBase MySQL persistence
 ```
 
-Agent Run 主入口、Tool、Retriever 和 Trace / Evaluation 语义已进入 LangGraph / LangChain / LangSmith 边界。`_shared/modelGateway.js` 仍是当前模型调用边界，不再扩展为新模型平台；后续迁入 LangChain model layer 时必须单轨替换，不允许新增旁路包装层或 old/new 双轨兼容。
+Agent Run 主入口、Tool、Retriever、Model 和 Trace / Evaluation 语义已进入 LangGraph / LangChain / LangSmith 边界。不允许恢复 `_shared/modelGateway.js` 运行时调用，不允许新增旁路包装层或 old/new 双轨兼容。
 
 ## 2. 核心执行链路
 
@@ -80,7 +81,7 @@ external:
 
 - `runId` 只能指 DB `agent_runs.id`，是 Agent Run 相关对象的 canonical 主关系。
 - `conversationId`、`clientMessageId`、`clientRunId` 语义以 `docs/id-contract.md` 为准，不能被 LangGraph / LangSmith 外部 ID 替代。
-- `selectedModelId` 是模型选择输入，当前由 model catalog / `_shared/modelGateway.js` 解析到 provider client；长期迁入 LangChain model layer 时，前端仍不得传 provider / model / apiKeyEnv。
+- `selectedModelId` 是模型选择输入，当前由 model catalog / `_shared/langchainModelLayer.js` 解析到 LangChain Chat Model 和 provider client；前端不得传 provider / model / apiKeyEnv。
 - tool / RAG / model / report / fallback / usage 状态必须能映射到 canonical Run Trace、Source、Report 和 Usage 对象。
 - LangGraph thread / checkpoint / node id 和 LangSmith trace id 只能作为外部恢复、观测或调试 ID，不得作为业务主外键。
 
@@ -157,7 +158,7 @@ LangSmith 是长期 Trace / Evaluation / Observability 标准平台，项目可�
 - `workbench-agent-run-stream` 主入口已进入 LangGraph runtime，不保留旧 runtime 与 LangGraph 长期双轨。
 - 正式 Tool 已进入 LangChain Tool / Structured Tool 边界，`tool_invocations` 仍是主事实源。
 - `knowledge_search` 已进入 LangChain Retriever / Document 输出边界，`retrieval_logs` / `run_sources` 仍是 Source Lineage 主事实源。
-- `_shared/modelGateway.js` 不再扩展为新模型平台；模型调用迁入 LangChain model layer 后删除旧 gateway 调用链。
+- `_shared/modelGateway.js` 不再扩展为新模型平台，不得作为 Agent Run runtime fallback；源文件留待 W2 清理任务删除。
 - 当前 mock / real / fallback 必须收敛为明确状态：Mock 只能用于显式 demo / seed / 测试路径，Real 走 LangGraph + LangChain Tool / Retriever，Fallback 必须写明 `fallbackReason` / `modelErrorType`，不得伪装真实模型结果。
 - 前端 Run Trace mapper / ViewModel 可以保留，但只能消费 canonical event / snapshot；凡是依赖旧 raw payload、旧字段 fallback 或重复 formatter 的代码必须删除或改写。
 - Report artifact 链路保留 `report_artifacts` 主事实源；如 report 在 graph 内生成，graph 只产出标准化 report state，持久化仍回到 report 主关系。
@@ -273,14 +274,14 @@ Quota
 Conversation / Message
 LangGraph Runtime
 LangChain Tool / Retriever
-Model Gateway
+LangChain Model Layer
 Conclusion
 Report Pending
 Run Persistence
 SSE Events
 ```
 
-该函数承担服务端安全边界、Run 创建、SSE 输出和持久化边界。当前 Agent 编排进入 LangGraph；正式 Tool 和 RAG 能力进入 LangChain Tool / Retriever；模型调用仍通过 model catalog / `_shared/modelGateway.js`，后续迁入 LangChain model layer 时单轨替换。
+该函数承担服务端安全边界、Run 创建、SSE 输出和持久化边界。当前 Agent 编排进入 LangGraph；正式 Tool 和 RAG 能力进入 LangChain Tool / Retriever；模型调用通过 model catalog / `_shared/langchainModelLayer.js` 单轨执行。
 
 ## 6. 共享后端模块
 
@@ -292,9 +293,9 @@ SSE Events
 
 共享 CloudBase MySQL helper。
 
-### `_shared/modelGateway.js`
+### `_shared/langchainModelLayer.js`
 
-当前共享模型网关是模型调用边界：
+当前 LangChain Model Layer 是 Agent Run 主模型调用边界：
 
 ```text
 selectedModelId
@@ -302,11 +303,11 @@ selectedModelId
   -> provider
   -> model
   -> apiKeyEnv
-  -> request
+  -> LangChain Chat Model
   -> tokenUsage / latency / fallbackReason
 ```
 
-长期终态应由 LangChain model layer 承担模型调用、错误归类和 usage 归集。W2 最小边界为 `_shared/langchainModelLayer.js`，承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。后续不得继续扩展 `_shared/modelGateway.js` 为新的模型平台。
+该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。`_shared/modelGateway.js` 源文件仍在仓库中等待 W2 清理，不得恢复为 Agent Run runtime 调用链。
 
 ## 7. 核心对象关系
 

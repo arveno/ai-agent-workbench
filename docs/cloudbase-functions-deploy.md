@@ -161,7 +161,6 @@ cloudbase-workbench-agent-run-stream-package/workbench-agent-run-stream/index.js
 - `workbench-agent-run-stream` 需要：
   - `_shared/auth.js`
   - `_shared/mysql.js`
-  - `_shared/modelGateway.js`
   - `_shared/langchainModelLayer.js`
   - `_shared/langgraphRuntime.js`
   - `_shared/langsmithObservability.js`
