@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/report-metadata.schema.json",
+  "title": "ReportMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "selectedModelId",
+    "modelTrace",
+    "conclusionSource",
+    "usage",
+    "costEstimate"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Canonical runId owning the report."
+    },
+    "selectedModelId": {
+      "type": ["string", "null"],
+      "description": "Model selection copied from the run model trace."
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "conclusionSource": {
+      "$ref": "model-trace.schema.json#/$defs/ConclusionSource"
+    },
+    "usage": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json#/$defs/ModelUsage" },
+        { "type": "null" }
+      ]
+    },
+    "costEstimate": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json#/$defs/CostEstimate" },
+        { "type": "null" }
+      ]
+    },
+    "langSmithTraceId": {
+      "type": ["string", "null"],
+      "description": "External observability id. It does not replace canonical runId."
+    }
+  }
+}

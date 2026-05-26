@@ -37,6 +37,16 @@ Closes #
 - [ ] 没有修改未确认的数据库字段
 - [ ] 已说明风险点和后续建议
 
+# Data Contract 自检清单
+
+- [ ] 本次不涉及字段契约变更
+- [ ] 已更新 `contracts/field-registry.yml`
+- [ ] 已更新 `contracts/schemas/**`
+- [ ] 已更新 generated 文件
+- [ ] 后端输出与前端类型同名同层级
+- [ ] mapper 单点解析，无旧字段 fallback
+- [ ] component 只消费 ViewModel
+
 # 验证结果
 
 - [ ] `pnpm lint`

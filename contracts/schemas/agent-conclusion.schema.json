@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/agent-conclusion.schema.json",
+  "title": "AgentConclusion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["conclusionSource", "content", "fallbackReason", "modelErrorType"],
+  "properties": {
+    "conclusionSource": {
+      "$ref": "model-trace.schema.json#/$defs/ConclusionSource"
+    },
+    "content": {
+      "type": "string",
+      "description": "Final assistant-facing conclusion content."
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "Optional short summary for panels or trace."
+    },
+    "fallbackReason": {
+      "type": ["string", "null"],
+      "description": "Reason when conclusionSource is fallback."
+    },
+    "modelErrorType": {
+      "type": ["string", "null"],
+      "description": "Normalized model error type related to the conclusion."
+    }
+  }
+}

@@ -11,6 +11,7 @@
 - Source / RAG lineage：`docs/source-lineage.md`
 - 工具治理：`docs/tool-governance.md`
 - 架构分层与数据流：`docs/architecture.md`
+- 字段契约：`contracts/field-registry.yml`、`contracts/schemas/*.schema.json`
 - 协作、门禁与验收：`docs/workflow.md`
 - CloudBase 函数部署：`docs/cloudbase-functions-deploy.md`
 
@@ -90,6 +91,15 @@ component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 
 - UI 主视图不能直接消费 raw payload。
 - 同源数据只能标准化一次。
 - 不允许多个组件各自 formatter / parse / clean 同一份数据。
+
+## 5.1 Data Contract Pack
+
+- 字段契约事实源是 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json`。
+- 新增或修改 Run / ModelTrace / Usage / CostEstimate / AgentConclusion / ReportMetadata / EvaluationMetadata 字段前，必须先更新 Contract Pack。
+- 前端可引用类型来自 `contracts/generated/workbench-contract.ts`，人读字段表来自 `contracts/generated/field-registry.md`。
+- 修改字段契约后必须重新执行生成脚本，并确保 generated 文件同步。
+- 不允许绕过 `scripts/check-data-contract.mjs` 或 `.github/workflows/data-contract-check.yml`。
+- 不允许在 architecture / lifecycle 中重复维护字段表；这些文档只能引用 `contracts/`。
 
 ## 6. Model / Tool / RAG 终态
 

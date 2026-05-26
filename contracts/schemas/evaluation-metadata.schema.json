@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/evaluation-metadata.schema.json",
+  "title": "EvaluationMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "selectedModelId",
+    "modelTrace",
+    "conclusionSource",
+    "usage",
+    "costEstimate"
+  ],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Canonical runId evaluated by this result."
+    },
+    "selectedModelId": {
+      "type": ["string", "null"],
+      "description": "Model selection copied from the run model trace."
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "conclusionSource": {
+      "$ref": "model-trace.schema.json#/$defs/ConclusionSource"
+    },
+    "usage": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json#/$defs/ModelUsage" },
+        { "type": "null" }
+      ]
+    },
+    "costEstimate": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json#/$defs/CostEstimate" },
+        { "type": "null" }
+      ]
+    },
+    "evaluatorVersion": {
+      "type": ["string", "null"],
+      "description": "Evaluator or rubric version."
+    },
+    "langSmithTraceId": {
+      "type": ["string", "null"],
+      "description": "External observability id. It does not replace canonical runId."
+    }
+  }
+}
