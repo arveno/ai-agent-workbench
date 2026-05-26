@@ -82,6 +82,102 @@ const cases = [
     labels: ['metadata.modelErrorType'],
   },
   {
+    name: 'destructured metadata provider',
+    code: 'const { provider } = metadata;',
+    labels: ['metadata.provider'],
+  },
+  {
+    name: 'destructured metadata provider alias',
+    code: 'const { provider: p } = metadata;',
+    labels: ['metadata.provider'],
+  },
+  {
+    name: 'destructured metadata usage',
+    code: 'const { usage } = metadata;',
+    labels: ['metadata.usage'],
+  },
+  {
+    name: 'destructured metadata usage alias',
+    code: 'const { usage: canonicalUsage } = metadata;',
+    labels: ['metadata.usage'],
+  },
+  {
+    name: 'destructured metadata cost estimate default',
+    code: 'const { costEstimate = null } = metadata;',
+    labels: ['metadata.costEstimate'],
+  },
+  {
+    name: 'destructured metadata conclusion source',
+    code: 'const { conclusionSource } = metadata;',
+    labels: ['metadata.conclusionSource'],
+  },
+  {
+    name: 'destructured metadata fallback reason',
+    code: 'const { fallbackReason: reason = null } = metadata;',
+    labels: ['metadata.fallbackReason'],
+  },
+  {
+    name: 'destructured metadata model error type',
+    code: 'const { modelErrorType } = metadata;',
+    labels: ['metadata.modelErrorType'],
+  },
+  {
+    name: 'destructured metadata client run id',
+    code: 'const { clientRunId } = metadata;',
+    labels: ['metadata.clientRunId'],
+  },
+  {
+    name: 'destructured agent conclusion source',
+    code: 'const { source } = agentConclusion;',
+    labels: ['agentConclusion.source'],
+  },
+  {
+    name: 'destructured agent conclusion conclusion source',
+    code: 'const { conclusionSource } = agentConclusion;',
+    labels: ['agentConclusion.conclusionSource'],
+  },
+  {
+    name: 'destructured agent conclusion fallback reason',
+    code: 'const { fallbackReason } = agentConclusion;',
+    labels: ['agentConclusion.fallbackReason'],
+  },
+  {
+    name: 'destructured agent conclusion model error type',
+    code: 'const { modelErrorType } = agentConclusion;',
+    labels: ['agentConclusion.modelErrorType'],
+  },
+  {
+    name: 'destructured agent conclusion content alias',
+    code: 'const { content: markdown = "" } = agentConclusion;',
+    labels: ['agentConclusion.content'],
+  },
+  {
+    name: 'destructured agent conclusion summary',
+    code: 'const { summary } = agentConclusion;',
+    labels: ['agentConclusion.summary'],
+  },
+  {
+    name: 'destructured model trace token usage',
+    code: 'const { tokenUsage } = modelTrace;',
+    labels: ['tokenUsage', 'modelTrace.tokenUsage'],
+  },
+  {
+    name: 'destructured raw run conclusion source mock fallback',
+    code: `
+      const { conclusionSource } = rawRun;
+      const source = conclusionSource ?? 'mock';
+    `,
+    labels: ["rawRun.conclusionSource ?? 'mock'"],
+  },
+  {
+    name: 'destructured raw run conclusion source alias mock fallback',
+    code: `
+      const { conclusionSource: source } = rawRun;
+      const finalSource = source ?? 'mock';
+    `,
+    labels: ["rawRun.conclusionSource ?? 'mock'"],
+  },
+  {
     name: 'optional chaining rawRun.conclusionSource mock fallback',
     code: "const source = rawRun?.conclusionSource ?? 'mock';",
     labels: ["rawRun.conclusionSource ?? 'mock'"],
@@ -109,6 +205,18 @@ const cases = [
         traceModelErrorType: modelTrace.modelErrorType,
         usage: modelTrace?.usage,
         conclusionSource: rawRun?.conclusionSource ?? 'unknown',
+        metadataDestructuring: (() => {
+          const { providerLabel } = metadata;
+          return providerLabel;
+        })(),
+        traceDestructuring: (() => {
+          const { usage, conclusionSource } = modelTrace;
+          return { usage, conclusionSource };
+        })(),
+        conclusionDestructuring: (() => {
+          const { notice } = agentConclusion;
+          return notice;
+        })(),
       };
     `,
     labels: [],

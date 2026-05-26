@@ -9,6 +9,7 @@ const formalCodeRoots = ['src', 'tencent/functions'];
 const codeExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ignoredPathParts = new Set(['node_modules', 'dist', 'build', 'coverage']);
 const isCi = process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true';
+const identifierPattern = '[$_A-Za-z][$_A-Za-z0-9]*';
 
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -22,6 +23,25 @@ const propertyAccessPattern = (objectName, propertyName) => {
 
 const propertyAccess = (objectName, propertyName) =>
   new RegExp(propertyAccessPattern(objectName, propertyName));
+
+const destructuringForbiddenFields = [
+  { label: 'agentConclusion.source', objectName: 'agentConclusion', propertyName: 'source' },
+  { label: 'agentConclusion.conclusionSource', objectName: 'agentConclusion', propertyName: 'conclusionSource' },
+  { label: 'agentConclusion.fallbackReason', objectName: 'agentConclusion', propertyName: 'fallbackReason' },
+  { label: 'agentConclusion.modelErrorType', objectName: 'agentConclusion', propertyName: 'modelErrorType' },
+  { label: 'agentConclusion.content', objectName: 'agentConclusion', propertyName: 'content' },
+  { label: 'agentConclusion.summary', objectName: 'agentConclusion', propertyName: 'summary' },
+  { label: 'metadata.clientRunId', objectName: 'metadata', propertyName: 'clientRunId' },
+  { label: 'metadata.selectedModelId', objectName: 'metadata', propertyName: 'selectedModelId' },
+  { label: 'metadata.provider', objectName: 'metadata', propertyName: 'provider' },
+  { label: 'metadata.model', objectName: 'metadata', propertyName: 'model' },
+  { label: 'metadata.conclusionSource', objectName: 'metadata', propertyName: 'conclusionSource' },
+  { label: 'metadata.usage', objectName: 'metadata', propertyName: 'usage' },
+  { label: 'metadata.costEstimate', objectName: 'metadata', propertyName: 'costEstimate' },
+  { label: 'metadata.fallbackReason', objectName: 'metadata', propertyName: 'fallbackReason' },
+  { label: 'metadata.modelErrorType', objectName: 'metadata', propertyName: 'modelErrorType' },
+  { label: 'modelTrace.tokenUsage', objectName: 'modelTrace', propertyName: 'tokenUsage' },
+];
 
 export const forbiddenPatterns = [
   { label: 'tokenUsage', regex: /\btokenUsage\b/ },
@@ -143,6 +163,62 @@ function lineNumberAt(content, index) {
   return content.slice(0, index).split(/\r?\n/).length;
 }
 
+function findDestructuredBinding(body, propertyName) {
+  const property = escapeRegExp(propertyName);
+  const fieldRegex = new RegExp(
+    `(?:^|,)\\s*${property}\\b\\s*(?::\\s*(${identifierPattern})\\s*)?(?:=\\s*[^,}]*)?\\s*(?=,|$)`,
+  );
+  const match = fieldRegex.exec(body);
+
+  if (!match) return null;
+  return match[1] || propertyName;
+}
+
+function findDestructuringMatchesInContent(file, content) {
+  const matches = [];
+
+  for (const field of destructuringForbiddenFields) {
+    const object = escapeRegExp(field.objectName);
+    const destructuringRegex = new RegExp(`\\b(?:const|let|var)\\s*\\{([^{}]*)\\}\\s*=\\s*${object}\\b`, 'g');
+    let match;
+
+    while ((match = destructuringRegex.exec(content)) !== null) {
+      if (findDestructuredBinding(match[1], field.propertyName)) {
+        matches.push({
+          file,
+          line: lineNumberAt(content, match.index),
+          label: field.label,
+        });
+      }
+    }
+  }
+
+  return matches;
+}
+
+function findRawRunDestructuredMockFallbackMatches(file, content) {
+  const matches = [];
+  const destructuringRegex = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*rawRun\b/g;
+  let match;
+
+  while ((match = destructuringRegex.exec(content)) !== null) {
+    const bindingName = findDestructuredBinding(match[1], 'conclusionSource');
+    if (!bindingName) continue;
+
+    const nearbyContent = content.slice(match.index, match.index + 300);
+    const fallbackRegex = new RegExp(`\\b${escapeRegExp(bindingName)}\\s*\\?\\?\\s*['"]mock['"]`);
+    if (fallbackRegex.test(nearbyContent)) {
+      matches.push({
+        file,
+        line: lineNumberAt(content, match.index),
+        label: "rawRun.conclusionSource ?? 'mock'",
+      });
+    }
+  }
+
+  return matches;
+}
+
 export function findForbiddenMatchesInContent(file, content) {
   const matches = [];
 
@@ -157,6 +233,9 @@ export function findForbiddenMatchesInContent(file, content) {
       });
     }
   }
+
+  matches.push(...findDestructuringMatchesInContent(file, content));
+  matches.push(...findRawRunDestructuredMockFallbackMatches(file, content));
 
   return matches;
 }
