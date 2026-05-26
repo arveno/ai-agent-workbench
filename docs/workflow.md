@@ -119,11 +119,12 @@ Tracking Issue
 - ChatGPT Review 和 Codex Review 只是辅助审查，不替代用户验收。
 - ChatGPT / 用户完成实质 Review 后，由用户手动添加 `review:approved` label。
 - 不允许用 PR body 文本替代 `review:approved` label。
-- Codex 不允许自动添加、移除或伪造 `review:approved` label。
-- 新 commit push 到 PR 后，Review Gate 会自动移除已有 `review:approved` label。
-- 如果 Review Gate 无法自动移除该 label，用户必须手动移除。
+- Codex 不允许自动添加、移除或伪造 `review:approved` / `review:stale` label。
+- 新 commit push 到 PR 后，Review Gate 会尝试移除已有 `review:approved` label，并尝试添加 `review:stale` label。
+- 如果存在 `review:stale` label，Review Gate 必须失败。
+- 如果 Review Gate 无法自动移除 / 添加 label，用户必须手动处理。
 - Review Gate 通过后，才进入 merge 判断。
-- 如果 PR 后续又 push 新 commit，用户必须重新完成 review，并重新添加 `review:approved` label。
+- 如果 PR 后续又 push 新 commit，用户必须重新完成 review，移除 `review:stale`，并重新添加 `review:approved` label。
 - 最终 merge 必须由用户决定。
 - 任务 PR merge 后更新普通 Issue。
 - 阶段 PR merge 后更新 Tracking Issue。

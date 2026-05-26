@@ -31,6 +31,7 @@ jobs:
           const fs = require('node:fs');
 
           const APPROVAL_LABEL = 'review:approved';
+          const STALE_LABEL = 'review:stale';
           const API_VERSION = '2022-11-28';
 
           const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -43,6 +44,7 @@ jobs:
             ? event.pull_request.labels.map((label) => String(label.name || ''))
             : [];
           const hasApprovalLabel = labels.includes(APPROVAL_LABEL);
+          const hasStaleLabel = labels.includes(STALE_LABEL);
 
           if (!token || !repository || !pullRequest.number) {
             console.error('Review Gate failed: missing GitHub event context.');
@@ -50,24 +52,33 @@ jobs:
           }
 
           async function request(path, options = {}) {
-            const response = await fetch(`https://api.github.com${path}`, {
-              ...options,
-              headers: {
-                Accept: 'application/vnd.github+json',
-                Authorization: `Bearer ${token}`,
-                'X-GitHub-Api-Version': API_VERSION,
-                ...(options.headers || {}),
-              },
-            });
+            try {
+              const response = await fetch(`https://api.github.com${path}`, {
+                ...options,
+                headers: {
+                  Accept: 'application/vnd.github+json',
+                  Authorization: `Bearer ${token}`,
+                  'X-GitHub-Api-Version': API_VERSION,
+                  ...(options.headers || {}),
+                },
+              });
 
-            const text = await response.text().catch(() => '');
+              const text = await response.text().catch(() => '');
 
-            return {
-              ok: response.ok,
-              status: response.status,
-              statusText: response.statusText,
-              text,
-            };
+              return {
+                ok: response.ok,
+                status: response.status,
+                statusText: response.statusText,
+                text,
+              };
+            } catch (error) {
+              return {
+                ok: false,
+                status: 0,
+                statusText: 'request_error',
+                text: error instanceof Error ? error.message : String(error),
+              };
+            }
           }
 
           async function removeApprovalLabel() {
@@ -77,33 +88,63 @@ jobs:
             });
           }
 
+          async function addStaleLabel() {
+            return request(`/repos/${repository}/issues/${pullRequest.number}/labels`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ labels: [STALE_LABEL] }),
+            });
+          }
+
+          function logLabelOperationResult(operation, result) {
+            if (result.ok) {
+              console.error(`Review Gate notice: ${operation} succeeded.`);
+              return;
+            }
+
+            if (result.status === 403) {
+              console.error(`Review Gate notice: ${operation} failed because the current token has no write permission.`);
+              return;
+            }
+
+            if (result.status === 404) {
+              console.error(`Review Gate notice: ${operation} returned 404; the label may already be absent, missing, or unavailable.`);
+              return;
+            }
+
+            console.error(`Review Gate notice: ${operation} failed with ${result.status} ${result.statusText}.`);
+            if (result.text) {
+              console.error(result.text);
+            }
+          }
+
           async function main() {
+            if (hasStaleLabel) {
+              console.error('Review Gate failed: review:stale label is present.');
+              console.error('User must complete review again, remove `review:stale`, then manually add `review:approved`.');
+              process.exit(1);
+            }
+
             if (action === 'synchronize' && hasApprovalLabel) {
               const removeResult = await removeApprovalLabel();
+              const staleResult = await addStaleLabel();
 
               if (removeResult.ok) {
                 console.error('Review Gate failed: new commit pushed, existing review approval label was removed.');
-                console.error('User must complete review again, then manually add the `review:approved` label.');
-                process.exit(1);
-              }
-
-              if (removeResult.status === 403) {
+              } else if (removeResult.status === 403) {
                 console.error('Review Gate failed: new commit pushed, but the current token cannot automatically remove `review:approved`.');
                 console.error('User must manually remove the `review:approved` label.');
-                console.error('After completing review again, manually add the `review:approved` label.');
-                process.exit(1);
-              }
-
-              if (removeResult.status === 404) {
+              } else if (removeResult.status === 404) {
                 console.error('Review Gate failed: new commit pushed, and `review:approved` is already absent or was already removed.');
-                console.error('User must complete review again, then manually add the `review:approved` label.');
-                process.exit(1);
+              } else {
+                console.error('Review Gate failed: new commit pushed, and removing `review:approved` did not complete.');
+                logLabelOperationResult('remove review:approved', removeResult);
               }
 
-              console.error(`Review Gate failed: unexpected GitHub API error while removing review label: ${removeResult.status} ${removeResult.statusText}`);
-              if (removeResult.text) {
-                console.error(removeResult.text);
-              }
+              logLabelOperationResult('add review:stale', staleResult);
+              console.error('User must complete review again, remove `review:stale`, then manually add `review:approved`.');
               process.exit(1);
             }
 
