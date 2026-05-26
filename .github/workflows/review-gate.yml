@@ -1,0 +1,43 @@
+name: Review Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'stage/**'
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+
+jobs:
+  review-gate:
+    name: Review Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require review approval label
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const eventPath = process.env.GITHUB_EVENT_PATH;
+          const event = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+          const labels = Array.isArray(event.pull_request?.labels)
+            ? event.pull_request.labels.map((label) => String(label.name || ''))
+            : [];
+
+          if (!labels.includes('review:approved')) {
+            console.error('Review Gate failed: this PR needs a completed user review.');
+            console.error('After completing substantive review, manually add the `review:approved` label.');
+            console.error('Do not use PR body text as a substitute for this label.');
+            process.exit(1);
+          }
+
+          console.log('Review Gate passed: review:approved label is present.');
+          NODE

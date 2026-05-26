@@ -22,7 +22,7 @@
 - CloudBase 部署：`docs/cloudbase-functions-deploy.md`
 - Codex 执行规则：`AGENTS.md`
 - PR 审核清单：`.github/pull_request_template.md`
-- 自动门禁：`.github/workflows/ci.yml` 和 main ruleset
+- 自动门禁：`.github/workflows/ci.yml`、`.github/workflows/pr-template-check.yml`、`.github/workflows/review-gate.yml` 和 main ruleset
 
 ## 2. 角色
 
@@ -51,7 +51,8 @@
 - Git 记录任务分支过程。
 - GitHub 承载 Issue、PR、CI、Review 和 main ruleset。
 - CI 是基础质量门禁，不替代人工验收。
-- main 分支必须通过 PR、CI 和 main ruleset 后才能合并。
+- Review Gate 是实质 Review 门禁，不替代用户最终 merge 决策。
+- main 分支必须通过 PR、CI、PR Template Check、Review Gate 和 main ruleset 后才能合并。
 
 ## 3. 层级
 
@@ -90,11 +91,15 @@ Tracking Issue
   -> commit
   -> push 到任务分支
   -> 创建 / 更新任务 PR 到 stage 分支
-  -> CI / ChatGPT Review / 用户 Review
+  -> CI / PR Template Check / ChatGPT Review / 用户 Review
+  -> 用户手动添加 review:approved label
+  -> Review Gate
   -> 用户决定是否 merge 到 stage 分支
   -> 阶段完成
   -> 创建 / 更新阶段 PR 到 main
-  -> CI / ChatGPT Review / 用户 Review
+  -> CI / PR Template Check / ChatGPT Review / 用户 Review
+  -> 用户手动添加 review:approved label
+  -> Review Gate
   -> 用户决定是否 merge 到 main
   -> 更新 Tracking Issue
 ```
@@ -110,7 +115,13 @@ Tracking Issue
 - 阶段 PR 必须关联 Tracking Issue，base 必须是 main。
 - PR 必须按 PR Template 自检。
 - CI 通过不等于可以 merge。
+- PR Template Check 通过不等于可以 merge。
 - ChatGPT Review 和 Codex Review 只是辅助审查，不替代用户验收。
+- ChatGPT / 用户完成实质 Review 后，由用户手动添加 `review:approved` label。
+- 不允许用 PR body 文本替代 `review:approved` label。
+- Codex 不允许自动添加、移除或伪造 `review:approved` label。
+- Review Gate 通过后，才进入 merge 判断。
+- 如果 PR 后续又 push 新 commit，Review Gate 会重新跑；必要时用户需要重新确认 label 状态。
 - 最终 merge 必须由用户决定。
 - 任务 PR merge 后更新普通 Issue。
 - 阶段 PR merge 后更新 Tracking Issue。
@@ -175,12 +186,15 @@ Review / 辅助验收必须检查：
 - 任务 PR base 是否为对应 stage 分支。
 - 阶段 PR base 是否为 main。
 - CI Lint and Build 是否通过。
+- PR Template Check 是否通过。
+- Review Gate 是否通过。
 - 用户是否明确验收完整任务闭环。
 
 Merge 规则：
 
 - PR 通过 CI 只是满足基础门禁，不代表可以合并。
-- Review 通过只是合并前条件之一。
+- PR Template Check 通过只是满足模板门禁，不代表可以合并。
+- Review Gate 通过表示 `review:approved` label 存在，是合并前条件之一，不代表可以自动合并。
 - 只有普通 Issue 或 Tracking Issue 的完整任务闭环明确验收通过后，才可以合并对应 PR。
 - ChatGPT / Codex 可以给出是否建议合并的判断，但不能默认替用户合并。
 - 用户可以自己在 GitHub 页面合并。

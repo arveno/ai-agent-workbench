@@ -183,6 +183,7 @@ selectedModelId
 禁止：
 
 - 未按 Issue 或 prompt 授权自动 commit、push、创建 / 更新 PR；自动 merge；push main。
+- 自动添加、移除或伪造 `review:approved` label。
 - 处理 stash。
 - 全项目格式化。
 - 新增无关依赖。
@@ -195,6 +196,8 @@ selectedModelId
 - 部署脚本静默猜测 envId、domain、HTTP route 或函数类型。
 - 把代码上传成功等同于完整部署成功。
 - 修改部署脚本却不提供 dry-run、真实验证或人工校验步骤。
+
+合并 PR 前，Codex 必须确认 `Review Gate` 已通过。若 `Review Gate` 未通过，必须停止，不得 merge。
 
 ## 11. 输出要求
 
