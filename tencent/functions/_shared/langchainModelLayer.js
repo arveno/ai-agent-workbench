@@ -483,9 +483,7 @@ function describeLangChainModelLayerBoundary() {
       'Outputs keep modelTrace, tokenUsage, latencyMs, fallbackReason and modelErrorType contracts stable.',
       'LangChain raw messages, chunks and metadata stay inside the server boundary.',
     ],
-    replaceLater: [
-      'Remove _shared/modelGateway.js during W2 cleanup after package and deployment references are gone.',
-    ],
+    replaceLater: [],
   };
 }
 

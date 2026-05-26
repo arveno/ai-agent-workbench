@@ -99,7 +99,7 @@ component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 
 selectedModelId -> model catalog -> LangChain model layer -> provider client
 ```
 
-当前状态：Agent Run 主链路已进入 LangGraph runtime；正式 Tool / Retriever 已进入 LangChain Tool / Retriever 边界；模型调用已进入 `_shared/langchainModelLayer.js`。`_shared/modelGateway.js` 源文件仅作为 W2 清理前的旧边界残留，不得被主运行时调用或扩展。
+当前状态：Agent Run 主链路已进入 LangGraph runtime；正式 Tool / Retriever 已进入 LangChain Tool / Retriever 边界；模型调用已进入 `_shared/langchainModelLayer.js`。
 
 要求：
 
@@ -107,7 +107,7 @@ selectedModelId -> model catalog -> LangChain model layer -> provider client
 - 前端不得出现模型 API Key、baseURL、provider 密钥配置。
 - 后端通过 catalog 白名单解析 provider / model / apiKeyEnv。
 - 模型调用、工具定义和 RAG 能力向 LangChain Model / Tool / Retriever 收敛。
-- `_shared/modelGateway.js` 不再作为 Agent Run 主模型调用边界，不得扩展成新的长期模型平台。
+- 旧模型网关调用链不得恢复或扩展成新的长期模型平台。
 
 禁止：
 
@@ -115,7 +115,7 @@ selectedModelId -> model catalog -> LangChain model layer -> provider client
 - 恢复 `modelProvider: 'groq'`。
 - 恢复前端 provider / model 透传链路。
 - 绕过 catalog 或 LangChain model layer 直接调用模型。
-- 恢复 `_shared/modelGateway.js` 为 Agent Run 主模型调用边界或 fallback 旁路。
+- 恢复旧模型网关为 Agent Run 主模型调用边界或 fallback 旁路。
 - 绕过 LangChain Tool / Retriever 边界新增旧工具链或旧 RAG 链。
 - 在旧 runtime 旁边新增 LangChain wrapper / adapter 旁路。
 - 为兼容旧代码保留 old/new 双轨字段或 fallback 链。
