@@ -50,7 +50,6 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
-  'conclusion_source',
   'metadata',
   'created_at',
 ].join(',');
@@ -502,7 +501,9 @@ function createPayloadMetadata(payloadMetadata) {
   }
 
   for (const field of Object.keys(metadata)) {
-    if (field.toLowerCase() === 'tokenusage') {
+    const normalized = field.toLowerCase();
+
+    if (normalized.endsWith('usage') || normalized.endsWith('costestimate')) {
       delete metadata[field];
     }
   }
@@ -714,7 +715,7 @@ async function createResult(currentUser, body) {
   const runMetadata = run ? parseJsonObject(run.metadata) : {};
   const hasCanonicalRun = Boolean(run);
   const runModelMetadata = run
-    ? createAgentRunModelMetadata(runMetadata, toNullableString(run.conclusion_source))
+    ? createAgentRunModelMetadata(runMetadata)
     : {};
   const modelTrace = createEvaluationModelTrace(runModelMetadata, hasCanonicalRun);
   const langSmithEvaluation = await submitLangSmithEvaluationFeedback({

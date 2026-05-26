@@ -30,7 +30,7 @@ export type {
   RunIntent,
   RunModelCostEstimate,
   RunModelTrace,
-  RunModelTokenUsage,
+  RunModelUsageCounts,
   RunModelUsage,
   RunMode,
   RunPlanSnapshot,

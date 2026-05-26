@@ -14,13 +14,13 @@ export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
 
 export type RunReportState = 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
 
-export interface RunModelTokenUsage {
+export interface RunModelUsageCounts {
   promptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
 }
 
-export interface RunModelUsage extends RunModelTokenUsage {
+export interface RunModelUsage extends RunModelUsageCounts {
   usageAvailable: boolean;
   usageSource: string | null;
   usageUnavailableReason: string | null;
@@ -245,7 +245,6 @@ export interface RunConclusionCompletedEvent {
   type: 'conclusion_completed';
   runId: string;
   conclusion: string;
-  conclusionSource: RunConclusionSource;
   agentConclusion?: AgentConclusion;
   conclusionNotice?: string;
   modelTrace?: RunModelTrace;

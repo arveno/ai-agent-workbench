@@ -252,7 +252,7 @@ LANGSMITH_PROJECT=ai-agent-workbench
 LANGSMITH_TIMEOUT_MS=3000
 ```
 
-模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界，并在现有 JSON metadata 中输出 canonical `usage` / `costEstimate`，不新增数据库字段；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
+模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `modelTrace.fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界，并在现有 JSON metadata 中输出 canonical `modelTrace.usage` / `modelTrace.costEstimate`，不新增数据库字段；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 

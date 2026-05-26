@@ -35,16 +35,15 @@ const MODEL_METADATA_FIELDS = [
   'modelTrace',
 ];
 
-function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
+function createAgentRunModelMetadata(runMetadata) {
   const metadata = isRecord(runMetadata) ? runMetadata : {};
   const trace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
-  const fallbackSource = normalizeConclusionSource(fallbackConclusionSource);
 
   if (!trace) {
-    return fallbackSource ? { conclusionSource: fallbackSource } : {};
+    return {};
   }
 
-  const conclusionSource = normalizeConclusionSource(trace.conclusionSource) || fallbackSource;
+  const conclusionSource = normalizeConclusionSource(trace.conclusionSource) || 'none';
   const modelTrace = {
     selectedModelId: normalizeTraceString(trace.selectedModelId),
     provider: normalizeTraceString(trace.provider),
@@ -68,10 +67,11 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
     modelTrace.fallbackReason ||
     modelTrace.modelErrorType ||
     modelTrace.modelHttpStatus !== null ||
-    modelTrace.modelErrorMessage,
+    modelTrace.modelErrorMessage ||
+    modelTrace.conclusionSource !== 'none',
   );
 
-  if (!hasModelMetadata && !conclusionSource) {
+  if (!hasModelMetadata) {
     return {};
   }
 
@@ -88,7 +88,9 @@ function removeAgentRunModelMetadataFields(metadata) {
   }
 
   for (const field of Object.keys(nextMetadata)) {
-    if (field.toLowerCase() === 'tokenusage') {
+    const normalized = field.toLowerCase();
+
+    if (normalized.endsWith('usage') || normalized.endsWith('costestimate')) {
       delete nextMetadata[field];
     }
   }

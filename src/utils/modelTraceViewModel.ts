@@ -29,18 +29,18 @@ export interface ModelTraceViewModel {
 }
 
 const USAGE_UNAVAILABLE_REASON_LABELS: Record<string, string> = {
-  model_failed: '模型调用失败，未产生 token usage。',
-  model_not_invoked: '模型未调用，因此没有 token usage。',
-  provider_no_usage: '模型服务未返回 token usage。',
+  model_failed: '模型调用失败，未产生用量数据。',
+  model_not_invoked: '模型未调用，因此没有用量数据。',
+  provider_no_usage: '模型服务未返回用量数据。',
 };
 
 const COST_UNAVAILABLE_REASON_LABELS: Record<string, string> = {
   free_pricing: '免费模型定价，不显示真实账单。',
   model_failed: '模型调用失败，无法估算费用。',
   model_not_invoked: '模型未调用，无法估算费用。',
-  provider_no_usage: '模型服务未返回 token usage，无法估算费用。',
+  provider_no_usage: '模型服务未返回用量数据，无法估算费用。',
   unknown_pricing: '模型价格未知，无法估算费用。',
-  usage_unavailable: 'token usage 不可用，无法估算费用。',
+  usage_unavailable: '模型用量不可用，无法估算费用。',
 };
 
 function formatText(value: string | null | undefined): string {
@@ -111,7 +111,7 @@ function getUsageStatus(modelTrace: RunModelTrace): string {
     return 'Fallback 不适用';
   }
 
-  return '模型服务未返回 token usage';
+  return '模型服务未返回用量数据';
 }
 
 function getUsageSourceLabel(modelTrace: RunModelTrace): string {

@@ -48,7 +48,6 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
-  'conclusion_source',
   'metadata',
 ].join(',');
 
@@ -510,7 +509,7 @@ async function readAgentRunModelMetadata(db, currentUser, conversationId, runId)
     return {};
   }
 
-  return createAgentRunModelMetadata(parseJsonObject(run.metadata), toNullableString(run.conclusion_source));
+  return createAgentRunModelMetadata(parseJsonObject(run.metadata));
 }
 
 async function hydrateReportSources(db, currentUser, report) {

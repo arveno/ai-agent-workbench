@@ -916,10 +916,9 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
       client_message_id: clientMessageId,
       status: 'completed',
       metadata: JSON.stringify({
-        source: metadata.source || context.conclusionSource || 'fallback',
+        source: metadata.source || 'agent-run',
         retrievedChunkCount: Number.isInteger(metadata.retrievedChunkCount) ? metadata.retrievedChunkCount : null,
         sourceDocumentIds: Array.isArray(metadata.sourceDocumentIds) ? metadata.sourceDocumentIds : [],
-        conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
         modelTrace: context.modelTrace || null,
         agentConclusion: metadata.agentConclusion || context.agentConclusion || null,
         agentMode: 'real',
@@ -3111,10 +3110,9 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
     disconnect,
     createRunEvent('conclusion_completed', context, {
       conclusion,
-      conclusionSource,
       agentConclusion,
       conclusionNotice: params.conclusionNotice,
-      modelTrace: params.modelTrace,
+      modelTrace: params.modelTrace || context.modelTrace || null,
     }),
   );
 }
@@ -4130,16 +4128,15 @@ async function runRealAgentFlow(req, res, currentUser, body) {
 
       const conclusion = await runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect);
       assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
-        source: context.conclusionSource,
         agentConclusion: context.agentConclusion,
         ...(context.assistantMessageMetadata || {}),
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
       const elapsedMs = Math.max(Date.now() - startedAt, 1);
+      const completionModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
       context.langSmithTrace = await completeLangSmithTrace(context.langSmithTrace, {
         outputs: {
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          modelTrace: completionModelMetadata.modelTrace,
           reportState: context.reportState,
           elapsedMs,
         },
@@ -4147,9 +4144,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           runtime: context.langGraphRuntime,
           intent: context.intent,
           reportState: context.reportState,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
-          modelTrace: context.modelTrace || null,
+          ...completionModelMetadata,
         },
       });
       await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
@@ -4168,11 +4163,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           completedAt: nowIso(),
           elapsedMs,
           assistantMessageId,
-          conclusionSource: context.conclusionSource,
           metadata: {
             langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
           },
-          ...createModelEventMetadata(context, context.modelDiagnostics),
+          ...completionModelMetadata,
         }),
       );
 
@@ -4181,10 +4175,8 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           assistantMessageId,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
-          ...createModelEventMetadata(context, context.modelDiagnostics),
+          ...completionModelMetadata,
         });
         context.usageFinished = true;
       } catch (finishError) {
@@ -4200,23 +4192,21 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     } catch (error) {
       const disconnected = error && error.errorCode === 'client_disconnected';
       const finalStatus = disconnected ? 'stopped' : 'failed';
+      const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
 
       context.langSmithTrace = await failLangSmithTrace(context.langSmithTrace, {
         error,
         outputs: {
           finalStatus,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          modelTrace: failureModelMetadata.modelTrace,
         },
         metadata: {
           runtime: context.langGraphRuntime,
           intent: context.intent,
           finalStatus,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          ...failureModelMetadata,
         },
       });
-      const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
 
       try {
         await failAgentRun(db, currentUser, context, finalStatus, error && error.message);

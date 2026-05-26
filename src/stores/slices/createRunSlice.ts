@@ -233,8 +233,6 @@ function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId
   const metadata: Record<string, unknown> = {
     source: 'agent-run',
     runId,
-    conclusionSource: run?.conclusionSource ?? null,
-    fallbackReason: run?.conclusionSource === 'fallback' ? run.conclusionNotice ?? null : null,
     conclusionNotice: run?.conclusionNotice ?? null,
     toolNames: run?.toolInvocations.map((tool) => tool.toolName) ?? [],
   };

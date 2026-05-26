@@ -579,8 +579,9 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
   }
 
   if (event.type === 'conclusion_completed') {
+    const conclusionSource = event.modelTrace?.conclusionSource ?? currentRun.modelTrace?.conclusionSource ?? 'none';
     const agentConclusion = normalizeAgentConclusion(
-      event.conclusionSource,
+      conclusionSource,
       event.conclusion,
       event.agentConclusion,
     );
@@ -590,7 +591,7 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
         {
           ...currentRun,
           conclusion: agentConclusion.plainText,
-          conclusionSource: event.conclusionSource,
+          conclusionSource,
           agentConclusion,
           conclusionNotice: event.conclusionNotice,
         },

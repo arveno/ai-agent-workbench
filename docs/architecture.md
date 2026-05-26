@@ -246,7 +246,7 @@ message 的写入和读取。
 
 ### `workbench-reports`
 
-report artifact 的生成状态、保存和读取。写入 `report_artifacts.metadata` 时，报告链路只从项目 canonical `agent_runs.metadata.modelTrace` 同步单一 `modelTrace` 对象；`modelTrace.usage` 是 token usage 的 canonical 表达，`modelTrace.costEstimate` 是 cost estimate 的 canonical 表达。报告链路不再同步顶层模型字段，不新增数据库字段，不消费 LangChain raw payload。
+report artifact 的生成状态、保存和读取。写入 `report_artifacts.metadata` 时，报告链路只从项目 canonical `agent_runs.metadata.modelTrace` 同步单一 `modelTrace` 对象；`modelTrace.usage` 是模型用量的 canonical 表达，`modelTrace.costEstimate` 是 cost estimate 的 canonical 表达。报告链路不再同步顶层模型字段，不新增数据库字段，不消费 LangChain raw payload。
 
 ### `workbench-demo-copy`
 
@@ -351,7 +351,7 @@ conclusion summary
 
 raw payload 只进入调试详情或可展开区域。工具展示字段和工具名以 `docs/tool-governance.md` 为准。
 
-Run Trace / 右侧工作台展示模型状态时，前端必须先由 mapper 将 `modelTrace.usage` / `modelTrace.costEstimate` 标准化进入 `RunSnapshot`，再由 ViewModel 输出 provider、model、latency、token usage、cost estimate、fallback 和 model error 展示字段；组件不得直接解析 raw metadata 或 LangChain payload。
+Run Trace / 右侧工作台展示模型状态时，前端必须先由 mapper 将 `modelTrace.usage` / `modelTrace.costEstimate` 标准化进入 `RunSnapshot`，再由 ViewModel 输出 provider、model、latency、模型用量、cost estimate、fallback 和 model error 展示字段；组件不得直接解析 raw metadata 或 LangChain payload。
 
 ## 9. 安全边界
 

@@ -299,7 +299,7 @@ eval_results
 
 - 当前版本功能回归。
 - 代码规范化与目录结构收口。
-- Token Usage / Cost Analysis。
+- Model Usage / Cost Analysis。
 - Guardrail 标准化。
 - Model Compare。
 - Tool Calling Schema Validation。

@@ -162,7 +162,7 @@ function asCostEstimate(value: unknown): RunModelCostEstimate | null {
   };
 }
 
-function asModelTrace(value: unknown, fallbackConclusionSource: RunConclusionSource): RunModelTrace | undefined {
+function asModelTrace(value: unknown): RunModelTrace | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -178,12 +178,12 @@ function asModelTrace(value: unknown, fallbackConclusionSource: RunConclusionSou
     modelErrorType: getNullableString(value.modelErrorType),
     modelHttpStatus: getNullableNumber(value.modelHttpStatus),
     modelErrorMessage: getNullableString(value.modelErrorMessage),
-    conclusionSource: mapTraceConclusionSource(value.conclusionSource) || fallbackConclusionSource,
+    conclusionSource: mapTraceConclusionSource(value.conclusionSource),
   };
 }
 
-function getRunModelTrace(record: AgentRunRecord, conclusionSource: RunConclusionSource): RunModelTrace | undefined {
-  return asModelTrace(record.metadata.modelTrace, conclusionSource);
+function getRunModelTrace(record: AgentRunRecord): RunModelTrace | undefined {
+  return asModelTrace(record.metadata.modelTrace);
 }
 
 function asPlan(value: Record<string, unknown>): RunPlanSnapshot | undefined {
@@ -233,7 +233,7 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   'id' | 'clientRunId' | 'displayRunId'
 > {
   const runId = record.id;
-  const clientRunId = record.client_run_id || undefined;
+  const clientRunId = record.client_run_id === null ? undefined : record.client_run_id;
 
   return {
     id: runId,
@@ -268,7 +268,7 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
     conclusionSource,
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
     conclusionNotice: conclusionNotice || undefined,
-    modelTrace: getRunModelTrace(record, conclusionSource),
+    modelTrace: getRunModelTrace(record),
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,
     updatedAt: record.completed_at ?? record.started_at,
