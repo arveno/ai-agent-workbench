@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/agent-conclusion.schema.json",
+  "title": "AgentConclusion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["markdownText", "plainText"],
+  "properties": {
+    "markdownText": {
+      "type": "string",
+      "description": "Final assistant-facing conclusion rendered as markdown."
+    },
+    "plainText": {
+      "type": "string",
+      "description": "Plain text conclusion for search, previews, and non-markdown surfaces."
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AgentConclusionSection"
+      },
+      "description": "Optional structured conclusion sections."
+    },
+    "notice": {
+      "type": ["string", "null"],
+      "description": "Optional user-facing notice about conclusion limitations or display context."
+    },
+    "rawText": {
+      "type": "string",
+      "description": "Optional raw conclusion text for debug or lossless rendering."
+    }
+  },
+  "$defs": {
+    "AgentConclusionSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markdownText", "plainText"],
+      "properties": {
+        "title": {
+          "type": ["string", "null"],
+          "description": "Optional section title."
+        },
+        "markdownText": {
+          "type": "string",
+          "description": "Section markdown text."
+        },
+        "plainText": {
+          "type": "string",
+          "description": "Section plain text."
+        }
+      }
+    }
+  }
+}

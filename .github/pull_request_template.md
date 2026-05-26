@@ -37,6 +37,13 @@ Closes #
 - [ ] 没有修改未确认的数据库字段
 - [ ] 已说明风险点和后续建议
 
+# Data Contract 自检
+
+- [ ] 已说明本 PR 是否涉及字段契约变更
+- [ ] 如涉及字段契约变更，已更新 `contracts/field-registry.yml`、`contracts/schemas/**` 和 generated 文件；如不涉及，已在 PR 中说明不适用
+- [ ] 如涉及运行字段，已确认后端输出、前端 type、mapper、ViewModel 同名同层级；如不涉及，已说明不适用
+- [ ] 未绕过 Contract Pack；未新增未登记字段
+
 # 验证结果
 
 - [ ] `pnpm lint`
