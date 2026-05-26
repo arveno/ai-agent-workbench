@@ -55,6 +55,7 @@ function createModelCatalog() {
       baseUrl: siliconflowBaseUrl,
       model: readEnv('SILICONFLOW_MODEL_QWEN') || DEFAULT_QWEN_MODEL,
       timeoutMs: getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+      supportsStreamUsage: false,
       enabled: true,
       billingType: 'free',
     },
@@ -66,6 +67,7 @@ function createModelCatalog() {
       baseUrl: siliconflowBaseUrl,
       model: readEnv('SILICONFLOW_MODEL_GLM') || DEFAULT_SILICONFLOW_GLM_MODEL,
       timeoutMs: getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+      supportsStreamUsage: false,
       enabled: true,
       billingType: 'free',
     },
@@ -77,6 +79,7 @@ function createModelCatalog() {
       baseUrl: zhipuBaseUrl,
       model: readEnv('ZHIPU_MODEL_GLM_FLASH') || DEFAULT_ZHIPU_GLM_FLASH_MODEL,
       timeoutMs: getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+      supportsStreamUsage: false,
       enabled: true,
       billingType: 'free',
     },
@@ -101,6 +104,7 @@ function createUnconfiguredConfig(selectedModelId, errorType, message, base = {}
     baseUrl: base.baseUrl || null,
     model: base.model || null,
     timeoutMs: base.timeoutMs || getSharedTimeoutMs(DEFAULT_TIMEOUT_MS),
+    supportsStreamUsage: base.supportsStreamUsage === true,
     enabled: base.enabled !== false,
     billingType: base.billingType || 'free',
     hasApiKey: false,
@@ -365,7 +369,7 @@ function createChatModel(config, params = {}) {
     temperature: normalizeTemperature(params.temperature),
     maxTokens: normalizeMaxTokens(params.maxTokens),
     timeout: config.timeoutMs,
-    streamUsage: true,
+    streamUsage: config.supportsStreamUsage === true,
   });
 }
 
