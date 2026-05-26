@@ -103,7 +103,7 @@ Response:
 
 `metadata` is `JSON.stringify(...)` before writing to MySQL and safely parsed before returning.
 
-When `runId` is present, the function reads the owned `agent_runs.metadata.modelTrace` row and copies the project canonical model metadata into `report_artifacts.metadata`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. This keeps provider no-usage and cost unavailable reasons explainable without adding report columns or consuming LangChain raw payloads.
+When `runId` is present, the function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and copies the project canonical model metadata into `report_artifacts.metadata`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. This keeps provider no-usage and cost unavailable reasons explainable without adding report columns or consuming LangChain raw payloads.
 
 ## Package
 
@@ -119,7 +119,7 @@ if (Test-Path $stage) {
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
 Copy-Item workbench-reports/index.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
-Copy-Item _shared/mysql.js,_shared/auth.js -Destination (Join-Path $stage '_shared')
+Copy-Item _shared/mysql.js,_shared/auth.js,_shared/agentRunModelMetadata.js -Destination (Join-Path $stage '_shared')
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-reports.zip') -Force
 ```
 
