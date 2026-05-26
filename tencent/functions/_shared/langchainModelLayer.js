@@ -469,12 +469,24 @@ function getChunkText(chunk) {
   return '';
 }
 
-function getChunkUsage(chunk) {
-  return normalizeUsageShape(
+function extractProviderRawUsage(chunk) {
+  const responseMetadataTokenUsage = chunk?.response_metadata && chunk.response_metadata.tokenUsage;
+
+  return (
     chunk?.usage_metadata ||
     chunk?.response_metadata?.token_usage ||
-    chunk?.additional_kwargs?.usage,
+    responseMetadataTokenUsage ||
+    chunk?.additional_kwargs?.usage ||
+    null
   );
+}
+
+function normalizeProviderUsage(rawUsage) {
+  return normalizeUsageShape(rawUsage);
+}
+
+function getChunkUsage(chunk) {
+  return normalizeProviderUsage(extractProviderRawUsage(chunk));
 }
 
 function createChatModel(config, params = {}) {
@@ -625,8 +637,10 @@ module.exports = {
   createCostEstimate,
   createUsageCostMetadata,
   describeLangChainModelLayerBoundary,
+  extractProviderRawUsage,
   getLangChainModelCatalog,
   getLangChainModelLayerConfig,
+  normalizeProviderUsage,
   normalizeLangChainModelError,
   streamLangChainChatCompletion,
 };

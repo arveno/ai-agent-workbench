@@ -55,20 +55,6 @@ const AGENT_RUN_COLUMNS = [
 ].join(',');
 
 const VALID_VERDICTS = new Set(['pass', 'fail', 'unknown']);
-const MODEL_METADATA_FIELDS = [
-  'selectedModelId',
-  'provider',
-  'model',
-  'latencyMs',
-  'usage',
-  'costEstimate',
-  'fallbackReason',
-  'modelErrorType',
-  'modelHttpStatus',
-  'modelErrorMessage',
-  'conclusionSource',
-  'modelTrace',
-];
 const FORBIDDEN_RAW_FIELDS = new Set([
   'runEvents',
   'run_events',
@@ -100,7 +86,10 @@ const {
   extractLangSmithTraceFromMetadata,
   submitLangSmithEvaluationFeedback,
 } = loadSharedModule('langsmithObservability');
-const { createAgentRunModelMetadata } = loadSharedModule('agentRunModelMetadata');
+const {
+  createAgentRunModelMetadata,
+  stripLegacyModelMetadata,
+} = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -494,21 +483,7 @@ function createEvaluationModelTrace(runModelMetadata, hasCanonicalRun) {
 }
 
 function createPayloadMetadata(payloadMetadata) {
-  const metadata = isRecord(payloadMetadata) ? { ...payloadMetadata } : {};
-
-  for (const field of MODEL_METADATA_FIELDS) {
-    delete metadata[field];
-  }
-
-  for (const field of Object.keys(metadata)) {
-    const normalized = field.toLowerCase();
-
-    if (normalized.endsWith('usage') || normalized.endsWith('costestimate')) {
-      delete metadata[field];
-    }
-  }
-
-  return metadata;
+  return stripLegacyModelMetadata(payloadMetadata);
 }
 
 function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation) {

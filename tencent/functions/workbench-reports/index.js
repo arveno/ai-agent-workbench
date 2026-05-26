@@ -66,7 +66,7 @@ const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 const {
   createAgentRunModelMetadata,
-  removeAgentRunModelMetadataFields,
+  stripLegacyModelMetadata,
 } = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
@@ -330,7 +330,7 @@ function mapRunSource(row) {
 
 function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
   const nextMetadata = options.stripRequestModelMetadata
-    ? removeAgentRunModelMetadataFields(metadata)
+    ? stripLegacyModelMetadata(metadata)
     : (isRecord(metadata) ? { ...metadata } : {});
 
   delete nextMetadata.sources;

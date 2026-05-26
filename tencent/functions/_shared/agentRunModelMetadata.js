@@ -20,7 +20,7 @@ function readTraceObject(value) {
   return isRecord(value) ? { ...value } : null;
 }
 
-const MODEL_METADATA_FIELDS = [
+const LEGACY_MODEL_METADATA_KEYS = new Set([
   'selectedModelId',
   'provider',
   'model',
@@ -33,7 +33,8 @@ const MODEL_METADATA_FIELDS = [
   'modelErrorMessage',
   'conclusionSource',
   'modelTrace',
-];
+  'tokenUsage',
+]);
 
 function createAgentRunModelMetadata(runMetadata) {
   const metadata = isRecord(runMetadata) ? runMetadata : {};
@@ -80,17 +81,11 @@ function createAgentRunModelMetadata(runMetadata) {
   };
 }
 
-function removeAgentRunModelMetadataFields(metadata) {
+function stripLegacyModelMetadata(metadata) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
 
-  for (const field of MODEL_METADATA_FIELDS) {
-    delete nextMetadata[field];
-  }
-
   for (const field of Object.keys(nextMetadata)) {
-    const normalized = field.toLowerCase();
-
-    if (normalized.endsWith('usage') || normalized.endsWith('costestimate')) {
+    if (LEGACY_MODEL_METADATA_KEYS.has(field)) {
       delete nextMetadata[field];
     }
   }
@@ -99,6 +94,7 @@ function removeAgentRunModelMetadataFields(metadata) {
 }
 
 module.exports = {
+  LEGACY_MODEL_METADATA_KEYS,
   createAgentRunModelMetadata,
-  removeAgentRunModelMetadataFields,
+  stripLegacyModelMetadata,
 };
