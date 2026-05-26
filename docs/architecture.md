@@ -346,12 +346,15 @@ modelTrace.costEstimate
 latency
 fallbackReason
 modelErrorType
-conclusion summary
+agentConclusion summary
+agentConclusion.notice
 ```
 
 raw payload 只进入调试详情或可展开区域。工具展示字段和工具名以 `docs/tool-governance.md` 为准。
 
 Run Trace / 右侧工作台展示模型状态时，前端必须先由 mapper 将 `modelTrace.usage` / `modelTrace.costEstimate` 标准化进入 `RunSnapshot`，再由 ViewModel 输出 provider、model、latency、模型用量、cost estimate、fallback 和 model error 展示字段；组件不得直接解析 raw metadata 或 LangChain payload。
+
+结论正文、结构化段落、rawText 和提示统一归入 `agentConclusion`；提示使用 `agentConclusion.notice`。`modelTrace.conclusionSource` 只表示模型 / 兜底 / 模拟来源，`modelTrace.fallbackReason` 只表示兜底原因，不使用额外顶层字段表达结论提示。
 
 ## 9. 安全边界
 

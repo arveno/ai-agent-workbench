@@ -115,11 +115,6 @@ function shouldPreferPersistedReportState(reportState: RunReportState): boolean 
   return reportState !== 'hidden';
 }
 
-function getMetadataString(metadata: Record<string, unknown>, key: string): string {
-  const value = metadata[key];
-  return typeof value === 'string' ? value : '';
-}
-
 function getNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -244,7 +239,6 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
 
 export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
   const runIdentity = getAgentRunRecordIdentity(record);
-  const conclusionNotice = getMetadataString(record.metadata, 'conclusionNotice');
   const conclusionSource = mapConclusionSource(record.conclusion_source);
   const agentConclusion = normalizeAgentConclusion(
     conclusionSource,
@@ -267,7 +261,6 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
     conclusion: agentConclusion.plainText,
     conclusionSource,
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    conclusionNotice: conclusionNotice || undefined,
     modelTrace: getRunModelTrace(record),
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,

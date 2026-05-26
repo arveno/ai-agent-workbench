@@ -208,6 +208,10 @@ function normalizeSections(sections: AgentConclusionSection[]): AgentConclusionS
   return normalizedSections.length > 0 ? normalizedSections : undefined;
 }
 
+function normalizeNotice(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function createPlainTextFromSections(sections: AgentConclusionSection[] | undefined): string {
   return sections?.map((section) => `${section.title}：${section.content}`).join('\n\n') ?? '';
 }
@@ -367,6 +371,7 @@ function coerceAgentConclusion(value: unknown, source: RunConclusionSource, fall
     createPlainTextFromSections(sections) ||
     createPlainTextFromMarkdown(markdownText);
   const rawText = typeof value.rawText === 'string' && value.rawText.trim() ? value.rawText.trim() : undefined;
+  const notice = normalizeNotice(value.notice);
 
   if (!markdownText && !plainText) {
     return null;
@@ -377,6 +382,7 @@ function coerceAgentConclusion(value: unknown, source: RunConclusionSource, fall
     markdownText: markdownText || plainText,
     plainText,
     ...(sections ? { sections } : {}),
+    ...(notice ? { notice } : {}),
     ...(rawText && rawText !== markdownText ? { rawText } : {}),
   };
 }
@@ -405,12 +411,14 @@ export function normalizeAgentConclusion(
   const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
   const markdownText = normalized.markdownText || normalizeMarkdownText(rawValue);
   const plainText = normalized.plainText || createPlainTextFromMarkdown(markdownText);
+  const notice = isRecord(existingConclusion) ? normalizeNotice(existingConclusion.notice) : null;
 
   return {
     source: normalizedSource,
     markdownText,
     plainText,
     ...(normalized.sections ? { sections: normalized.sections } : {}),
+    ...(notice ? { notice } : {}),
     ...(rawValue && rawValue !== markdownText ? { rawText: rawValue } : {}),
   };
 }
@@ -593,7 +601,6 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
           conclusion: agentConclusion.plainText,
           conclusionSource,
           agentConclusion,
-          conclusionNotice: event.conclusionNotice,
         },
         event.modelTrace,
       ),

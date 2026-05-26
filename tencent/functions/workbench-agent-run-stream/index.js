@@ -1032,7 +1032,6 @@ function createRunSnapshot(context, options = {}) {
     conclusion: options.conclusion || context.conclusion || '',
     conclusionSource: options.conclusionSource || context.conclusionSource || 'none',
     agentConclusion: options.agentConclusion || context.agentConclusion,
-    conclusionNotice: options.conclusionNotice || context.conclusionNotice,
     modelTrace: options.modelTrace || context.modelTrace,
     reportState: options.reportState || context.reportState || 'hidden',
     createdAt,
@@ -2784,24 +2783,30 @@ function normalizeConclusionText(value) {
   };
 }
 
-function normalizeAgentConclusion(source, rawText) {
+function normalizeAgentNotice(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeAgentConclusion(source, rawText, notice) {
   const rawValue = typeof rawText === 'string' ? rawText.trim() : '';
   const parsedJson = rawValue ? parseConclusionJson(rawValue) : null;
   const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
   const markdownText = normalized.markdownText || normalizeConclusionMarkdownText(rawValue);
   const plainText = normalized.plainText || createPlainTextFromMarkdown(markdownText);
+  const normalizedNotice = normalizeAgentNotice(notice);
 
   return {
     source: toAgentConclusionSource(source),
     markdownText,
     plainText,
     ...(normalized.sections ? { sections: normalized.sections } : {}),
+    ...(normalizedNotice ? { notice: normalizedNotice } : {}),
     ...(rawValue && rawValue !== markdownText ? { rawText: rawValue } : {}),
   };
 }
 
-function setCanonicalConclusion(context, rawText, source) {
-  const agentConclusion = normalizeAgentConclusion(source, rawText);
+function setCanonicalConclusion(context, rawText, source, notice) {
+  const agentConclusion = normalizeAgentConclusion(source, rawText, notice);
 
   context.agentConclusion = agentConclusion;
   context.conclusion = agentConclusion.markdownText;
@@ -3091,10 +3096,8 @@ async function emitConclusionDeltas(db, currentUser, context, res, disconnect, t
 
 async function streamStaticConclusion(db, currentUser, context, res, disconnect, params) {
   const conclusionSource = params.conclusionSource || context.conclusionSource || 'fallback';
-  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource);
+  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource, params.notice);
   const conclusion = agentConclusion.markdownText;
-
-  context.conclusionNotice = params.conclusionNotice || context.conclusionNotice || null;
 
   const ok = await emitConclusionDeltas(db, currentUser, context, res, disconnect, conclusion);
 
@@ -3111,7 +3114,6 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
     createRunEvent('conclusion_completed', context, {
       conclusion,
       agentConclusion,
-      conclusionNotice: params.conclusionNotice,
       modelTrace: params.modelTrace || context.modelTrace || null,
     }),
   );
@@ -3411,27 +3413,27 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   let conclusion = '';
   let conclusionSource = 'fallback';
   let fallbackReason = toolContext.fallbackReason;
-  let conclusionNotice = null;
+  let notice = null;
   const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
 
   if (fallbackReason) {
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '数据工具不可用，当前结论由明确 fallback 生成。';
+    notice = '数据工具不可用，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
   } else if (!toolContext.aggregateResult || toolContext.aggregateResult.totalRecords === 0) {
     fallbackReason = 'data_empty';
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
+    notice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
@@ -3443,11 +3445,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
+    notice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, {
         ...context.modelDiagnostics,
@@ -3512,11 +3514,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
       }));
       conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-      conclusionNotice = '模型生成失败，当前结论由本地工具结果摘要生成。';
+      notice = '模型生成失败，当前结论由本地工具结果摘要生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
-        conclusionNotice,
+        notice,
         fallbackReason,
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
@@ -3528,7 +3530,6 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
-  context.conclusionNotice = conclusionNotice;
 
   await persistAndWriteRawEvent(
     db,
@@ -3680,18 +3681,18 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   let conclusion = '';
   let conclusionSource = 'fallback';
   let fallbackReason = ragContext.fallbackReason;
-  let conclusionNotice = null;
+  let notice = null;
   const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
   const hasMatches = Boolean(ragContext.searchResult && ragContext.searchResult.retrievedChunkCount > 0);
 
   if (!hasMatches) {
     fallbackReason = fallbackReason || 'rag_no_match';
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
+    notice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
@@ -3703,11 +3704,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
       modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
+    notice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, {
         ...context.modelDiagnostics,
@@ -3767,11 +3768,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
       }));
       conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-      conclusionNotice = '模型生成失败，当前知识回答由检索片段结构化生成。';
+      notice = '模型生成失败，当前知识回答由检索片段结构化生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
-        conclusionNotice,
+        notice,
         fallbackReason,
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
@@ -3781,7 +3782,6 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
-  context.conclusionNotice = conclusionNotice;
   context.assistantMessageMetadata = {
     source: 'knowledge_qa',
     retrievedChunkCount: ragContext.searchResult?.retrievedChunkCount ?? 0,
@@ -3895,7 +3895,7 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource: 'fallback',
-      conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
+      notice: '能力说明由 CloudBase 本地逻辑生成。',
       fallbackReason: context.fallbackReason,
       ...createModelEventMetadata(context, {
         conclusionSource: 'fallback',
@@ -3909,7 +3909,7 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource: 'fallback',
-      conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
+      notice: '不支持问题由 CloudBase 本地逻辑生成。',
       fallbackReason: context.fallbackReason,
       ...createModelEventMetadata(context, {
         conclusionSource: 'fallback',

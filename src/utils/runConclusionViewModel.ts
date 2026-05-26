@@ -11,6 +11,7 @@ export interface ConclusionViewModel {
   compactSections: ConclusionSectionView[];
   compactMarkdownText: string;
   source: AgentConclusionSource;
+  notice: string | null;
 }
 
 const COMPACT_SECTION_TITLES = ['关键发现', '可能原因', '下一步建议'];
@@ -91,5 +92,6 @@ export function createConclusionViewModel(run: RunSnapshot): ConclusionViewModel
     compactMarkdownText:
       compactSections.length > 0 ? createMarkdownFromSections(compactSections) : createCompactMarkdownText(fullMarkdownText, plainText),
     source: toConclusionSource(conclusion?.source ?? run.conclusionSource),
+    notice: normalizeText(conclusion?.notice) || null,
   };
 }

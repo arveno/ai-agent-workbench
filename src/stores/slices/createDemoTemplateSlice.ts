@@ -139,7 +139,7 @@ function createDemoRun(template: DemoConversationTemplateRecord, sessionId: stri
     chartData: rawRun.chartData,
     conclusion: rawRun.conclusion ?? '',
     conclusionSource: rawRun.conclusionSource ?? 'mock',
-    conclusionNotice: rawRun.conclusionNotice,
+    agentConclusion: rawRun.agentConclusion,
     reportState: rawRun.reportState ?? 'skipped',
     createdAt: rawRun.createdAt ?? template.created_at,
     updatedAt: rawRun.updatedAt ?? template.updated_at,

@@ -61,6 +61,7 @@ export interface AgentConclusion {
   markdownText: string;
   plainText: string;
   sections?: AgentConclusionSection[];
+  notice?: string | null;
   rawText?: string;
 }
 
@@ -138,7 +139,6 @@ export interface RunSnapshot {
   conclusion: string;
   conclusionSource: RunConclusionSource;
   agentConclusion?: AgentConclusion;
-  conclusionNotice?: string;
   modelTrace?: RunModelTrace;
   reportState: RunReportState;
   createdAt: string;
@@ -246,7 +246,6 @@ export interface RunConclusionCompletedEvent {
   runId: string;
   conclusion: string;
   agentConclusion?: AgentConclusion;
-  conclusionNotice?: string;
   modelTrace?: RunModelTrace;
 }
 

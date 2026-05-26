@@ -120,6 +120,7 @@ If quota consumption fails after the pending run is inserted, the function keeps
 - `conclusionSource = "model"` means `_shared/langchainModelLayer.js` generated the final conclusion through the selected catalog model.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
 - `conclusionSource = "mock"` is reserved for explicit mock/demo data and must not be emitted as a real provider result.
+- `agentConclusion` is the structured conclusion object for markdown text, plain text, optional sections, raw text, and `notice`.
 - `knowledge_qa` runs the controlled `knowledge_search` tool through LangChain Retriever / Document against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
 - `runId` / `agent_runs.id` is the only business run relationship. `clientRunId` / `agent_runs.client_run_id` is used for frontend pending state, idempotency, duplicate request handling, and request tracing.
 - `tool_invocations` remains the Tool Invocation fact source.
@@ -242,6 +243,12 @@ Example event:
   "conversationId": "...",
   "timestamp": "2026-05-15T00:00:00.000Z",
   "conclusionSource": "model",
+  "agentConclusion": {
+    "source": "model",
+    "markdownText": "...",
+    "plainText": "...",
+    "notice": null
+  },
   "modelTrace": {
     "selectedModelId": "siliconflow-qwen-free",
     "provider": "siliconflow",

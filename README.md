@@ -88,7 +88,7 @@ MODEL_GATEWAY_TIMEOUT_MS=30000
 - Real：登录后通过 CloudBase private API 触发 Agent Run，主链路进入 LangGraph runtime，并由 LangChain Tool / Retriever 访问受控数据和知识库。
 - Fallback：模型不可用、模型未配置、任务不支持或数据工具不可用时，服务端用明确 fallback 结果收口。
 
-Fallback 不能伪装成真实模型结果。Run Trace 和 assistant message metadata 会通过 `modelTrace` 记录并呈现 `conclusionSource`、`fallbackReason`、`modelErrorType`、`provider`、`model`、`usage`、`costEstimate` 和 `latencyMs` 等观测字段。
+Fallback 不能伪装成真实模型结果。结论内容、结构化段落和提示统一由 `agentConclusion` 承载；模型 / 兜底 / 模拟来源由 `modelTrace.conclusionSource` 表达，兜底原因由 `modelTrace.fallbackReason` 表达。Run Trace 和 assistant message metadata 会通过 `modelTrace` 记录并呈现 `modelErrorType`、`provider`、`model`、`usage`、`costEstimate` 和 `latencyMs` 等观测字段。
 
 项目主事实源仍是 canonical `runId`、`run_events`、`tool_invocations`、`retrieval_logs`、`run_sources`、`report_artifacts` 和 `eval_results`。LangGraph / LangSmith 外部 ID 只能进入 metadata / debug，不替代业务主外键。
 
