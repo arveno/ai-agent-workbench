@@ -36,7 +36,9 @@
       "description": "Canonical run status."
     },
     "conclusionSource": {
-      "$ref": "model-trace.schema.json#/$defs/ConclusionSource"
+      "type": "string",
+      "enum": ["model", "fallback", "mock", "unknown", "none"],
+      "description": "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock."
     },
     "modelTrace": {
       "anyOf": [

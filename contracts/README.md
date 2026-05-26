@@ -13,6 +13,12 @@
 
 新增或修改业务字段时，必须先更新 `field-registry.yml` 和对应 schema，再更新后端输出、前端 type、mapper 和 ViewModel。组件层只能消费 ViewModel，不得绕过 mapper 读取 raw payload 或旧字段 fallback。
 
+职责边界：
+
+- `ModelTrace` 负责模型来源、usage、cost、fallback 和 model error。
+- `AgentConclusion` 只负责结论文本、结构化段落、提示文案和可选 raw text。
+- Report / Evaluation metadata 只能通过单一 `modelTrace` 继承模型状态，不能把模型字段展开到 metadata 顶层。
+
 生成命令：
 
 ```bash

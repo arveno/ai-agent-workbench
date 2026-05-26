@@ -4,26 +4,51 @@
   "title": "AgentConclusion",
   "type": "object",
   "additionalProperties": false,
-  "required": ["conclusionSource", "content", "fallbackReason", "modelErrorType"],
+  "required": ["markdownText", "plainText"],
   "properties": {
-    "conclusionSource": {
-      "$ref": "model-trace.schema.json#/$defs/ConclusionSource"
-    },
-    "content": {
+    "markdownText": {
       "type": "string",
-      "description": "Final assistant-facing conclusion content."
+      "description": "Final assistant-facing conclusion rendered as markdown."
     },
-    "summary": {
-      "type": ["string", "null"],
-      "description": "Optional short summary for panels or trace."
+    "plainText": {
+      "type": "string",
+      "description": "Plain text conclusion for search, previews, and non-markdown surfaces."
     },
-    "fallbackReason": {
-      "type": ["string", "null"],
-      "description": "Reason when conclusionSource is fallback."
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AgentConclusionSection"
+      },
+      "description": "Optional structured conclusion sections."
     },
-    "modelErrorType": {
+    "notice": {
       "type": ["string", "null"],
-      "description": "Normalized model error type related to the conclusion."
+      "description": "Optional user-facing notice about conclusion limitations or display context."
+    },
+    "rawText": {
+      "type": "string",
+      "description": "Optional raw conclusion text for debug or lossless rendering."
+    }
+  },
+  "$defs": {
+    "AgentConclusionSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markdownText", "plainText"],
+      "properties": {
+        "title": {
+          "type": ["string", "null"],
+          "description": "Optional section title."
+        },
+        "markdownText": {
+          "type": "string",
+          "description": "Section markdown text."
+        },
+        "plainText": {
+          "type": "string",
+          "description": "Section plain text."
+        }
+      }
     }
   }
 }

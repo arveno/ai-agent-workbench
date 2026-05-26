@@ -138,33 +138,54 @@ objects:
     lifecycleNode: "12 Response, 13 Artifact / Source / Report"
     coreObject: "Run, Message, Report"
     owner: "CloudBase Function / mapper"
-    summary: "Canonical conclusion envelope. Use conclusionSource; do not introduce agentConclusion.source."
+    summary: "Canonical conclusion envelope. It owns conclusion text and notice only; model source, fallback, and model error state belong to ModelTrace."
     fields:
-      conclusionSource:
-        type: "model | fallback | mock | unknown"
-        required: "yes"
-        source: "Agent Run runtime"
-        description: "Canonical source of the conclusion."
-      content:
+      markdownText:
         type: "string"
         required: "yes"
         source: "Agent Run runtime"
-        description: "Final assistant-facing conclusion content."
-      summary:
+        description: "Final assistant-facing conclusion rendered as markdown."
+      plainText:
+        type: "string"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "Plain text conclusion for search, previews, and non-markdown surfaces."
+      sections:
+        type: "AgentConclusionSection[]"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "Optional structured conclusion sections."
+      notice:
         type: "string | null"
         required: "no"
         source: "Agent Run runtime"
-        description: "Optional short summary for panels or trace."
-      fallbackReason:
+        description: "Optional user-facing notice about conclusion limitations or display context."
+      rawText:
+        type: "string"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "Optional raw conclusion text for debug or lossless rendering."
+  AgentConclusionSection:
+    lifecycleNode: "12 Response, 13 Artifact / Source / Report"
+    coreObject: "Run, Message, Report"
+    owner: "CloudBase Function / mapper"
+    summary: "Optional structured section inside AgentConclusion."
+    fields:
+      title:
         type: "string | null"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "Optional section title."
+      markdownText:
+        type: "string"
         required: "yes"
         source: "Agent Run runtime"
-        description: "Reason when conclusionSource is fallback."
-      modelErrorType:
-        type: "string | null"
+        description: "Section markdown text."
+      plainText:
+        type: "string"
         required: "yes"
-        source: "LangChain model layer"
-        description: "Normalized model error type related to the conclusion."
+        source: "Agent Run runtime"
+        description: "Section plain text."
   RunSnapshot:
     lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage"
     coreObject: "Run"
@@ -197,10 +218,10 @@ objects:
         source: "agent_runs.status"
         description: "Canonical run status."
       conclusionSource:
-        type: "model | fallback | mock | unknown"
+        type: "model | fallback | mock | unknown | none"
         required: "yes"
-        source: "Agent Run runtime"
-        description: "Canonical conclusion source."
+        source: "Derived from modelTrace.conclusionSource"
+        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock."
       modelTrace:
         type: "ModelTrace | null"
         required: "yes"
@@ -235,38 +256,18 @@ objects:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"
     owner: "workbench-reports / mapper"
-    summary: "Canonical report metadata copied from the owning run."
+    summary: "Canonical report metadata. Model state is inherited only as a single modelTrace object."
     fields:
       runId:
         type: "string"
         required: "yes"
         source: "report_artifacts.run_id"
         description: "Canonical runId owning the report."
-      selectedModelId:
-        type: "string | null"
-        required: "yes"
-        source: "ModelTrace"
-        description: "Model selection copied from the run model trace."
       modelTrace:
         type: "ModelTrace | null"
-        required: "yes"
+        required: "no"
         source: "agent_runs.metadata.modelTrace"
-        description: "Canonical model trace copied from the owning run."
-      conclusionSource:
-        type: "model | fallback | mock | unknown"
-        required: "yes"
-        source: "Agent Run runtime"
-        description: "Canonical conclusion source copied from the owning run."
-      usage:
-        type: "ModelUsage | null"
-        required: "yes"
-        source: "ModelTrace"
-        description: "Canonical usage copied from the run model trace."
-      costEstimate:
-        type: "CostEstimate | null"
-        required: "yes"
-        source: "ModelTrace"
-        description: "Canonical cost estimate copied from the run model trace."
+        description: "Single inherited model trace object. Do not expand model fields at metadata top level."
       langSmithTraceId:
         type: "string | null"
         required: "no"
@@ -276,38 +277,18 @@ objects:
     lifecycleNode: "15 Evaluation / Quality Gate"
     coreObject: "Evaluation"
     owner: "workbench-evaluations / mapper"
-    summary: "Canonical evaluation metadata copied from the owning run and evaluation process."
+    summary: "Canonical evaluation metadata. Model state is inherited only as a single modelTrace object."
     fields:
       runId:
         type: "string"
         required: "yes"
         source: "eval_results.run_id"
         description: "Canonical runId evaluated by this result."
-      selectedModelId:
-        type: "string | null"
-        required: "yes"
-        source: "ModelTrace"
-        description: "Model selection copied from the run model trace."
       modelTrace:
         type: "ModelTrace | null"
-        required: "yes"
+        required: "no"
         source: "agent_runs.metadata.modelTrace"
-        description: "Canonical model trace copied from the owning run."
-      conclusionSource:
-        type: "model | fallback | mock | unknown"
-        required: "yes"
-        source: "Agent Run runtime"
-        description: "Canonical conclusion source copied from the owning run."
-      usage:
-        type: "ModelUsage | null"
-        required: "yes"
-        source: "ModelTrace"
-        description: "Canonical usage copied from the run model trace."
-      costEstimate:
-        type: "CostEstimate | null"
-        required: "yes"
-        source: "ModelTrace"
-        description: "Canonical cost estimate copied from the run model trace."
+        description: "Single inherited model trace object. Do not expand model fields at metadata top level."
       evaluatorVersion:
         type: "string | null"
         required: "no"
@@ -324,10 +305,25 @@ forbiddenFields:
     reason: "Legacy usage object. Use ModelTrace.usage."
   conclusionNotice:
     pattern: "conclusionNotice"
-    reason: "Legacy fallback notice. Use fallbackReason / modelErrorType and ViewModel display copy."
+    reason: "Legacy fallback notice. Use AgentConclusion.notice for user-facing notices and ModelTrace for fallback / model error state."
   agentConclusionSource:
     pattern: "agentConclusion.source"
-    reason: "Ambiguous nested source. Use agentConclusion.conclusionSource."
+    reason: "AgentConclusion owns text and notice only. Use ModelTrace.conclusionSource."
+  agentConclusionConclusionSource:
+    pattern: "agentConclusion.conclusionSource"
+    reason: "Conclusion source belongs to ModelTrace.conclusionSource."
+  agentConclusionFallbackReason:
+    pattern: "agentConclusion.fallbackReason"
+    reason: "Fallback reason belongs to ModelTrace.fallbackReason."
+  agentConclusionModelErrorType:
+    pattern: "agentConclusion.modelErrorType"
+    reason: "Model error type belongs to ModelTrace.modelErrorType."
+  agentConclusionContent:
+    pattern: "agentConclusion.content"
+    reason: "Use AgentConclusion.markdownText and AgentConclusion.plainText."
+  agentConclusionSummary:
+    pattern: "agentConclusion.summary"
+    reason: "Use AgentConclusion.sections or AgentConclusion.notice."
   metadataClientRunId:
     pattern: "metadata.clientRunId"
     reason: "clientRunId is only pending / idempotency state, not persisted metadata relationship."
@@ -346,12 +342,24 @@ forbiddenFields:
   metadataProvider:
     pattern: "metadata.provider"
     reason: "Provider must come from canonical modelTrace."
+  metadataSelectedModelId:
+    pattern: "metadata.selectedModelId"
+    reason: "Selected model id must come from canonical modelTrace."
   metadataModel:
     pattern: "metadata.model"
     reason: "Model must come from canonical modelTrace."
+  metadataConclusionSource:
+    pattern: "metadata.conclusionSource"
+    reason: "Conclusion source must come from canonical modelTrace.conclusionSource."
   metadataUsage:
     pattern: "metadata.usage"
     reason: "Usage must come from canonical modelTrace.usage."
   metadataCostEstimate:
     pattern: "metadata.costEstimate"
     reason: "Cost estimate must come from canonical modelTrace.costEstimate."
+  metadataFallbackReason:
+    pattern: "metadata.fallbackReason"
+    reason: "Fallback reason must come from canonical modelTrace.fallbackReason."
+  metadataModelErrorType:
+    pattern: "metadata.modelErrorType"
+    reason: "Model error type must come from canonical modelTrace.modelErrorType."

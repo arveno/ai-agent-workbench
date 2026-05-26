@@ -4,43 +4,18 @@
   "title": "ReportMetadata",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "runId",
-    "selectedModelId",
-    "modelTrace",
-    "conclusionSource",
-    "usage",
-    "costEstimate"
-  ],
+  "required": ["runId"],
   "properties": {
     "runId": {
       "type": "string",
       "description": "Canonical runId owning the report."
     },
-    "selectedModelId": {
-      "type": ["string", "null"],
-      "description": "Model selection copied from the run model trace."
-    },
     "modelTrace": {
       "anyOf": [
         { "$ref": "model-trace.schema.json" },
         { "type": "null" }
-      ]
-    },
-    "conclusionSource": {
-      "$ref": "model-trace.schema.json#/$defs/ConclusionSource"
-    },
-    "usage": {
-      "anyOf": [
-        { "$ref": "model-trace.schema.json#/$defs/ModelUsage" },
-        { "type": "null" }
-      ]
-    },
-    "costEstimate": {
-      "anyOf": [
-        { "$ref": "model-trace.schema.json#/$defs/CostEstimate" },
-        { "type": "null" }
-      ]
+      ],
+      "description": "Single inherited model trace object. Do not expand model fields at metadata top level."
     },
     "langSmithTraceId": {
       "type": ["string", "null"],

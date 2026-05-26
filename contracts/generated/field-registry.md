@@ -66,7 +66,7 @@ Canonical model trace attached to a run, report metadata, evaluation metadata, a
 
 ### AgentConclusion
 
-Canonical conclusion envelope. Use conclusionSource; do not introduce agentConclusion.source.
+Canonical conclusion envelope. It owns conclusion text and notice only; model source, fallback, and model error state belong to ModelTrace.
 
 - Lifecycle node: 12 Response, 13 Artifact / Source / Report
 - Core object: Run, Message, Report
@@ -74,11 +74,25 @@ Canonical conclusion envelope. Use conclusionSource; do not introduce agentConcl
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `conclusionSource` | model \| fallback \| mock \| unknown | yes | Agent Run runtime | Canonical source of the conclusion. |
-| `content` | string | yes | Agent Run runtime | Final assistant-facing conclusion content. |
-| `summary` | string \| null | no | Agent Run runtime | Optional short summary for panels or trace. |
-| `fallbackReason` | string \| null | yes | Agent Run runtime | Reason when conclusionSource is fallback. |
-| `modelErrorType` | string \| null | yes | LangChain model layer | Normalized model error type related to the conclusion. |
+| `markdownText` | string | yes | Agent Run runtime | Final assistant-facing conclusion rendered as markdown. |
+| `plainText` | string | yes | Agent Run runtime | Plain text conclusion for search, previews, and non-markdown surfaces. |
+| `sections` | AgentConclusionSection[] | no | Agent Run runtime | Optional structured conclusion sections. |
+| `notice` | string \| null | no | Agent Run runtime | Optional user-facing notice about conclusion limitations or display context. |
+| `rawText` | string | no | Agent Run runtime | Optional raw conclusion text for debug or lossless rendering. |
+
+### AgentConclusionSection
+
+Optional structured section inside AgentConclusion.
+
+- Lifecycle node: 12 Response, 13 Artifact / Source / Report
+- Core object: Run, Message, Report
+- Owner: CloudBase Function / mapper
+
+| Field | Type | Required | Source | Description |
+| --- | --- | --- | --- | --- |
+| `title` | string \| null | no | Agent Run runtime | Optional section title. |
+| `markdownText` | string | yes | Agent Run runtime | Section markdown text. |
+| `plainText` | string | yes | Agent Run runtime | Section plain text. |
 
 ### RunSnapshot
 
@@ -95,7 +109,7 @@ Canonical run snapshot consumed by ViewModel builders.
 | `clientRunId` | string \| null | no | request idempotency | Pending and idempotency id. It is not a business foreign key. |
 | `displayRunId` | string \| null | no | ViewModel | UI-only short id. |
 | `status` | pending \| running \| completed \| failed \| cancelled | yes | agent_runs.status | Canonical run status. |
-| `conclusionSource` | model \| fallback \| mock \| unknown | yes | Agent Run runtime | Canonical conclusion source. |
+| `conclusionSource` | model \| fallback \| mock \| unknown \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock. |
 | `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |
 | `usageId` | string \| null | no | agent_runs.usage_id | Usage record id when persisted. |
@@ -105,7 +119,7 @@ Canonical run snapshot consumed by ViewModel builders.
 
 ### ReportMetadata
 
-Canonical report metadata copied from the owning run.
+Canonical report metadata. Model state is inherited only as a single modelTrace object.
 
 - Lifecycle node: 13 Artifact / Source / Report, 14 Persistence / Lineage
 - Core object: Report
@@ -114,16 +128,12 @@ Canonical report metadata copied from the owning run.
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
 | `runId` | string | yes | report_artifacts.run_id | Canonical runId owning the report. |
-| `selectedModelId` | string \| null | yes | ModelTrace | Model selection copied from the run model trace. |
-| `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace copied from the owning run. |
-| `conclusionSource` | model \| fallback \| mock \| unknown | yes | Agent Run runtime | Canonical conclusion source copied from the owning run. |
-| `usage` | ModelUsage \| null | yes | ModelTrace | Canonical usage copied from the run model trace. |
-| `costEstimate` | CostEstimate \| null | yes | ModelTrace | Canonical cost estimate copied from the run model trace. |
+| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Single inherited model trace object. Do not expand model fields at metadata top level. |
 | `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
 
 ### EvaluationMetadata
 
-Canonical evaluation metadata copied from the owning run and evaluation process.
+Canonical evaluation metadata. Model state is inherited only as a single modelTrace object.
 
 - Lifecycle node: 15 Evaluation / Quality Gate
 - Core object: Evaluation
@@ -132,11 +142,7 @@ Canonical evaluation metadata copied from the owning run and evaluation process.
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
 | `runId` | string | yes | eval_results.run_id | Canonical runId evaluated by this result. |
-| `selectedModelId` | string \| null | yes | ModelTrace | Model selection copied from the run model trace. |
-| `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace copied from the owning run. |
-| `conclusionSource` | model \| fallback \| mock \| unknown | yes | Agent Run runtime | Canonical conclusion source copied from the owning run. |
-| `usage` | ModelUsage \| null | yes | ModelTrace | Canonical usage copied from the run model trace. |
-| `costEstimate` | CostEstimate \| null | yes | ModelTrace | Canonical cost estimate copied from the run model trace. |
+| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Single inherited model trace object. Do not expand model fields at metadata top level. |
 | `evaluatorVersion` | string \| null | no | evaluation runtime | Evaluator or rubric version. |
 | `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
 
@@ -145,14 +151,23 @@ Canonical evaluation metadata copied from the owning run and evaluation process.
 | Pattern | Reason |
 | --- | --- |
 | `tokenUsage` | Legacy usage object. Use ModelTrace.usage. |
-| `conclusionNotice` | Legacy fallback notice. Use fallbackReason / modelErrorType and ViewModel display copy. |
-| `agentConclusion.source` | Ambiguous nested source. Use agentConclusion.conclusionSource. |
+| `conclusionNotice` | Legacy fallback notice. Use AgentConclusion.notice for user-facing notices and ModelTrace for fallback / model error state. |
+| `agentConclusion.source` | AgentConclusion owns text and notice only. Use ModelTrace.conclusionSource. |
+| `agentConclusion.conclusionSource` | Conclusion source belongs to ModelTrace.conclusionSource. |
+| `agentConclusion.fallbackReason` | Fallback reason belongs to ModelTrace.fallbackReason. |
+| `agentConclusion.modelErrorType` | Model error type belongs to ModelTrace.modelErrorType. |
+| `agentConclusion.content` | Use AgentConclusion.markdownText and AgentConclusion.plainText. |
+| `agentConclusion.summary` | Use AgentConclusion.sections or AgentConclusion.notice. |
 | `metadata.clientRunId` | clientRunId is only pending / idempotency state, not persisted metadata relationship. |
 | `modelTrace.tokenUsage` | Legacy model trace field. Use modelTrace.usage. |
 | `usage ?? tokenUsage` | Old/new fallback chain. Normalize usage once in mapper. |
 | `tokenUsage \|\| usage` | Old/new fallback chain. Normalize usage once in mapper. |
 | `rawRun.conclusionSource ?? 'mock'` | Mock source must be explicit and not a raw fallback. |
 | `metadata.provider` | Provider must come from canonical modelTrace. |
+| `metadata.selectedModelId` | Selected model id must come from canonical modelTrace. |
 | `metadata.model` | Model must come from canonical modelTrace. |
+| `metadata.conclusionSource` | Conclusion source must come from canonical modelTrace.conclusionSource. |
 | `metadata.usage` | Usage must come from canonical modelTrace.usage. |
 | `metadata.costEstimate` | Cost estimate must come from canonical modelTrace.costEstimate. |
+| `metadata.fallbackReason` | Fallback reason must come from canonical modelTrace.fallbackReason. |
+| `metadata.modelErrorType` | Model error type must come from canonical modelTrace.modelErrorType. |

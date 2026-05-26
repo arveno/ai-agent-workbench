@@ -42,9 +42,44 @@ const cases = [
     labels: ['agentConclusion.source'],
   },
   {
+    name: 'forbidden agentConclusion conclusion source',
+    code: 'const source = agentConclusion.conclusionSource;',
+    labels: ['agentConclusion.conclusionSource'],
+  },
+  {
+    name: 'forbidden agentConclusion fallback reason',
+    code: "const fallbackReason = agentConclusion?.['fallbackReason'];",
+    labels: ['agentConclusion.fallbackReason'],
+  },
+  {
+    name: 'forbidden agentConclusion model error type',
+    code: 'const modelErrorType = agentConclusion?.modelErrorType;',
+    labels: ['agentConclusion.modelErrorType'],
+  },
+  {
     name: 'optional bracket access modelTrace.tokenUsage',
     code: "const usage = modelTrace?.['tokenUsage'];",
     labels: ['modelTrace.tokenUsage', 'tokenUsage'],
+  },
+  {
+    name: 'forbidden metadata selected model id',
+    code: "const selectedModelId = metadata['selectedModelId'];",
+    labels: ['metadata.selectedModelId'],
+  },
+  {
+    name: 'forbidden metadata conclusion source',
+    code: 'const conclusionSource = metadata?.conclusionSource;',
+    labels: ['metadata.conclusionSource'],
+  },
+  {
+    name: 'forbidden metadata fallback reason',
+    code: "const fallbackReason = metadata?.['fallbackReason'];",
+    labels: ['metadata.fallbackReason'],
+  },
+  {
+    name: 'forbidden metadata model error type',
+    code: 'const modelErrorType = metadata.modelErrorType;',
+    labels: ['metadata.modelErrorType'],
   },
   {
     name: 'optional chaining rawRun.conclusionSource mock fallback',
@@ -67,8 +102,11 @@ const cases = [
       const view = {
         metadataProvider: metadata.providerLabel,
         bracketProviderLabel: metadata['providerLabel'],
-        source: agentConclusion?.conclusionSource,
-        bracketSource: agentConclusion['conclusionSource'],
+        notice: agentConclusion.notice,
+        bracketNotice: agentConclusion['notice'],
+        traceSource: modelTrace.conclusionSource,
+        traceFallbackReason: modelTrace.fallbackReason,
+        traceModelErrorType: modelTrace.modelErrorType,
         usage: modelTrace?.usage,
         conclusionSource: rawRun?.conclusionSource ?? 'unknown',
       };

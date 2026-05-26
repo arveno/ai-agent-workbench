@@ -27,6 +27,11 @@ export const forbiddenPatterns = [
   { label: 'tokenUsage', regex: /\btokenUsage\b/ },
   { label: 'conclusionNotice', regex: /\bconclusionNotice\b/ },
   { label: 'agentConclusion.source', regex: propertyAccess('agentConclusion', 'source') },
+  { label: 'agentConclusion.conclusionSource', regex: propertyAccess('agentConclusion', 'conclusionSource') },
+  { label: 'agentConclusion.fallbackReason', regex: propertyAccess('agentConclusion', 'fallbackReason') },
+  { label: 'agentConclusion.modelErrorType', regex: propertyAccess('agentConclusion', 'modelErrorType') },
+  { label: 'agentConclusion.content', regex: propertyAccess('agentConclusion', 'content') },
+  { label: 'agentConclusion.summary', regex: propertyAccess('agentConclusion', 'summary') },
   { label: 'metadata.clientRunId', regex: propertyAccess('metadata', 'clientRunId') },
   { label: 'modelTrace.tokenUsage', regex: propertyAccess('modelTrace', 'tokenUsage') },
   { label: 'usage ?? tokenUsage', regex: /\busage\s*\?\?\s*tokenUsage\b/ },
@@ -35,10 +40,14 @@ export const forbiddenPatterns = [
     label: "rawRun.conclusionSource ?? 'mock'",
     regex: new RegExp(`${propertyAccessPattern('rawRun', 'conclusionSource')}\\s*\\?\\?\\s*['"]mock['"]`),
   },
+  { label: 'metadata.selectedModelId', regex: propertyAccess('metadata', 'selectedModelId') },
   { label: 'metadata.provider', regex: propertyAccess('metadata', 'provider') },
   { label: 'metadata.model', regex: propertyAccess('metadata', 'model') },
+  { label: 'metadata.conclusionSource', regex: propertyAccess('metadata', 'conclusionSource') },
   { label: 'metadata.usage', regex: propertyAccess('metadata', 'usage') },
   { label: 'metadata.costEstimate', regex: propertyAccess('metadata', 'costEstimate') },
+  { label: 'metadata.fallbackReason', regex: propertyAccess('metadata', 'fallbackReason') },
+  { label: 'metadata.modelErrorType', regex: propertyAccess('metadata', 'modelErrorType') },
 ];
 
 function git(args) {
