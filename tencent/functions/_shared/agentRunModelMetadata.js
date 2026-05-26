@@ -20,6 +20,20 @@ function readTraceObject(value) {
   return isRecord(value) ? { ...value } : null;
 }
 
+const MODEL_METADATA_FIELDS = [
+  'selectedModelId',
+  'provider',
+  'model',
+  'latencyMs',
+  'tokenUsage',
+  'usage',
+  'costEstimate',
+  'fallbackReason',
+  'modelErrorType',
+  'conclusionSource',
+  'modelTrace',
+];
+
 function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
   const metadata = isRecord(runMetadata) ? runMetadata : {};
   const trace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
@@ -73,6 +87,17 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
   };
 }
 
+function removeAgentRunModelMetadataFields(metadata) {
+  const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
+
+  for (const field of MODEL_METADATA_FIELDS) {
+    delete nextMetadata[field];
+  }
+
+  return nextMetadata;
+}
+
 module.exports = {
   createAgentRunModelMetadata,
+  removeAgentRunModelMetadataFields,
 };

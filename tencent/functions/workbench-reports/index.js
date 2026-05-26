@@ -65,7 +65,10 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
-const { createAgentRunModelMetadata } = loadSharedModule('agentRunModelMetadata');
+const {
+  createAgentRunModelMetadata,
+  removeAgentRunModelMetadataFields,
+} = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -326,8 +329,10 @@ function mapRunSource(row) {
   };
 }
 
-function createReportMetadata(metadata, runModelMetadata = {}) {
-  const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
+function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
+  const nextMetadata = options.stripRequestModelMetadata
+    ? removeAgentRunModelMetadataFields(metadata)
+    : (isRecord(metadata) ? { ...metadata } : {});
 
   delete nextMetadata.sources;
   delete nextMetadata.sourceCount;
@@ -599,7 +604,9 @@ async function createReportStateMarker(db, currentUser, conversationId, runId, r
     source: 'agent-run-report-state',
     reportState,
     runId,
-  }, runModelMetadata);
+  }, runModelMetadata, {
+    stripRequestModelMetadata: true,
+  });
 
   const reportId = randomUUID();
   const insertResult = await db.from('report_artifacts').insert({
@@ -657,7 +664,9 @@ async function createReport(currentUser, body) {
   const requestMetadata = readMetadata(body.metadata);
   const runId = readRequiredRunId(body.runId);
   const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
-  const metadata = createReportMetadata(requestMetadata, runModelMetadata);
+  const metadata = createReportMetadata(requestMetadata, runModelMetadata, {
+    stripRequestModelMetadata: true,
+  });
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,

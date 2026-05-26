@@ -103,7 +103,7 @@ Response:
 
 `metadata` is `JSON.stringify(...)` before writing to MySQL and safely parsed before returning.
 
-When `runId` is present, the function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and copies the project canonical model metadata into `report_artifacts.metadata`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. This keeps provider no-usage and cost unavailable reasons explainable without adding report columns or consuming LangChain raw payloads.
+When `runId` is present, the function first removes request-side model metadata fields from `metadata`, then reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and copies the project canonical model metadata into `report_artifacts.metadata`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. This keeps provider no-usage and cost unavailable reasons explainable without adding report columns or consuming LangChain raw payloads. If the run has no canonical `modelTrace`, request metadata cannot backfill these model fields.
 
 ## Package
 
