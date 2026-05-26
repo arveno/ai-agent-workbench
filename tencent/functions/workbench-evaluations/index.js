@@ -50,6 +50,7 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
+  'conclusion_source',
   'metadata',
   'created_at',
 ].join(',');
@@ -474,6 +475,96 @@ function mapResult(row) {
   };
 }
 
+function normalizeTraceString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeTraceNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function normalizeConclusionSource(value) {
+  const source = normalizeTraceString(value);
+  return source === 'model' || source === 'fallback' || source === 'mock' || source === 'none' ? source : null;
+}
+
+function readTraceObject(value) {
+  return isRecord(value) ? value : null;
+}
+
+function createRunModelMetadata(runMetadata, fallbackConclusionSource) {
+  const sourceMetadata = isRecord(runMetadata) ? runMetadata : {};
+  const trace = isRecord(sourceMetadata.modelTrace) ? sourceMetadata.modelTrace : null;
+
+  if (!trace) {
+    return {};
+  }
+
+  const modelTrace = {
+    selectedModelId: normalizeTraceString(trace.selectedModelId),
+    provider: normalizeTraceString(trace.provider),
+    model: normalizeTraceString(trace.model),
+    latencyMs: normalizeTraceNumber(trace.latencyMs),
+    tokenUsage: readTraceObject(trace.tokenUsage),
+    usage: readTraceObject(trace.usage),
+    costEstimate: readTraceObject(trace.costEstimate),
+    fallbackReason: normalizeTraceString(trace.fallbackReason),
+    modelErrorType: normalizeTraceString(trace.modelErrorType),
+    conclusionSource: normalizeConclusionSource(trace.conclusionSource) ||
+      normalizeConclusionSource(fallbackConclusionSource) ||
+      'none',
+  };
+  const hasModelMetadata = Boolean(
+    modelTrace.selectedModelId ||
+    modelTrace.provider ||
+    modelTrace.model ||
+    modelTrace.latencyMs !== null ||
+    modelTrace.tokenUsage ||
+    modelTrace.usage ||
+    modelTrace.costEstimate ||
+    modelTrace.fallbackReason ||
+    modelTrace.modelErrorType,
+  );
+
+  if (!hasModelMetadata) {
+    return {};
+  }
+
+  return {
+    selectedModelId: modelTrace.selectedModelId,
+    provider: modelTrace.provider,
+    model: modelTrace.model,
+    latencyMs: modelTrace.latencyMs,
+    tokenUsage: modelTrace.tokenUsage,
+    usage: modelTrace.usage,
+    costEstimate: modelTrace.costEstimate,
+    fallbackReason: modelTrace.fallbackReason,
+    modelErrorType: modelTrace.modelErrorType,
+    conclusionSource: modelTrace.conclusionSource,
+    modelTrace,
+  };
+}
+
+function createEvaluationModelTrace(payloadModelTrace, runModelMetadata) {
+  if (isRecord(runModelMetadata.modelTrace)) {
+    return runModelMetadata.modelTrace;
+  }
+
+  const payloadMetadata = createRunModelMetadata({ modelTrace: payloadModelTrace }, null);
+  return isRecord(payloadMetadata.modelTrace) ? payloadMetadata.modelTrace : {};
+}
+
+function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation) {
+  return {
+    ...(isRecord(payloadMetadata) ? payloadMetadata : {}),
+    ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
+    source: 'workbench-evaluation',
+    resultVersion: 1,
+    langSmithEvaluation,
+  };
+}
+
 async function fetchCases(params) {
   const db = getDb();
   let query = db.from('eval_cases').select(CASE_COLUMNS).eq('is_active', 1);
@@ -667,6 +758,10 @@ async function createResult(currentUser, body) {
 
   const resultId = randomUUID();
   const runMetadata = run ? parseJsonObject(run.metadata) : {};
+  const runModelMetadata = run
+    ? createRunModelMetadata(runMetadata, toNullableString(run.conclusion_source))
+    : {};
+  const modelTrace = createEvaluationModelTrace(payload.modelTrace, runModelMetadata);
   const langSmithEvaluation = await submitLangSmithEvaluationFeedback({
     evaluationId: resultId,
     runId: run ? String(run.id ?? '') : null,
@@ -688,16 +783,11 @@ async function createResult(currentUser, body) {
     bad_case_reason: payload.badCaseReason,
     human_note: payload.humanNote,
     actual_summary: JSON.stringify(payload.actualSummary),
-    model_trace: JSON.stringify(payload.modelTrace),
+    model_trace: JSON.stringify(modelTrace),
     tool_summary: JSON.stringify(payload.toolSummary),
     rag_summary: JSON.stringify(payload.ragSummary),
     report_summary: JSON.stringify(payload.reportSummary),
-    metadata: JSON.stringify({
-      ...payload.metadata,
-      source: 'workbench-evaluation',
-      resultVersion: 1,
-      langSmithEvaluation,
-    }),
+    metadata: JSON.stringify(createEvaluationMetadata(payload.metadata, runModelMetadata, langSmithEvaluation)),
   };
 
   const insertResult = await db.from('eval_results').insert(insertPayload);

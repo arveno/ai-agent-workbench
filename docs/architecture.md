@@ -246,7 +246,7 @@ message 的写入和读取。
 
 ### `workbench-reports`
 
-report artifact 的生成状态、保存和读取。
+report artifact 的生成状态、保存和读取。写入 `report_artifacts.metadata` 时，报告链路只从项目 canonical `agent_runs.metadata.modelTrace` 同步 `selectedModelId`、provider、model、latency、`tokenUsage`、canonical `usage`、`costEstimate`、fallback、model error 和 `conclusionSource`，仍使用现有 JSON metadata，不新增数据库字段，不消费 LangChain raw payload。
 
 ### `workbench-demo-copy`
 
@@ -262,7 +262,7 @@ quota / usage 状态读取。
 
 ### `workbench-evaluations`
 
-Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。
+Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。写入 `eval_results.metadata` 和 `model_trace` 时，Evaluation 链路以 canonical `runId` 读取项目 `agent_runs.metadata.modelTrace`，同步 usage / cost / provider 状态；LangSmith feedback / trace id 只作为外部观测 metadata，不替代 `eval_results.run_id` 或项目主事实源。
 
 ### `workbench-agent-run-stream`
 

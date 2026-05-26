@@ -54,6 +54,8 @@ Evaluation results store compact summaries only:
 - `reportSummary`
 - `metadata`
 
+When a result references a canonical `runId`, the function reads the owned `agent_runs.metadata.modelTrace` row and syncs the project canonical model metadata into `eval_results.metadata` and `model_trace`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. Provider no-usage and cost unavailable states remain explicit JSON metadata; no evaluation columns or migrations are added.
+
 The function rejects obvious raw fields such as `runEvents`, `toolRawPayload`, `rawToolInput`, and `rawToolOutput`. It does not copy raw `run_events`, raw tool input, or raw tool output into `eval_results`.
 
 ## LangSmith Boundary

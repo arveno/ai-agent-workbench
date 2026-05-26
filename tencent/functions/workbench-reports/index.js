@@ -43,6 +43,14 @@ const RUN_SOURCE_COLUMNS = [
   'created_at',
   'metadata',
 ].join(',');
+const AGENT_RUN_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+  'conversation_id',
+  'conclusion_source',
+  'metadata',
+].join(',');
 
 const VALID_STATUSES = new Set(['draft', 'generated', 'archived']);
 const VALID_RUN_REPORT_STATES = new Set(['hidden', 'pending', 'generating', 'generated', 'skipped', 'failed']);
@@ -317,7 +325,78 @@ function mapRunSource(row) {
   };
 }
 
-function createReportMetadata(metadata) {
+function normalizeTraceString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeTraceNumber(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function normalizeConclusionSource(value) {
+  const source = normalizeTraceString(value);
+  return source === 'model' || source === 'fallback' || source === 'mock' || source === 'none' ? source : null;
+}
+
+function readTraceObject(value) {
+  return isRecord(value) ? value : null;
+}
+
+function createRunModelMetadata(runMetadata, fallbackConclusionSource) {
+  const metadata = isRecord(runMetadata) ? runMetadata : {};
+  const trace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
+
+  if (!trace) {
+    return {};
+  }
+
+  const modelTrace = {
+    selectedModelId: normalizeTraceString(trace.selectedModelId),
+    provider: normalizeTraceString(trace.provider),
+    model: normalizeTraceString(trace.model),
+    latencyMs: normalizeTraceNumber(trace.latencyMs),
+    tokenUsage: readTraceObject(trace.tokenUsage),
+    usage: readTraceObject(trace.usage),
+    costEstimate: readTraceObject(trace.costEstimate),
+    fallbackReason: normalizeTraceString(trace.fallbackReason),
+    modelErrorType: normalizeTraceString(trace.modelErrorType),
+    conclusionSource: normalizeConclusionSource(trace.conclusionSource) ||
+      normalizeConclusionSource(fallbackConclusionSource) ||
+      'none',
+  };
+  const hasModelMetadata = Boolean(
+    modelTrace.selectedModelId ||
+    modelTrace.provider ||
+    modelTrace.model ||
+    modelTrace.latencyMs !== null ||
+    modelTrace.tokenUsage ||
+    modelTrace.usage ||
+    modelTrace.costEstimate ||
+    modelTrace.fallbackReason ||
+    modelTrace.modelErrorType,
+  );
+
+  if (!hasModelMetadata) {
+    return {};
+  }
+
+  return {
+    selectedModelId: modelTrace.selectedModelId,
+    provider: modelTrace.provider,
+    model: modelTrace.model,
+    latencyMs: modelTrace.latencyMs,
+    tokenUsage: modelTrace.tokenUsage,
+    usage: modelTrace.usage,
+    costEstimate: modelTrace.costEstimate,
+    fallbackReason: modelTrace.fallbackReason,
+    modelErrorType: modelTrace.modelErrorType,
+    conclusionSource: modelTrace.conclusionSource,
+    modelTrace,
+  };
+}
+
+function createReportMetadata(metadata, runModelMetadata = {}) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
 
   delete nextMetadata.sources;
@@ -328,7 +407,10 @@ function createReportMetadata(metadata) {
   delete nextMetadata.sourceNoSourceReason;
   delete nextMetadata.source_no_source_reason;
 
-  return nextMetadata;
+  return {
+    ...nextMetadata,
+    ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
+  };
 }
 
 function toUuidOrNull(value) {
@@ -380,6 +462,15 @@ function hasExpectedConversationOwner(row, currentUser) {
 
 function hasExpectedReportOwner(row, currentUser) {
   return String(row._openid ?? '') === currentUser.openid && String(row.user_id ?? '') === currentUser.userId;
+}
+
+function hasExpectedAgentRunOwner(row, currentUser, conversationId, runId) {
+  return (
+    String(row.id ?? '') === runId &&
+    String(row.conversation_id ?? '') === conversationId &&
+    String(row._openid ?? '') === currentUser.openid &&
+    String(row.user_id ?? '') === currentUser.userId
+  );
 }
 
 async function fetchConversationRecord(db, currentUser, conversationId) {
@@ -460,6 +551,31 @@ async function readRunSourceSnapshot(db, currentUser, conversationId, runId) {
       noSourceReason: 'source_query_failed',
     };
   }
+}
+
+async function readAgentRunModelMetadata(db, currentUser, conversationId, runId) {
+  if (!runId) {
+    return {};
+  }
+
+  const result = await db
+    .from('agent_runs')
+    .select(AGENT_RUN_COLUMNS)
+    .eq('id', runId)
+    .eq('conversation_id', conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedAgentRunOwner(row, currentUser, conversationId, runId));
+  const run = rows.length > 0 ? rows[0] : null;
+
+  if (!run) {
+    return {};
+  }
+
+  return createRunModelMetadata(parseJsonObject(run.metadata), toNullableString(run.conclusion_source));
 }
 
 async function hydrateReportSources(db, currentUser, report) {
@@ -544,16 +660,16 @@ async function markAgentRunReportState(db, currentUser, conversationId, runId, r
   assertNoQueryError(updateByIdResult);
 }
 
-async function createReportStateMarker(db, currentUser, conversationId, runId, reportState) {
+async function createReportStateMarker(db, currentUser, conversationId, runId, reportState, runModelMetadata = {}) {
   if (reportState !== 'skipped') {
     return null;
   }
 
-  const metadata = {
+  const metadata = createReportMetadata({
     source: 'agent-run-report-state',
     reportState,
     runId,
-  };
+  }, runModelMetadata);
 
   const reportId = randomUUID();
   const insertResult = await db.from('report_artifacts').insert({
@@ -586,9 +702,10 @@ async function updateRunReportState(currentUser, body) {
 
   const reportState = readRunReportState(body.reportState);
   const runId = readRequiredRunId(body.runId);
+  const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
 
   await markAgentRunReportState(db, currentUser, conversationId, runId, reportState);
-  await createReportStateMarker(db, currentUser, conversationId, runId, reportState);
+  await createReportStateMarker(db, currentUser, conversationId, runId, reportState, runModelMetadata);
 
   return {
     runId,
@@ -609,7 +726,8 @@ async function createReport(currentUser, body) {
   const reportId = randomUUID();
   const requestMetadata = readMetadata(body.metadata);
   const runId = readRequiredRunId(body.runId);
-  const metadata = createReportMetadata(requestMetadata);
+  const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
+  const metadata = createReportMetadata(requestMetadata, runModelMetadata);
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,

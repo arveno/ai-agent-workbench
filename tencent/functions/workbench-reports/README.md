@@ -103,6 +103,8 @@ Response:
 
 `metadata` is `JSON.stringify(...)` before writing to MySQL and safely parsed before returning.
 
+When `runId` is present, the function reads the owned `agent_runs.metadata.modelTrace` row and copies the project canonical model metadata into `report_artifacts.metadata`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. This keeps provider no-usage and cost unavailable reasons explainable without adding report columns or consuming LangChain raw payloads.
+
 ## Package
 
 Upload a source package only. Do not include `node_modules`, and do not submit or upload `package-lock.json`. Enable CloudBase automatic dependency installation.
