@@ -19,10 +19,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch PR base ref
+        run: git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+
+      - name: Run data contract self-test
+        run: node scripts/check-data-contract-self-test.mjs
 
       - name: Generate field registry doc
         run: node scripts/generate-field-registry-doc.mjs
