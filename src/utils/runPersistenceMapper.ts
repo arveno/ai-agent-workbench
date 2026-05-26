@@ -73,7 +73,7 @@ function mapIntent(value: string | null): RunIntent {
 }
 
 function mapConclusionSource(value: string | null): RunConclusionSource {
-  if (value === 'model' || value === 'fallback' || value === 'mock' || value === 'unknown' || value === 'none') {
+  if (value === 'model' || value === 'fallback' || value === 'mock' || value === 'none') {
     return value;
   }
 
@@ -261,7 +261,8 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
 
 export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
   const runIdentity = getAgentRunRecordIdentity(record);
-  const conclusionSource = mapConclusionSource(record.conclusion_source);
+  const modelTrace = getRunModelTrace(record);
+  const conclusionSource = modelTrace?.conclusionSource ?? 'none';
   const agentConclusion = normalizeAgentConclusion(
     record.conclusion ?? '',
     record.metadata.agentConclusion as AgentConclusion | undefined,
@@ -282,7 +283,7 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
     conclusion: agentConclusion.plainText,
     conclusionSource,
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    modelTrace: getRunModelTrace(record),
+    modelTrace,
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,
     updatedAt: record.completed_at ?? record.started_at,
@@ -322,12 +323,15 @@ export function runPersistenceRecordsToSnapshot(params: {
   const persistedSources = params.sources.map((source) => runSourceRecordToRunSource(source));
   const persistedReportState = mapReportState(params.run.report_state);
   const runIdentity = getAgentRunRecordIdentity(params.run);
+  const modelTrace = snapshot.modelTrace ?? getRunModelTrace(params.run);
 
   return {
     ...snapshot,
     ...runIdentity,
     conclusion: agentConclusion.plainText,
+    conclusionSource: modelTrace?.conclusionSource ?? 'none',
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
+    modelTrace,
     sessionId: params.run.conversation_id,
     toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
     sources: persistedSources,

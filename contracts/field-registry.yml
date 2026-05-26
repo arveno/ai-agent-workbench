@@ -130,7 +130,7 @@ objects:
         source: "LangChain model layer"
         description: "Sanitized model error message."
       conclusionSource:
-        type: "model | fallback | mock | unknown"
+        type: "model | fallback | mock | none"
         required: "yes"
         source: "Agent Run runtime"
         description: "Canonical conclusion source shared by Chat, Run Trace, Report, and Evaluation."
@@ -218,10 +218,10 @@ objects:
         source: "agent_runs.status"
         description: "Canonical run status."
       conclusionSource:
-        type: "model | fallback | mock | unknown | none"
+        type: "model | fallback | mock | none"
         required: "yes"
         source: "Derived from modelTrace.conclusionSource"
-        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock."
+        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
       modelTrace:
         type: "ModelTrace | null"
         required: "yes"

@@ -345,17 +345,24 @@ async function fetchConversationRecord(db, currentUser, conversationId) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+function normalizeRunConclusionSource(value) {
+  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none' ? value : 'none';
+}
+
 function mapAgentRun(row) {
+  const metadata = parseJsonObject(row.metadata);
+  const modelTrace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
+
   return {
     id: String(row.id ?? ''),
     conversationId: String(row.conversation_id ?? ''),
     usageId: row.usage_id ? String(row.usage_id) : null,
     clientRunId: row.client_run_id ? String(row.client_run_id) : null,
     status: String(row.status ?? 'running'),
-    conclusionSource: row.conclusion_source ? String(row.conclusion_source) : null,
+    conclusionSource: normalizeRunConclusionSource(modelTrace?.conclusionSource),
     reportState: row.report_state ? String(row.report_state) : null,
     completedAt: row.completed_at ? String(row.completed_at) : null,
-    metadata: parseJsonObject(row.metadata),
+    metadata,
     createdAt: row.created_at ? String(row.created_at) : null,
     updatedAt: row.updated_at ? String(row.updated_at) : null,
   };
@@ -1013,6 +1020,7 @@ function createRunSnapshot(context, options = {}) {
   const createdAt = context.createdAt || nowIso();
   const plan = options.plan || context.plan;
   const intent = plan?.intent || context.intent || 'unknown';
+  const modelTrace = options.modelTrace || context.modelTrace || null;
 
   return {
     id: context.runId,
@@ -1030,9 +1038,9 @@ function createRunSnapshot(context, options = {}) {
     toolInvocations: options.toolInvocations || context.toolInvocations || [],
     chartData: options.chartData || context.chartData,
     conclusion: options.conclusion || context.conclusion || '',
-    conclusionSource: options.conclusionSource || context.conclusionSource || 'none',
+    conclusionSource: modelTrace?.conclusionSource || 'none',
     agentConclusion: options.agentConclusion || context.agentConclusion,
-    modelTrace: options.modelTrace || context.modelTrace,
+    modelTrace,
     reportState: options.reportState || context.reportState || 'hidden',
     createdAt,
     updatedAt: nowIso(),

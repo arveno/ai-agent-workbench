@@ -113,7 +113,7 @@ function isRunIntent(value: unknown): value is RunSnapshot['intent'] {
 }
 
 function isRunConclusionSource(value: unknown): value is RunSnapshot['conclusionSource'] {
-  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'unknown' || value === 'none';
+  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none';
 }
 
 function isRunReportState(value: unknown): value is RunSnapshot['reportState'] {

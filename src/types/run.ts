@@ -10,7 +10,7 @@ export type RunStepStatus = 'pending' | 'running' | 'success' | 'error' | 'skipp
 
 export type RunToolStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
 
-export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'unknown' | 'none';
+export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
 
 export type RunReportState = 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
 
