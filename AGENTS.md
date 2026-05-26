@@ -183,7 +183,7 @@ selectedModelId
 禁止：
 
 - 未按 Issue 或 prompt 授权自动 commit、push、创建 / 更新 PR；自动 merge；push main。
-- 绕过 GitHub required review。
+- 绕过用户最终 merge 决策。
 - 处理 stash。
 - 全项目格式化。
 - 新增无关依赖。
@@ -197,7 +197,7 @@ selectedModelId
 - 把代码上传成功等同于完整部署成功。
 - 修改部署脚本却不提供 dry-run、真实验证或人工校验步骤。
 
-合并 PR 前，Codex 必须确认 required reviews 和 required checks 已通过。若 GitHub required review 或 required checks 未通过，必须停止，不得 merge。
+合并 PR 前，Codex 必须确认 CI 和 PR Template Check 已通过，并确认用户已经完成 ChatGPT Review / 用户 Review。Codex 不得自动 merge，不得绕过用户最终 merge 决策。
 
 ## 11. 输出要求
 
