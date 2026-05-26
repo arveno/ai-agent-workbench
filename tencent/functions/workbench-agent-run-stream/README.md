@@ -158,7 +158,7 @@ Model and LangSmith keys must be CloudBase function environment variables only. 
 
 When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/langchainModelLayer.js` is the current execution boundary; `MODEL_GATEWAY_TIMEOUT_MS` remains the timeout environment variable name to keep existing server configuration stable.
 
-The model layer keeps the legacy `tokenUsage` object for existing consumers and also writes canonical `usage` and `costEstimate` objects into `modelTrace`, Run Trace events, assistant message metadata, and `agent_run_usage.metadata`. If a provider succeeds but does not return usage, `usage.usageAvailable = false` and `usage.usageUnavailableReason = "provider_no_usage"`; model output is still accepted. Cost is an estimate-only metadata shape and is not a real billing record. Current free / unknown pricing returns `estimatedCost = null`, `isEstimated = false`, and an explicit `costUnavailableReason`.
+The model layer writes model observability through a single `modelTrace` object. `modelTrace.usage` is the canonical token usage shape and `modelTrace.costEstimate` is the canonical cost estimate shape across Run Trace events, assistant message metadata, and `agent_run_usage.metadata`. If a provider succeeds but does not return usage, `usage.usageAvailable = false` and `usage.usageUnavailableReason = "provider_no_usage"`; model output is still accepted. Cost is an estimate-only metadata shape and is not a real billing record. Current free / unknown pricing returns `estimatedCost = null`, `isEstimated = false`, and an explicit `costUnavailableReason`.
 
 Fallback reasons used by the real data-analysis path:
 
@@ -242,31 +242,30 @@ Example event:
   "conversationId": "...",
   "timestamp": "2026-05-15T00:00:00.000Z",
   "conclusionSource": "model",
-  "fallbackReason": null,
-  "selectedModelId": "siliconflow-qwen-free",
-  "provider": "siliconflow",
-  "model": "Qwen/Qwen2.5-7B-Instruct",
-  "latencyMs": 1280,
-  "tokenUsage": {
-    "promptTokens": 320,
-    "completionTokens": 180,
-    "totalTokens": 500
-  },
-  "usage": {
-    "promptTokens": 320,
-    "completionTokens": 180,
-    "totalTokens": 500,
-    "usageAvailable": true,
-    "usageSource": "provider",
-    "usageUnavailableReason": null
-  },
-  "costEstimate": {
-    "estimatedCost": null,
-    "currency": null,
-    "pricingUnit": null,
-    "isEstimated": false,
-    "pricingSource": "model_catalog.billingType",
-    "costUnavailableReason": "free_pricing"
+  "modelTrace": {
+    "selectedModelId": "siliconflow-qwen-free",
+    "provider": "siliconflow",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "latencyMs": 1280,
+    "usage": {
+      "promptTokens": 320,
+      "completionTokens": 180,
+      "totalTokens": 500,
+      "usageAvailable": true,
+      "usageSource": "provider",
+      "usageUnavailableReason": null
+    },
+    "costEstimate": {
+      "estimatedCost": null,
+      "currency": null,
+      "pricingUnit": null,
+      "isEstimated": false,
+      "pricingSource": "model_catalog.billingType",
+      "costUnavailableReason": "free_pricing"
+    },
+    "fallbackReason": null,
+    "modelErrorType": null,
+    "conclusionSource": "model"
   }
 }
 ```
@@ -343,9 +342,9 @@ Expected result:
 - Without token: CloudBase gateway returns `401 MISSING_CREDENTIALS`.
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
 - Current Agent Run streams LangGraph-backed canonical events, including `schema_inspect` / `aggregate_table` / `chart_render` or `knowledge_search` tool completions where applicable.
-- If the model provider succeeds after data tools succeed, the run returns `conclusionSource = "model"` with `selectedModelId`, `provider`, `model`, `tokenUsage`, canonical `usage`, `costEstimate`, and `latencyMs`.
+- If the model provider succeeds after data tools succeed, the run returns `conclusionSource = "model"` with `modelTrace.selectedModelId`, `modelTrace.provider`, `modelTrace.model`, canonical `modelTrace.usage`, `modelTrace.costEstimate`, and `modelTrace.latencyMs`.
 - If the model provider fails after data tools succeed, the run returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
-- `conclusion_completed` and `run_completed` include `provider`, `model`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
+- `conclusion_completed` and `run_completed` include `modelTrace.provider`, `modelTrace.model`, `modelTrace.modelErrorType`, `modelTrace.modelHttpStatus`, and redacted `modelTrace.modelErrorMessage` when available; neither event includes raw tokens or request headers.
 - LangSmith trace status is explicit in metadata: started, completed, not configured, failed, or timed out.
 - `quotaUsed` increases for `demo_user`.
 - `messages` contains the assistant message.

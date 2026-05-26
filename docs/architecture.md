@@ -22,7 +22,7 @@ selectedModelId
   -> _shared/langchainModelLayer.js
   -> LangChain Chat Model
   -> provider client
-  -> modelTrace / tokenUsage / usage / costEstimate / latency / fallbackReason
+  -> modelTrace.usage / modelTrace.costEstimate / latency / fallbackReason
 ```
 
 LangChain model layer 承担模型调用、错误归类、canonical usage 归集和 cost estimate 标准化。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
@@ -246,7 +246,7 @@ message 的写入和读取。
 
 ### `workbench-reports`
 
-report artifact 的生成状态、保存和读取。写入 `report_artifacts.metadata` 时，报告链路只从项目 canonical `agent_runs.metadata.modelTrace` 同步 `selectedModelId`、provider、model、latency、`tokenUsage`、canonical `usage`、`costEstimate`、fallback、model error 和 `conclusionSource`，仍使用现有 JSON metadata，不新增数据库字段，不消费 LangChain raw payload。
+report artifact 的生成状态、保存和读取。写入 `report_artifacts.metadata` 时，报告链路只从项目 canonical `agent_runs.metadata.modelTrace` 同步单一 `modelTrace` 对象；`modelTrace.usage` 是 token usage 的 canonical 表达，`modelTrace.costEstimate` 是 cost estimate 的 canonical 表达。报告链路不再同步顶层模型字段，不新增数据库字段，不消费 LangChain raw payload。
 
 ### `workbench-demo-copy`
 
@@ -262,7 +262,7 @@ quota / usage 状态读取。
 
 ### `workbench-evaluations`
 
-Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。写入 `eval_results.metadata` 和 `model_trace` 时，Evaluation 链路以 canonical `runId` 读取项目 `agent_runs.metadata.modelTrace`，同步 usage / cost / provider 状态；LangSmith feedback / trace id 只作为外部观测 metadata，不替代 `eval_results.run_id` 或项目主事实源。
+Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。写入 `eval_results.metadata` 和 `model_trace` 时，Evaluation 链路以 canonical `runId` 读取项目 `agent_runs.metadata.modelTrace`，只同步单一 `modelTrace` 对象；LangSmith feedback / trace id 只作为外部观测 metadata，不替代 `eval_results.run_id` 或项目主事实源。
 
 ### `workbench-agent-run-stream`
 
@@ -304,10 +304,10 @@ selectedModelId
   -> model
   -> apiKeyEnv
   -> LangChain Chat Model
-  -> tokenUsage / usage / costEstimate / latency / fallbackReason
+  -> modelTrace.usage / modelTrace.costEstimate / latency / fallbackReason
 ```
 
-该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类契约。`tokenUsage` 保持兼容旧消费；canonical `usage` 至少包含 `promptTokens`、`completionTokens`、`totalTokens`、`usageAvailable`、`usageSource`、`usageUnavailableReason`。`costEstimate` 至少包含 `estimatedCost`、`currency`、`pricingUnit`、`isEstimated`、`pricingSource`、`costUnavailableReason`。这些字段写入现有 JSON metadata / Run Trace payload，不新增数据库字段。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
+该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类契约。`modelTrace` 是模型状态唯一外层对象；`modelTrace.usage` 至少包含 `promptTokens`、`completionTokens`、`totalTokens`、`usageAvailable`、`usageSource`、`usageUnavailableReason`；`modelTrace.costEstimate` 至少包含 `estimatedCost`、`currency`、`pricingUnit`、`isEstimated`、`pricingSource`、`costUnavailableReason`。这些字段写入现有 JSON metadata / Run Trace payload，不新增数据库字段。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
 
 ## 7. 核心对象关系
 
@@ -341,9 +341,8 @@ Run Trace 是执行过程视图，不是 raw JSON dump 面板。
 数据源
 provider
 model
-tokenUsage
-usage
-costEstimate
+modelTrace.usage
+modelTrace.costEstimate
 latency
 fallbackReason
 modelErrorType

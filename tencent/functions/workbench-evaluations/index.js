@@ -61,11 +61,12 @@ const MODEL_METADATA_FIELDS = [
   'provider',
   'model',
   'latencyMs',
-  'tokenUsage',
   'usage',
   'costEstimate',
   'fallbackReason',
   'modelErrorType',
+  'modelHttpStatus',
+  'modelErrorMessage',
   'conclusionSource',
   'modelTrace',
 ];
@@ -489,20 +490,19 @@ function mapResult(row) {
   };
 }
 
-function createEvaluationModelTrace(payloadModelTrace, runModelMetadata, hasCanonicalRun) {
-  if (hasCanonicalRun) {
-    return isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
-  }
-
-  const payloadMetadata = createAgentRunModelMetadata({ modelTrace: payloadModelTrace }, null);
-  return isRecord(payloadMetadata.modelTrace) ? payloadMetadata.modelTrace : {};
+function createEvaluationModelTrace(runModelMetadata, hasCanonicalRun) {
+  return hasCanonicalRun && isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
 }
 
-function createPayloadMetadata(payloadMetadata, hasCanonicalRun) {
+function createPayloadMetadata(payloadMetadata) {
   const metadata = isRecord(payloadMetadata) ? { ...payloadMetadata } : {};
 
-  if (hasCanonicalRun) {
-    for (const field of MODEL_METADATA_FIELDS) {
+  for (const field of MODEL_METADATA_FIELDS) {
+    delete metadata[field];
+  }
+
+  for (const field of Object.keys(metadata)) {
+    if (field.toLowerCase() === 'tokenusage') {
       delete metadata[field];
     }
   }
@@ -510,9 +510,9 @@ function createPayloadMetadata(payloadMetadata, hasCanonicalRun) {
   return metadata;
 }
 
-function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation, hasCanonicalRun) {
+function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation) {
   return {
-    ...createPayloadMetadata(payloadMetadata, hasCanonicalRun),
+    ...createPayloadMetadata(payloadMetadata),
     ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
     source: 'workbench-evaluation',
     resultVersion: 1,
@@ -670,7 +670,6 @@ function readCreateResultPayload(body) {
     badCaseReason: readOptionalString(body, 'badCaseReason', 128),
     humanNote: readOptionalString(body, 'humanNote'),
     actualSummary: readRequiredObject(body, 'actualSummary'),
-    modelTrace: readRequiredObject(body, 'modelTrace'),
     toolSummary: readRequiredArray(body, 'toolSummary'),
     ragSummary: readRequiredObject(body, 'ragSummary'),
     reportSummary: readRequiredObject(body, 'reportSummary'),
@@ -717,7 +716,7 @@ async function createResult(currentUser, body) {
   const runModelMetadata = run
     ? createAgentRunModelMetadata(runMetadata, toNullableString(run.conclusion_source))
     : {};
-  const modelTrace = createEvaluationModelTrace(payload.modelTrace, runModelMetadata, hasCanonicalRun);
+  const modelTrace = createEvaluationModelTrace(runModelMetadata, hasCanonicalRun);
   const langSmithEvaluation = await submitLangSmithEvaluationFeedback({
     evaluationId: resultId,
     runId: run ? String(run.id ?? '') : null,
@@ -747,7 +746,6 @@ async function createResult(currentUser, body) {
       payload.metadata,
       runModelMetadata,
       langSmithEvaluation,
-      hasCanonicalRun,
     )),
   };
 

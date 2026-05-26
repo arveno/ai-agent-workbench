@@ -40,11 +40,12 @@ export interface RunModelTrace {
   provider: string | null;
   model: string | null;
   latencyMs: number | null;
-  tokenUsage: RunModelTokenUsage | null;
-  usage?: RunModelUsage | null;
-  costEstimate?: RunModelCostEstimate | null;
+  usage: RunModelUsage | null;
+  costEstimate: RunModelCostEstimate | null;
   fallbackReason: string | null;
   modelErrorType: string | null;
+  modelHttpStatus?: number | null;
+  modelErrorMessage?: string | null;
   conclusionSource: RunConclusionSource;
 }
 
@@ -248,10 +249,6 @@ export interface RunConclusionCompletedEvent {
   agentConclusion?: AgentConclusion;
   conclusionNotice?: string;
   modelTrace?: RunModelTrace;
-  usage?: RunModelUsage | null;
-  costEstimate?: RunModelCostEstimate | null;
-  fallbackReason?: string | null;
-  modelErrorType?: string | null;
 }
 
 export interface RunRagSourcesReadyEvent {
@@ -271,10 +268,6 @@ export interface RunCompletedEvent {
   completedAt: string;
   elapsedMs?: number;
   modelTrace?: RunModelTrace;
-  usage?: RunModelUsage | null;
-  costEstimate?: RunModelCostEstimate | null;
-  fallbackReason?: string | null;
-  modelErrorType?: string | null;
 }
 
 export interface RunFailedEvent {

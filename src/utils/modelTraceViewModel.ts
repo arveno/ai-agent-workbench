@@ -2,7 +2,6 @@ import type {
   RunConclusionSource,
   RunModelCostEstimate,
   RunModelTrace,
-  RunModelTokenUsage,
   RunModelUsage,
 } from '@/types/run';
 import { getConclusionSourceLabel, getFallbackReasonLabel, getModelErrorTypeLabel } from './observabilityLabels';
@@ -15,8 +14,8 @@ export interface ModelTraceViewModel {
   promptTokensLabel: string;
   completionTokensLabel: string;
   totalTokensLabel: string;
-  tokenUsageStatus: string;
-  tokenUsageSourceLabel: string;
+  usageStatus: string;
+  usageSourceLabel: string;
   usageUnavailableReasonLabel: string;
   estimatedCostLabel: string;
   costCurrencyLabel: string;
@@ -76,21 +75,6 @@ function getModelLabel(modelTrace: RunModelTrace): string {
   return formatText(modelTrace.model);
 }
 
-function hasReturnedTokenUsage(tokenUsage: RunModelTokenUsage | null | undefined): boolean {
-  return Boolean(
-    tokenUsage &&
-      (
-        Number.isFinite(tokenUsage.promptTokens) ||
-        Number.isFinite(tokenUsage.completionTokens) ||
-        Number.isFinite(tokenUsage.totalTokens)
-      ),
-  );
-}
-
-function getDisplayTokenUsage(modelTrace: RunModelTrace): RunModelTokenUsage | RunModelUsage | null {
-  return modelTrace.usage ?? modelTrace.tokenUsage ?? null;
-}
-
 function getReasonLabel(
   reason: string | null | undefined,
   labels: Record<string, string>,
@@ -112,19 +96,15 @@ function getUsageUnavailableReasonLabel(usage: RunModelUsage | null | undefined)
   return getReasonLabel(usage.usageUnavailableReason, USAGE_UNAVAILABLE_REASON_LABELS);
 }
 
-function getTokenUsageStatus(modelTrace: RunModelTrace): string {
+function getUsageStatus(modelTrace: RunModelTrace): string {
   const usage = modelTrace.usage;
 
-  if (usage) {
-    if (usage.usageAvailable) {
-      return '可用';
-    }
-
-    return getUsageUnavailableReasonLabel(usage);
+  if (usage?.usageAvailable) {
+    return '可用';
   }
 
-  if (hasReturnedTokenUsage(modelTrace.tokenUsage)) {
-    return '已返回';
+  if (usage) {
+    return getUsageUnavailableReasonLabel(usage);
   }
 
   if (modelTrace.conclusionSource === 'fallback') {
@@ -139,7 +119,7 @@ function getUsageSourceLabel(modelTrace: RunModelTrace): string {
     return modelTrace.usage.usageSource;
   }
 
-  return hasReturnedTokenUsage(modelTrace.tokenUsage) ? 'provider' : '-';
+  return '-';
 }
 
 function hasEstimatedCost(costEstimate: RunModelCostEstimate | null | undefined): boolean {
@@ -190,7 +170,7 @@ export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined)
     return null;
   }
 
-  const displayUsage = getDisplayTokenUsage(modelTrace);
+  const usage = modelTrace.usage ?? null;
   const costEstimate = modelTrace.costEstimate ?? null;
 
   return {
@@ -198,12 +178,12 @@ export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined)
     providerLabel: getProviderLabel(modelTrace),
     modelLabel: getModelLabel(modelTrace),
     latencyLabel: formatNumber(modelTrace.latencyMs, 'ms'),
-    promptTokensLabel: formatNumber(displayUsage?.promptTokens),
-    completionTokensLabel: formatNumber(displayUsage?.completionTokens),
-    totalTokensLabel: formatNumber(displayUsage?.totalTokens),
-    tokenUsageStatus: getTokenUsageStatus(modelTrace),
-    tokenUsageSourceLabel: getUsageSourceLabel(modelTrace),
-    usageUnavailableReasonLabel: getUsageUnavailableReasonLabel(modelTrace.usage),
+    promptTokensLabel: formatNumber(usage?.promptTokens),
+    completionTokensLabel: formatNumber(usage?.completionTokens),
+    totalTokensLabel: formatNumber(usage?.totalTokens),
+    usageStatus: getUsageStatus(modelTrace),
+    usageSourceLabel: getUsageSourceLabel(modelTrace),
+    usageUnavailableReasonLabel: getUsageUnavailableReasonLabel(usage),
     estimatedCostLabel: formatEstimatedCost(costEstimate),
     costCurrencyLabel: formatText(costEstimate?.currency),
     pricingUnitLabel: formatText(costEstimate?.pricingUnit),

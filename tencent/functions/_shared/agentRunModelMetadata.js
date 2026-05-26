@@ -25,11 +25,12 @@ const MODEL_METADATA_FIELDS = [
   'provider',
   'model',
   'latencyMs',
-  'tokenUsage',
   'usage',
   'costEstimate',
   'fallbackReason',
   'modelErrorType',
+  'modelHttpStatus',
+  'modelErrorMessage',
   'conclusionSource',
   'modelTrace',
 ];
@@ -49,11 +50,12 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
     provider: normalizeTraceString(trace.provider),
     model: normalizeTraceString(trace.model),
     latencyMs: normalizeTraceNumber(trace.latencyMs),
-    tokenUsage: readTraceObject(trace.tokenUsage),
     usage: readTraceObject(trace.usage),
     costEstimate: readTraceObject(trace.costEstimate),
     fallbackReason: normalizeTraceString(trace.fallbackReason),
     modelErrorType: normalizeTraceString(trace.modelErrorType),
+    modelHttpStatus: normalizeTraceNumber(trace.modelHttpStatus),
+    modelErrorMessage: normalizeTraceString(trace.modelErrorMessage),
     conclusionSource,
   };
   const hasModelMetadata = Boolean(
@@ -61,35 +63,19 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
     modelTrace.provider ||
     modelTrace.model ||
     modelTrace.latencyMs !== null ||
-    modelTrace.tokenUsage ||
     modelTrace.usage ||
     modelTrace.costEstimate ||
     modelTrace.fallbackReason ||
-    modelTrace.modelErrorType,
+    modelTrace.modelErrorType ||
+    modelTrace.modelHttpStatus !== null ||
+    modelTrace.modelErrorMessage,
   );
 
   if (!hasModelMetadata && !conclusionSource) {
     return {};
   }
 
-  if (!hasModelMetadata) {
-    return {
-      conclusionSource,
-      modelTrace,
-    };
-  }
-
   return {
-    selectedModelId: modelTrace.selectedModelId,
-    provider: modelTrace.provider,
-    model: modelTrace.model,
-    latencyMs: modelTrace.latencyMs,
-    tokenUsage: modelTrace.tokenUsage,
-    usage: modelTrace.usage,
-    costEstimate: modelTrace.costEstimate,
-    fallbackReason: modelTrace.fallbackReason,
-    modelErrorType: modelTrace.modelErrorType,
-    conclusionSource: modelTrace.conclusionSource,
     modelTrace,
   };
 }
@@ -99,6 +85,12 @@ function removeAgentRunModelMetadataFields(metadata) {
 
   for (const field of MODEL_METADATA_FIELDS) {
     delete nextMetadata[field];
+  }
+
+  for (const field of Object.keys(nextMetadata)) {
+    if (field.toLowerCase() === 'tokenusage') {
+      delete nextMetadata[field];
+    }
   }
 
   return nextMetadata;
