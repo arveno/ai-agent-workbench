@@ -60,26 +60,50 @@ jobs:
               },
             });
 
-            if (!response.ok && response.status !== 404) {
-              const text = await response.text().catch(() => '');
-              throw new Error(`GitHub API request failed ${response.status} ${response.statusText}: ${path} ${text}`);
-            }
+            const text = await response.text().catch(() => '');
 
-            return response;
+            return {
+              ok: response.ok,
+              status: response.status,
+              statusText: response.statusText,
+              text,
+            };
           }
 
           async function removeApprovalLabel() {
             const encodedLabel = encodeURIComponent(APPROVAL_LABEL);
-            await request(`/repos/${repository}/issues/${pullRequest.number}/labels/${encodedLabel}`, {
+            return request(`/repos/${repository}/issues/${pullRequest.number}/labels/${encodedLabel}`, {
               method: 'DELETE',
             });
           }
 
           async function main() {
             if (action === 'synchronize' && hasApprovalLabel) {
-              await removeApprovalLabel();
-              console.error('Review Gate failed: new commit pushed, existing review approval label was removed.');
-              console.error('User must complete review again, then manually add the `review:approved` label.');
+              const removeResult = await removeApprovalLabel();
+
+              if (removeResult.ok) {
+                console.error('Review Gate failed: new commit pushed, existing review approval label was removed.');
+                console.error('User must complete review again, then manually add the `review:approved` label.');
+                process.exit(1);
+              }
+
+              if (removeResult.status === 403) {
+                console.error('Review Gate failed: new commit pushed, but the current token cannot automatically remove `review:approved`.');
+                console.error('User must manually remove the `review:approved` label.');
+                console.error('After completing review again, manually add the `review:approved` label.');
+                process.exit(1);
+              }
+
+              if (removeResult.status === 404) {
+                console.error('Review Gate failed: new commit pushed, and `review:approved` is already absent or was already removed.');
+                console.error('User must complete review again, then manually add the `review:approved` label.');
+                process.exit(1);
+              }
+
+              console.error(`Review Gate failed: unexpected GitHub API error while removing review label: ${removeResult.status} ${removeResult.statusText}`);
+              if (removeResult.text) {
+                console.error(removeResult.text);
+              }
               process.exit(1);
             }
 

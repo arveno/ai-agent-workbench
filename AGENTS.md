@@ -197,7 +197,7 @@ selectedModelId
 - 把代码上传成功等同于完整部署成功。
 - 修改部署脚本却不提供 dry-run、真实验证或人工校验步骤。
 
-合并 PR 前，Codex 必须确认 `Review Gate` 已通过。若 `Review Gate` 未通过，必须停止，不得 merge。新 commit push 到 PR 后，旧 `review:approved` label 只能由 Review Gate 自动移除，Codex 不得手动操作。
+合并 PR 前，Codex 必须确认 `Review Gate` 已通过。若 `Review Gate` 未通过，必须停止，不得 merge。新 commit push 到 PR 后，旧 `review:approved` label 优先由 Review Gate 自动移除；如果自动移除失败，只能由用户手动移除并在重新 review 后手动添加，Codex 不得手动操作。
 
 ## 11. 输出要求
 
