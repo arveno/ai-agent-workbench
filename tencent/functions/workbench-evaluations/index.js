@@ -56,6 +56,19 @@ const AGENT_RUN_COLUMNS = [
 ].join(',');
 
 const VALID_VERDICTS = new Set(['pass', 'fail', 'unknown']);
+const MODEL_METADATA_FIELDS = [
+  'selectedModelId',
+  'provider',
+  'model',
+  'latencyMs',
+  'tokenUsage',
+  'usage',
+  'costEstimate',
+  'fallbackReason',
+  'modelErrorType',
+  'conclusionSource',
+  'modelTrace',
+];
 const FORBIDDEN_RAW_FIELDS = new Set([
   'runEvents',
   'run_events',
@@ -476,18 +489,30 @@ function mapResult(row) {
   };
 }
 
-function createEvaluationModelTrace(payloadModelTrace, runModelMetadata) {
-  if (isRecord(runModelMetadata.modelTrace)) {
-    return runModelMetadata.modelTrace;
+function createEvaluationModelTrace(payloadModelTrace, runModelMetadata, hasCanonicalRun) {
+  if (hasCanonicalRun) {
+    return isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
   }
 
   const payloadMetadata = createAgentRunModelMetadata({ modelTrace: payloadModelTrace }, null);
   return isRecord(payloadMetadata.modelTrace) ? payloadMetadata.modelTrace : {};
 }
 
-function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation) {
+function createPayloadMetadata(payloadMetadata, hasCanonicalRun) {
+  const metadata = isRecord(payloadMetadata) ? { ...payloadMetadata } : {};
+
+  if (hasCanonicalRun) {
+    for (const field of MODEL_METADATA_FIELDS) {
+      delete metadata[field];
+    }
+  }
+
+  return metadata;
+}
+
+function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation, hasCanonicalRun) {
   return {
-    ...(isRecord(payloadMetadata) ? payloadMetadata : {}),
+    ...createPayloadMetadata(payloadMetadata, hasCanonicalRun),
     ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
     source: 'workbench-evaluation',
     resultVersion: 1,
@@ -688,10 +713,11 @@ async function createResult(currentUser, body) {
 
   const resultId = randomUUID();
   const runMetadata = run ? parseJsonObject(run.metadata) : {};
+  const hasCanonicalRun = Boolean(run);
   const runModelMetadata = run
     ? createAgentRunModelMetadata(runMetadata, toNullableString(run.conclusion_source))
     : {};
-  const modelTrace = createEvaluationModelTrace(payload.modelTrace, runModelMetadata);
+  const modelTrace = createEvaluationModelTrace(payload.modelTrace, runModelMetadata, hasCanonicalRun);
   const langSmithEvaluation = await submitLangSmithEvaluationFeedback({
     evaluationId: resultId,
     runId: run ? String(run.id ?? '') : null,
@@ -717,7 +743,12 @@ async function createResult(currentUser, body) {
     tool_summary: JSON.stringify(payload.toolSummary),
     rag_summary: JSON.stringify(payload.ragSummary),
     report_summary: JSON.stringify(payload.reportSummary),
-    metadata: JSON.stringify(createEvaluationMetadata(payload.metadata, runModelMetadata, langSmithEvaluation)),
+    metadata: JSON.stringify(createEvaluationMetadata(
+      payload.metadata,
+      runModelMetadata,
+      langSmithEvaluation,
+      hasCanonicalRun,
+    )),
   };
 
   const insertResult = await db.from('eval_results').insert(insertPayload);
