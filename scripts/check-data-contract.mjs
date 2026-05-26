@@ -1,81 +1,27 @@
 import { readdir, readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import ts from 'typescript';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rulesPath = path.join(rootDir, 'contracts/generated/forbidden-rules.json');
 const checkAll = process.argv.includes('--all');
 const formalCodeRoots = ['src', 'tencent/functions'];
 const codeExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
 const ignoredPathParts = new Set(['node_modules', 'dist', 'build', 'coverage']);
 const isCi = process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true';
-const identifierPattern = '[$_A-Za-z][$_A-Za-z0-9]*';
-
-const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const propertyAccessPattern = (objectName, propertyName) => {
-  const object = escapeRegExp(objectName);
-  const property = escapeRegExp(propertyName);
-  const quotedProperty = `['"]${property}['"]`;
-
-  return `\\b${object}\\s*(?:\\??\\s*\\.\\s*${property}\\b|\\??\\s*\\.\\s*\\[\\s*${quotedProperty}\\s*\\]|\\[\\s*${quotedProperty}\\s*\\])`;
-};
-
-const propertyAccess = (objectName, propertyName) =>
-  new RegExp(propertyAccessPattern(objectName, propertyName));
-
-const destructuringForbiddenFields = [
-  { label: 'agentConclusion.source', objectName: 'agentConclusion', propertyName: 'source' },
-  { label: 'agentConclusion.conclusionSource', objectName: 'agentConclusion', propertyName: 'conclusionSource' },
-  { label: 'agentConclusion.fallbackReason', objectName: 'agentConclusion', propertyName: 'fallbackReason' },
-  { label: 'agentConclusion.modelErrorType', objectName: 'agentConclusion', propertyName: 'modelErrorType' },
-  { label: 'agentConclusion.content', objectName: 'agentConclusion', propertyName: 'content' },
-  { label: 'agentConclusion.summary', objectName: 'agentConclusion', propertyName: 'summary' },
-  { label: 'metadata.clientRunId', objectName: 'metadata', propertyName: 'clientRunId' },
-  { label: 'metadata.selectedModelId', objectName: 'metadata', propertyName: 'selectedModelId' },
-  { label: 'metadata.provider', objectName: 'metadata', propertyName: 'provider' },
-  { label: 'metadata.model', objectName: 'metadata', propertyName: 'model' },
-  { label: 'metadata.conclusionSource', objectName: 'metadata', propertyName: 'conclusionSource' },
-  { label: 'metadata.usage', objectName: 'metadata', propertyName: 'usage' },
-  { label: 'metadata.costEstimate', objectName: 'metadata', propertyName: 'costEstimate' },
-  { label: 'metadata.fallbackReason', objectName: 'metadata', propertyName: 'fallbackReason' },
-  { label: 'metadata.modelErrorType', objectName: 'metadata', propertyName: 'modelErrorType' },
-  { label: 'modelTrace.tokenUsage', objectName: 'modelTrace', propertyName: 'tokenUsage' },
-];
-
-export const forbiddenPatterns = [
-  { label: 'tokenUsage', regex: /\btokenUsage\b/ },
-  { label: 'conclusionNotice', regex: /\bconclusionNotice\b/ },
-  { label: 'agentConclusion.source', regex: propertyAccess('agentConclusion', 'source') },
-  { label: 'agentConclusion.conclusionSource', regex: propertyAccess('agentConclusion', 'conclusionSource') },
-  { label: 'agentConclusion.fallbackReason', regex: propertyAccess('agentConclusion', 'fallbackReason') },
-  { label: 'agentConclusion.modelErrorType', regex: propertyAccess('agentConclusion', 'modelErrorType') },
-  { label: 'agentConclusion.content', regex: propertyAccess('agentConclusion', 'content') },
-  { label: 'agentConclusion.summary', regex: propertyAccess('agentConclusion', 'summary') },
-  { label: 'metadata.clientRunId', regex: propertyAccess('metadata', 'clientRunId') },
-  { label: 'modelTrace.tokenUsage', regex: propertyAccess('modelTrace', 'tokenUsage') },
-  { label: 'usage ?? tokenUsage', regex: /\busage\s*\?\?\s*tokenUsage\b/ },
-  { label: 'tokenUsage || usage', regex: /\btokenUsage\s*\|\|\s*usage\b/ },
-  {
-    label: "rawRun.conclusionSource ?? 'mock'",
-    regex: new RegExp(`${propertyAccessPattern('rawRun', 'conclusionSource')}\\s*\\?\\?\\s*['"]mock['"]`),
-  },
-  { label: 'metadata.selectedModelId', regex: propertyAccess('metadata', 'selectedModelId') },
-  { label: 'metadata.provider', regex: propertyAccess('metadata', 'provider') },
-  { label: 'metadata.model', regex: propertyAccess('metadata', 'model') },
-  { label: 'metadata.conclusionSource', regex: propertyAccess('metadata', 'conclusionSource') },
-  { label: 'metadata.usage', regex: propertyAccess('metadata', 'usage') },
-  { label: 'metadata.costEstimate', regex: propertyAccess('metadata', 'costEstimate') },
-  { label: 'metadata.fallbackReason', regex: propertyAccess('metadata', 'fallbackReason') },
-  { label: 'metadata.modelErrorType', regex: propertyAccess('metadata', 'modelErrorType') },
-];
 
 function git(args) {
   return execFileSync('git', args, { cwd: rootDir, encoding: 'utf8' }).trim();
 }
 
+function normalizePath(filePath) {
+  return filePath.split(path.sep).join('/');
+}
+
 function isFormalCodePath(filePath) {
-  const normalized = filePath.split(path.sep).join('/');
+  const normalized = normalizePath(filePath);
   if (!formalCodeRoots.some((root) => normalized === root || normalized.startsWith(`${root}/`))) {
     return false;
   }
@@ -96,14 +42,13 @@ async function walk(dir) {
   const files = [];
 
   for (const entry of entries) {
-    const relativePath = path.join(dir, entry.name);
-    const normalized = relativePath.split(path.sep).join('/');
+    const relativePath = normalizePath(path.join(dir, entry.name));
     if (entry.isDirectory()) {
       if (!ignoredPathParts.has(entry.name)) {
-        files.push(...(await walk(normalized)));
+        files.push(...(await walk(relativePath)));
       }
-    } else if (isFormalCodePath(normalized)) {
-      files.push(normalized);
+    } else if (isFormalCodePath(relativePath)) {
+      files.push(relativePath);
     }
   }
 
@@ -159,98 +104,345 @@ export function changedFilesFromGit() {
   return [...files].filter(isFormalCodePath).sort();
 }
 
-function lineNumberAt(content, index) {
-  return content.slice(0, index).split(/\r?\n/).length;
+function scriptKindForFile(file) {
+  const extension = path.extname(file);
+  if (extension === '.tsx') return ts.ScriptKind.TSX;
+  if (extension === '.jsx') return ts.ScriptKind.JSX;
+  if (extension === '.js') return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
 }
 
-function findDestructuredBinding(body, propertyName) {
-  const property = escapeRegExp(propertyName);
-  const fieldRegex = new RegExp(
-    `(?:^|,)\\s*${property}\\b\\s*(?::\\s*(${identifierPattern})\\s*)?(?:=\\s*[^,}]*)?\\s*(?=,|$)`,
-  );
-  const match = fieldRegex.exec(body);
-
-  if (!match) return null;
-  return match[1] || propertyName;
+function readNameText(name) {
+  if (!name) return null;
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return null;
 }
 
-function findDestructuringMatchesInContent(file, content) {
+function unwrapExpression(expression) {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current) || ts.isNonNullExpression(current)) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function readIdentifierExpression(expression) {
+  const current = unwrapExpression(expression);
+  return ts.isIdentifier(current) ? current.text : null;
+}
+
+function readLiteralString(expression) {
+  const current = unwrapExpression(expression);
+  return ts.isStringLiteralLike(current) ? current.text : null;
+}
+
+function locationFor(sourceFile, node) {
+  const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  return line + 1;
+}
+
+function ruleKey(objectName, propertyName) {
+  return `${objectName}.${propertyName}`;
+}
+
+export function buildRuleIndex(rules) {
+  const identifierRules = new Map();
+  const propertyRules = new Map();
+  const binaryRules = [];
+  const protectedObjects = new Set();
+  let rawRunMockFallbackRule = null;
+
+  for (const rule of rules) {
+    if (rule.kind === 'identifier') {
+      identifierRules.set(rule.identifier, rule);
+    } else if (rule.kind === 'objectProperty') {
+      propertyRules.set(ruleKey(rule.objectName, rule.propertyName), rule);
+      protectedObjects.add(rule.objectName);
+    } else if (rule.kind === 'binaryExpression') {
+      binaryRules.push(rule);
+    } else if (rule.kind === 'rawRunMockFallback') {
+      rawRunMockFallbackRule = rule;
+      protectedObjects.add(rule.objectName);
+    }
+  }
+
+  return {
+    binaryRules,
+    identifierRules,
+    propertyRules,
+    protectedObjects,
+    rawRunMockFallbackRule,
+  };
+}
+
+function createReporter(file, sourceFile) {
   const matches = [];
+  const seen = new Set();
 
-  for (const field of destructuringForbiddenFields) {
-    const object = escapeRegExp(field.objectName);
-    const destructuringRegex = new RegExp(`\\b(?:const|let|var)\\s*\\{([^{}]*)\\}\\s*=\\s*${object}\\b`, 'g');
-    let match;
+  return {
+    matches,
+    report(node, label) {
+      const line = locationFor(sourceFile, node);
+      const key = `${line}:${label}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      matches.push({ file, line, label });
+    },
+  };
+}
 
-    while ((match = destructuringRegex.exec(content)) !== null) {
-      if (findDestructuredBinding(match[1], field.propertyName)) {
-        matches.push({
-          file,
-          line: lineNumberAt(content, match.index),
-          label: field.label,
-        });
+function findPropertyRule(index, objectName, propertyName) {
+  if (!objectName || !propertyName) return null;
+  return index.propertyRules.get(ruleKey(objectName, propertyName)) ?? null;
+}
+
+function isPropertyAccessLike(node) {
+  return ts.isPropertyAccessExpression(node) || ts.isPropertyAccessChain?.(node);
+}
+
+function isElementAccessLike(node) {
+  return ts.isElementAccessExpression(node) || ts.isElementAccessChain?.(node);
+}
+
+function reportPropertyAccess(node, index, reporter) {
+  const objectName = readIdentifierExpression(node.expression);
+  const propertyName = node.name?.text;
+  const rule = findPropertyRule(index, objectName, propertyName);
+  if (rule) reporter.report(node, rule.label);
+}
+
+function reportElementAccess(node, index, reporter) {
+  const objectName = readIdentifierExpression(node.expression);
+  if (!objectName || !index.protectedObjects.has(objectName)) return;
+
+  const propertyName = node.argumentExpression ? readLiteralString(node.argumentExpression) : null;
+  if (propertyName) {
+    const rule = findPropertyRule(index, objectName, propertyName);
+    if (rule) reporter.report(node, rule.label);
+    return;
+  }
+
+  reporter.report(node, `${objectName}[dynamic]`);
+}
+
+function reportIdentifier(node, index, reporter) {
+  const rule = index.identifierRules.get(node.text);
+  if (rule) reporter.report(node, rule.label);
+}
+
+function isIdentifierNamed(node, name) {
+  return ts.isIdentifier(unwrapExpression(node)) && unwrapExpression(node).text === name;
+}
+
+function expressionMatchesRuleSide(node, identifier) {
+  return isIdentifierNamed(node, identifier);
+}
+
+function operatorTextToKind(operator) {
+  if (operator === '??') return ts.SyntaxKind.QuestionQuestionToken;
+  if (operator === '||') return ts.SyntaxKind.BarBarToken;
+  return null;
+}
+
+function isRawRunConclusionSourceAccess(node, rule) {
+  const current = unwrapExpression(node);
+  if (!rule) return false;
+
+  if (isPropertyAccessLike(current)) {
+    return readIdentifierExpression(current.expression) === rule.objectName && current.name?.text === rule.propertyName;
+  }
+
+  if (isElementAccessLike(current)) {
+    return (
+      readIdentifierExpression(current.expression) === rule.objectName &&
+      current.argumentExpression &&
+      readLiteralString(current.argumentExpression) === rule.propertyName
+    );
+  }
+
+  return false;
+}
+
+function reportBinaryExpression(node, index, rawRunAliases, reporter) {
+  for (const rule of index.binaryRules) {
+    if (node.operatorToken.kind !== operatorTextToKind(rule.operator)) continue;
+    if (
+      expressionMatchesRuleSide(node.left, rule.leftIdentifier) &&
+      expressionMatchesRuleSide(node.right, rule.rightIdentifier)
+    ) {
+      reporter.report(node, rule.label);
+    }
+  }
+
+  const rawRule = index.rawRunMockFallbackRule;
+  if (!rawRule || node.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken) return;
+  if (!ts.isStringLiteralLike(unwrapExpression(node.right)) || readLiteralString(node.right) !== rawRule.fallbackValue) {
+    return;
+  }
+
+  if (isRawRunConclusionSourceAccess(node.left, rawRule)) {
+    reporter.report(node, rawRule.label);
+    return;
+  }
+
+  const left = unwrapExpression(node.left);
+  if (ts.isIdentifier(left) && rawRunAliases.has(left.text)) {
+    reporter.report(node, rawRule.label);
+  }
+}
+
+function isProtectedObjectName(index, name) {
+  return Boolean(name && index.protectedObjects.has(name));
+}
+
+function aliasFromBindingName(name) {
+  if (ts.isIdentifier(name)) return name.text;
+  return null;
+}
+
+function scanBindingPattern(pattern, objectName, index, reporter, rawRunAliases) {
+  for (const element of pattern.elements) {
+    if (ts.isOmittedExpression(element)) continue;
+
+    const propertyName = readNameText(element.propertyName) ?? aliasFromBindingName(element.name);
+    if (!propertyName) continue;
+
+    if (objectName) {
+      const rule = findPropertyRule(index, objectName, propertyName);
+      if (rule) reporter.report(element, rule.label);
+
+      const rawRule = index.rawRunMockFallbackRule;
+      const alias = aliasFromBindingName(element.name);
+      if (rawRule && objectName === rawRule.objectName && propertyName === rawRule.propertyName && alias) {
+        rawRunAliases.add(alias);
+      }
+    }
+
+    if (ts.isObjectBindingPattern(element.name)) {
+      const nestedObjectName = isProtectedObjectName(index, propertyName) ? propertyName : null;
+      scanBindingPattern(element.name, nestedObjectName, index, reporter, rawRunAliases);
+    }
+  }
+}
+
+function scanAssignmentPattern(pattern, objectName, index, reporter, rawRunAliases) {
+  for (const property of pattern.properties) {
+    if (ts.isSpreadAssignment(property)) continue;
+
+    const propertyName = ts.isShorthandPropertyAssignment(property)
+      ? property.name.text
+      : readNameText(property.name);
+    if (!propertyName) continue;
+
+    if (objectName) {
+      const rule = findPropertyRule(index, objectName, propertyName);
+      if (rule) reporter.report(property, rule.label);
+
+      const rawRule = index.rawRunMockFallbackRule;
+      const alias = assignmentAlias(property);
+      if (rawRule && objectName === rawRule.objectName && propertyName === rawRule.propertyName && alias) {
+        rawRunAliases.add(alias);
+      }
+    }
+
+    if (ts.isPropertyAssignment(property)) {
+      const initializer = unwrapExpression(property.initializer);
+      if (ts.isObjectLiteralExpression(initializer)) {
+        const nestedObjectName = isProtectedObjectName(index, propertyName) ? propertyName : null;
+        scanAssignmentPattern(initializer, nestedObjectName, index, reporter, rawRunAliases);
       }
     }
   }
-
-  return matches;
 }
 
-function findRawRunDestructuredMockFallbackMatches(file, content) {
-  const matches = [];
-  const destructuringRegex = /\b(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*rawRun\b/g;
-  let match;
+function assignmentAlias(property) {
+  if (ts.isShorthandPropertyAssignment(property)) return property.name.text;
+  if (!ts.isPropertyAssignment(property)) return null;
 
-  while ((match = destructuringRegex.exec(content)) !== null) {
-    const bindingName = findDestructuredBinding(match[1], 'conclusionSource');
-    if (!bindingName) continue;
+  const initializer = unwrapExpression(property.initializer);
+  if (ts.isIdentifier(initializer)) return initializer.text;
+  if (
+    ts.isBinaryExpression(initializer) &&
+    initializer.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isIdentifier(unwrapExpression(initializer.left))
+  ) {
+    return unwrapExpression(initializer.left).text;
+  }
+  return null;
+}
 
-    const nearbyContent = content.slice(match.index, match.index + 300);
-    const fallbackRegex = new RegExp(`\\b${escapeRegExp(bindingName)}\\s*\\?\\?\\s*['"]mock['"]`);
-    if (fallbackRegex.test(nearbyContent)) {
-      matches.push({
-        file,
-        line: lineNumberAt(content, match.index),
-        label: "rawRun.conclusionSource ?? 'mock'",
-      });
-    }
+function collectAliasesFromNode(node, index, reporter, rawRunAliases) {
+  if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)) {
+    const objectName = node.initializer ? readIdentifierExpression(node.initializer) : null;
+    scanBindingPattern(node.name, isProtectedObjectName(index, objectName) ? objectName : null, index, reporter, rawRunAliases);
+  } else if (ts.isParameter(node) && ts.isObjectBindingPattern(node.name)) {
+    scanBindingPattern(node.name, null, index, reporter, rawRunAliases);
+  } else if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    ts.isObjectLiteralExpression(unwrapExpression(node.left))
+  ) {
+    const objectName = readIdentifierExpression(node.right);
+    scanAssignmentPattern(
+      unwrapExpression(node.left),
+      isProtectedObjectName(index, objectName) ? objectName : null,
+      index,
+      reporter,
+      rawRunAliases,
+    );
   }
 
-  return matches;
+  ts.forEachChild(node, (child) => collectAliasesFromNode(child, index, reporter, rawRunAliases));
 }
 
-export function findForbiddenMatchesInContent(file, content) {
-  const matches = [];
+export function findForbiddenMatchesInContent(file, content, rules) {
+  const sourceFile = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, scriptKindForFile(file));
+  const index = buildRuleIndex(rules);
+  const reporter = createReporter(file, sourceFile);
+  const rawRunAliases = new Set();
 
-  for (const pattern of forbiddenPatterns) {
-    pattern.regex.lastIndex = 0;
-    const match = pattern.regex.exec(content);
-    if (match) {
-      matches.push({
-        file,
-        line: lineNumberAt(content, match.index),
-        label: pattern.label,
-      });
+  collectAliasesFromNode(sourceFile, index, reporter, rawRunAliases);
+
+  function visit(node) {
+    if (isPropertyAccessLike(node)) {
+      reportPropertyAccess(node, index, reporter);
+    } else if (isElementAccessLike(node)) {
+      reportElementAccess(node, index, reporter);
+    } else if (ts.isIdentifier(node)) {
+      reportIdentifier(node, index, reporter);
+    } else if (ts.isBinaryExpression(node)) {
+      reportBinaryExpression(node, index, rawRunAliases, reporter);
     }
+
+    ts.forEachChild(node, visit);
   }
 
-  matches.push(...findDestructuringMatchesInContent(file, content));
-  matches.push(...findRawRunDestructuredMockFallbackMatches(file, content));
-
-  return matches;
+  visit(sourceFile);
+  return reporter.matches;
 }
 
-async function scanFile(file) {
+export async function readForbiddenRules() {
+  const rulesDocument = JSON.parse(await readFile(rulesPath, 'utf8'));
+  if (!Array.isArray(rulesDocument.rules)) {
+    throw new Error('Invalid forbidden rules: contracts/generated/forbidden-rules.json must contain rules[].');
+  }
+  return rulesDocument.rules;
+}
+
+async function scanFile(file, rules) {
   const content = await readFile(path.join(rootDir, file), 'utf8');
-  return findForbiddenMatchesInContent(file, content);
+  return findForbiddenMatchesInContent(file, content, rules);
 }
 
 async function main() {
+  const rules = await readForbiddenRules();
   const files = checkAll
     ? (await Promise.all(formalCodeRoots.map(walk))).flat().sort()
     : changedFilesFromGit();
 
-  const violations = (await Promise.all(files.map(scanFile))).flat();
+  const violations = (await Promise.all(files.map((file) => scanFile(file, rules)))).flat();
 
   if (violations.length > 0) {
     console.error('Data Contract Check failed. Forbidden fields or fallback patterns were found:');

@@ -8,6 +8,7 @@
 - `contracts/schemas/*.schema.json`：机器可读契约，用于生成前端可引用类型。
 - `contracts/generated/workbench-contract.ts`：由 schema 生成的 TypeScript 类型。
 - `contracts/generated/field-registry.md`：由字段总账生成的人读字段表。
+- `contracts/generated/forbidden-rules.json`：由字段总账的 forbiddenFields 生成，供 Data Contract Check 使用。
 
 ## 使用规则
 
@@ -24,6 +25,7 @@
 ```bash
 node scripts/generate-field-registry-doc.mjs
 node scripts/generate-contract-types.mjs
+node scripts/generate-contract-rules.mjs
 node scripts/check-data-contract.mjs
 ```
 
