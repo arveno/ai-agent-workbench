@@ -99,6 +99,7 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const {
+  createUsageCostMetadata,
   DEFAULT_LANGCHAIN_MODEL_ID: DEFAULT_REAL_MODEL_ID,
   getLangChainModelLayerConfig,
   normalizeLangChainModelError,
@@ -931,6 +932,8 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
         model: metadata.model || context.modelTrace?.model || null,
         latencyMs: Number.isInteger(metadata.latencyMs) ? metadata.latencyMs : (context.modelTrace?.latencyMs ?? null),
         tokenUsage: metadata.tokenUsage || context.modelTrace?.tokenUsage || null,
+        usage: metadata.usage || context.modelTrace?.usage || null,
+        costEstimate: metadata.costEstimate || context.modelTrace?.costEstimate || null,
         modelTrace: metadata.modelTrace || context.modelTrace || null,
         agentConclusion: metadata.agentConclusion || context.agentConclusion || null,
         modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
@@ -2496,6 +2499,40 @@ function normalizeModelTraceNumber(value) {
   return Number.isInteger(value) ? value : null;
 }
 
+function resolveUsageUnavailableReason(params = {}) {
+  if (params.usage?.usageAvailable === true || params.tokenUsage) {
+    return null;
+  }
+
+  if (params.usage?.usageAvailable === false && params.usage.usageUnavailableReason) {
+    return params.usage.usageUnavailableReason;
+  }
+
+  if (params.usageUnavailableReason) {
+    return params.usageUnavailableReason;
+  }
+
+  if (params.conclusionSource === 'model') {
+    return 'provider_no_usage';
+  }
+
+  const fallbackReason = params.fallbackReason || null;
+
+  if (
+    fallbackReason === 'invalid_model' ||
+    fallbackReason === 'model_disabled' ||
+    fallbackReason === 'model_not_configured'
+  ) {
+    return fallbackReason;
+  }
+
+  if (params.modelErrorType || isModelFallbackReason(fallbackReason)) {
+    return 'model_failed';
+  }
+
+  return 'model_not_invoked';
+}
+
 const CONCLUSION_SECTION_FIELDS = [
   { title: '关键发现', keys: ['keyFindings', 'key_findings', 'findings'] },
   { title: '可能原因', keys: ['possibleCauses', 'possible_causes', 'causes'] },
@@ -2792,15 +2829,34 @@ function setCanonicalConclusion(context, rawText, source) {
 }
 
 function createModelTrace(params = {}) {
+  const tokenUsage = params.tokenUsage || null;
+  const conclusionSource = params.conclusionSource || 'none';
+  const usageUnavailableReason = resolveUsageUnavailableReason({
+    ...params,
+    tokenUsage,
+    conclusionSource,
+  });
+  const { usage, costEstimate } = createUsageCostMetadata({
+    tokenUsage,
+    usage: params.usage || null,
+    costEstimate: params.costEstimate || null,
+    billingType: params.billingType || null,
+    usageSource: params.usageSource || (tokenUsage ? 'provider' : 'none'),
+    usageUnavailableReason,
+    costUnavailableReason: params.costUnavailableReason,
+  });
+
   return {
     selectedModelId: params.selectedModelId || null,
     provider: params.provider || null,
     model: params.model || null,
     latencyMs: normalizeModelTraceNumber(params.latencyMs),
-    tokenUsage: params.tokenUsage || null,
+    tokenUsage,
+    usage,
+    costEstimate,
     fallbackReason: params.fallbackReason || null,
     modelErrorType: params.modelErrorType || null,
-    conclusionSource: params.conclusionSource || 'none',
+    conclusionSource,
   };
 }
 
@@ -2811,6 +2867,9 @@ function createInitialModelTrace(selectedModelId) {
     selectedModelId: config.selectedModelId || selectedModelId || null,
     provider: config.provider || null,
     model: config.model || null,
+    billingType: config.billingType || null,
+    usageUnavailableReason: 'model_not_invoked',
+    costUnavailableReason: 'model_not_invoked',
     conclusionSource: 'none',
   });
 }
@@ -2822,9 +2881,12 @@ function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessa
     selectedModelId: config.selectedModelId || selectedModelId || null,
     provider: config.provider || null,
     model: config.model || null,
+    billingType: config.billingType || null,
     modelErrorType: errorType || null,
     modelHttpStatus: null,
     modelErrorMessage: errorMessage || null,
+    usageUnavailableReason: errorType || 'model_not_configured',
+    costUnavailableReason: errorType || 'model_not_configured',
   };
 }
 
@@ -2835,11 +2897,14 @@ function createFailedModelDiagnostics(error) {
     selectedModelId: modelError.selectedModelId || null,
     provider: modelError.provider || null,
     model: modelError.model || null,
+    billingType: modelError.billingType || null,
     modelErrorType: modelError.errorType || 'model_failed',
     modelHttpStatus: modelError.httpStatus,
     modelErrorMessage: modelError.message || null,
     latencyMs: normalizeModelTraceNumber(modelError.latencyMs),
     tokenUsage: null,
+    usageUnavailableReason: 'model_failed',
+    costUnavailableReason: 'model_failed',
     hasModelApiKey: Boolean(modelError.hasApiKey),
     modelApiKeyLength: Number(modelError.apiKeyLength) || 0,
   };
@@ -2850,12 +2915,18 @@ function createModelEventMetadata(context, diagnostics = {}) {
   const fallbackReason = diagnostics.fallbackReason ?? context?.fallbackReason ?? existingTrace.fallbackReason ?? null;
   const modelErrorType = diagnostics.modelErrorType ?? existingTrace.modelErrorType ?? null;
   const conclusionSource = diagnostics.conclusionSource || context?.conclusionSource || existingTrace.conclusionSource || 'none';
+  const tokenUsage = diagnostics.tokenUsage || existingTrace.tokenUsage || null;
   const modelTrace = createModelTrace({
     selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || null,
     provider: diagnostics.provider || existingTrace.provider || null,
     model: diagnostics.model || existingTrace.model || null,
     latencyMs: normalizeModelTraceNumber(diagnostics.latencyMs) ?? existingTrace.latencyMs ?? null,
-    tokenUsage: diagnostics.tokenUsage || existingTrace.tokenUsage || null,
+    tokenUsage,
+    usage: diagnostics.usage || existingTrace.usage || null,
+    costEstimate: diagnostics.costEstimate || existingTrace.costEstimate || null,
+    billingType: diagnostics.billingType || existingTrace.billingType || null,
+    usageUnavailableReason: diagnostics.usageUnavailableReason,
+    costUnavailableReason: diagnostics.costUnavailableReason,
     fallbackReason,
     modelErrorType,
     conclusionSource,
@@ -2872,6 +2943,8 @@ function createModelEventMetadata(context, diagnostics = {}) {
     model: modelTrace.model,
     latencyMs: modelTrace.latencyMs,
     tokenUsage: modelTrace.tokenUsage,
+    usage: modelTrace.usage,
+    costEstimate: modelTrace.costEstimate,
     fallbackReason: modelTrace.fallbackReason,
     modelErrorType: modelTrace.modelErrorType,
     modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus) ? diagnostics.modelHttpStatus : null,
@@ -3077,6 +3150,8 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
       model: params.model,
       latencyMs: params.latencyMs,
       tokenUsage: params.tokenUsage,
+      usage: params.usage,
+      costEstimate: params.costEstimate,
       modelErrorType: params.modelErrorType,
       modelHttpStatus: params.modelHttpStatus,
       modelErrorMessage: params.modelErrorMessage,
@@ -3442,8 +3517,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         selectedModelId: modelResult.selectedModelId || context.selectedModelId,
         provider: modelResult.provider || modelConfig.provider || null,
         model: modelResult.model || modelConfig.model || null,
+        billingType: modelResult.billingType || modelConfig.billingType || null,
         latencyMs: modelResult.latencyMs,
         tokenUsage: modelResult.tokenUsage,
+        usage: modelResult.usage,
+        costEstimate: modelResult.costEstimate,
         conclusionSource,
         fallbackReason,
         modelErrorType: null,
@@ -3695,8 +3773,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         selectedModelId: modelResult.selectedModelId || context.selectedModelId,
         provider: modelResult.provider || modelConfig.provider || null,
         model: modelResult.model || modelConfig.model || null,
+        billingType: modelResult.billingType || modelConfig.billingType || null,
         latencyMs: modelResult.latencyMs,
         tokenUsage: modelResult.tokenUsage,
+        usage: modelResult.usage,
+        costEstimate: modelResult.costEstimate,
         conclusionSource,
         fallbackReason,
         modelErrorType: null,
@@ -4179,6 +4260,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           fallbackReason: context.fallbackReason,
         },
       });
+      const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
 
       try {
         await failAgentRun(db, currentUser, context, finalStatus, error && error.message);
@@ -4191,6 +4273,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          ...failureModelMetadata,
         });
         context.usageFinished = true;
       } catch (cleanupError) {
@@ -4203,6 +4286,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           metadata: {
             langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
           },
+          ...failureModelMetadata,
         });
 
         try {
@@ -4222,10 +4306,12 @@ async function runRealAgentFlow(req, res, currentUser, body) {
   } catch (error) {
     if (context.usageId && !context.usageFinished) {
       try {
+        const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
         await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          ...failureModelMetadata,
         });
         context.usageFinished = true;
       } catch (finishError) {
