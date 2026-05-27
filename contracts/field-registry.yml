@@ -263,6 +263,21 @@ objects:
         required: "yes"
         source: "report_artifacts.run_id"
         description: "Canonical runId owning the report."
+      source:
+        type: "string | null"
+        required: "no"
+        source: "Report metadata input allowlist"
+        description: "Report metadata provenance. Request metadata can only set this through the explicit allowlist."
+      reportState:
+        type: "string | null"
+        required: "no"
+        source: "workbench-reports"
+        description: "Report decision marker state for persisted report status artifacts."
+      toolNames:
+        type: "string[]"
+        required: "no"
+        source: "Report metadata input allowlist"
+        description: "Business metadata listing tool names used by the owning run. It is not model usage metadata."
       modelTrace:
         type: "ModelTrace | null"
         required: "no"
@@ -284,6 +299,16 @@ objects:
         required: "yes"
         source: "eval_results.run_id"
         description: "Canonical runId evaluated by this result."
+      source:
+        type: "string"
+        required: "yes"
+        source: "workbench-evaluations"
+        description: "Evaluation metadata provenance set by the server."
+      resultVersion:
+        type: "number"
+        required: "yes"
+        source: "workbench-evaluations"
+        description: "Evaluation metadata format version."
       modelTrace:
         type: "ModelTrace | null"
         required: "no"
@@ -299,6 +324,11 @@ objects:
         required: "no"
         source: "LangSmith metadata"
         description: "External observability id. It does not replace canonical runId."
+      langSmithEvaluation:
+        type: "Record<string, unknown>"
+        required: "no"
+        source: "LangSmith feedback boundary"
+        description: "Server-created LangSmith feedback status metadata. Request metadata cannot set it."
 forbiddenFields:
   tokenUsage:
     pattern: "tokenUsage"

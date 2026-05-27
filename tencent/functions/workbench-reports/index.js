@@ -66,7 +66,7 @@ const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 const {
   createAgentRunModelMetadata,
-  stripLegacyModelMetadata,
+  createReportRequestMetadata,
 } = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
@@ -329,9 +329,11 @@ function mapRunSource(row) {
 }
 
 function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
-  const nextMetadata = options.stripRequestModelMetadata
-    ? stripLegacyModelMetadata(metadata)
-    : (isRecord(metadata) ? { ...metadata } : {});
+  const nextMetadata = createReportRequestMetadata(metadata);
+
+  if (typeof options.runId === 'string' && options.runId.trim()) {
+    nextMetadata.runId = options.runId.trim();
+  }
 
   delete nextMetadata.sources;
   delete nextMetadata.sourceCount;
@@ -345,6 +347,47 @@ function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
     ...nextMetadata,
     ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
   };
+}
+
+function readPersistedReportMetadata(metadata) {
+  const source = isRecord(metadata) ? metadata : {};
+  const nextMetadata = {};
+
+  if (typeof source.source === 'string' && source.source.trim()) {
+    nextMetadata.source = source.source.trim();
+  }
+
+  if (typeof source.runId === 'string' && source.runId.trim()) {
+    nextMetadata.runId = source.runId.trim();
+  }
+
+  if (typeof source.reportState === 'string' && source.reportState.trim()) {
+    nextMetadata.reportState = source.reportState.trim();
+  }
+
+  if (Array.isArray(source.toolNames)) {
+    const toolNames = source.toolNames
+      .filter((toolName) => typeof toolName === 'string' && toolName.trim())
+      .map((toolName) => toolName.trim());
+
+    if (toolNames.length > 0) {
+      nextMetadata.toolNames = toolNames;
+    }
+  }
+
+  if (isRecord(source.modelTrace)) {
+    nextMetadata.modelTrace = { ...source.modelTrace };
+  } else if (source.modelTrace === null) {
+    nextMetadata.modelTrace = null;
+  }
+
+  if (typeof source.langSmithTraceId === 'string' && source.langSmithTraceId.trim()) {
+    nextMetadata.langSmithTraceId = source.langSmithTraceId.trim();
+  } else if (source.langSmithTraceId === null) {
+    nextMetadata.langSmithTraceId = null;
+  }
+
+  return nextMetadata;
 }
 
 function toUuidOrNull(value) {
@@ -378,7 +421,7 @@ function mapReport(row) {
     version: normalizeNumber(row.version),
     created_at: normalizeDateTime(row.created_at),
     updated_at: normalizeDateTime(row.updated_at),
-    metadata: createReportMetadata(parseJsonObject(row.metadata)),
+    metadata: readPersistedReportMetadata(parseJsonObject(row.metadata)),
     sources: [],
     sourceCount: 0,
     sourceLineage: 'run_sources',
@@ -604,7 +647,7 @@ async function createReportStateMarker(db, currentUser, conversationId, runId, r
     reportState,
     runId,
   }, runModelMetadata, {
-    stripRequestModelMetadata: true,
+    runId,
   });
 
   const reportId = randomUUID();
@@ -664,7 +707,7 @@ async function createReport(currentUser, body) {
   const runId = readRequiredRunId(body.runId);
   const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
   const metadata = createReportMetadata(requestMetadata, runModelMetadata, {
-    stripRequestModelMetadata: true,
+    runId,
   });
   const insertPayload = {
     id: reportId,

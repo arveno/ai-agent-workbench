@@ -128,6 +128,9 @@ Canonical report metadata. Model state is inherited only as a single modelTrace 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
 | `runId` | string | yes | report_artifacts.run_id | Canonical runId owning the report. |
+| `source` | string \| null | no | Report metadata input allowlist | Report metadata provenance. Request metadata can only set this through the explicit allowlist. |
+| `reportState` | string \| null | no | workbench-reports | Report decision marker state for persisted report status artifacts. |
+| `toolNames` | string[] | no | Report metadata input allowlist | Business metadata listing tool names used by the owning run. It is not model usage metadata. |
 | `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Single inherited model trace object. Do not expand model fields at metadata top level. |
 | `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
 
@@ -142,9 +145,12 @@ Canonical evaluation metadata. Model state is inherited only as a single modelTr
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
 | `runId` | string | yes | eval_results.run_id | Canonical runId evaluated by this result. |
+| `source` | string | yes | workbench-evaluations | Evaluation metadata provenance set by the server. |
+| `resultVersion` | number | yes | workbench-evaluations | Evaluation metadata format version. |
 | `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Single inherited model trace object. Do not expand model fields at metadata top level. |
 | `evaluatorVersion` | string \| null | no | evaluation runtime | Evaluator or rubric version. |
 | `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
+| `langSmithEvaluation` | Record<string, unknown> | no | LangSmith feedback boundary | Server-created LangSmith feedback status metadata. Request metadata cannot set it. |
 
 ## Forbidden Fields
 

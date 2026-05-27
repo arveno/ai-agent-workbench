@@ -4,11 +4,19 @@
   "title": "EvaluationMetadata",
   "type": "object",
   "additionalProperties": false,
-  "required": ["runId"],
+  "required": ["runId", "source", "resultVersion"],
   "properties": {
     "runId": {
       "type": "string",
       "description": "Canonical runId evaluated by this result."
+    },
+    "source": {
+      "const": "workbench-evaluation",
+      "description": "Evaluation metadata provenance set by the server."
+    },
+    "resultVersion": {
+      "type": "number",
+      "description": "Evaluation metadata format version."
     },
     "modelTrace": {
       "anyOf": [
@@ -24,6 +32,10 @@
     "langSmithTraceId": {
       "type": ["string", "null"],
       "description": "External observability id. It does not replace canonical runId."
+    },
+    "langSmithEvaluation": {
+      "type": "object",
+      "description": "Server-created LangSmith feedback status metadata. Request metadata cannot set it."
     }
   }
 }

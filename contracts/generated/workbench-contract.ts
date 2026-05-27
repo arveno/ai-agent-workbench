@@ -66,12 +66,18 @@ export interface AgentConclusion {
 export interface EvaluationMetadata {
   /** Canonical runId evaluated by this result. */
   runId: string;
+  /** Evaluation metadata provenance set by the server. */
+  source: "workbench-evaluation";
+  /** Evaluation metadata format version. */
+  resultVersion: number;
   /** Single inherited model trace object. Do not expand model fields at metadata top level. */
   modelTrace?: ModelTrace | null;
   /** Evaluator or rubric version. */
   evaluatorVersion?: string | null;
   /** External observability id. It does not replace canonical runId. */
   langSmithTraceId?: string | null;
+  /** Server-created LangSmith feedback status metadata. Request metadata cannot set it. */
+  langSmithEvaluation?: Record<string, unknown>;
 }
 
 export interface ModelTrace {
@@ -99,6 +105,12 @@ export interface ModelTrace {
 export interface ReportMetadata {
   /** Canonical runId owning the report. */
   runId: string;
+  /** Report metadata provenance. Request metadata can only set this through the explicit allowlist. */
+  source?: string | null;
+  /** Report decision marker state for persisted report status artifacts. */
+  reportState?: string | null;
+  /** Business metadata listing tool names used by the owning run. It is not model usage metadata. */
+  toolNames?: string[];
   /** Single inherited model trace object. Do not expand model fields at metadata top level. */
   modelTrace?: ModelTrace | null;
   /** External observability id. It does not replace canonical runId. */
