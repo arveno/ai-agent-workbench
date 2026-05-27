@@ -4,6 +4,7 @@ import type {
   RunCompletedEvent,
   RunConclusionCompletedEvent,
   RunEvent,
+  RunModelTrace,
   RunReportPendingEvent,
   RunStartedEvent,
   RunStepCompletedEvent,
@@ -38,6 +39,34 @@ const MOCK_RUN_STEPS = [
   { id: MOCK_RUN_STEP_IDS.waitConfirmation, title: '等待用户确认' },
   { id: MOCK_RUN_STEP_IDS.generateConclusion, title: '生成最终结论' },
 ] as const;
+
+function createMockModelTrace(): RunModelTrace {
+  return {
+    selectedModelId: 'mock-agent',
+    provider: 'mock',
+    model: '本地模拟',
+    latencyMs: null,
+    usage: {
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      usageAvailable: false,
+      usageSource: 'none',
+      usageUnavailableReason: 'model_not_invoked',
+    },
+    costEstimate: {
+      estimatedCost: null,
+      currency: null,
+      pricingUnit: null,
+      isEstimated: false,
+      pricingSource: 'none',
+      costUnavailableReason: 'model_not_invoked',
+    },
+    fallbackReason: null,
+    modelErrorType: null,
+    conclusionSource: 'mock',
+  };
+}
 
 export function createMockRunStartedEvent(params: {
   runId: string;
@@ -78,6 +107,7 @@ export function createMockRunStartedEvent(params: {
       sources: createMockRagSources(),
       conclusion: '',
       conclusionSource: 'mock',
+      modelTrace: createMockModelTrace(),
       reportState: 'hidden',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -153,7 +183,7 @@ export function createMockConclusionCompletedEvent(
     type: 'conclusion_completed',
     runId,
     conclusion,
-    conclusionSource: 'mock',
+    modelTrace: createMockModelTrace(),
   };
 }
 

@@ -48,7 +48,6 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
-  'conclusion_source',
   'metadata',
 ].join(',');
 
@@ -67,7 +66,7 @@ const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 const {
   createAgentRunModelMetadata,
-  removeAgentRunModelMetadataFields,
+  stripLegacyModelMetadata,
 } = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
@@ -331,7 +330,7 @@ function mapRunSource(row) {
 
 function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
   const nextMetadata = options.stripRequestModelMetadata
-    ? removeAgentRunModelMetadataFields(metadata)
+    ? stripLegacyModelMetadata(metadata)
     : (isRecord(metadata) ? { ...metadata } : {});
 
   delete nextMetadata.sources;
@@ -510,7 +509,7 @@ async function readAgentRunModelMetadata(db, currentUser, conversationId, runId)
     return {};
   }
 
-  return createAgentRunModelMetadata(parseJsonObject(run.metadata), toNullableString(run.conclusion_source));
+  return createAgentRunModelMetadata(parseJsonObject(run.metadata));
 }
 
 async function hydrateReportSources(db, currentUser, report) {

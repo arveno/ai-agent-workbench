@@ -20,40 +20,42 @@ function readTraceObject(value) {
   return isRecord(value) ? { ...value } : null;
 }
 
-const MODEL_METADATA_FIELDS = [
+const LEGACY_MODEL_METADATA_KEYS = new Set([
   'selectedModelId',
   'provider',
   'model',
   'latencyMs',
-  'tokenUsage',
   'usage',
   'costEstimate',
   'fallbackReason',
   'modelErrorType',
+  'modelHttpStatus',
+  'modelErrorMessage',
   'conclusionSource',
   'modelTrace',
-];
+  'tokenUsage',
+]);
 
-function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
+function createAgentRunModelMetadata(runMetadata) {
   const metadata = isRecord(runMetadata) ? runMetadata : {};
   const trace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
-  const fallbackSource = normalizeConclusionSource(fallbackConclusionSource);
 
   if (!trace) {
-    return fallbackSource ? { conclusionSource: fallbackSource } : {};
+    return {};
   }
 
-  const conclusionSource = normalizeConclusionSource(trace.conclusionSource) || fallbackSource;
+  const conclusionSource = normalizeConclusionSource(trace.conclusionSource) || 'none';
   const modelTrace = {
     selectedModelId: normalizeTraceString(trace.selectedModelId),
     provider: normalizeTraceString(trace.provider),
     model: normalizeTraceString(trace.model),
     latencyMs: normalizeTraceNumber(trace.latencyMs),
-    tokenUsage: readTraceObject(trace.tokenUsage),
     usage: readTraceObject(trace.usage),
     costEstimate: readTraceObject(trace.costEstimate),
     fallbackReason: normalizeTraceString(trace.fallbackReason),
     modelErrorType: normalizeTraceString(trace.modelErrorType),
+    modelHttpStatus: normalizeTraceNumber(trace.modelHttpStatus),
+    modelErrorMessage: normalizeTraceString(trace.modelErrorMessage),
     conclusionSource,
   };
   const hasModelMetadata = Boolean(
@@ -61,50 +63,38 @@ function createAgentRunModelMetadata(runMetadata, fallbackConclusionSource) {
     modelTrace.provider ||
     modelTrace.model ||
     modelTrace.latencyMs !== null ||
-    modelTrace.tokenUsage ||
     modelTrace.usage ||
     modelTrace.costEstimate ||
     modelTrace.fallbackReason ||
-    modelTrace.modelErrorType,
+    modelTrace.modelErrorType ||
+    modelTrace.modelHttpStatus !== null ||
+    modelTrace.modelErrorMessage ||
+    modelTrace.conclusionSource !== 'none',
   );
 
-  if (!hasModelMetadata && !conclusionSource) {
+  if (!hasModelMetadata) {
     return {};
   }
 
-  if (!hasModelMetadata) {
-    return {
-      conclusionSource,
-      modelTrace,
-    };
-  }
-
   return {
-    selectedModelId: modelTrace.selectedModelId,
-    provider: modelTrace.provider,
-    model: modelTrace.model,
-    latencyMs: modelTrace.latencyMs,
-    tokenUsage: modelTrace.tokenUsage,
-    usage: modelTrace.usage,
-    costEstimate: modelTrace.costEstimate,
-    fallbackReason: modelTrace.fallbackReason,
-    modelErrorType: modelTrace.modelErrorType,
-    conclusionSource: modelTrace.conclusionSource,
     modelTrace,
   };
 }
 
-function removeAgentRunModelMetadataFields(metadata) {
+function stripLegacyModelMetadata(metadata) {
   const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
 
-  for (const field of MODEL_METADATA_FIELDS) {
-    delete nextMetadata[field];
+  for (const field of Object.keys(nextMetadata)) {
+    if (LEGACY_MODEL_METADATA_KEYS.has(field)) {
+      delete nextMetadata[field];
+    }
   }
 
   return nextMetadata;
 }
 
 module.exports = {
+  LEGACY_MODEL_METADATA_KEYS,
   createAgentRunModelMetadata,
-  removeAgentRunModelMetadataFields,
+  stripLegacyModelMetadata,
 };

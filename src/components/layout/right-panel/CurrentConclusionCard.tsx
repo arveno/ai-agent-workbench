@@ -133,8 +133,8 @@ export function CurrentConclusionCard() {
           ) : null}
         </div>
 
-        {currentRun.conclusionNotice ? (
-          <div className="conclusion-fallback-notice">{currentRun.conclusionNotice}</div>
+        {conclusionView.notice ? (
+          <div className="conclusion-fallback-notice">{conclusionView.notice}</div>
         ) : null}
 
         <div className="conclusion-card">

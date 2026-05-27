@@ -345,17 +345,24 @@ async function fetchConversationRecord(db, currentUser, conversationId) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+function normalizeRunConclusionSource(value) {
+  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none' ? value : 'none';
+}
+
 function mapAgentRun(row) {
+  const metadata = parseJsonObject(row.metadata);
+  const modelTrace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
+
   return {
     id: String(row.id ?? ''),
     conversationId: String(row.conversation_id ?? ''),
     usageId: row.usage_id ? String(row.usage_id) : null,
     clientRunId: row.client_run_id ? String(row.client_run_id) : null,
     status: String(row.status ?? 'running'),
-    conclusionSource: row.conclusion_source ? String(row.conclusion_source) : null,
+    conclusionSource: normalizeRunConclusionSource(modelTrace?.conclusionSource),
     reportState: row.report_state ? String(row.report_state) : null,
     completedAt: row.completed_at ? String(row.completed_at) : null,
-    metadata: parseJsonObject(row.metadata),
+    metadata,
     createdAt: row.created_at ? String(row.created_at) : null,
     updatedAt: row.updated_at ? String(row.updated_at) : null,
   };
@@ -636,13 +643,9 @@ function createAgentRunMetadata(context, extra = {}) {
     langSmithTrace,
     clientRunId: context.clientRunId,
     clientRunIdMissing: Boolean(context.clientRunIdMissing),
-    provider: context.provider || 'cloudbase_mysql',
     dataProvider: context.provider || 'cloudbase_mysql',
-    selectedModelId: context.selectedModelId || null,
     modelTrace: context.modelTrace || null,
-    conclusionSource: context.conclusionSource || null,
     agentConclusion: context.agentConclusion || null,
-    fallbackReason: context.fallbackReason || null,
     ...extra,
   };
 }
@@ -771,9 +774,7 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
       metadata: JSON.stringify(createAgentRunMetadata(context, {
         assistantMessageId,
         modelTrace: context.modelTrace || null,
-        conclusionSource: options.conclusionSource || context.conclusionSource || 'fallback',
         agentConclusion: context.agentConclusion || null,
-        fallbackReason: context.fallbackReason || null,
       })),
     })
     .eq('id', context.runId)
@@ -922,23 +923,11 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
       client_message_id: clientMessageId,
       status: 'completed',
       metadata: JSON.stringify({
-        source: metadata.source || context.conclusionSource || 'fallback',
+        source: metadata.source || 'agent-run',
         retrievedChunkCount: Number.isInteger(metadata.retrievedChunkCount) ? metadata.retrievedChunkCount : null,
         sourceDocumentIds: Array.isArray(metadata.sourceDocumentIds) ? metadata.sourceDocumentIds : [],
-        conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
-        fallbackReason: metadata.fallbackReason || null,
-        selectedModelId: metadata.selectedModelId || context.modelTrace?.selectedModelId || context.selectedModelId || null,
-        provider: metadata.provider || context.modelTrace?.provider || null,
-        model: metadata.model || context.modelTrace?.model || null,
-        latencyMs: Number.isInteger(metadata.latencyMs) ? metadata.latencyMs : (context.modelTrace?.latencyMs ?? null),
-        tokenUsage: metadata.tokenUsage || context.modelTrace?.tokenUsage || null,
-        usage: metadata.usage || context.modelTrace?.usage || null,
-        costEstimate: metadata.costEstimate || context.modelTrace?.costEstimate || null,
-        modelTrace: metadata.modelTrace || context.modelTrace || null,
+        modelTrace: context.modelTrace || null,
         agentConclusion: metadata.agentConclusion || context.agentConclusion || null,
-        modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
-        modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
-        modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
         agentMode: 'real',
         clientRunId: context.clientRunId || null,
       }),
@@ -1031,6 +1020,7 @@ function createRunSnapshot(context, options = {}) {
   const createdAt = context.createdAt || nowIso();
   const plan = options.plan || context.plan;
   const intent = plan?.intent || context.intent || 'unknown';
+  const modelTrace = options.modelTrace || context.modelTrace || null;
 
   return {
     id: context.runId,
@@ -1048,10 +1038,9 @@ function createRunSnapshot(context, options = {}) {
     toolInvocations: options.toolInvocations || context.toolInvocations || [],
     chartData: options.chartData || context.chartData,
     conclusion: options.conclusion || context.conclusion || '',
-    conclusionSource: options.conclusionSource || context.conclusionSource || 'none',
+    conclusionSource: modelTrace?.conclusionSource || 'none',
     agentConclusion: options.agentConclusion || context.agentConclusion,
-    conclusionNotice: options.conclusionNotice || context.conclusionNotice,
-    modelTrace: options.modelTrace || context.modelTrace,
+    modelTrace,
     reportState: options.reportState || context.reportState || 'hidden',
     createdAt,
     updatedAt: nowIso(),
@@ -2500,7 +2489,7 @@ function normalizeModelTraceNumber(value) {
 }
 
 function resolveUsageUnavailableReason(params = {}) {
-  if (params.usage?.usageAvailable === true || params.tokenUsage) {
+  if (params.usage?.usageAvailable === true) {
     return null;
   }
 
@@ -2541,10 +2530,6 @@ const CONCLUSION_SECTION_FIELDS = [
   { title: '结论', keys: ['conclusion'] },
 ];
 const CONCLUSION_SECTION_TITLES = CONCLUSION_SECTION_FIELDS.map((field) => field.title);
-
-function toAgentConclusionSource(source) {
-  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
-}
 
 function stripConclusionJsonFence(value) {
   return String(value || '')
@@ -2657,21 +2642,28 @@ function parseConclusionJson(value) {
 
 function normalizeConclusionSections(sections) {
   const normalizedSections = sections
-    .map((section) => ({
-      title: cleanConclusionText(section.title),
-      content: cleanConclusionText(section.content),
-    }))
-    .filter((section) => section.title && section.content);
+    .map((section) => {
+      const markdownText = normalizeConclusionMarkdownText(section.markdownText);
+      const plainText = cleanConclusionText(section.plainText) || createPlainTextFromMarkdown(markdownText);
+      const title = typeof section.title === 'string' ? cleanConclusionText(section.title) : '';
+
+      return {
+        ...(title ? { title } : {}),
+        markdownText,
+        plainText,
+      };
+    })
+    .filter((section) => section.markdownText || section.plainText);
 
   return normalizedSections.length > 0 ? normalizedSections : null;
 }
 
 function createConclusionPlainText(sections) {
-  return sections ? sections.map((section) => `${section.title}：${section.content}`).join('\n\n') : '';
+  return sections ? sections.map((section) => (section.title ? `${section.title}：${section.plainText}` : section.plainText)).join('\n\n') : '';
 }
 
 function createConclusionMarkdownText(sections) {
-  return sections ? sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n') : '';
+  return sections ? sections.map((section) => (section.title ? `**${section.title}**：${section.markdownText}` : section.markdownText)).join('\n\n') : '';
 }
 
 function extractConclusionSectionsFromMarkdown(value) {
@@ -2683,7 +2675,7 @@ function extractConclusionSectionsFromMarkdown(value) {
     const matchedSection = matchConclusionSectionLine(line);
 
     if (matchedSection) {
-      if (currentSection && currentSection.content.trim()) {
+      if (currentSection && (currentSection.plainText.trim() || currentSection.markdownText.trim())) {
         sections.push(currentSection);
       }
 
@@ -2692,14 +2684,18 @@ function extractConclusionSectionsFromMarkdown(value) {
     }
 
     if (currentSection && line.trim()) {
+      const markdownText = normalizeConclusionMarkdownText(line);
+      const plainText = cleanConclusionText(line);
+
       currentSection = {
         ...currentSection,
-        content: [currentSection.content, cleanConclusionText(line)].filter(Boolean).join(' '),
+        markdownText: [currentSection.markdownText, markdownText].filter(Boolean).join('\n'),
+        plainText: [currentSection.plainText, plainText].filter(Boolean).join(' '),
       };
     }
   }
 
-  if (currentSection && currentSection.content.trim()) {
+  if (currentSection && (currentSection.plainText.trim() || currentSection.markdownText.trim())) {
     sections.push(currentSection);
   }
 
@@ -2740,10 +2736,15 @@ function normalizeParsedConclusion(value) {
   }
 
   const sections = normalizeConclusionSections(
-    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => ({
-      title,
-      content: stringifyConclusionValue(getConclusionFieldValue(value, keys)),
-    })),
+    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => {
+      const fieldValue = getConclusionFieldValue(value, keys);
+
+      return {
+        title,
+        markdownText: stringifyConclusionMarkdownValue(fieldValue),
+        plainText: stringifyConclusionValue(fieldValue),
+      };
+    }),
   );
 
   if (sections) {
@@ -2773,9 +2774,12 @@ function matchConclusionSectionLine(line) {
   const labelMatch = line.match(labelPattern);
 
   if (labelMatch) {
+    const sectionText = labelMatch[2] || '';
+
     return {
       title: labelMatch[1],
-      content: labelMatch[2] || '',
+      markdownText: normalizeConclusionMarkdownText(sectionText),
+      plainText: cleanConclusionText(sectionText),
     };
   }
 
@@ -2784,7 +2788,8 @@ function matchConclusionSectionLine(line) {
   if (headingMatch) {
     return {
       title: headingMatch[1],
-      content: '',
+      markdownText: '',
+      plainText: '',
     };
   }
 
@@ -2802,24 +2807,29 @@ function normalizeConclusionText(value) {
   };
 }
 
-function normalizeAgentConclusion(source, rawText) {
+function normalizeAgentNotice(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeAgentConclusion(rawText, notice) {
   const rawValue = typeof rawText === 'string' ? rawText.trim() : '';
   const parsedJson = rawValue ? parseConclusionJson(rawValue) : null;
   const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
   const markdownText = normalized.markdownText || normalizeConclusionMarkdownText(rawValue);
   const plainText = normalized.plainText || createPlainTextFromMarkdown(markdownText);
+  const normalizedNotice = normalizeAgentNotice(notice);
 
   return {
-    source: toAgentConclusionSource(source),
     markdownText,
     plainText,
     ...(normalized.sections ? { sections: normalized.sections } : {}),
+    ...(normalizedNotice ? { notice: normalizedNotice } : {}),
     ...(rawValue && rawValue !== markdownText ? { rawText: rawValue } : {}),
   };
 }
 
-function setCanonicalConclusion(context, rawText, source) {
-  const agentConclusion = normalizeAgentConclusion(source, rawText);
+function setCanonicalConclusion(context, rawText, source, notice) {
+  const agentConclusion = normalizeAgentConclusion(rawText, notice);
 
   context.agentConclusion = agentConclusion;
   context.conclusion = agentConclusion.markdownText;
@@ -2829,33 +2839,31 @@ function setCanonicalConclusion(context, rawText, source) {
 }
 
 function createModelTrace(params = {}) {
-  const tokenUsage = params.tokenUsage || null;
   const conclusionSource = params.conclusionSource || 'none';
   const usageUnavailableReason = resolveUsageUnavailableReason({
     ...params,
-    tokenUsage,
     conclusionSource,
   });
   const { usage, costEstimate } = createUsageCostMetadata({
-    tokenUsage,
     usage: params.usage || null,
     costEstimate: params.costEstimate || null,
     billingType: params.billingType || null,
-    usageSource: params.usageSource || (tokenUsage ? 'provider' : 'none'),
+    usageSource: params.usageSource || (params.usage?.usageAvailable === true ? 'provider' : 'none'),
     usageUnavailableReason,
     costUnavailableReason: params.costUnavailableReason,
   });
 
   return {
-    selectedModelId: params.selectedModelId || null,
+    selectedModelId: params.selectedModelId || 'unknown',
     provider: params.provider || null,
     model: params.model || null,
     latencyMs: normalizeModelTraceNumber(params.latencyMs),
-    tokenUsage,
     usage,
     costEstimate,
     fallbackReason: params.fallbackReason || null,
     modelErrorType: params.modelErrorType || null,
+    modelHttpStatus: Number.isInteger(params.modelHttpStatus) ? params.modelHttpStatus : null,
+    modelErrorMessage: params.modelErrorMessage || null,
     conclusionSource,
   };
 }
@@ -2864,7 +2872,7 @@ function createInitialModelTrace(selectedModelId) {
   const config = getLangChainModelLayerConfig(selectedModelId);
 
   return createModelTrace({
-    selectedModelId: config.selectedModelId || selectedModelId || null,
+    selectedModelId: config.selectedModelId || selectedModelId || 'unknown',
     provider: config.provider || null,
     model: config.model || null,
     billingType: config.billingType || null,
@@ -2878,7 +2886,7 @@ function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessa
   const config = getLangChainModelLayerConfig(selectedModelId);
 
   return {
-    selectedModelId: config.selectedModelId || selectedModelId || null,
+    selectedModelId: config.selectedModelId || selectedModelId || 'unknown',
     provider: config.provider || null,
     model: config.model || null,
     billingType: config.billingType || null,
@@ -2894,7 +2902,7 @@ function createFailedModelDiagnostics(error) {
   const modelError = normalizeLangChainModelError(error);
 
   return {
-    selectedModelId: modelError.selectedModelId || null,
+    selectedModelId: modelError.selectedModelId || 'unknown',
     provider: modelError.provider || null,
     model: modelError.model || null,
     billingType: modelError.billingType || null,
@@ -2902,7 +2910,6 @@ function createFailedModelDiagnostics(error) {
     modelHttpStatus: modelError.httpStatus,
     modelErrorMessage: modelError.message || null,
     latencyMs: normalizeModelTraceNumber(modelError.latencyMs),
-    tokenUsage: null,
     usageUnavailableReason: 'model_failed',
     costUnavailableReason: 'model_failed',
     hasModelApiKey: Boolean(modelError.hasApiKey),
@@ -2915,13 +2922,11 @@ function createModelEventMetadata(context, diagnostics = {}) {
   const fallbackReason = diagnostics.fallbackReason ?? context?.fallbackReason ?? existingTrace.fallbackReason ?? null;
   const modelErrorType = diagnostics.modelErrorType ?? existingTrace.modelErrorType ?? null;
   const conclusionSource = diagnostics.conclusionSource || context?.conclusionSource || existingTrace.conclusionSource || 'none';
-  const tokenUsage = diagnostics.tokenUsage || existingTrace.tokenUsage || null;
   const modelTrace = createModelTrace({
-    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || null,
+    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || 'unknown',
     provider: diagnostics.provider || existingTrace.provider || null,
     model: diagnostics.model || existingTrace.model || null,
     latencyMs: normalizeModelTraceNumber(diagnostics.latencyMs) ?? existingTrace.latencyMs ?? null,
-    tokenUsage,
     usage: diagnostics.usage || existingTrace.usage || null,
     costEstimate: diagnostics.costEstimate || existingTrace.costEstimate || null,
     billingType: diagnostics.billingType || existingTrace.billingType || null,
@@ -2929,6 +2934,10 @@ function createModelEventMetadata(context, diagnostics = {}) {
     costUnavailableReason: diagnostics.costUnavailableReason,
     fallbackReason,
     modelErrorType,
+    modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus)
+      ? diagnostics.modelHttpStatus
+      : (Number.isInteger(existingTrace.modelHttpStatus) ? existingTrace.modelHttpStatus : null),
+    modelErrorMessage: diagnostics.modelErrorMessage || existingTrace.modelErrorMessage || null,
     conclusionSource,
   });
 
@@ -2938,17 +2947,6 @@ function createModelEventMetadata(context, diagnostics = {}) {
 
   return {
     modelTrace,
-    selectedModelId: modelTrace.selectedModelId,
-    provider: modelTrace.provider,
-    model: modelTrace.model,
-    latencyMs: modelTrace.latencyMs,
-    tokenUsage: modelTrace.tokenUsage,
-    usage: modelTrace.usage,
-    costEstimate: modelTrace.costEstimate,
-    fallbackReason: modelTrace.fallbackReason,
-    modelErrorType: modelTrace.modelErrorType,
-    modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus) ? diagnostics.modelHttpStatus : null,
-    modelErrorMessage: diagnostics.modelErrorMessage || null,
   };
 }
 
@@ -3121,10 +3119,8 @@ async function emitConclusionDeltas(db, currentUser, context, res, disconnect, t
 
 async function streamStaticConclusion(db, currentUser, context, res, disconnect, params) {
   const conclusionSource = params.conclusionSource || context.conclusionSource || 'fallback';
-  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource);
+  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource, params.notice);
   const conclusion = agentConclusion.markdownText;
-
-  context.conclusionNotice = params.conclusionNotice || context.conclusionNotice || null;
 
   const ok = await emitConclusionDeltas(db, currentUser, context, res, disconnect, conclusion);
 
@@ -3140,21 +3136,8 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
     disconnect,
     createRunEvent('conclusion_completed', context, {
       conclusion,
-      conclusionSource,
       agentConclusion,
-      conclusionNotice: params.conclusionNotice,
-      fallbackReason: params.fallbackReason,
-      modelTrace: params.modelTrace,
-      selectedModelId: params.selectedModelId,
-      provider: params.provider,
-      model: params.model,
-      latencyMs: params.latencyMs,
-      tokenUsage: params.tokenUsage,
-      usage: params.usage,
-      costEstimate: params.costEstimate,
-      modelErrorType: params.modelErrorType,
-      modelHttpStatus: params.modelHttpStatus,
-      modelErrorMessage: params.modelErrorMessage,
+      modelTrace: params.modelTrace || context.modelTrace || null,
     }),
   );
 }
@@ -3453,27 +3436,27 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   let conclusion = '';
   let conclusionSource = 'fallback';
   let fallbackReason = toolContext.fallbackReason;
-  let conclusionNotice = null;
+  let notice = null;
   const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
 
   if (fallbackReason) {
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '数据工具不可用，当前结论由明确 fallback 生成。';
+    notice = '数据工具不可用，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
   } else if (!toolContext.aggregateResult || toolContext.aggregateResult.totalRecords === 0) {
     fallbackReason = 'data_empty';
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
+    notice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
@@ -3485,11 +3468,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
+    notice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, {
         ...context.modelDiagnostics,
@@ -3519,7 +3502,6 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         model: modelResult.model || modelConfig.model || null,
         billingType: modelResult.billingType || modelConfig.billingType || null,
         latencyMs: modelResult.latencyMs,
-        tokenUsage: modelResult.tokenUsage,
         usage: modelResult.usage,
         costEstimate: modelResult.costEstimate,
         conclusionSource,
@@ -3555,11 +3537,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
       }));
       conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-      conclusionNotice = '模型生成失败，当前结论由本地工具结果摘要生成。';
+      notice = '模型生成失败，当前结论由本地工具结果摘要生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
-        conclusionNotice,
+        notice,
         fallbackReason,
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
@@ -3571,7 +3553,6 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
-  context.conclusionNotice = conclusionNotice;
 
   await persistAndWriteRawEvent(
     db,
@@ -3723,18 +3704,18 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   let conclusion = '';
   let conclusionSource = 'fallback';
   let fallbackReason = ragContext.fallbackReason;
-  let conclusionNotice = null;
+  let notice = null;
   const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
   const hasMatches = Boolean(ragContext.searchResult && ragContext.searchResult.retrievedChunkCount > 0);
 
   if (!hasMatches) {
     fallbackReason = fallbackReason || 'rag_no_match';
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
+    notice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
@@ -3746,11 +3727,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
       modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
+    notice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, {
         ...context.modelDiagnostics,
@@ -3775,7 +3756,6 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         model: modelResult.model || modelConfig.model || null,
         billingType: modelResult.billingType || modelConfig.billingType || null,
         latencyMs: modelResult.latencyMs,
-        tokenUsage: modelResult.tokenUsage,
         usage: modelResult.usage,
         costEstimate: modelResult.costEstimate,
         conclusionSource,
@@ -3811,11 +3791,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
       }));
       conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-      conclusionNotice = '模型生成失败，当前知识回答由检索片段结构化生成。';
+      notice = '模型生成失败，当前知识回答由检索片段结构化生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
-        conclusionNotice,
+        notice,
         fallbackReason,
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
@@ -3825,7 +3805,6 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
-  context.conclusionNotice = conclusionNotice;
   context.assistantMessageMetadata = {
     source: 'knowledge_qa',
     retrievedChunkCount: ragContext.searchResult?.retrievedChunkCount ?? 0,
@@ -3939,7 +3918,7 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource: 'fallback',
-      conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
+      notice: '能力说明由 CloudBase 本地逻辑生成。',
       fallbackReason: context.fallbackReason,
       ...createModelEventMetadata(context, {
         conclusionSource: 'fallback',
@@ -3953,7 +3932,7 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource: 'fallback',
-      conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
+      notice: '不支持问题由 CloudBase 本地逻辑生成。',
       fallbackReason: context.fallbackReason,
       ...createModelEventMetadata(context, {
         conclusionSource: 'fallback',
@@ -4172,17 +4151,15 @@ async function runRealAgentFlow(req, res, currentUser, body) {
 
       const conclusion = await runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect);
       assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
-        source: context.conclusionSource,
-        fallbackReason: context.fallbackReason,
         agentConclusion: context.agentConclusion,
         ...(context.assistantMessageMetadata || {}),
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
       const elapsedMs = Math.max(Date.now() - startedAt, 1);
+      const completionModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
       context.langSmithTrace = await completeLangSmithTrace(context.langSmithTrace, {
         outputs: {
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          modelTrace: completionModelMetadata.modelTrace,
           reportState: context.reportState,
           elapsedMs,
         },
@@ -4190,9 +4167,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           runtime: context.langGraphRuntime,
           intent: context.intent,
           reportState: context.reportState,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
-          modelTrace: context.modelTrace || null,
+          ...completionModelMetadata,
         },
       });
       await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
@@ -4211,12 +4186,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           completedAt: nowIso(),
           elapsedMs,
           assistantMessageId,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
           metadata: {
             langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
           },
-          ...createModelEventMetadata(context, context.modelDiagnostics),
+          ...completionModelMetadata,
         }),
       );
 
@@ -4225,10 +4198,8 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           assistantMessageId,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
-          ...createModelEventMetadata(context, context.modelDiagnostics),
+          ...completionModelMetadata,
         });
         context.usageFinished = true;
       } catch (finishError) {
@@ -4244,23 +4215,21 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     } catch (error) {
       const disconnected = error && error.errorCode === 'client_disconnected';
       const finalStatus = disconnected ? 'stopped' : 'failed';
+      const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
 
       context.langSmithTrace = await failLangSmithTrace(context.langSmithTrace, {
         error,
         outputs: {
           finalStatus,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          modelTrace: failureModelMetadata.modelTrace,
         },
         metadata: {
           runtime: context.langGraphRuntime,
           intent: context.intent,
           finalStatus,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          ...failureModelMetadata,
         },
       });
-      const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
 
       try {
         await failAgentRun(db, currentUser, context, finalStatus, error && error.message);

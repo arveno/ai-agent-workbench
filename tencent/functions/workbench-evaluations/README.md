@@ -54,7 +54,7 @@ Evaluation results store compact summaries only:
 - `reportSummary`
 - `metadata`
 
-When a result references a canonical `runId`, the function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and syncs the project canonical model metadata into `eval_results.metadata` and `model_trace`: `selectedModelId`, `provider`, `model`, `latencyMs`, `tokenUsage`, `usage`, `costEstimate`, `fallbackReason`, `modelErrorType`, `conclusionSource`, and `modelTrace`. Provider no-usage and cost unavailable states remain explicit JSON metadata; no evaluation columns or migrations are added. Run-linked results never fall back to request `modelTrace`; if the run has no canonical `modelTrace`, `model_trace` is stored as `{}` and valid `agent_runs.conclusion_source` is still preserved in metadata.
+When a result references a canonical `runId`, the function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and syncs only the project canonical `modelTrace` object into `eval_results.metadata` and `model_trace`. `modelTrace.usage` is the canonical model usage field and `modelTrace.costEstimate` is the canonical cost estimate field. Provider no-usage and cost unavailable states remain explicit JSON metadata; no evaluation columns or migrations are added. Results never fall back to request `modelTrace`; if the run has no canonical `modelTrace`, `model_trace` is stored as `{}`.
 
 The function rejects obvious raw fields such as `runEvents`, `toolRawPayload`, `rawToolInput`, and `rawToolOutput`. It does not copy raw `run_events`, raw tool input, or raw tool output into `eval_results`.
 

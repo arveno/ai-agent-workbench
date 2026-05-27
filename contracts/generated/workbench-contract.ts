@@ -14,7 +14,7 @@ export interface AgentConclusionSection {
 }
 
 /** Canonical source of a run conclusion. */
-export type ConclusionSource = "model" | "fallback" | "mock" | "unknown";
+export type ConclusionSource = "model" | "fallback" | "mock" | "none";
 
 /** Canonical usage source label. */
 export type UsageSource = "provider" | "unavailable" | "none" | "estimated";
@@ -116,8 +116,8 @@ export interface RunSnapshot {
   displayRunId?: string | null;
   /** Canonical run status. */
   status: "pending" | "running" | "completed" | "failed" | "cancelled";
-  /** Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock. */
-  conclusionSource: "model" | "fallback" | "mock" | "unknown" | "none";
+  /** Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. */
+  conclusionSource: "model" | "fallback" | "mock" | "none";
   modelTrace: ModelTrace | null;
   agentConclusion?: AgentConclusion | null;
   /** Usage record id when persisted. */

@@ -62,7 +62,7 @@ Canonical model trace attached to a run, report metadata, evaluation metadata, a
 | `modelErrorType` | string \| null | yes | LangChain model layer | Normalized model error type. |
 | `modelHttpStatus` | number \| null | no | LangChain model layer | HTTP status when the provider reports one. |
 | `modelErrorMessage` | string \| null | no | LangChain model layer | Sanitized model error message. |
-| `conclusionSource` | model \| fallback \| mock \| unknown | yes | Agent Run runtime | Canonical conclusion source shared by Chat, Run Trace, Report, and Evaluation. |
+| `conclusionSource` | model \| fallback \| mock \| none | yes | Agent Run runtime | Canonical conclusion source shared by Chat, Run Trace, Report, and Evaluation. |
 
 ### AgentConclusion
 
@@ -109,7 +109,7 @@ Canonical run snapshot consumed by ViewModel builders.
 | `clientRunId` | string \| null | no | request idempotency | Pending and idempotency id. It is not a business foreign key. |
 | `displayRunId` | string \| null | no | ViewModel | UI-only short id. |
 | `status` | pending \| running \| completed \| failed \| cancelled | yes | agent_runs.status | Canonical run status. |
-| `conclusionSource` | model \| fallback \| mock \| unknown \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none or unknown and never fallback to mock. |
+| `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. |
 | `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |
 | `usageId` | string \| null | no | agent_runs.usage_id | Usage record id when persisted. |

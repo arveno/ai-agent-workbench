@@ -13,7 +13,6 @@ import type {
   RunEvent,
   RunIntent,
   RunModelCostEstimate,
-  RunModelTokenUsage,
   RunModelTrace,
   RunModelUsage,
   RunPlanSnapshot,
@@ -116,16 +115,6 @@ function shouldPreferPersistedReportState(reportState: RunReportState): boolean 
   return reportState !== 'hidden';
 }
 
-function getMetadataString(metadata: Record<string, unknown>, key: string): string {
-  const value = metadata[key];
-  return typeof value === 'string' ? value : '';
-}
-
-function getMetadataNumber(metadata: Record<string, unknown>, key: string): number | null {
-  const value = metadata[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
 function getNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -134,20 +123,30 @@ function getNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function mapTraceConclusionSource(value: unknown): RunConclusionSource {
-  return mapConclusionSource(getNullableString(value));
+function createUnavailableModelUsage(reason = 'model_not_invoked'): RunModelUsage {
+  return {
+    promptTokens: null,
+    completionTokens: null,
+    totalTokens: null,
+    usageAvailable: false,
+    usageSource: 'none',
+    usageUnavailableReason: reason,
+  };
 }
 
-function asTokenUsage(value: unknown): RunModelTokenUsage | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
+function createUnavailableCostEstimate(reason = 'model_not_invoked'): RunModelCostEstimate {
   return {
-    promptTokens: getNullableNumber(value.promptTokens),
-    completionTokens: getNullableNumber(value.completionTokens),
-    totalTokens: getNullableNumber(value.totalTokens),
+    estimatedCost: null,
+    currency: null,
+    pricingUnit: null,
+    isEstimated: false,
+    pricingSource: 'none',
+    costUnavailableReason: reason,
   };
+}
+
+function mapTraceConclusionSource(value: unknown): RunConclusionSource {
+  return mapConclusionSource(getNullableString(value));
 }
 
 function asModelUsage(value: unknown): RunModelUsage | null {
@@ -180,66 +179,28 @@ function asCostEstimate(value: unknown): RunModelCostEstimate | null {
   };
 }
 
-function asModelTrace(value: unknown, fallbackConclusionSource: RunConclusionSource): RunModelTrace | undefined {
+function asModelTrace(value: unknown): RunModelTrace | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
   return {
-    selectedModelId: getNullableString(value.selectedModelId),
+    selectedModelId: getNullableString(value.selectedModelId) ?? 'unknown',
     provider: getNullableString(value.provider),
     model: getNullableString(value.model),
     latencyMs: getNullableNumber(value.latencyMs),
-    tokenUsage: asTokenUsage(value.tokenUsage),
-    usage: asModelUsage(value.usage),
-    costEstimate: asCostEstimate(value.costEstimate),
+    usage: asModelUsage(value.usage) ?? createUnavailableModelUsage(),
+    costEstimate: asCostEstimate(value.costEstimate) ?? createUnavailableCostEstimate(),
     fallbackReason: getNullableString(value.fallbackReason),
     modelErrorType: getNullableString(value.modelErrorType),
-    conclusionSource: mapTraceConclusionSource(value.conclusionSource) || fallbackConclusionSource,
+    modelHttpStatus: getNullableNumber(value.modelHttpStatus),
+    modelErrorMessage: getNullableString(value.modelErrorMessage),
+    conclusionSource: mapTraceConclusionSource(value.conclusionSource),
   };
 }
 
-function getRunModelTrace(record: AgentRunRecord, conclusionSource: RunConclusionSource): RunModelTrace | undefined {
-  const trace = asModelTrace(record.metadata.modelTrace, conclusionSource);
-
-  if (trace) {
-    return trace;
-  }
-
-  const selectedModelId = getMetadataString(record.metadata, 'selectedModelId');
-  const provider = getMetadataString(record.metadata, 'provider');
-  const model = getMetadataString(record.metadata, 'model');
-  const fallbackReason = getMetadataString(record.metadata, 'fallbackReason');
-  const modelErrorType = getMetadataString(record.metadata, 'modelErrorType');
-  const latencyMs = getMetadataNumber(record.metadata, 'latencyMs');
-  const usage = asModelUsage(record.metadata.usage);
-  const costEstimate = asCostEstimate(record.metadata.costEstimate);
-
-  if (
-    !selectedModelId &&
-    !provider &&
-    !model &&
-    !fallbackReason &&
-    !modelErrorType &&
-    latencyMs === null &&
-    !usage &&
-    !costEstimate
-  ) {
-    return undefined;
-  }
-
-  return {
-    selectedModelId: selectedModelId || null,
-    provider: provider || null,
-    model: model || null,
-    latencyMs,
-    tokenUsage: asTokenUsage(record.metadata.tokenUsage),
-    usage,
-    costEstimate,
-    fallbackReason: fallbackReason || null,
-    modelErrorType: modelErrorType || null,
-    conclusionSource,
-  };
+function getRunModelTrace(record: AgentRunRecord): RunModelTrace | undefined {
+  return asModelTrace(record.metadata.modelTrace);
 }
 
 function asPlan(value: Record<string, unknown>): RunPlanSnapshot | undefined {
@@ -289,7 +250,7 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   'id' | 'clientRunId' | 'displayRunId'
 > {
   const runId = record.id;
-  const clientRunId = record.client_run_id ?? (getMetadataString(record.metadata, 'clientRunId') || undefined);
+  const clientRunId = record.client_run_id === null ? undefined : record.client_run_id;
 
   return {
     id: runId,
@@ -300,10 +261,9 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
 
 export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
   const runIdentity = getAgentRunRecordIdentity(record);
-  const conclusionNotice = getMetadataString(record.metadata, 'conclusionNotice');
-  const conclusionSource = mapConclusionSource(record.conclusion_source);
+  const modelTrace = getRunModelTrace(record);
+  const conclusionSource = modelTrace?.conclusionSource ?? 'none';
   const agentConclusion = normalizeAgentConclusion(
-    conclusionSource,
     record.conclusion ?? '',
     record.metadata.agentConclusion as AgentConclusion | undefined,
   );
@@ -323,8 +283,7 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
     conclusion: agentConclusion.plainText,
     conclusionSource,
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    conclusionNotice: conclusionNotice || undefined,
-    modelTrace: getRunModelTrace(record, conclusionSource),
+    modelTrace,
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,
     updatedAt: record.completed_at ?? record.started_at,
@@ -357,7 +316,6 @@ export function runPersistenceRecordsToSnapshot(params: {
   const baseSnapshot = agentRunRecordToBaseSnapshot(params.run);
   const snapshot = eventSnapshot ? { ...baseSnapshot, ...eventSnapshot } : baseSnapshot;
   const agentConclusion = normalizeAgentConclusion(
-    snapshot.conclusionSource,
     snapshot.conclusion,
     snapshot.agentConclusion,
   );
@@ -365,12 +323,15 @@ export function runPersistenceRecordsToSnapshot(params: {
   const persistedSources = params.sources.map((source) => runSourceRecordToRunSource(source));
   const persistedReportState = mapReportState(params.run.report_state);
   const runIdentity = getAgentRunRecordIdentity(params.run);
+  const modelTrace = snapshot.modelTrace ?? getRunModelTrace(params.run);
 
   return {
     ...snapshot,
     ...runIdentity,
     conclusion: agentConclusion.plainText,
+    conclusionSource: modelTrace?.conclusionSource ?? 'none',
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
+    modelTrace,
     sessionId: params.run.conversation_id,
     toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
     sources: persistedSources,

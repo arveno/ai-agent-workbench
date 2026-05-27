@@ -2,7 +2,6 @@ import type {
   RunConclusionSource,
   RunModelCostEstimate,
   RunModelTrace,
-  RunModelTokenUsage,
   RunModelUsage,
 } from '@/types/run';
 import { getConclusionSourceLabel, getFallbackReasonLabel, getModelErrorTypeLabel } from './observabilityLabels';
@@ -15,8 +14,8 @@ export interface ModelTraceViewModel {
   promptTokensLabel: string;
   completionTokensLabel: string;
   totalTokensLabel: string;
-  tokenUsageStatus: string;
-  tokenUsageSourceLabel: string;
+  usageStatus: string;
+  usageSourceLabel: string;
   usageUnavailableReasonLabel: string;
   estimatedCostLabel: string;
   costCurrencyLabel: string;
@@ -30,18 +29,18 @@ export interface ModelTraceViewModel {
 }
 
 const USAGE_UNAVAILABLE_REASON_LABELS: Record<string, string> = {
-  model_failed: '模型调用失败，未产生 token usage。',
-  model_not_invoked: '模型未调用，因此没有 token usage。',
-  provider_no_usage: '模型服务未返回 token usage。',
+  model_failed: '模型调用失败，未产生用量数据。',
+  model_not_invoked: '模型未调用，因此没有用量数据。',
+  provider_no_usage: '模型服务未返回用量数据。',
 };
 
 const COST_UNAVAILABLE_REASON_LABELS: Record<string, string> = {
   free_pricing: '免费模型定价，不显示真实账单。',
   model_failed: '模型调用失败，无法估算费用。',
   model_not_invoked: '模型未调用，无法估算费用。',
-  provider_no_usage: '模型服务未返回 token usage，无法估算费用。',
+  provider_no_usage: '模型服务未返回用量数据，无法估算费用。',
   unknown_pricing: '模型价格未知，无法估算费用。',
-  usage_unavailable: 'token usage 不可用，无法估算费用。',
+  usage_unavailable: '模型用量不可用，无法估算费用。',
 };
 
 function formatText(value: string | null | undefined): string {
@@ -76,21 +75,6 @@ function getModelLabel(modelTrace: RunModelTrace): string {
   return formatText(modelTrace.model);
 }
 
-function hasReturnedTokenUsage(tokenUsage: RunModelTokenUsage | null | undefined): boolean {
-  return Boolean(
-    tokenUsage &&
-      (
-        Number.isFinite(tokenUsage.promptTokens) ||
-        Number.isFinite(tokenUsage.completionTokens) ||
-        Number.isFinite(tokenUsage.totalTokens)
-      ),
-  );
-}
-
-function getDisplayTokenUsage(modelTrace: RunModelTrace): RunModelTokenUsage | RunModelUsage | null {
-  return modelTrace.usage ?? modelTrace.tokenUsage ?? null;
-}
-
 function getReasonLabel(
   reason: string | null | undefined,
   labels: Record<string, string>,
@@ -112,26 +96,22 @@ function getUsageUnavailableReasonLabel(usage: RunModelUsage | null | undefined)
   return getReasonLabel(usage.usageUnavailableReason, USAGE_UNAVAILABLE_REASON_LABELS);
 }
 
-function getTokenUsageStatus(modelTrace: RunModelTrace): string {
+function getUsageStatus(modelTrace: RunModelTrace): string {
   const usage = modelTrace.usage;
 
-  if (usage) {
-    if (usage.usageAvailable) {
-      return '可用';
-    }
-
-    return getUsageUnavailableReasonLabel(usage);
+  if (usage?.usageAvailable) {
+    return '可用';
   }
 
-  if (hasReturnedTokenUsage(modelTrace.tokenUsage)) {
-    return '已返回';
+  if (usage) {
+    return getUsageUnavailableReasonLabel(usage);
   }
 
   if (modelTrace.conclusionSource === 'fallback') {
     return 'Fallback 不适用';
   }
 
-  return '模型服务未返回 token usage';
+  return '模型服务未返回用量数据';
 }
 
 function getUsageSourceLabel(modelTrace: RunModelTrace): string {
@@ -139,7 +119,7 @@ function getUsageSourceLabel(modelTrace: RunModelTrace): string {
     return modelTrace.usage.usageSource;
   }
 
-  return hasReturnedTokenUsage(modelTrace.tokenUsage) ? 'provider' : '-';
+  return '-';
 }
 
 function hasEstimatedCost(costEstimate: RunModelCostEstimate | null | undefined): boolean {
@@ -190,7 +170,7 @@ export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined)
     return null;
   }
 
-  const displayUsage = getDisplayTokenUsage(modelTrace);
+  const usage = modelTrace.usage ?? null;
   const costEstimate = modelTrace.costEstimate ?? null;
 
   return {
@@ -198,12 +178,12 @@ export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined)
     providerLabel: getProviderLabel(modelTrace),
     modelLabel: getModelLabel(modelTrace),
     latencyLabel: formatNumber(modelTrace.latencyMs, 'ms'),
-    promptTokensLabel: formatNumber(displayUsage?.promptTokens),
-    completionTokensLabel: formatNumber(displayUsage?.completionTokens),
-    totalTokensLabel: formatNumber(displayUsage?.totalTokens),
-    tokenUsageStatus: getTokenUsageStatus(modelTrace),
-    tokenUsageSourceLabel: getUsageSourceLabel(modelTrace),
-    usageUnavailableReasonLabel: getUsageUnavailableReasonLabel(modelTrace.usage),
+    promptTokensLabel: formatNumber(usage?.promptTokens),
+    completionTokensLabel: formatNumber(usage?.completionTokens),
+    totalTokensLabel: formatNumber(usage?.totalTokens),
+    usageStatus: getUsageStatus(modelTrace),
+    usageSourceLabel: getUsageSourceLabel(modelTrace),
+    usageUnavailableReasonLabel: getUsageUnavailableReasonLabel(usage),
     estimatedCostLabel: formatEstimatedCost(costEstimate),
     costCurrencyLabel: formatText(costEstimate?.currency),
     pricingUnitLabel: formatText(costEstimate?.pricingUnit),

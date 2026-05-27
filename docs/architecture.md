@@ -22,7 +22,7 @@ selectedModelId
   -> _shared/langchainModelLayer.js
   -> LangChain Chat Model
   -> provider client
-  -> modelTrace / usage / costEstimate / latency / fallbackReason
+  -> modelTrace
 ```
 
 LangChain model layer 承担模型调用、错误归类、canonical usage 归集和 cost estimate 标准化。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
@@ -344,12 +344,14 @@ Run Trace 是执行过程视图，不是 raw JSON dump 面板。
 usage / cost
 latency
 fallback / model error
-conclusion summary
+结论内容 / 提示
 ```
 
 raw payload 只进入调试详情或可展开区域。工具展示字段和工具名以 `docs/tool-governance.md` 为准。
 
 Run Trace / 右侧工作台展示模型状态时，前端必须先由 mapper 按 `contracts/field-registry.yml` 和 `contracts/schemas/model-trace.schema.json` 将模型 trace 标准化进入 `RunSnapshot`，再由 ViewModel 输出展示字段；组件不得直接解析 raw metadata 或 LangChain payload。
+
+结论字段契约以 `contracts/field-registry.yml` 和 `contracts/schemas/agent-conclusion.schema.json` 为准；模型来源、fallback 和 model error 只归 `modelTrace`，结论提示只归 `agentConclusion`。
 
 ## 9. 安全边界
 

@@ -61,7 +61,7 @@
   "$defs": {
     "ConclusionSource": {
       "type": "string",
-      "enum": ["model", "fallback", "mock", "unknown"],
+      "enum": ["model", "fallback", "mock", "none"],
       "description": "Canonical source of a run conclusion."
     },
     "UsageSource": {

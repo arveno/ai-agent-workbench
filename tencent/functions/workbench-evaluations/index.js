@@ -50,25 +50,11 @@ const AGENT_RUN_COLUMNS = [
   '_openid',
   'user_id',
   'conversation_id',
-  'conclusion_source',
   'metadata',
   'created_at',
 ].join(',');
 
 const VALID_VERDICTS = new Set(['pass', 'fail', 'unknown']);
-const MODEL_METADATA_FIELDS = [
-  'selectedModelId',
-  'provider',
-  'model',
-  'latencyMs',
-  'tokenUsage',
-  'usage',
-  'costEstimate',
-  'fallbackReason',
-  'modelErrorType',
-  'conclusionSource',
-  'modelTrace',
-];
 const FORBIDDEN_RAW_FIELDS = new Set([
   'runEvents',
   'run_events',
@@ -100,7 +86,10 @@ const {
   extractLangSmithTraceFromMetadata,
   submitLangSmithEvaluationFeedback,
 } = loadSharedModule('langsmithObservability');
-const { createAgentRunModelMetadata } = loadSharedModule('agentRunModelMetadata');
+const {
+  createAgentRunModelMetadata,
+  stripLegacyModelMetadata,
+} = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -489,30 +478,17 @@ function mapResult(row) {
   };
 }
 
-function createEvaluationModelTrace(payloadModelTrace, runModelMetadata, hasCanonicalRun) {
-  if (hasCanonicalRun) {
-    return isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
-  }
-
-  const payloadMetadata = createAgentRunModelMetadata({ modelTrace: payloadModelTrace }, null);
-  return isRecord(payloadMetadata.modelTrace) ? payloadMetadata.modelTrace : {};
+function createEvaluationModelTrace(runModelMetadata, hasCanonicalRun) {
+  return hasCanonicalRun && isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
 }
 
-function createPayloadMetadata(payloadMetadata, hasCanonicalRun) {
-  const metadata = isRecord(payloadMetadata) ? { ...payloadMetadata } : {};
-
-  if (hasCanonicalRun) {
-    for (const field of MODEL_METADATA_FIELDS) {
-      delete metadata[field];
-    }
-  }
-
-  return metadata;
+function createPayloadMetadata(payloadMetadata) {
+  return stripLegacyModelMetadata(payloadMetadata);
 }
 
-function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation, hasCanonicalRun) {
+function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation) {
   return {
-    ...createPayloadMetadata(payloadMetadata, hasCanonicalRun),
+    ...createPayloadMetadata(payloadMetadata),
     ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
     source: 'workbench-evaluation',
     resultVersion: 1,
@@ -670,7 +646,6 @@ function readCreateResultPayload(body) {
     badCaseReason: readOptionalString(body, 'badCaseReason', 128),
     humanNote: readOptionalString(body, 'humanNote'),
     actualSummary: readRequiredObject(body, 'actualSummary'),
-    modelTrace: readRequiredObject(body, 'modelTrace'),
     toolSummary: readRequiredArray(body, 'toolSummary'),
     ragSummary: readRequiredObject(body, 'ragSummary'),
     reportSummary: readRequiredObject(body, 'reportSummary'),
@@ -715,9 +690,9 @@ async function createResult(currentUser, body) {
   const runMetadata = run ? parseJsonObject(run.metadata) : {};
   const hasCanonicalRun = Boolean(run);
   const runModelMetadata = run
-    ? createAgentRunModelMetadata(runMetadata, toNullableString(run.conclusion_source))
+    ? createAgentRunModelMetadata(runMetadata)
     : {};
-  const modelTrace = createEvaluationModelTrace(payload.modelTrace, runModelMetadata, hasCanonicalRun);
+  const modelTrace = createEvaluationModelTrace(runModelMetadata, hasCanonicalRun);
   const langSmithEvaluation = await submitLangSmithEvaluationFeedback({
     evaluationId: resultId,
     runId: run ? String(run.id ?? '') : null,
@@ -747,7 +722,6 @@ async function createResult(currentUser, body) {
       payload.metadata,
       runModelMetadata,
       langSmithEvaluation,
-      hasCanonicalRun,
     )),
   };
 

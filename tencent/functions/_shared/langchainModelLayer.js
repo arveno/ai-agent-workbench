@@ -296,7 +296,7 @@ function normalizeUsageNumber(value) {
   return Number.isFinite(numberValue) && numberValue >= 0 ? Math.trunc(numberValue) : null;
 }
 
-function normalizeTokenUsage(usage) {
+function normalizeUsageShape(usage) {
   if (!usage || typeof usage !== 'object') {
     return null;
   }
@@ -334,8 +334,8 @@ function normalizeUsageSource(value, fallback = 'none') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
-function createCanonicalUsage(tokenUsage, options = {}) {
-  const normalized = normalizeTokenUsage(tokenUsage);
+function createCanonicalUsage(usageInput, options = {}) {
+  const normalized = normalizeUsageShape(usageInput);
 
   if (!normalized) {
     return {
@@ -343,9 +343,9 @@ function createCanonicalUsage(tokenUsage, options = {}) {
       completionTokens: null,
       totalTokens: null,
       usageAvailable: false,
-      usageSource: normalizeUsageSource(options.usageSource || tokenUsage?.usageSource, 'none'),
+      usageSource: normalizeUsageSource(options.usageSource || usageInput?.usageSource, 'none'),
       usageUnavailableReason: normalizeUsageUnavailableReason(
-        options.usageUnavailableReason || tokenUsage?.usageUnavailableReason,
+        options.usageUnavailableReason || usageInput?.usageUnavailableReason,
         'provider_no_usage',
       ),
     };
@@ -362,7 +362,7 @@ function createCanonicalUsage(tokenUsage, options = {}) {
     completionTokens: normalized.completionTokens,
     totalTokens,
     usageAvailable: true,
-    usageSource: normalizeUsageSource(options.usageSource || tokenUsage?.usageSource, 'provider'),
+    usageSource: normalizeUsageSource(options.usageSource || usageInput?.usageSource, 'provider'),
     usageUnavailableReason: null,
   };
 }
@@ -395,7 +395,7 @@ function normalizeCostEstimate(costEstimate) {
 }
 
 function createCostEstimate(params = {}) {
-  const usage = params.usage || createCanonicalUsage(params.tokenUsage, {
+  const usage = params.usage || createCanonicalUsage(null, {
     usageSource: params.usageSource,
     usageUnavailableReason: params.usageUnavailableReason,
   });
@@ -428,7 +428,7 @@ function createCostEstimate(params = {}) {
 }
 
 function createUsageCostMetadata(params = {}) {
-  const usage = createCanonicalUsage(params.usage || params.tokenUsage, {
+  const usage = createCanonicalUsage(params.usage, {
     usageSource: params.usageSource,
     usageUnavailableReason: params.usageUnavailableReason,
   });
@@ -469,13 +469,24 @@ function getChunkText(chunk) {
   return '';
 }
 
-function getChunkUsage(chunk) {
-  return normalizeTokenUsage(
+function extractProviderRawUsage(chunk) {
+  const responseMetadataTokenUsage = chunk?.response_metadata && chunk.response_metadata.tokenUsage;
+
+  return (
     chunk?.usage_metadata ||
-    chunk?.response_metadata?.tokenUsage ||
     chunk?.response_metadata?.token_usage ||
-    chunk?.additional_kwargs?.usage,
+    responseMetadataTokenUsage ||
+    chunk?.additional_kwargs?.usage ||
+    null
   );
+}
+
+function normalizeProviderUsage(rawUsage) {
+  return normalizeUsageShape(rawUsage);
+}
+
+function getChunkUsage(chunk) {
+  return normalizeProviderUsage(extractProviderRawUsage(chunk));
 }
 
 function createChatModel(config, params = {}) {
@@ -506,7 +517,7 @@ async function streamLangChainChatCompletion(params = {}) {
   const startedAt = Date.now();
   const model = createChatModel(config, params);
   let text = '';
-  let tokenUsage = null;
+  let providerUsage = null;
 
   try {
     const stream = await model.stream(params.messages || []);
@@ -516,7 +527,7 @@ async function streamLangChainChatCompletion(params = {}) {
       const usage = getChunkUsage(chunk);
 
       if (usage) {
-        tokenUsage = usage;
+        providerUsage = usage;
       }
 
       if (delta) {
@@ -540,10 +551,10 @@ async function streamLangChainChatCompletion(params = {}) {
 
   const latencyMs = Math.max(Date.now() - startedAt, 1);
   const { usage, costEstimate } = createUsageCostMetadata({
-    tokenUsage,
+    usage: providerUsage,
     billingType: config.billingType,
-    usageSource: tokenUsage ? 'provider' : 'none',
-    usageUnavailableReason: tokenUsage ? null : 'provider_no_usage',
+    usageSource: providerUsage ? 'provider' : 'none',
+    usageUnavailableReason: providerUsage ? null : 'provider_no_usage',
   });
 
   if (!text.trim()) {
@@ -563,7 +574,6 @@ async function streamLangChainChatCompletion(params = {}) {
     displayName: config.displayName,
     billingType: config.billingType,
     latencyMs,
-    tokenUsage,
     usage,
     costEstimate,
   };
@@ -613,7 +623,7 @@ function describeLangChainModelLayerBoundary() {
       'Frontend only submits selectedModelId.',
       'Server-side catalog resolves provider, model, apiKeyEnv, baseUrl and timeout.',
       'Provider keys stay in CloudBase function environment variables.',
-      'Outputs keep modelTrace, tokenUsage, canonical usage, costEstimate, latencyMs, fallbackReason and modelErrorType contracts stable.',
+      'Outputs keep modelTrace.usage, modelTrace.costEstimate, latencyMs, fallbackReason and modelErrorType contracts stable.',
       'LangChain raw messages, chunks and metadata stay inside the server boundary.',
     ],
     replaceLater: [],
@@ -627,8 +637,10 @@ module.exports = {
   createCostEstimate,
   createUsageCostMetadata,
   describeLangChainModelLayerBoundary,
+  extractProviderRawUsage,
   getLangChainModelCatalog,
   getLangChainModelLayerConfig,
+  normalizeProviderUsage,
   normalizeLangChainModelError,
   streamLangChainChatCompletion,
 };

@@ -1,8 +1,6 @@
 import type {
   AgentConclusion,
-  AgentConclusionSource,
   AgentConclusionSection,
-  RunConclusionSource,
   RunEvent,
   RunModelTrace,
   RunSnapshot,
@@ -71,10 +69,6 @@ const CONCLUSION_SECTION_TITLES = CONCLUSION_SECTION_FIELDS.map((field) => field
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function toAgentConclusionSource(source: RunConclusionSource): AgentConclusionSource {
-  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
 }
 
 function stripJsonFence(value: string): string {
@@ -199,21 +193,32 @@ function parseConclusionJson(value: string): unknown | null {
 
 function normalizeSections(sections: AgentConclusionSection[]): AgentConclusionSection[] | undefined {
   const normalizedSections = sections
-    .map((section) => ({
-      title: normalizeDisplayText(section.title),
-      content: normalizeDisplayText(section.content),
-    }))
-    .filter((section) => section.title && section.content);
+    .map((section) => {
+      const markdownText = normalizeMarkdownText(section.markdownText);
+      const plainText = normalizeDisplayText(section.plainText) || createPlainTextFromMarkdown(markdownText);
+      const title = typeof section.title === 'string' ? normalizeDisplayText(section.title) : '';
+
+      return {
+        ...(title ? { title } : {}),
+        markdownText,
+        plainText,
+      };
+    })
+    .filter((section) => section.markdownText || section.plainText);
 
   return normalizedSections.length > 0 ? normalizedSections : undefined;
 }
 
+function normalizeNotice(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function createPlainTextFromSections(sections: AgentConclusionSection[] | undefined): string {
-  return sections?.map((section) => `${section.title}：${section.content}`).join('\n\n') ?? '';
+  return sections?.map((section) => (section.title ? `${section.title}：${section.plainText}` : section.plainText)).join('\n\n') ?? '';
 }
 
 function createMarkdownTextFromSections(sections: AgentConclusionSection[] | undefined): string {
-  return sections?.map((section) => `**${section.title}**：${section.content}`).join('\n\n') ?? '';
+  return sections?.map((section) => (section.title ? `**${section.title}**：${section.markdownText}` : section.markdownText)).join('\n\n') ?? '';
 }
 
 function extractSectionsFromMarkdown(value: string): AgentConclusionSection[] | undefined {
@@ -225,7 +230,7 @@ function extractSectionsFromMarkdown(value: string): AgentConclusionSection[] | 
     const matchedSection = matchConclusionSectionLine(line);
 
     if (matchedSection) {
-      if (currentSection?.content.trim()) {
+      if (currentSection?.plainText.trim() || currentSection?.markdownText.trim()) {
         sections.push(currentSection);
       }
 
@@ -234,14 +239,18 @@ function extractSectionsFromMarkdown(value: string): AgentConclusionSection[] | 
     }
 
     if (currentSection && line.trim()) {
+      const markdownText = normalizeMarkdownText(line);
+      const plainText = normalizeDisplayText(line);
+
       currentSection = {
         ...currentSection,
-        content: [currentSection.content, normalizeDisplayText(line)].filter(Boolean).join(' '),
+        markdownText: [currentSection.markdownText, markdownText].filter(Boolean).join('\n'),
+        plainText: [currentSection.plainText, plainText].filter(Boolean).join(' '),
       };
     }
   }
 
-  if (currentSection?.content.trim()) {
+  if (currentSection?.plainText.trim() || currentSection?.markdownText.trim()) {
     sections.push(currentSection);
   }
 
@@ -282,10 +291,15 @@ function normalizeParsedConclusion(value: unknown): Pick<AgentConclusion, 'markd
   }
 
   const sections = normalizeSections(
-    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => ({
-      title,
-      content: stringifyConclusionValue(getConclusionFieldValue(value, keys)),
-    })),
+    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => {
+      const fieldValue = getConclusionFieldValue(value, keys);
+
+      return {
+        title,
+        markdownText: stringifyMarkdownValue(fieldValue),
+        plainText: stringifyConclusionValue(fieldValue),
+      };
+    }),
   );
 
   if (sections) {
@@ -304,7 +318,7 @@ function normalizeParsedConclusion(value: unknown): Pick<AgentConclusion, 'markd
   };
 }
 
-function matchConclusionSectionLine(line: string): { title: string; content: string } | null {
+function matchConclusionSectionLine(line: string): AgentConclusionSection | null {
   const titleAlternatives = CONCLUSION_SECTION_TITLES.join('|');
   const labelPattern = new RegExp(
     `^\\s*(?:\\d+[.)、]\\s*)?(?:[-*+]\\s*)?(?:#{1,6}\\s*)?(?:\\*\\*)?\\s*(${titleAlternatives})\\s*(?:\\*\\*)?\\s*[：:]\\s*(.*)$`,
@@ -315,9 +329,12 @@ function matchConclusionSectionLine(line: string): { title: string; content: str
   const labelMatch = line.match(labelPattern);
 
   if (labelMatch) {
+    const sectionText = labelMatch[2] ?? '';
+
     return {
       title: labelMatch[1],
-      content: labelMatch[2] ?? '',
+      markdownText: normalizeMarkdownText(sectionText),
+      plainText: normalizeDisplayText(sectionText),
     };
   }
 
@@ -326,7 +343,8 @@ function matchConclusionSectionLine(line: string): { title: string; content: str
   if (headingMatch) {
     return {
       title: headingMatch[1],
-      content: '',
+      markdownText: '',
+      plainText: '',
     };
   }
 
@@ -344,7 +362,7 @@ function normalizeConclusionText(value: string): Pick<AgentConclusion, 'markdown
   };
 }
 
-function coerceAgentConclusion(value: unknown, source: RunConclusionSource, fallbackText: string): AgentConclusion | null {
+function coerceAgentConclusion(value: unknown, fallbackText: string): AgentConclusion | null {
   if (!isRecord(value) || (typeof value.markdownText !== 'string' && typeof value.plainText !== 'string')) {
     return null;
   }
@@ -354,8 +372,9 @@ function coerceAgentConclusion(value: unknown, source: RunConclusionSource, fall
         value.sections
           .filter(isRecord)
           .map((section) => ({
-            title: typeof section.title === 'string' ? section.title : '',
-            content: typeof section.content === 'string' ? section.content : '',
+            title: typeof section.title === 'string' ? section.title : null,
+            markdownText: typeof section.markdownText === 'string' ? section.markdownText : '',
+            plainText: typeof section.plainText === 'string' ? section.plainText : '',
           })),
       )
     : undefined;
@@ -367,34 +386,33 @@ function coerceAgentConclusion(value: unknown, source: RunConclusionSource, fall
     createPlainTextFromSections(sections) ||
     createPlainTextFromMarkdown(markdownText);
   const rawText = typeof value.rawText === 'string' && value.rawText.trim() ? value.rawText.trim() : undefined;
+  const notice = normalizeNotice(value.notice);
 
   if (!markdownText && !plainText) {
     return null;
   }
 
   return {
-    source: toAgentConclusionSource(source),
     markdownText: markdownText || plainText,
     plainText,
     ...(sections ? { sections } : {}),
+    ...(notice ? { notice } : {}),
     ...(rawText && rawText !== markdownText ? { rawText } : {}),
   };
 }
 
 export function normalizeAgentConclusion(
-  source: RunConclusionSource,
   rawText: string,
   existingConclusion?: unknown,
 ): AgentConclusion {
   const hasExistingMarkdownText =
     isRecord(existingConclusion) && typeof existingConclusion.markdownText === 'string' && existingConclusion.markdownText.trim();
-  const existing = hasExistingMarkdownText ? coerceAgentConclusion(existingConclusion, source, rawText) : null;
+  const existing = hasExistingMarkdownText ? coerceAgentConclusion(existingConclusion, rawText) : null;
 
   if (existing) {
     return existing;
   }
 
-  const normalizedSource = toAgentConclusionSource(source);
   const rawValue =
     isRecord(existingConclusion) && typeof existingConclusion.rawText === 'string' && existingConclusion.rawText.trim()
       ? existingConclusion.rawText.trim()
@@ -405,12 +423,13 @@ export function normalizeAgentConclusion(
   const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
   const markdownText = normalized.markdownText || normalizeMarkdownText(rawValue);
   const plainText = normalized.plainText || createPlainTextFromMarkdown(markdownText);
+  const notice = isRecord(existingConclusion) ? normalizeNotice(existingConclusion.notice) : null;
 
   return {
-    source: normalizedSource,
     markdownText,
     plainText,
     ...(normalized.sections ? { sections: normalized.sections } : {}),
+    ...(notice ? { notice } : {}),
     ...(rawValue && rawValue !== markdownText ? { rawText: rawValue } : {}),
   };
 }
@@ -435,7 +454,6 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
   if (event.type === 'run_started') {
     const updatedAt = event.run.updatedAt || nowIso();
     const agentConclusion = normalizeAgentConclusion(
-      event.run.conclusionSource,
       event.run.conclusion,
       event.run.agentConclusion,
     );
@@ -579,8 +597,8 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
   }
 
   if (event.type === 'conclusion_completed') {
+    const conclusionSource = event.modelTrace?.conclusionSource ?? currentRun.modelTrace?.conclusionSource ?? 'none';
     const agentConclusion = normalizeAgentConclusion(
-      event.conclusionSource,
       event.conclusion,
       event.agentConclusion,
     );
@@ -590,9 +608,8 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
         {
           ...currentRun,
           conclusion: agentConclusion.plainText,
-          conclusionSource: event.conclusionSource,
+          conclusionSource,
           agentConclusion,
-          conclusionNotice: event.conclusionNotice,
         },
         event.modelTrace,
       ),

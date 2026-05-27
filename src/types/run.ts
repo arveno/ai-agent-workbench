@@ -14,13 +14,13 @@ export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
 
 export type RunReportState = 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
 
-export interface RunModelTokenUsage {
+export interface RunModelUsageCounts {
   promptTokens: number | null;
   completionTokens: number | null;
   totalTokens: number | null;
 }
 
-export interface RunModelUsage extends RunModelTokenUsage {
+export interface RunModelUsage extends RunModelUsageCounts {
   usageAvailable: boolean;
   usageSource: string | null;
   usageUnavailableReason: string | null;
@@ -36,30 +36,30 @@ export interface RunModelCostEstimate {
 }
 
 export interface RunModelTrace {
-  selectedModelId: string | null;
+  selectedModelId: string;
   provider: string | null;
   model: string | null;
   latencyMs: number | null;
-  tokenUsage: RunModelTokenUsage | null;
-  usage?: RunModelUsage | null;
-  costEstimate?: RunModelCostEstimate | null;
+  usage: RunModelUsage;
+  costEstimate: RunModelCostEstimate;
   fallbackReason: string | null;
   modelErrorType: string | null;
+  modelHttpStatus?: number | null;
+  modelErrorMessage?: string | null;
   conclusionSource: RunConclusionSource;
 }
 
-export type AgentConclusionSource = 'model' | 'fallback' | 'mock';
-
 export interface AgentConclusionSection {
-  title: string;
-  content: string;
+  title?: string | null;
+  markdownText: string;
+  plainText: string;
 }
 
 export interface AgentConclusion {
-  source: AgentConclusionSource;
   markdownText: string;
   plainText: string;
   sections?: AgentConclusionSection[];
+  notice?: string | null;
   rawText?: string;
 }
 
@@ -137,7 +137,6 @@ export interface RunSnapshot {
   conclusion: string;
   conclusionSource: RunConclusionSource;
   agentConclusion?: AgentConclusion;
-  conclusionNotice?: string;
   modelTrace?: RunModelTrace;
   reportState: RunReportState;
   createdAt: string;
@@ -244,14 +243,8 @@ export interface RunConclusionCompletedEvent {
   type: 'conclusion_completed';
   runId: string;
   conclusion: string;
-  conclusionSource: RunConclusionSource;
   agentConclusion?: AgentConclusion;
-  conclusionNotice?: string;
   modelTrace?: RunModelTrace;
-  usage?: RunModelUsage | null;
-  costEstimate?: RunModelCostEstimate | null;
-  fallbackReason?: string | null;
-  modelErrorType?: string | null;
 }
 
 export interface RunRagSourcesReadyEvent {
@@ -271,10 +264,6 @@ export interface RunCompletedEvent {
   completedAt: string;
   elapsedMs?: number;
   modelTrace?: RunModelTrace;
-  usage?: RunModelUsage | null;
-  costEstimate?: RunModelCostEstimate | null;
-  fallbackReason?: string | null;
-  modelErrorType?: string | null;
 }
 
 export interface RunFailedEvent {
