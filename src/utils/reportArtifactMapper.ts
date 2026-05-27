@@ -101,7 +101,7 @@ function readReportSourceCount(record: ReportArtifactRecord, sources: RunSource[
 }
 
 export function reportArtifactToMessage(record: ReportArtifactRecord): WorkbenchMessage {
-  const runId = record.run_id?.trim() || null;
+  const runId = record.runId.trim() || null;
   const clientMessageId = `report_artifact_${record.id}`;
   const reportSources = readReportSources(record);
   const message: WorkbenchMessage = {

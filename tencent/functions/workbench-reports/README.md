@@ -84,7 +84,7 @@ When both `id` and `conversationId` exist, `id` takes priority.
 Supported fields:
 
 - `conversationId`: required conversation id.
-- `runId`: optional UUID. Omit it for Tencent-11 browser verification because Agent Run is not migrated in this step.
+- `runId`: required canonical Agent Run UUID.
 - `title`: optional string. Empty values default to `分析报告`.
 - `contentMarkdown`: required non-empty string.
 - `status`: optional. Allowed values are `draft`, `generated`, and `archived`; invalid values default to `generated`.
@@ -103,7 +103,7 @@ Response:
 
 `metadata` is allowlisted before `JSON.stringify(...)`, then safely parsed before returning. Request metadata may only keep report business fields registered in the Contract Pack, currently `source`, `runId`, `reportState`, and `toolNames`.
 
-When `runId` is present, the function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and copies only the project canonical `modelTrace` object into `report_artifacts.metadata`. Request metadata cannot backfill model fields, and the report chain does not add columns or consume LangChain raw payloads. `modelTrace.usage` is the canonical model usage field and `modelTrace.costEstimate` is the canonical cost estimate field.
+The response uses canonical API fields such as `runId`, `sources`, `sourceCount`, `sourceLineage`, and `sourceNoSourceReason`. DB snake_case fields stay inside the DB / mapper boundary. The function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and copies only the project canonical `modelTrace` object into `report_artifacts.metadata`. Request metadata cannot backfill model fields, and the report chain does not add columns or consume LangChain raw payloads. `modelTrace.usage` is the canonical model usage field and `modelTrace.costEstimate` is the canonical cost estimate field.
 
 ## Package
 

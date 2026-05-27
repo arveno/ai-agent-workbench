@@ -7,6 +7,15 @@ const DEFAULT_TIMEOUT_MS = 120000;
 const SMOKE_SOURCE = 'automated-report-source-smoke';
 const SMOKE_TOOL = 'scripts/smoke-report-source.mjs';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const REPORT_SOURCE_METADATA_FIELDS = [
+  'sources',
+  'sourceCount',
+  'source_count',
+  'sourceLineage',
+  'source_lineage',
+  'sourceNoSourceReason',
+  'source_no_source_reason',
+];
 
 function printUsage() {
   console.log(`Usage:
@@ -240,7 +249,7 @@ function getReportId(report) {
 }
 
 function getReportRunId(report) {
-  return report?.runId || report?.run_id || '';
+  return typeof report?.runId === 'string' ? report.runId.trim() : '';
 }
 
 function getReportSources(report) {
@@ -252,18 +261,22 @@ function getReportSources(report) {
 }
 
 function getReportSourceCount(report) {
-  const count = Number(report?.sourceCount ?? report?.source_count);
-
-  return Number.isFinite(count) ? count : getReportSources(report).length;
+  return typeof report?.sourceCount === 'number' && Number.isFinite(report.sourceCount)
+    ? report.sourceCount
+    : Number.NaN;
 }
 
 function getReportSourceLineage(report) {
-  return report?.sourceLineage || report?.source_lineage || '';
+  return typeof report?.sourceLineage === 'string' ? report.sourceLineage.trim() : '';
 }
 
 function hasReportMetadataField(report, fieldName) {
   const metadata = report && typeof report.metadata === 'object' && report.metadata !== null ? report.metadata : {};
   return Object.prototype.hasOwnProperty.call(metadata, fieldName);
+}
+
+function getReportMetadataSourceFields(report) {
+  return REPORT_SOURCE_METADATA_FIELDS.filter((fieldName) => hasReportMetadataField(report, fieldName));
 }
 
 function extractReports(payload) {
@@ -663,10 +676,31 @@ function validateReport(step, report, expectedRunId) {
     });
   }
 
+  if (!reportRunId) {
+    throw createSmokeError(step, {
+      errorCode: 'missing_canonical_report_run_id',
+      responseSummary: 'Expected canonical runId in report API response.',
+    });
+  }
+
   if (reportRunId !== expectedRunId) {
     throw createSmokeError(step, {
       errorCode: 'report_run_id_mismatch',
       responseSummary: `Expected runId=${expectedRunId}, got ${reportRunId || '<empty>'}.`,
+    });
+  }
+
+  if (!Number.isFinite(sourceCount)) {
+    throw createSmokeError(step, {
+      errorCode: 'missing_canonical_source_count',
+      responseSummary: 'Expected canonical sourceCount in report API response.',
+    });
+  }
+
+  if (!sourceLineage) {
+    throw createSmokeError(step, {
+      errorCode: 'missing_canonical_source_lineage',
+      responseSummary: 'Expected canonical sourceLineage in report API response.',
     });
   }
 
@@ -687,18 +721,16 @@ function validateReport(step, report, expectedRunId) {
   if (sourceLineage !== 'run_sources') {
     throw createSmokeError(step, {
       errorCode: 'invalid_source_lineage',
-      responseSummary: `Expected sourceLineage=run_sources, got ${sourceLineage || '<empty>'}.`,
+      responseSummary: `Expected sourceLineage=run_sources, got ${sourceLineage ? sourceLineage : '<empty>'}.`,
     });
   }
 
-  if (
-    hasReportMetadataField(report, 'sources') ||
-    hasReportMetadataField(report, 'sourceCount') ||
-    hasReportMetadataField(report, 'source_count')
-  ) {
+  const metadataSourceFields = getReportMetadataSourceFields(report);
+
+  if (metadataSourceFields.length > 0) {
     throw createSmokeError(step, {
       errorCode: 'metadata_report_sources_present',
-      responseSummary: 'Report metadata must not contain sources/sourceCount. Use top-level report sources fields only.',
+      responseSummary: `Report metadata must not contain source lineage fields: ${metadataSourceFields.join(', ')}. Use top-level canonical report source fields only.`,
     });
   }
 
