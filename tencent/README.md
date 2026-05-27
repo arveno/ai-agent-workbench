@@ -155,7 +155,7 @@ CloudBase RunSql 更适合单条或分段 SQL 执行。正式迁移时需要提�
 
 Preview 阶段仍需注意：
 
-1. quota consume 已使用 CAS 条件更新做原子扣减重试；Agent Run 幂等需要先执行 `migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束；公开高并发前仍建议为 quota 补事务或存储过程。
+1. quota consume 已使用 CAS 条件更新做原子扣减重试；当前 canonical baseline 已在 `agent_runs(user_id, client_run_id)` 上提供唯一约束；公开高并发前仍建议为 quota 补事务或存储过程。
 2. Agent Run 的 LangChain Model Layer 仍可能 fallback，fallback 不能伪装成真实模型结果；`data_table_not_found` / `data_tool_query_failed` / `data_empty` / `model_*` 需要结合 CloudBase MySQL、模型服务和函数日志排查。
 3. `local-tools/cloudbase-auth-test.html` 仅用于本地快速验证，不属于正式产品，也不应提交为正式能力。
 
@@ -166,5 +166,5 @@ Preview 阶段仍需注意：
 3. 新增 CloudBase Auth 后端校验 helper，建立 `_openid -> app_profiles.user_id` 映射。当前 `auth-me` 已验证该链路，Tencent-25/Tencent-25B 已把前端默认登录主线切到 CloudBase 用户名密码登录。
 4. 迁移 conversations/messages/report/run 查询接口，所有 SQL 显式加 `_openid/user_id`。当前 conversations、messages、reports、demo-copy、workbench-runs 和报告闭环已完成，PATCH、archive 后续再迁。
 5. 迁移 quota 事务。当前 Tencent-13 已新增 quota 基础闭环，后续仍需单独验证 MySQL transaction + 行锁并发扣减。
-6. 迁移 Agent Run SSE。CloudBase 函数内的 data tools 直接读取 CloudBase MySQL `teaching_metrics`，LangChain Model Layer 负责模型调用，`007_agent_runs_client_run_id.sql` 提供跨实例幂等唯一约束，`knowledge_qa` 通过 CloudBase MySQL `knowledge_search` 执行受控检索；后续仍需做 EdgeOne Preview 线上回归。
+6. 迁移 Agent Run SSE。CloudBase 函数内的 data tools 直接读取 CloudBase MySQL `teaching_metrics`，LangChain Model Layer 负责模型调用，canonical baseline 提供跨实例幂等唯一约束，`knowledge_qa` 通过 CloudBase MySQL `knowledge_search` 执行受控检索；后续仍需做 EdgeOne Preview 线上回归。
 7. 后续继续做 EdgeOne 线上回归和 CloudBase 运行时 smoke。

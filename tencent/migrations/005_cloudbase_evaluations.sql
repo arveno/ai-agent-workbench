@@ -45,8 +45,7 @@ CREATE TABLE IF NOT EXISTS eval_results (
   user_id VARCHAR(128) NOT NULL,
   case_id VARCHAR(64) NOT NULL,
   conversation_id VARCHAR(64) NULL,
-  run_id VARCHAR(64) NULL,
-  runtime_run_id VARCHAR(128) NULL,
+  run_id VARCHAR(36) NOT NULL,
   verdict VARCHAR(32) NOT NULL DEFAULT 'unknown',
   bad_case_reason VARCHAR(128) NULL,
   human_note TEXT NULL,
@@ -72,7 +71,7 @@ CREATE TABLE IF NOT EXISTS eval_results (
     ON DELETE SET NULL,
   CONSTRAINT fk_eval_results_run
     FOREIGN KEY (run_id) REFERENCES agent_runs (id)
-    ON DELETE SET NULL,
+    ON DELETE CASCADE,
   CONSTRAINT fk_eval_results_profile_user
     FOREIGN KEY (user_id) REFERENCES app_profiles (user_id)
     ON DELETE CASCADE

@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   user_id VARCHAR(128) NOT NULL,
   conversation_id VARCHAR(36) NOT NULL,
   usage_id VARCHAR(36) NULL,
-  runtime_run_id VARCHAR(128) NULL,
+  client_run_id VARCHAR(128) NULL,
   mode ENUM('mock', 'agent') NOT NULL DEFAULT 'agent',
   status ENUM('pending', 'running', 'completed', 'failed', 'stopped') NOT NULL DEFAULT 'running',
   intent VARCHAR(64) NULL,
@@ -119,7 +119,6 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   data_source_snapshot JSON NOT NULL,
   chart_data JSON NOT NULL,
   conclusion MEDIUMTEXT NULL,
-  conclusion_source VARCHAR(64) NULL,
   report_state VARCHAR(64) NULL,
   started_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   completed_at DATETIME(3) NULL,
@@ -133,10 +132,11 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   KEY idx_agent_runs_user_id (user_id),
   KEY idx_agent_runs_conversation_id (conversation_id),
   KEY idx_agent_runs_usage_id (usage_id),
-  KEY idx_agent_runs_runtime_run_id (runtime_run_id),
+  KEY idx_agent_runs_client_run_id (client_run_id),
   KEY idx_agent_runs_created_at (created_at),
   KEY idx_agent_runs_user_started (user_id, started_at),
   KEY idx_agent_runs_conversation_started (conversation_id, started_at),
+  UNIQUE KEY uk_agent_runs_user_client_run (user_id, client_run_id),
   CONSTRAINT fk_agent_runs_conversation
     FOREIGN KEY (conversation_id) REFERENCES conversations (id)
     ON DELETE CASCADE,
@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS report_artifacts (
   _openid VARCHAR(128) NOT NULL,
   user_id VARCHAR(128) NOT NULL,
   conversation_id VARCHAR(36) NOT NULL,
-  run_id VARCHAR(36) NULL,
+  run_id VARCHAR(36) NOT NULL,
   title VARCHAR(255) NOT NULL,
   content_markdown MEDIUMTEXT NOT NULL,
   status ENUM('draft', 'generated', 'archived') NOT NULL DEFAULT 'generated',
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS report_artifacts (
     ON DELETE CASCADE,
   CONSTRAINT fk_report_artifacts_run
     FOREIGN KEY (run_id) REFERENCES agent_runs (id)
-    ON DELETE SET NULL,
+    ON DELETE CASCADE,
   CONSTRAINT fk_report_artifacts_profile_user
     FOREIGN KEY (user_id) REFERENCES app_profiles (user_id)
     ON DELETE CASCADE
