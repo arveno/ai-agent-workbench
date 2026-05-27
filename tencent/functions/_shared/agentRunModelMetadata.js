@@ -20,21 +20,55 @@ function readTraceObject(value) {
   return isRecord(value) ? { ...value } : null;
 }
 
-const LEGACY_MODEL_METADATA_KEYS = new Set([
-  'selectedModelId',
-  'provider',
-  'model',
-  'latencyMs',
-  'usage',
-  'costEstimate',
-  'fallbackReason',
-  'modelErrorType',
-  'modelHttpStatus',
-  'modelErrorMessage',
-  'conclusionSource',
-  'modelTrace',
-  'tokenUsage',
-]);
+const REPORT_METADATA_ALLOWLIST = {
+  source: readMetadataString,
+  runId: readMetadataString,
+  reportState: readMetadataString,
+  toolNames: readMetadataStringArray,
+};
+
+const EVALUATION_METADATA_ALLOWLIST = {
+  evaluatorVersion: readMetadataString,
+};
+
+function readMetadataString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readMetadataStringArray(value) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const values = value
+    .filter((item) => typeof item === 'string' && item.trim())
+    .map((item) => item.trim());
+
+  return values.length > 0 ? values : undefined;
+}
+
+function createAllowlistedMetadata(metadata, allowlist) {
+  const source = isRecord(metadata) ? metadata : {};
+  const nextMetadata = {};
+
+  for (const [field, readValue] of Object.entries(allowlist)) {
+    const value = readValue(source[field]);
+
+    if (value !== undefined) {
+      nextMetadata[field] = value;
+    }
+  }
+
+  return nextMetadata;
+}
+
+function createReportRequestMetadata(metadata) {
+  return createAllowlistedMetadata(metadata, REPORT_METADATA_ALLOWLIST);
+}
+
+function createEvaluationRequestMetadata(metadata) {
+  return createAllowlistedMetadata(metadata, EVALUATION_METADATA_ALLOWLIST);
+}
 
 function createAgentRunModelMetadata(runMetadata) {
   const metadata = isRecord(runMetadata) ? runMetadata : {};
@@ -81,20 +115,10 @@ function createAgentRunModelMetadata(runMetadata) {
   };
 }
 
-function stripLegacyModelMetadata(metadata) {
-  const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
-
-  for (const field of Object.keys(nextMetadata)) {
-    if (LEGACY_MODEL_METADATA_KEYS.has(field)) {
-      delete nextMetadata[field];
-    }
-  }
-
-  return nextMetadata;
-}
-
 module.exports = {
-  LEGACY_MODEL_METADATA_KEYS,
   createAgentRunModelMetadata,
-  stripLegacyModelMetadata,
+  createEvaluationRequestMetadata,
+  createReportRequestMetadata,
+  EVALUATION_METADATA_ALLOWLIST,
+  REPORT_METADATA_ALLOWLIST,
 };

@@ -88,7 +88,7 @@ const {
 } = loadSharedModule('langsmithObservability');
 const {
   createAgentRunModelMetadata,
-  stripLegacyModelMetadata,
+  createEvaluationRequestMetadata,
 } = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
@@ -483,12 +483,26 @@ function createEvaluationModelTrace(runModelMetadata, hasCanonicalRun) {
 }
 
 function createPayloadMetadata(payloadMetadata) {
-  return stripLegacyModelMetadata(payloadMetadata);
+  return createEvaluationRequestMetadata(payloadMetadata);
 }
 
-function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation) {
+function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation, options = {}) {
+  const metadata = createPayloadMetadata(payloadMetadata);
+
+  if (typeof options.runId === 'string' && options.runId.trim()) {
+    metadata.runId = options.runId.trim();
+  }
+
+  if (
+    isRecord(langSmithEvaluation) &&
+    typeof langSmithEvaluation.langSmithTraceId === 'string' &&
+    langSmithEvaluation.langSmithTraceId.trim()
+  ) {
+    metadata.langSmithTraceId = langSmithEvaluation.langSmithTraceId.trim();
+  }
+
   return {
-    ...createPayloadMetadata(payloadMetadata),
+    ...metadata,
     ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
     source: 'workbench-evaluation',
     resultVersion: 1,
@@ -722,6 +736,9 @@ async function createResult(currentUser, body) {
       payload.metadata,
       runModelMetadata,
       langSmithEvaluation,
+      {
+        runId: run ? String(run.id ?? '') : null,
+      },
     )),
   };
 

@@ -10,6 +10,19 @@
       "type": "string",
       "description": "Canonical runId owning the report."
     },
+    "source": {
+      "type": ["string", "null"],
+      "description": "Report metadata provenance. Request metadata can only set this through the explicit allowlist."
+    },
+    "reportState": {
+      "type": ["string", "null"],
+      "description": "Report decision marker state for persisted report status artifacts."
+    },
+    "toolNames": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Business metadata listing tool names used by the owning run. It is not model usage metadata."
+    },
     "modelTrace": {
       "anyOf": [
         { "$ref": "model-trace.schema.json" },

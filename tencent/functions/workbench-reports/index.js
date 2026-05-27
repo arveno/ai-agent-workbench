@@ -66,7 +66,7 @@ const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
 const {
   createAgentRunModelMetadata,
-  stripLegacyModelMetadata,
+  createReportRequestMetadata,
 } = loadSharedModule('agentRunModelMetadata');
 
 class RequestError extends Error {
@@ -329,9 +329,13 @@ function mapRunSource(row) {
 }
 
 function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
-  const nextMetadata = options.stripRequestModelMetadata
-    ? stripLegacyModelMetadata(metadata)
+  const nextMetadata = options.allowlistInputMetadata
+    ? createReportRequestMetadata(metadata)
     : (isRecord(metadata) ? { ...metadata } : {});
+
+  if (typeof options.runId === 'string' && options.runId.trim()) {
+    nextMetadata.runId = options.runId.trim();
+  }
 
   delete nextMetadata.sources;
   delete nextMetadata.sourceCount;
@@ -604,7 +608,8 @@ async function createReportStateMarker(db, currentUser, conversationId, runId, r
     reportState,
     runId,
   }, runModelMetadata, {
-    stripRequestModelMetadata: true,
+    allowlistInputMetadata: true,
+    runId,
   });
 
   const reportId = randomUUID();
@@ -664,7 +669,8 @@ async function createReport(currentUser, body) {
   const runId = readRequiredRunId(body.runId);
   const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
   const metadata = createReportMetadata(requestMetadata, runModelMetadata, {
-    stripRequestModelMetadata: true,
+    allowlistInputMetadata: true,
+    runId,
   });
   const insertPayload = {
     id: reportId,
