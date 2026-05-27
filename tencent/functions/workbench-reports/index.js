@@ -413,7 +413,7 @@ function mapReport(row) {
   return {
     id: String(row.id ?? ''),
     conversation_id: String(row.conversation_id ?? ''),
-    run_id: toNullableString(row.run_id),
+    runId: String(row.run_id ?? ''),
     user_id: String(row.user_id ?? ''),
     title: String(row.title ?? '分析报告'),
     content_markdown: String(row.content_markdown ?? ''),
@@ -556,7 +556,7 @@ async function readAgentRunModelMetadata(db, currentUser, conversationId, runId)
 }
 
 async function hydrateReportSources(db, currentUser, report) {
-  const runId = toUuidOrNull(report.run_id);
+  const runId = toUuidOrNull(report.runId);
 
   if (!runId) {
     return {

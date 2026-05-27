@@ -44,7 +44,7 @@ function getMetadataString(metadata: Record<string, unknown>, key: string): stri
 }
 
 function getReportArtifactRunId(report: ReportArtifactRecord): string | null {
-  return report.run_id?.trim() || null;
+  return report.runId.trim() || null;
 }
 
 function getReportArtifactState(report: ReportArtifactRecord): RunReportState | null {

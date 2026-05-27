@@ -214,7 +214,7 @@ export type ReportArtifactStatus = 'draft' | 'generated' | 'archived';
 export interface ReportArtifactRecord {
   id: string;
   conversation_id: string;
-  run_id: string | null;
+  runId: string;
   user_id: string;
   title: string;
   content_markdown: string;

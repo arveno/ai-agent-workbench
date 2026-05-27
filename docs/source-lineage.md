@@ -169,7 +169,7 @@ knowledge_search
 - Chat、Run Trace、Report、Evaluation 不各自解析 raw tool output。
 - 无来源时必须保留明确空态或 `noSourceReason`。
 - 旧 run 没有 `run_sources` 时，不得从 raw event 假装完整 lineage。
-- API / ViewModel 使用 camelCase source 字段：`sources`、`sourceCount`、`sourceLineage`、`sourceNoSourceReason`。
+- API / ViewModel 使用 camelCase source 字段：`runId`、`sources`、`sourceCount`、`sourceLineage`、`sourceNoSourceReason`。
 - DB snake_case 字段只能存在于 DB / mapper 边界；release smoke 只验证 canonical API 输出，不接受 snake_case fallback。
 
 LangGraph Retriever node 契约：
