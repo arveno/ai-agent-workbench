@@ -329,9 +329,7 @@ function mapRunSource(row) {
 }
 
 function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
-  const nextMetadata = options.allowlistInputMetadata
-    ? createReportRequestMetadata(metadata)
-    : (isRecord(metadata) ? { ...metadata } : {});
+  const nextMetadata = createReportRequestMetadata(metadata);
 
   if (typeof options.runId === 'string' && options.runId.trim()) {
     nextMetadata.runId = options.runId.trim();
@@ -608,7 +606,6 @@ async function createReportStateMarker(db, currentUser, conversationId, runId, r
     reportState,
     runId,
   }, runModelMetadata, {
-    allowlistInputMetadata: true,
     runId,
   });
 
@@ -669,7 +666,6 @@ async function createReport(currentUser, body) {
   const runId = readRequiredRunId(body.runId);
   const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
   const metadata = createReportMetadata(requestMetadata, runModelMetadata, {
-    allowlistInputMetadata: true,
     runId,
   });
   const insertPayload = {
