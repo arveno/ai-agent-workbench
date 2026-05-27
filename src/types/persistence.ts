@@ -148,7 +148,6 @@ export interface AgentRunRecord {
   data_source_snapshot: JsonObject;
   chart_data: JsonObject;
   conclusion: string | null;
-  conclusion_source: string | null;
   report_state: string | null;
   started_at: string;
   completed_at: string | null;

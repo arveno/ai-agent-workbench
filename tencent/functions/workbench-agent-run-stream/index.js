@@ -68,7 +68,6 @@ const AGENT_RUN_COLUMNS = [
   'usage_id',
   'client_run_id',
   'status',
-  'conclusion_source',
   'report_state',
   'completed_at',
   'metadata',
@@ -667,7 +666,6 @@ async function createAgentRun(db, currentUser, context, options = {}) {
       data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || getDataSourceSnapshot()),
       chart_data: JSON.stringify({}),
       conclusion: null,
-      conclusion_source: null,
       report_state: context.reportState || 'hidden',
       metadata: JSON.stringify(createAgentRunMetadata(context)),
     });
@@ -768,7 +766,6 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
       plan: JSON.stringify(context.planSnapshot || {}),
       data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || {}),
       conclusion,
-      conclusion_source: options.conclusionSource || context.conclusionSource || 'fallback',
       report_state: options.reportState || context.reportState || 'hidden',
       chart_data: JSON.stringify(options.chartData || {}),
       metadata: JSON.stringify(createAgentRunMetadata(context, {

@@ -64,7 +64,7 @@ The current path is:
 1. Authenticate request and resolve `currentUser`.
 2. Read and validate `conversationId`.
 3. Check idempotency by `user_id + clientRunId` when `clientRunId` is provided. Existing runs return a `run_reused` SSE event and do not consume quota or write trace rows again.
-4. Insert `agent_runs(status = pending)` first. Migration `007_agent_runs_client_run_id.sql` adds the hard unique boundary on `(user_id, client_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
+4. Insert `agent_runs(status = pending)` first. The canonical baseline adds the hard unique boundary on `(user_id, client_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
 5. Consume one Agent Run quota with a compare-and-set update and create `agent_run_usage(status = started)`.
 6. Attach `usage_id` to the pending run, mark it `running`, and update the conversation latest run.
 7. Start LangSmith trace when server-side LangSmith config is available; otherwise record explicit not-configured / failed status.
@@ -90,7 +90,7 @@ Tencent-24 adds service-side idempotency for `POST /api/agent/run/stream`:
 
 - `user_id + clientRunId` is the idempotency key when `clientRunId` is provided.
 - A duplicate request that finds an existing `agent_runs.client_run_id` for the current user returns `run_reused` over SSE and does not consume quota, create another run, write another assistant message, or replay `run_events` / `tool_invocations`.
-- Migration `007_agent_runs_client_run_id.sql` must be executed before deploying this function. It adds `UNIQUE KEY uk_agent_runs_user_client_run (user_id, client_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
+- The canonical baseline must be executed before deploying this function. It adds `UNIQUE KEY uk_agent_runs_user_client_run (user_id, client_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
 - The function inserts a pending run before quota consumption. If the insert hits the unique key, it queries the existing run and returns `run_reused` instead of treating the duplicate as a 500.
 - A same-process in-flight guard reduces duplicate work from double clicks and local retries before the first run row is visible.
 - If `clientRunId` is missing, the function still runs with a generated id and records `clientRunIdMissing = true` in run metadata, but full idempotency is not possible.
@@ -300,7 +300,7 @@ JSON fields are written with `JSON.stringify(...)`:
 - `tool_invocations.metadata`
 - `messages.metadata`
 
-This function uses CAS-style atomic quota update plus migration `007_agent_runs_client_run_id.sql` for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public high-concurrency traffic, review quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
+This function uses CAS-style atomic quota update plus the canonical baseline unique key for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public high-concurrency traffic, review quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
 
 ## Package
 
