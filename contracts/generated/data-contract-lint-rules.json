@@ -1,0 +1,399 @@
+{
+  "generatedFrom": "contracts/field-registry.yml",
+  "generatedBy": "node scripts/generate-data-contract-lint-rules.mjs",
+  "rules": [
+    {
+      "id": "tokenUsage",
+      "kind": "identifier",
+      "label": "tokenUsage",
+      "identifier": "tokenUsage",
+      "reason": "Legacy usage object. Use ModelTrace.usage."
+    },
+    {
+      "id": "conclusionNotice",
+      "kind": "identifier",
+      "label": "conclusionNotice",
+      "identifier": "conclusionNotice",
+      "reason": "Legacy fallback notice. Use AgentConclusion.notice for user-facing notices and ModelTrace for fallback / model error state."
+    },
+    {
+      "id": "agentConclusionSource",
+      "kind": "objectProperty",
+      "label": "agentConclusion.source",
+      "objectName": "agentConclusion",
+      "propertyName": "source",
+      "reason": "AgentConclusion owns text and notice only. Use ModelTrace.conclusionSource."
+    },
+    {
+      "id": "agentConclusionConclusionSource",
+      "kind": "objectProperty",
+      "label": "agentConclusion.conclusionSource",
+      "objectName": "agentConclusion",
+      "propertyName": "conclusionSource",
+      "reason": "Conclusion source belongs to ModelTrace.conclusionSource."
+    },
+    {
+      "id": "agentConclusionFallbackReason",
+      "kind": "objectProperty",
+      "label": "agentConclusion.fallbackReason",
+      "objectName": "agentConclusion",
+      "propertyName": "fallbackReason",
+      "reason": "Fallback reason belongs to ModelTrace.fallbackReason."
+    },
+    {
+      "id": "agentConclusionModelErrorType",
+      "kind": "objectProperty",
+      "label": "agentConclusion.modelErrorType",
+      "objectName": "agentConclusion",
+      "propertyName": "modelErrorType",
+      "reason": "Model error type belongs to ModelTrace.modelErrorType."
+    },
+    {
+      "id": "agentConclusionContent",
+      "kind": "objectProperty",
+      "label": "agentConclusion.content",
+      "objectName": "agentConclusion",
+      "propertyName": "content",
+      "reason": "Use AgentConclusion.markdownText and AgentConclusion.plainText."
+    },
+    {
+      "id": "agentConclusionSummary",
+      "kind": "objectProperty",
+      "label": "agentConclusion.summary",
+      "objectName": "agentConclusion",
+      "propertyName": "summary",
+      "reason": "Use AgentConclusion.sections or AgentConclusion.notice."
+    },
+    {
+      "id": "metadataClientRunId",
+      "kind": "objectProperty",
+      "label": "metadata.clientRunId",
+      "objectName": "metadata",
+      "propertyName": "clientRunId",
+      "reason": "clientRunId is only pending / idempotency state, not persisted metadata relationship."
+    },
+    {
+      "id": "modelTraceTokenUsage",
+      "kind": "objectProperty",
+      "label": "modelTrace.tokenUsage",
+      "objectName": "modelTrace",
+      "propertyName": "tokenUsage",
+      "reason": "Legacy model trace field. Use modelTrace.usage."
+    },
+    {
+      "id": "usageNullishTokenUsage",
+      "kind": "fallbackExpression",
+      "label": "usage ?? tokenUsage",
+      "left": "usage",
+      "operator": "??",
+      "right": "tokenUsage",
+      "reason": "Old/new fallback chain. Normalize usage once in mapper."
+    },
+    {
+      "id": "tokenUsageOrUsage",
+      "kind": "fallbackExpression",
+      "label": "tokenUsage || usage",
+      "left": "tokenUsage",
+      "operator": "||",
+      "right": "usage",
+      "reason": "Old/new fallback chain. Normalize usage once in mapper."
+    },
+    {
+      "id": "usageOrTokenUsage",
+      "kind": "fallbackExpression",
+      "label": "usage || tokenUsage",
+      "left": "usage",
+      "operator": "||",
+      "right": "tokenUsage",
+      "reason": "Old/new fallback chain. Normalize usage once in mapper."
+    },
+    {
+      "id": "rawRunConclusionSourceMock",
+      "kind": "fallbackExpression",
+      "label": "rawRun.conclusionSource ?? 'mock'",
+      "left": "rawRun.conclusionSource",
+      "operator": "??",
+      "right": "'mock'",
+      "reason": "Mock source must be explicit and not a raw fallback."
+    },
+    {
+      "id": "metadataProvider",
+      "kind": "objectProperty",
+      "label": "metadata.provider",
+      "objectName": "metadata",
+      "propertyName": "provider",
+      "reason": "Provider must come from canonical modelTrace."
+    },
+    {
+      "id": "metadataSelectedModelId",
+      "kind": "objectProperty",
+      "label": "metadata.selectedModelId",
+      "objectName": "metadata",
+      "propertyName": "selectedModelId",
+      "reason": "Selected model id must come from canonical modelTrace."
+    },
+    {
+      "id": "metadataModel",
+      "kind": "objectProperty",
+      "label": "metadata.model",
+      "objectName": "metadata",
+      "propertyName": "model",
+      "reason": "Model must come from canonical modelTrace."
+    },
+    {
+      "id": "metadataConclusionSource",
+      "kind": "objectProperty",
+      "label": "metadata.conclusionSource",
+      "objectName": "metadata",
+      "propertyName": "conclusionSource",
+      "reason": "Conclusion source must come from canonical modelTrace.conclusionSource."
+    },
+    {
+      "id": "metadataUsage",
+      "kind": "objectProperty",
+      "label": "metadata.usage",
+      "objectName": "metadata",
+      "propertyName": "usage",
+      "reason": "Usage must come from canonical modelTrace.usage."
+    },
+    {
+      "id": "metadataCostEstimate",
+      "kind": "objectProperty",
+      "label": "metadata.costEstimate",
+      "objectName": "metadata",
+      "propertyName": "costEstimate",
+      "reason": "Cost estimate must come from canonical modelTrace.costEstimate."
+    },
+    {
+      "id": "metadataFallbackReason",
+      "kind": "objectProperty",
+      "label": "metadata.fallbackReason",
+      "objectName": "metadata",
+      "propertyName": "fallbackReason",
+      "reason": "Fallback reason must come from canonical modelTrace.fallbackReason."
+    },
+    {
+      "id": "metadataModelErrorType",
+      "kind": "objectProperty",
+      "label": "metadata.modelErrorType",
+      "objectName": "metadata",
+      "propertyName": "modelErrorType",
+      "reason": "Model error type must come from canonical modelTrace.modelErrorType."
+    },
+    {
+      "id": "metadataSources",
+      "kind": "objectProperty",
+      "label": "metadata.sources",
+      "objectName": "metadata",
+      "propertyName": "sources",
+      "reason": "Source lineage must be exposed through canonical top-level sources, not report metadata."
+    },
+    {
+      "id": "metadataSourceCount",
+      "kind": "objectProperty",
+      "label": "metadata.sourceCount",
+      "objectName": "metadata",
+      "propertyName": "sourceCount",
+      "reason": "Source count must be exposed through canonical top-level sourceCount, not report metadata."
+    },
+    {
+      "id": "metadataSourceCountSnake",
+      "kind": "objectProperty",
+      "label": "metadata.source_count",
+      "objectName": "metadata",
+      "propertyName": "source_count",
+      "reason": "Legacy snake_case source count must stay inside DB / mapper boundaries."
+    },
+    {
+      "id": "metadataSourceLineage",
+      "kind": "objectProperty",
+      "label": "metadata.sourceLineage",
+      "objectName": "metadata",
+      "propertyName": "sourceLineage",
+      "reason": "Source lineage must be exposed through canonical top-level sourceLineage, not report metadata."
+    },
+    {
+      "id": "metadataSourceLineageSnake",
+      "kind": "objectProperty",
+      "label": "metadata.source_lineage",
+      "objectName": "metadata",
+      "propertyName": "source_lineage",
+      "reason": "Legacy snake_case source lineage must stay inside DB / mapper boundaries."
+    },
+    {
+      "id": "metadataSourceNoSourceReason",
+      "kind": "objectProperty",
+      "label": "metadata.sourceNoSourceReason",
+      "objectName": "metadata",
+      "propertyName": "sourceNoSourceReason",
+      "reason": "No-source reason must be exposed through canonical top-level sourceNoSourceReason, not report metadata."
+    },
+    {
+      "id": "metadataSourceNoSourceReasonSnake",
+      "kind": "objectProperty",
+      "label": "metadata.source_no_source_reason",
+      "objectName": "metadata",
+      "propertyName": "source_no_source_reason",
+      "reason": "Legacy snake_case no-source reason must stay inside DB / mapper boundaries."
+    },
+    {
+      "id": "metadataTokenUsage",
+      "kind": "objectProperty",
+      "label": "metadata.tokenUsage",
+      "objectName": "metadata",
+      "propertyName": "tokenUsage",
+      "reason": "Usage must come from canonical modelTrace.usage."
+    },
+    {
+      "id": "metadataConclusionNotice",
+      "kind": "objectProperty",
+      "label": "metadata.conclusionNotice",
+      "objectName": "metadata",
+      "propertyName": "conclusionNotice",
+      "reason": "Conclusion notice belongs to AgentConclusion.notice."
+    },
+    {
+      "id": "runtimeRunIdSnake",
+      "kind": "identifier",
+      "label": "runtime_run_id",
+      "identifier": "runtime_run_id",
+      "reason": "Legacy runtime run id is removed. Use canonical runId / agent_runs.id."
+    },
+    {
+      "id": "conclusionSourceSnake",
+      "kind": "identifier",
+      "label": "conclusion_source",
+      "identifier": "conclusion_source",
+      "reason": "Legacy DB conclusion source field is removed. Use modelTrace.conclusionSource."
+    },
+    {
+      "id": "sourceCountSnake",
+      "kind": "identifier",
+      "label": "source_count",
+      "identifier": "source_count",
+      "reason": "Legacy snake_case source count must not appear outside DB / mapper boundaries."
+    },
+    {
+      "id": "sourceLineageSnake",
+      "kind": "identifier",
+      "label": "source_lineage",
+      "identifier": "source_lineage",
+      "reason": "Legacy snake_case source lineage must not appear outside DB / mapper boundaries."
+    },
+    {
+      "id": "sourceNoSourceReasonSnake",
+      "kind": "identifier",
+      "label": "source_no_source_reason",
+      "identifier": "source_no_source_reason",
+      "reason": "Legacy snake_case no-source reason must not appear outside DB / mapper boundaries."
+    },
+    {
+      "id": "sourceCountNullishSourceCountSnake",
+      "kind": "fallbackExpression",
+      "label": "sourceCount ?? source_count",
+      "left": "sourceCount",
+      "operator": "??",
+      "right": "source_count",
+      "reason": "Release checks must validate canonical sourceCount only."
+    },
+    {
+      "id": "sourceCountSnakeNullishSourceCount",
+      "kind": "fallbackExpression",
+      "label": "source_count ?? sourceCount",
+      "left": "source_count",
+      "operator": "??",
+      "right": "sourceCount",
+      "reason": "Release checks must validate canonical sourceCount only."
+    },
+    {
+      "id": "sourceLineageOrSourceLineageSnake",
+      "kind": "fallbackExpression",
+      "label": "sourceLineage || source_lineage",
+      "left": "sourceLineage",
+      "operator": "||",
+      "right": "source_lineage",
+      "reason": "Release checks must validate canonical sourceLineage only."
+    },
+    {
+      "id": "sourceLineageSnakeOrSourceLineage",
+      "kind": "fallbackExpression",
+      "label": "source_lineage || sourceLineage",
+      "left": "source_lineage",
+      "operator": "||",
+      "right": "sourceLineage",
+      "reason": "Release checks must validate canonical sourceLineage only."
+    },
+    {
+      "id": "runIdOrRunIdSnake",
+      "kind": "fallbackExpression",
+      "label": "runId || run_id",
+      "left": "runId",
+      "operator": "||",
+      "right": "run_id",
+      "reason": "API checks must validate canonical runId only."
+    },
+    {
+      "id": "runIdSnakeOrRunId",
+      "kind": "fallbackExpression",
+      "label": "run_id || runId",
+      "left": "run_id",
+      "operator": "||",
+      "right": "runId",
+      "reason": "API checks must validate canonical runId only."
+    },
+    {
+      "id": "sourceNoSourceReasonOrSnake",
+      "kind": "fallbackExpression",
+      "label": "sourceNoSourceReason || source_no_source_reason",
+      "left": "sourceNoSourceReason",
+      "operator": "||",
+      "right": "source_no_source_reason",
+      "reason": "Release checks must validate canonical sourceNoSourceReason only."
+    },
+    {
+      "id": "sourceNoSourceReasonSnakeOrCanonical",
+      "kind": "fallbackExpression",
+      "label": "source_no_source_reason || sourceNoSourceReason",
+      "left": "source_no_source_reason",
+      "operator": "||",
+      "right": "sourceNoSourceReason",
+      "reason": "Release checks must validate canonical sourceNoSourceReason only."
+    },
+    {
+      "id": "conclusionNoticeOrNotice",
+      "kind": "fallbackExpression",
+      "label": "conclusionNotice || notice",
+      "left": "conclusionNotice",
+      "operator": "||",
+      "right": "notice",
+      "reason": "AgentConclusion.notice is the canonical user-facing notice."
+    },
+    {
+      "id": "noticeOrConclusionNotice",
+      "kind": "fallbackExpression",
+      "label": "notice || conclusionNotice",
+      "left": "notice",
+      "operator": "||",
+      "right": "conclusionNotice",
+      "reason": "AgentConclusion.notice is the canonical user-facing notice."
+    },
+    {
+      "id": "sourcesOrMetadataSources",
+      "kind": "fallbackExpression",
+      "label": "sources || metadata.sources",
+      "left": "sources",
+      "operator": "||",
+      "right": "metadata.sources",
+      "reason": "Source lineage must come from canonical top-level sources."
+    },
+    {
+      "id": "metadataSourcesOrSources",
+      "kind": "fallbackExpression",
+      "label": "metadata.sources || sources",
+      "left": "metadata.sources",
+      "operator": "||",
+      "right": "sources",
+      "reason": "Source lineage must come from canonical top-level sources."
+    }
+  ]
+}

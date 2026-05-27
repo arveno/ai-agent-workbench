@@ -8,6 +8,7 @@
 - `contracts/schemas/*.schema.json`：机器可读契约，用于生成前端可引用类型。
 - `contracts/generated/workbench-contract.ts`：由 schema 生成的 TypeScript 类型。
 - `contracts/generated/field-registry.md`：由字段总账生成的人读字段表。
+- `contracts/generated/data-contract-lint-rules.json`：由字段总账的 `forbiddenFields` 生成，供本地 ESLint rule 执行静态检查。
 
 ## 使用规则
 
@@ -24,9 +25,10 @@
 ```bash
 node scripts/generate-field-registry-doc.mjs
 node scripts/generate-contract-types.mjs
+node scripts/generate-data-contract-lint-rules.mjs
 ```
 
-`Contract Pack Check` 只校验 generated 文件与契约源文件一致。本基础设施包不承担 forbidden 字段静态扫描；字段违规扫描应在后续独立 Data Contract Linter 中实现。
+`Contract Pack Check` 校验 generated 文件与契约源文件一致。`pnpm lint` 会执行 Data Contract Linter，阻止 forbidden 字段和旧字段 fallback 重新进入运行代码、前端 mapper 或 release scripts。
 
 ## 文档边界
 

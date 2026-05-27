@@ -35,5 +35,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Data Contract linter self-test
+        run: pnpm contract:lint-test
+
       - name: Build
         run: pnpm build

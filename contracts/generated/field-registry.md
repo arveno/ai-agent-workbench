@@ -168,6 +168,7 @@ Canonical evaluation metadata. Model state is inherited only as a single modelTr
 | `modelTrace.tokenUsage` | Legacy model trace field. Use modelTrace.usage. |
 | `usage ?? tokenUsage` | Old/new fallback chain. Normalize usage once in mapper. |
 | `tokenUsage \|\| usage` | Old/new fallback chain. Normalize usage once in mapper. |
+| `usage \|\| tokenUsage` | Old/new fallback chain. Normalize usage once in mapper. |
 | `rawRun.conclusionSource ?? 'mock'` | Mock source must be explicit and not a raw fallback. |
 | `metadata.provider` | Provider must come from canonical modelTrace. |
 | `metadata.selectedModelId` | Selected model id must come from canonical modelTrace. |
@@ -177,3 +178,29 @@ Canonical evaluation metadata. Model state is inherited only as a single modelTr
 | `metadata.costEstimate` | Cost estimate must come from canonical modelTrace.costEstimate. |
 | `metadata.fallbackReason` | Fallback reason must come from canonical modelTrace.fallbackReason. |
 | `metadata.modelErrorType` | Model error type must come from canonical modelTrace.modelErrorType. |
+| `metadata.sources` | Source lineage must be exposed through canonical top-level sources, not report metadata. |
+| `metadata.sourceCount` | Source count must be exposed through canonical top-level sourceCount, not report metadata. |
+| `metadata.source_count` | Legacy snake_case source count must stay inside DB / mapper boundaries. |
+| `metadata.sourceLineage` | Source lineage must be exposed through canonical top-level sourceLineage, not report metadata. |
+| `metadata.source_lineage` | Legacy snake_case source lineage must stay inside DB / mapper boundaries. |
+| `metadata.sourceNoSourceReason` | No-source reason must be exposed through canonical top-level sourceNoSourceReason, not report metadata. |
+| `metadata.source_no_source_reason` | Legacy snake_case no-source reason must stay inside DB / mapper boundaries. |
+| `metadata.tokenUsage` | Usage must come from canonical modelTrace.usage. |
+| `metadata.conclusionNotice` | Conclusion notice belongs to AgentConclusion.notice. |
+| `runtime_run_id` | Legacy runtime run id is removed. Use canonical runId / agent_runs.id. |
+| `conclusion_source` | Legacy DB conclusion source field is removed. Use modelTrace.conclusionSource. |
+| `source_count` | Legacy snake_case source count must not appear outside DB / mapper boundaries. |
+| `source_lineage` | Legacy snake_case source lineage must not appear outside DB / mapper boundaries. |
+| `source_no_source_reason` | Legacy snake_case no-source reason must not appear outside DB / mapper boundaries. |
+| `sourceCount ?? source_count` | Release checks must validate canonical sourceCount only. |
+| `source_count ?? sourceCount` | Release checks must validate canonical sourceCount only. |
+| `sourceLineage \|\| source_lineage` | Release checks must validate canonical sourceLineage only. |
+| `source_lineage \|\| sourceLineage` | Release checks must validate canonical sourceLineage only. |
+| `runId \|\| run_id` | API checks must validate canonical runId only. |
+| `run_id \|\| runId` | API checks must validate canonical runId only. |
+| `sourceNoSourceReason \|\| source_no_source_reason` | Release checks must validate canonical sourceNoSourceReason only. |
+| `source_no_source_reason \|\| sourceNoSourceReason` | Release checks must validate canonical sourceNoSourceReason only. |
+| `conclusionNotice \|\| notice` | AgentConclusion.notice is the canonical user-facing notice. |
+| `notice \|\| conclusionNotice` | AgentConclusion.notice is the canonical user-facing notice. |
+| `sources \|\| metadata.sources` | Source lineage must come from canonical top-level sources. |
+| `metadata.sources \|\| sources` | Source lineage must come from canonical top-level sources. |

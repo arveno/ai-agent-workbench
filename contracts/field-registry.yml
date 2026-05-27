@@ -366,6 +366,9 @@ forbiddenFields:
   tokenUsageOrUsage:
     pattern: "tokenUsage || usage"
     reason: "Old/new fallback chain. Normalize usage once in mapper."
+  usageOrTokenUsage:
+    pattern: "usage || tokenUsage"
+    reason: "Old/new fallback chain. Normalize usage once in mapper."
   rawRunConclusionSourceMock:
     pattern: "rawRun.conclusionSource ?? 'mock'"
     reason: "Mock source must be explicit and not a raw fallback."
@@ -393,3 +396,81 @@ forbiddenFields:
   metadataModelErrorType:
     pattern: "metadata.modelErrorType"
     reason: "Model error type must come from canonical modelTrace.modelErrorType."
+  metadataSources:
+    pattern: "metadata.sources"
+    reason: "Source lineage must be exposed through canonical top-level sources, not report metadata."
+  metadataSourceCount:
+    pattern: "metadata.sourceCount"
+    reason: "Source count must be exposed through canonical top-level sourceCount, not report metadata."
+  metadataSourceCountSnake:
+    pattern: "metadata.source_count"
+    reason: "Legacy snake_case source count must stay inside DB / mapper boundaries."
+  metadataSourceLineage:
+    pattern: "metadata.sourceLineage"
+    reason: "Source lineage must be exposed through canonical top-level sourceLineage, not report metadata."
+  metadataSourceLineageSnake:
+    pattern: "metadata.source_lineage"
+    reason: "Legacy snake_case source lineage must stay inside DB / mapper boundaries."
+  metadataSourceNoSourceReason:
+    pattern: "metadata.sourceNoSourceReason"
+    reason: "No-source reason must be exposed through canonical top-level sourceNoSourceReason, not report metadata."
+  metadataSourceNoSourceReasonSnake:
+    pattern: "metadata.source_no_source_reason"
+    reason: "Legacy snake_case no-source reason must stay inside DB / mapper boundaries."
+  metadataTokenUsage:
+    pattern: "metadata.tokenUsage"
+    reason: "Usage must come from canonical modelTrace.usage."
+  metadataConclusionNotice:
+    pattern: "metadata.conclusionNotice"
+    reason: "Conclusion notice belongs to AgentConclusion.notice."
+  runtimeRunIdSnake:
+    pattern: "runtime_run_id"
+    reason: "Legacy runtime run id is removed. Use canonical runId / agent_runs.id."
+  conclusionSourceSnake:
+    pattern: "conclusion_source"
+    reason: "Legacy DB conclusion source field is removed. Use modelTrace.conclusionSource."
+  sourceCountSnake:
+    pattern: "source_count"
+    reason: "Legacy snake_case source count must not appear outside DB / mapper boundaries."
+  sourceLineageSnake:
+    pattern: "source_lineage"
+    reason: "Legacy snake_case source lineage must not appear outside DB / mapper boundaries."
+  sourceNoSourceReasonSnake:
+    pattern: "source_no_source_reason"
+    reason: "Legacy snake_case no-source reason must not appear outside DB / mapper boundaries."
+  sourceCountNullishSourceCountSnake:
+    pattern: "sourceCount ?? source_count"
+    reason: "Release checks must validate canonical sourceCount only."
+  sourceCountSnakeNullishSourceCount:
+    pattern: "source_count ?? sourceCount"
+    reason: "Release checks must validate canonical sourceCount only."
+  sourceLineageOrSourceLineageSnake:
+    pattern: "sourceLineage || source_lineage"
+    reason: "Release checks must validate canonical sourceLineage only."
+  sourceLineageSnakeOrSourceLineage:
+    pattern: "source_lineage || sourceLineage"
+    reason: "Release checks must validate canonical sourceLineage only."
+  runIdOrRunIdSnake:
+    pattern: "runId || run_id"
+    reason: "API checks must validate canonical runId only."
+  runIdSnakeOrRunId:
+    pattern: "run_id || runId"
+    reason: "API checks must validate canonical runId only."
+  sourceNoSourceReasonOrSnake:
+    pattern: "sourceNoSourceReason || source_no_source_reason"
+    reason: "Release checks must validate canonical sourceNoSourceReason only."
+  sourceNoSourceReasonSnakeOrCanonical:
+    pattern: "source_no_source_reason || sourceNoSourceReason"
+    reason: "Release checks must validate canonical sourceNoSourceReason only."
+  conclusionNoticeOrNotice:
+    pattern: "conclusionNotice || notice"
+    reason: "AgentConclusion.notice is the canonical user-facing notice."
+  noticeOrConclusionNotice:
+    pattern: "notice || conclusionNotice"
+    reason: "AgentConclusion.notice is the canonical user-facing notice."
+  sourcesOrMetadataSources:
+    pattern: "sources || metadata.sources"
+    reason: "Source lineage must come from canonical top-level sources."
+  metadataSourcesOrSources:
+    pattern: "metadata.sources || sources"
+    reason: "Source lineage must come from canonical top-level sources."

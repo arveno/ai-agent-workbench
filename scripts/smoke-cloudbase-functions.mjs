@@ -407,7 +407,7 @@ function getModelObservation(summary) {
     selectedModelId: modelTrace.selectedModelId ?? null,
     provider: modelTrace.provider ?? null,
     model: modelTrace.model ?? null,
-    tokenUsage: modelTrace.tokenUsage ?? null,
+    usage: modelTrace.usage ?? null,
     latencyMs: modelTrace.latencyMs ?? null,
     fallbackReason: payload.fallbackReason ?? modelTrace.fallbackReason ?? null,
     modelErrorType: payload.modelErrorType ?? modelTrace.modelErrorType ?? null,

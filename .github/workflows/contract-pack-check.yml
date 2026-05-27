@@ -28,5 +28,8 @@ jobs:
       - name: Generate contract types
         run: node scripts/generate-contract-types.mjs
 
+      - name: Generate data contract lint rules
+        run: node scripts/generate-data-contract-lint-rules.mjs
+
       - name: Verify generated contracts are committed
-        run: git diff --exit-code contracts/generated/field-registry.md contracts/generated/workbench-contract.ts
+        run: git diff --exit-code contracts/generated/field-registry.md contracts/generated/workbench-contract.ts contracts/generated/data-contract-lint-rules.json
