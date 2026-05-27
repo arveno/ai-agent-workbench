@@ -39,7 +39,7 @@ eval_results._openid = currentUser.openid
 eval_results.user_id = currentUser.userId
 ```
 
-When a result references `conversationId`, the function verifies the row exists in `conversations` for the same `_openid` and `user_id`. When a result references `runId`, it must be a canonical UUID and resolves through `agent_runs.id` for the same `_openid` and `user_id`. If both conversation and run are present, `agent_runs.conversation_id` must match the supplied conversation.
+Every Evaluation result must bind to a canonical Agent Run. `POST` requires `runId`; it must be a canonical UUID and resolves through `agent_runs.id` for the same `_openid` and `user_id`. When a result also references `conversationId`, the function verifies the row exists in `conversations` for the same `_openid` and `user_id`, and `agent_runs.conversation_id` must match the supplied conversation.
 
 Missing or cross-user conversations/runs return not-found style errors and do not reveal whether another user's resource exists.
 
@@ -56,7 +56,9 @@ Evaluation results store compact summaries only:
 
 Request `metadata` is allowlisted before persistence. Request metadata may only keep evaluation business fields registered in the Contract Pack, currently `evaluatorVersion`; server-owned `source`, `resultVersion`, and LangSmith feedback metadata are set by the function.
 
-When a result references a canonical `runId`, the function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and syncs only the project canonical `modelTrace` object into `eval_results.metadata` and `model_trace`. `modelTrace.usage` is the canonical model usage field and `modelTrace.costEstimate` is the canonical cost estimate field. Provider no-usage and cost unavailable states remain explicit JSON metadata; no evaluation columns or migrations are added. Results never fall back to request `modelTrace`; if the run has no canonical `modelTrace`, `model_trace` is stored as `{}`.
+The function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and syncs only the project canonical `modelTrace` object into `eval_results.metadata` and `model_trace`. `modelTrace.usage` is the canonical model usage field and `modelTrace.costEstimate` is the canonical cost estimate field. Provider no-usage and cost unavailable states remain explicit JSON metadata; no evaluation columns or migrations are added. Results never fall back to request `modelTrace`; if the run has no canonical `modelTrace`, `model_trace` is stored as `{}`.
+
+Evaluation API output normalizes persisted metadata to the Contract Pack `EvaluationMetadata` shape. `metadata.runId` comes from `eval_results.run_id`; `source` and `resultVersion` are server-owned fields; `modelTrace` comes from the persisted server-owned `model_trace` column. Historical `eval_results` rows with null `run_id` are a DB baseline concern and are handled by the DB governance issue, not by runtime fallback.
 
 The function rejects obvious raw fields such as `runEvents`, `toolRawPayload`, `rawToolInput`, and `rawToolOutput`. It does not copy raw `run_events`, raw tool input, or raw tool output into `eval_results`.
 
