@@ -31,16 +31,22 @@ const DB_MAPPER_PROPERTIES = new Set([
   'source_no_source_reason',
 ]);
 
-const METADATA_OBJECT_LITERAL_PROPERTIES = new Set([
-  'sources',
-  'sourceCount',
-  'source_count',
-  'sourceLineage',
-  'source_lineage',
-  'sourceNoSourceReason',
-  'source_no_source_reason',
-  'tokenUsage',
-  'conclusionNotice',
+const NON_CONTRACT_METADATA_KEYS = new Set([
+  'langChainToolName',
+  'retrieverProvider',
+  'runLifecycle',
+  'runtime',
+  'runtimeToolId',
+  'sourceName',
+  'toolRuntime',
+]);
+
+const NON_CONTRACT_METADATA_CONTAINER_KEYS = new Set([
+  'citationLabel',
+  'pageContent',
+  'sourceOrder',
+  'sourceType',
+  'tags',
 ]);
 
 function normalizePathname(filename) {
@@ -167,6 +173,48 @@ function matchesPath(ruleLabel, memberPath) {
   return memberPath === ruleLabel || memberPath.endsWith(`.${ruleLabel}`);
 }
 
+function getObjectExpressionKeyNames(expression) {
+  const keys = new Set();
+  if (expression?.type !== 'ObjectExpression') return keys;
+
+  for (const property of expression.properties ?? []) {
+    if (property.type !== 'Property') continue;
+
+    const keyName = getStaticPropertyKeyName(property);
+    if (keyName) keys.add(keyName);
+  }
+
+  return keys;
+}
+
+function hasAnyKey(keys, expectedKeys) {
+  for (const key of expectedKeys) {
+    if (keys.has(key)) return true;
+  }
+  return false;
+}
+
+function getContainingObjectExpression(expression) {
+  if (
+    expression?.parent?.type === 'Property' &&
+    expression.parent.value === expression &&
+    expression.parent.parent?.type === 'ObjectExpression'
+  ) {
+    return expression.parent.parent;
+  }
+  return null;
+}
+
+function isAllowedNonContractMetadataBoundary(expression, fullPath) {
+  if (!fullPath.startsWith('metadata.')) return false;
+
+  const metadataKeys = getObjectExpressionKeyNames(expression);
+  if (hasAnyKey(metadataKeys, NON_CONTRACT_METADATA_KEYS)) return true;
+
+  const containerKeys = getObjectExpressionKeyNames(getContainingObjectExpression(expression));
+  return hasAnyKey(containerKeys, NON_CONTRACT_METADATA_CONTAINER_KEYS);
+}
+
 function buildRuleState() {
   const identifierRules = new Map();
   const objectPropertyRules = [];
@@ -190,13 +238,6 @@ function buildRuleState() {
 }
 
 const ruleState = buildRuleState();
-
-function isObjectLiteralPathRule(rule) {
-  if (rule.objectName === 'agentConclusion' || rule.objectName === 'modelTrace') return true;
-
-  if (rule.objectName !== 'metadata') return false;
-  return METADATA_OBJECT_LITERAL_PROPERTIES.has(rule.propertyName);
-}
 
 function report(context, node, rule) {
   context.report({
@@ -267,12 +308,10 @@ function checkObjectExpression(context, expression, basePath = '') {
     if (!keyName) continue;
 
     const fullPath = basePath ? `${basePath}.${keyName}` : keyName;
-    const objectRule = ruleState.objectPropertyRules.find(
-      (rule) => isObjectLiteralPathRule(rule) && matchesPath(rule.label, fullPath),
-    );
+    const objectRule = ruleState.objectPropertyRules.find((rule) => matchesPath(rule.label, fullPath));
     const identifierRule = ruleState.identifierRules.get(keyName);
 
-    if (objectRule) {
+    if (objectRule && !isAllowedNonContractMetadataBoundary(expression, fullPath)) {
       report(context, property.key, objectRule);
     } else if (identifierRule) {
       report(context, property.key, identifierRule);
