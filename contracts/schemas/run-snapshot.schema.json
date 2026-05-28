@@ -32,8 +32,8 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pending", "running", "completed", "failed", "cancelled"],
-      "description": "Canonical run status."
+      "enum": ["idle", "pending", "running", "success", "error", "stopped"],
+      "description": "Canonical frontend RunSnapshot ViewModel status."
     },
     "conclusionSource": {
       "type": "string",

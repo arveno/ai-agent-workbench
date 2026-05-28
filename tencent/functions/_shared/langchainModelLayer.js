@@ -334,6 +334,18 @@ function normalizeUsageSource(value, fallback = 'none') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function normalizePricingSource(value) {
+  if (value === 'catalog' || value === 'model_catalog.billingType') {
+    return 'catalog';
+  }
+
+  if (value === 'unavailable' || value === 'none') {
+    return value;
+  }
+
+  return null;
+}
+
 function createCanonicalUsage(usageInput, options = {}) {
   const normalized = normalizeUsageShape(usageInput);
 
@@ -385,9 +397,7 @@ function normalizeCostEstimate(costEstimate) {
       ? costEstimate.pricingUnit.trim()
       : null,
     isEstimated: costEstimate.isEstimated === true,
-    pricingSource: typeof costEstimate.pricingSource === 'string' && costEstimate.pricingSource.trim()
-      ? costEstimate.pricingSource.trim()
-      : null,
+    pricingSource: normalizePricingSource(costEstimate.pricingSource),
     costUnavailableReason: typeof costEstimate.costUnavailableReason === 'string' && costEstimate.costUnavailableReason.trim()
       ? costEstimate.costUnavailableReason.trim()
       : null,
@@ -400,7 +410,7 @@ function createCostEstimate(params = {}) {
     usageUnavailableReason: params.usageUnavailableReason,
   });
   const billingType = typeof params.billingType === 'string' ? params.billingType.trim() : '';
-  const pricingSource = billingType ? 'model_catalog.billingType' : null;
+  const pricingSource = billingType ? 'catalog' : 'none';
   const usageUnavailableReason = usage?.usageAvailable === false ? usage.usageUnavailableReason : null;
   let costUnavailableReason = 'unknown_pricing';
 

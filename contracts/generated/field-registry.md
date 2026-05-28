@@ -108,7 +108,7 @@ Canonical run snapshot consumed by ViewModel builders.
 | `conversationId` | string | yes | conversations.id | Conversation owning the run. |
 | `clientRunId` | string \| null | no | request idempotency | Pending and idempotency id. It is not a business foreign key. |
 | `displayRunId` | string \| null | no | ViewModel | UI-only short id. |
-| `status` | pending \| running \| completed \| failed \| cancelled | yes | agent_runs.status | Canonical run status. |
+| `status` | idle \| pending \| running \| success \| error \| stopped | yes | mapper / reducer ViewModel | Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract. |
 | `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. |
 | `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |

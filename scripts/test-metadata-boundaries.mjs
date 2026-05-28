@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+import Module, { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -9,8 +10,27 @@ const require = createRequire(import.meta.url);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(rootDir, 'contracts/schemas');
 
+function requireCommonJsFile(filePath, stubs = {}) {
+  const loadedModule = new Module(filePath);
+  loadedModule.filename = filePath;
+  loadedModule.paths = Module._nodeModulePaths(path.dirname(filePath));
+  loadedModule.require = (request) => {
+    if (Object.hasOwn(stubs, request)) {
+      return stubs[request];
+    }
+
+    return Module.prototype.require.call(loadedModule, request);
+  };
+  loadedModule._compile(readFileSync(filePath, 'utf8'), filePath);
+  return loadedModule.exports;
+}
+
 const reportBoundary = require(path.join(rootDir, 'tencent/functions/workbench-reports/metadata-boundary.js'));
 const evaluationBoundary = require(path.join(rootDir, 'tencent/functions/workbench-evaluations/metadata-boundary.js'));
+const modelLayer = requireCommonJsFile(
+  path.join(rootDir, 'tencent/functions/_shared/langchainModelLayer.js'),
+  { '@langchain/openai': { ChatOpenAI: class ChatOpenAI {} } },
+);
 
 const RUN_ID = '123e4567-e89b-12d3-a456-426614174000';
 const REQUEST_RUN_ID = '223e4567-e89b-12d3-a456-426614174000';
@@ -104,6 +124,13 @@ async function createSchemaValidators() {
       if (!isValid) {
         throw new Error(`${file} validation failed: ${ajv.errorsText(validate.errors, { separator: '\n' })}`);
       }
+    },
+    assertInvalid(file, data) {
+      const schema = schemasByFile.get(file);
+      assert.ok(schema, `Missing schema fixture: ${file}`);
+
+      const validate = ajv.compile(schema);
+      assert.equal(validate(data), false, `${file} should reject invalid fixture`);
     },
   };
 }
@@ -344,6 +371,46 @@ function testMapResult(validate) {
   validate.assertValid('evaluation-result.schema.json', result);
 }
 
+function testModelLayerPricingSource(validate) {
+  const usageCostMetadata = modelLayer.createUsageCostMetadata({
+    billingType: 'free',
+    usage: {
+      promptTokens: 10,
+      completionTokens: 20,
+      totalTokens: 30,
+    },
+  });
+
+  assert.equal(usageCostMetadata.costEstimate.pricingSource, 'catalog');
+  validate.assertValid('model-trace.schema.json', {
+    ...MODEL_TRACE,
+    usage: usageCostMetadata.usage,
+    costEstimate: usageCostMetadata.costEstimate,
+  });
+}
+
+function createRunSnapshotFixture(status) {
+  return {
+    id: RUN_ID,
+    conversationId: 'conversation-1',
+    status,
+    conclusionSource: 'none',
+    modelTrace: null,
+    createdAt: CREATED_AT,
+    updatedAt: UPDATED_AT,
+  };
+}
+
+function testRunSnapshotStatusContract(validate) {
+  for (const status of ['idle', 'pending', 'running', 'success', 'error', 'stopped']) {
+    validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+  }
+
+  for (const status of ['completed', 'failed', 'cancelled']) {
+    validate.assertInvalid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+  }
+}
+
 const validate = await createSchemaValidators();
 
 testReportRequestMetadata();
@@ -354,5 +421,7 @@ testEvaluationRequestMetadata();
 testEvaluationCreateMetadata(validate);
 testEvaluationPersistedRead(validate);
 testMapResult(validate);
+testModelLayerPricingSource(validate);
+testRunSnapshotStatusContract(validate);
 
 console.log('Metadata boundary tests passed.');

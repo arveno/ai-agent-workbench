@@ -213,10 +213,10 @@ objects:
         source: "ViewModel"
         description: "UI-only short id."
       status:
-        type: "pending | running | completed | failed | cancelled"
+        type: "idle | pending | running | success | error | stopped"
         required: "yes"
-        source: "agent_runs.status"
-        description: "Canonical run status."
+        source: "mapper / reducer ViewModel"
+        description: "Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract."
       conclusionSource:
         type: "model | fallback | mock | none"
         required: "yes"
