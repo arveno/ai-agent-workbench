@@ -4,27 +4,48 @@
   "title": "RunStartedEvent",
   "type": "object",
   "additionalProperties": false,
-  "required": ["type", "runId", "conversationId", "timestamp", "run"],
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
   "properties": {
     "type": {
-      "type": "string",
-      "const": "run_started",
-      "description": "SSE event 类型，表示 Agent Run 已创建并进入运行边界。"
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
     },
     "runId": {
-      "type": "string",
-      "description": "event-level canonical runId，应与 run.id 一致。"
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
     },
     "conversationId": {
-      "type": "string",
-      "description": "event-level conversationId，应与 run.conversationId 一致。"
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
     },
     "timestamp": {
-      "type": "string",
-      "description": "run_started 事件产生时间。"
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
     },
-    "run": {
-      "$ref": "../objects/run-snapshot.schema.json"
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
     }
-  }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "run_started",
+          "description": "SSE event 类型，表示 Agent Run 已创建并进入运行边界。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["run"],
+          "description": "run_started 事件业务数据。",
+          "properties": {
+            "run": {
+              "$ref": "../objects/run-snapshot.schema.json"
+            }
+          }
+        }
+      }
+    }
+  ]
 }

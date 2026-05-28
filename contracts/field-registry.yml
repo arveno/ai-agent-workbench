@@ -388,12 +388,18 @@ schemaObjectReferences:
     owner: "Source Lineage mapper"
     schema: "contracts/schemas/objects/run-source.schema.json"
     summary: "Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunSseEventEnvelope:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/run-sse-event-envelope.schema.json"
+    summary: "SSE event 公共 envelope schema，只定义 type / runId / conversationId / timestamp / payload 外壳，不定义具体业务字段。"
   RunStartedEvent:
     lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
     coreObject: "Event, Run"
     owner: "Agent Run SSE boundary"
     schema: "contracts/schemas/events/run-started-event.schema.json"
-    summary: "run_started SSE boundary schema，通过 $ref 引用 canonical RunSnapshot，不重复定义 RunSnapshot 字段。"
+    summary: "run_started SSE boundary schema 使用统一 envelope，payload.run 通过 $ref 引用 canonical RunSnapshot，不重复定义 RunSnapshot 字段。"
 forbiddenFields:
   tokenUsage:
     pattern: "tokenUsage"

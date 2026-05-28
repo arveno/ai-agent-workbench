@@ -433,8 +433,15 @@ function createRunStartedEventFixture(status = 'running') {
     runId: run.id,
     conversationId: run.conversationId,
     timestamp: CREATED_AT,
-    run,
+    payload: {
+      run,
+    },
   };
+}
+
+function assertRunStartedEventIdentity(event) {
+  assert.equal(event.runId, event.payload.run.id);
+  assert.equal(event.conversationId, event.payload.run.conversationId);
 }
 
 function testRunSnapshotStatusContract(validate) {
@@ -463,21 +470,58 @@ function testRunSnapshotStatusContract(validate) {
 
 function testRunStartedEventContract(validate) {
   const eventSchema = validate.getSchema('events/run-started-event.schema.json');
-  assert.equal(eventSchema.properties.run.$ref, '../objects/run-snapshot.schema.json');
-  assert.equal(Object.hasOwn(eventSchema.properties.run, 'properties'), false);
+  const envelopeRef = eventSchema.allOf[0];
+  const eventConstraints = eventSchema.allOf[1];
+  const envelopeFieldNames = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
+  const businessFieldNames = ['run', 'step', 'stepId', 'tool', 'toolId', 'chartData', 'sources', 'report', 'conclusion'];
+
+  assert.equal(envelopeRef.$ref, 'run-sse-event-envelope.schema.json');
+  assert.equal(eventConstraints.properties.type.const, 'run_started');
+  assert.equal(eventConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
+  assert.equal(Object.hasOwn(eventConstraints.properties.payload.properties.run, 'properties'), false);
+  assert.deepEqual(Object.keys(eventSchema.properties).sort(), envelopeFieldNames.toSorted());
+  for (const fieldName of businessFieldNames) {
+    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
+  }
+  for (const fieldName of envelopeFieldNames) {
+    assert.deepEqual(Object.keys(eventSchema.properties[fieldName]), ['$ref']);
+    assert.equal(
+      eventSchema.properties[fieldName].$ref,
+      `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
+    );
+  }
 
   validate.assertValid('events/run-started-event.schema.json', createRunStartedEventFixture());
+  assertRunStartedEventIdentity(createRunStartedEventFixture());
   validate.assertInvalid('events/run-started-event.schema.json', {
     ...createRunStartedEventFixture(),
     type: 'run_completed',
   });
   validate.assertInvalid('events/run-started-event.schema.json', {
     ...createRunStartedEventFixture(),
-    run: {
-      ...createRunSnapshotFixture('running'),
-      steps: [],
+    run: createRunSnapshotFixture('running'),
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    payload: {
+      run: {
+        ...createRunSnapshotFixture('running'),
+        steps: [],
+      },
     },
   });
+  assert.throws(() =>
+    assertRunStartedEventIdentity({
+      ...createRunStartedEventFixture(),
+      runId: 'run-mismatch',
+    }),
+  );
+  assert.throws(() =>
+    assertRunStartedEventIdentity({
+      ...createRunStartedEventFixture(),
+      conversationId: 'conversation-mismatch',
+    }),
+  );
 }
 
 const validate = await createSchemaValidators();
