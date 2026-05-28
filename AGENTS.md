@@ -64,8 +64,7 @@
 - 仅在治理流程尚未落地前的 bootstrap / facts-source correction 中，且用户明确 prompt 授权时，允许临时例外修改流程事实源本身；只能修改被授权的文档、模板或工作流文件，仍必须走任务分支和 PR，并在 PR body 说明原因、范围和退出条件。
 - PR #94 合并后，后续 Governance Task 必须使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
 - 用户明确 prompt 不能作为长期绕过 Issue 的通用入口。
-- 涉及 contract / schema / mapper / ViewModel / seed / DB 字段的任务，没有 Canonical Decision Packet，不允许改代码。
-- Canonical Decision Packet 至少必须明确 canonical 字段 / 对象、对象所属层级、是否被旧字段 / UI 命名 / seed / 历史数据牵引、是否允许删除或重建数据库数据 / seed / fixture、当前 Issue 范围、明确不做、后置 Issue 和验证方式。
+- 涉及 contract / schema / mapper / ViewModel / seed / DB 字段的任务，没有按对应 Issue 模板完成 Canonical Decision Packet，不允许改代码。
 - Review comment 不能直接变成修复 prompt，必须先归因。
 - 不是孤立单点的问题，必须归入当前 Issue 或新建 / 挂接后置 Issue。
 - 不允许为了历史数据、旧 seed、旧字段保留长期兼容 fallback。

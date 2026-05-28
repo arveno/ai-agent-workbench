@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        使用本模板前，请先按 `AGENTS.md` 与 `docs/workflow.md` 判断任务阶段、边界和事实源。
+        Phase Task 准入表单。执行硬规则见 `AGENTS.md`，流程顺序见 `docs/workflow.md`。
   - type: textarea
     id: lifecycle_nodes
     attributes:

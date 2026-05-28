@@ -55,9 +55,7 @@ Closes #
 
 # Review Comment 归因
 
-Review comment 不是任务本身，只是症状。必须先归因，再修复。
-
-每条 review comment 必须分类：
+先归因，再处理。分类：
 
 - A. 当前 Issue 范围内，已修
 - B. 后置到已有 Issue

@@ -7,8 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Release Gate 只用于发布判断、检查和用户最终 merge 决策，不承载修复 commit。
-        如果发现 blocker，必须新建 release-blocker Issue，并用小 PR 回到对应 stage 分支修复。
+        Release Gate 准入表单，用于发布判断、检查和用户最终 merge 决策。
   - type: textarea
     id: release_target
     attributes:

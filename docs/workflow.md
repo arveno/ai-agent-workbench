@@ -151,17 +151,13 @@ Deploy / Smoke
 merge 后更新 Tracking Issue / 后置 Issue
 ```
 
-固定门禁：
+职责分工：
 
-- 没有 Issue，不进代码。
-- 没有明确目标、范围、明确不做和验收标准，不让 Codex 改。
-- 长期规则变化，先改事实源文档。
-- 字段语义变化，先确认 Contract Pack 和 canonical decision。
-- Release PR 只做发布判断，不承载修复 commit。
-- merge 后必须更新 Tracking Issue、当前 Issue 和仍需跟进的后置 Issue。
-- PR #94 是 Canonical Decision Gate 落地前的一次性 bootstrap governance PR。
-- PR #94 合并后，后续所有 Governance Task 都必须先使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
-- 用户明确 prompt 不能作为长期绕过 Issue 的通用入口。
+- `AGENTS.md` 定义 Codex 必须 / 禁止遵守的硬规则。
+- Issue 模板承载任务准入信息。
+- PR 模板承载按 Issue 执行的验收证明。
+- PR Template Check 只做机械检查。
+- 本文档只描述执行顺序。
 
 ## 4.2 任务类型与 Issue 模板
 
@@ -170,70 +166,31 @@ merge 后更新 Tracking Issue / 后置 Issue
 - Phase Task：阶段内功能、体验或工程任务，使用 `.github/ISSUE_TEMPLATE/phase_task.yml`。
 - Bug Fix：缺陷修复，必须先完成问题归因，使用 `.github/ISSUE_TEMPLATE/bug_fix.yml`。
 - Architecture Change：架构、职责、主链路或迁移策略变更，使用 `.github/ISSUE_TEMPLATE/architecture_change.yml`。
-- Contract Change：涉及 schema / generated contract / field-registry / mapper / ViewModel / DTO / seed / fixture / DB 字段 / canonical ID / runtime 输出，使用 `.github/ISSUE_TEMPLATE/contract_change.yml`。
+- Contract Change：字段、对象或数据契约变更，使用 `.github/ISSUE_TEMPLATE/contract_change.yml`。
 - Governance Task：流程、模板、AGENTS、workflow、CI、GitHub ruleset 等治理任务，使用 `.github/ISSUE_TEMPLATE/governance_task.yml`。
 - Release Gate：stage -> main、main -> deploy、deploy -> smoke，使用 `.github/ISSUE_TEMPLATE/release_gate.yml`。
 
 ## 4.3 Issue Gate / Canonical Decision
 
-Issue Gate 必须在 Codex 改代码前完成：
+Issue Gate 是 Codex 执行前的准入步骤：
 
-- Issue 必须明确任务目标、允许修改范围、明确不做、验收标准和验证方式。
-- 涉及 schema / mapper / ViewModel / seed / DB 字段 / runtime 输出时，必须先完成 Canonical Decision Packet。
-- Canonical Decision Packet 必须明确 canonical 字段 / 对象、对象所属层级、旧字段 / UI 命名 / seed / 历史数据是否牵引当前设计、是否允许删除或重建数据库数据 / seed / fixture、后置 Issue 和验证方式。
-- 如果任务不涉及字段契约或数据链路，Issue 必须明确写“不涉及”。
-- 没有 Canonical Decision Packet 的 contract / schema / mapper / ViewModel / seed / DB 字段任务，不允许 Codex 改代码。
-- 不允许为了历史数据、旧 seed、旧字段保留长期兼容 fallback；确实暂时不能删除时，必须在 Issue 中写明原因、影响范围和删除条件。
+- 按任务类型填写对应 Issue 模板。
+- Contract Change 使用 `.github/ISSUE_TEMPLATE/contract_change.yml` 承载 Canonical Decision。
+- Phase / Bug / Architecture 任务如涉及契约或数据链路，在各自模板的 Canonical Decision 区块中说明；不涉及时写“不涉及”。
 
 ## 4.4 Review Comment 归因
 
-Review comment 不是任务本身，只是症状。必须先归因，再修复。
-
-每条 review comment 必须归入以下分类之一：
-
-- A. 当前 Issue 范围内，已修。
-- B. 后置到已有 Issue。
-- C. 新建 Issue。
-- D. 真正孤立单点。
-
-规则：
-
-- 孤立单点可以在当前 PR 内直接修，但必须仍在当前 Issue 范围内。
-- 不是孤立单点的问题，必须归入当前 Issue 或新建 / 挂接后置 Issue。
-- 涉及 contract / mapper / ViewModel / seed / DB 字段的问题，必须回到 Canonical Decision Gate，不允许直接按 review comment 写补丁。
-- 如果 review comment 暴露当前 PR 方向错误，应停止并建议关闭重开，不继续堆补丁式 commit。
+Review comment 归因在 PR 模板中记录。归因后按结果在当前 Issue、已有后置 Issue 或新 Issue 中处理；Codex 硬规则见 `AGENTS.md`。
 
 ## 4.5 Release Gate
 
 Release Gate 用于 stage -> main、main -> deploy、deploy -> smoke。
 
-Release Gate 必须检查：
-
-- 发布目标、base / head 和 release 范围。
-- release 前检查、required checks、package / deploy / smoke 检查。
-- open blocker、未完成后置 Issue、失败检查和未完成 Review。
-- 用户最终 merge 决策。
-
-固定规则：
-
-- Release PR 只做发布判断，不承载修复 commit。
-- 发现 blocker 时，新建 release-blocker Issue。
-- blocker 修复必须用小 PR 回到对应 stage 分支，不在 release PR 上直接修。
-- CI、PR Template Check、Contract Pack、Review Gate 和 smoke 通过后，仍必须由用户最终决定是否 merge。
+Release Gate 使用 `.github/ISSUE_TEMPLATE/release_gate.yml` 承载发布目标、base / head、检查项、blocker 处理和用户最终 merge 决策。
 
 ## 5. 任务准入
 
-- 代码任务没有可读取的关联 Issue，不进入 Codex 执行。
-- 代码任务 Issue 读取失败时，Codex 必须停止，不允许修改文件。
-- prompt 与仓库文档冲突时，停止执行并报告冲突。
-- 需要超出 Issue 范围时，停止并说明原因。
-- 没有 Issue，不进代码是常规规则；流程事实源纠偏不是长期绕过 Issue 的入口。
-- 只有在修复流程事实源本身、治理门禁尚未落地或当前门禁阻止流程落地，且用户明确授权时，才允许临时 bootstrap / facts-source correction 例外。
-- 临时例外只能修改被授权的文档、模板或工作流文件，仍必须走任务分支和 PR，并必须在 PR body 说明原因、范围和退出条件。
-- PR #94 合并后，后续所有 Governance Task 必须先使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
-- 没有范围，不让 Codex 改。
-- 长期规则变化，先改文档。
-- 字段语义变化，先确认 contract。
+Codex 准入硬规则见 `AGENTS.md`。进入执行前，Issue 或明确授权的 bootstrap 收口任务必须提供以下信息：
 
 Codex 指令必须明确：
 

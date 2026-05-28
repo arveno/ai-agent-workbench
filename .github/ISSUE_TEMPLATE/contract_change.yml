@@ -7,8 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        凡涉及 schema / generated contract / field-registry / mapper / ViewModel / DTO / seed / fixture / DB 字段 / canonical ID / runtime 输出，优先使用本模板。
-        提交给 Codex 前，必须先完成 Canonical Decision Packet。
+        Contract Change 准入表单。Canonical Decision Packet 由下列必填项承载。
   - type: textarea
     id: background
     attributes:

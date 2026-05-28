@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        架构变更必须先对齐 `AGENTS.md` 和对应 `docs/*` 事实源。若需要改变长期契约，先更新事实源文档，再改代码。
+        Architecture Change 准入表单。执行硬规则见 `AGENTS.md`，长期事实源列在下方。
   - type: textarea
     id: related_docs
     attributes:

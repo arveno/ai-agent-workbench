@@ -7,8 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Governance Task 只固化流程和门禁，不承载业务代码、运行时链路或 Contract Pack schema 变更。
-        如果治理规则改变长期契约，必须先更新对应事实源文档。
+        Governance Task 准入表单，用于流程、模板、AGENTS、workflow、CI 或 GitHub ruleset。
   - type: textarea
     id: governance_background
     attributes:
