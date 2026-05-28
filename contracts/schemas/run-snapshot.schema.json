@@ -7,9 +7,10 @@
   "required": [
     "id",
     "conversationId",
+    "mode",
     "status",
-    "conclusionSource",
     "modelTrace",
+    "reportState",
     "createdAt",
     "updatedAt"
   ],
@@ -26,19 +27,43 @@
       "type": ["string", "null"],
       "description": "Pending and idempotency id. It is not a business foreign key."
     },
-    "displayRunId": {
+    "usageId": {
       "type": ["string", "null"],
-      "description": "UI-only short id."
+      "description": "Usage record id when persisted."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["mock", "agent"],
+      "description": "Run execution mode at the runtime and persistence boundary."
     },
     "status": {
       "type": "string",
-      "enum": ["idle", "pending", "running", "success", "error", "stopped"],
-      "description": "Canonical frontend RunSnapshot ViewModel status."
+      "enum": ["pending", "running", "completed", "failed", "stopped"],
+      "description": "Canonical runtime and persistence run status. UI status is mapped in RunViewModel."
     },
-    "conclusionSource": {
+    "intent": {
       "type": "string",
-      "enum": ["model", "fallback", "mock", "none"],
-      "description": "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
+      "enum": ["capability_intro", "data_analysis", "knowledge_qa", "unsupported", "unknown"],
+      "description": "Planner intent when known."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "User prompt captured for this run."
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Runtime plan snapshot. Plan details are not a UI ViewModel contract."
+    },
+    "dataSource": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Runtime data source snapshot."
+    },
+    "chartData": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Canonical chart payload produced by the run when available."
     },
     "modelTrace": {
       "anyOf": [
@@ -52,13 +77,26 @@
         { "type": "null" }
       ]
     },
-    "usageId": {
-      "type": ["string", "null"],
-      "description": "Usage record id when persisted."
+    "reportState": {
+      "type": "string",
+      "enum": ["hidden", "pending", "generating", "generated", "skipped", "failed"],
+      "description": "Report decision state attached to the run boundary."
     },
-    "reportId": {
-      "type": ["string", "null"],
-      "description": "Report artifact id when generated."
+    "startedAt": {
+      "type": "string",
+      "description": "Run start timestamp."
+    },
+    "completedAt": {
+      "type": "string",
+      "description": "Run completion timestamp."
+    },
+    "elapsedMs": {
+      "type": "number",
+      "description": "Elapsed runtime in milliseconds."
+    },
+    "errorMessage": {
+      "type": "string",
+      "description": "Failure message for failed or stopped runs."
     },
     "createdAt": {
       "type": "string",

@@ -1,4 +1,4 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunViewModel as RunSnapshot } from '../../types/run';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { MessageBubble } from './MessageBubble';

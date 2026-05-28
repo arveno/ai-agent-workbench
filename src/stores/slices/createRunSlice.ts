@@ -15,8 +15,8 @@ import type {
   WorkbenchStore,
 } from '../../types/workbench';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
-import { runEventsRecordToRunEvents, runPersistenceRecordsToSnapshot } from '../../utils/runPersistenceMapper';
-import { applyRunEventToSnapshot } from '../../utils/runReducer';
+import { runEventsRecordToRunEvents, runPersistenceRecordsToViewModel } from '../../utils/runPersistenceMapper';
+import { applyRunEventToViewModel } from '../../utils/runReducer';
 import { getSessionLatestRun, initialWorkbenchState, persistWorkbenchSessions, upsertRunIntoSessions } from './shared';
 import { useAuthStore } from '../authStore';
 
@@ -330,9 +330,9 @@ function migratePendingRunIdInSessions(
   sessions: WorkbenchStore['sessions'],
   conversationId: string,
   pendingRunId: string | null,
-  canonicalRun: RunSnapshot,
+  viewRun: RunSnapshot,
 ): WorkbenchStore['sessions'] {
-  if (!pendingRunId || pendingRunId === canonicalRun.id) {
+  if (!pendingRunId || pendingRunId === viewRun.id) {
     return sessions;
   }
 
@@ -343,7 +343,7 @@ function migratePendingRunIdInSessions(
 
     const runsById = {
       ...session.runsById,
-      [canonicalRun.id]: canonicalRun,
+      [viewRun.id]: viewRun,
     };
     delete runsById[pendingRunId];
 
@@ -353,12 +353,12 @@ function migratePendingRunIdInSessions(
         message.runId === pendingRunId
           ? {
               ...message,
-              runId: canonicalRun.id,
+              runId: viewRun.id,
             }
           : message,
       ),
       runsById,
-      latestRunId: session.latestRunId === pendingRunId ? canonicalRun.id : session.latestRunId,
+      latestRunId: session.latestRunId === pendingRunId ? viewRun.id : session.latestRunId,
     };
   });
 }
@@ -419,7 +419,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
 
   applyRunEvent: (event: RunEvent) => {
     set((state) => {
-      const nextRun = applyRunEventToSnapshot(state.currentRun, event);
+      const nextRun = applyRunEventToViewModel(state.currentRun, event);
       const nextLog = [...state.runEventLog, event].slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
       if (!nextRun) {
@@ -529,7 +529,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runSnapshot = runPersistenceRecordsToSnapshot({
+    const runSnapshot = runPersistenceRecordsToViewModel({
       run: runRecord,
       events: latestRunResult.data.events,
       tools: latestRunResult.data.toolInvocations,
@@ -676,7 +676,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runSnapshot = runPersistenceRecordsToSnapshot({
+    const runSnapshot = runPersistenceRecordsToViewModel({
       run: result.data.run,
       events: result.data.events,
       tools: result.data.toolInvocations,
@@ -799,7 +799,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runSnapshot = runPersistenceRecordsToSnapshot({
+    const runSnapshot = runPersistenceRecordsToViewModel({
       run: result.data.run,
       events: result.data.events,
       tools: result.data.toolInvocations,

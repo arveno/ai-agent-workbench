@@ -433,27 +433,65 @@ export interface RunSnapshot {
    */
   clientRunId?: string | null;
   /**
-   * UI-only short id.
-   */
-  displayRunId?: string | null;
-  /**
-   * Canonical frontend RunSnapshot ViewModel status.
-   */
-  status: 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
-  /**
-   * Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none.
-   */
-  conclusionSource: 'model' | 'fallback' | 'mock' | 'none';
-  modelTrace: ModelTrace | null;
-  agentConclusion?: AgentConclusion | null;
-  /**
    * Usage record id when persisted.
    */
   usageId?: string | null;
   /**
-   * Report artifact id when generated.
+   * Run execution mode at the runtime and persistence boundary.
    */
-  reportId?: string | null;
+  mode: 'mock' | 'agent';
+  /**
+   * Canonical runtime and persistence run status. UI status is mapped in RunViewModel.
+   */
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+  /**
+   * Planner intent when known.
+   */
+  intent?: 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
+  /**
+   * User prompt captured for this run.
+   */
+  prompt?: string;
+  /**
+   * Runtime plan snapshot. Plan details are not a UI ViewModel contract.
+   */
+  plan?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Runtime data source snapshot.
+   */
+  dataSource?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Canonical chart payload produced by the run when available.
+   */
+  chartData?: {
+    [k: string]: unknown;
+  };
+  modelTrace: ModelTrace | null;
+  agentConclusion?: AgentConclusion | null;
+  /**
+   * Report decision state attached to the run boundary.
+   */
+  reportState: 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
+  /**
+   * Run start timestamp.
+   */
+  startedAt?: string;
+  /**
+   * Run completion timestamp.
+   */
+  completedAt?: string;
+  /**
+   * Elapsed runtime in milliseconds.
+   */
+  elapsedMs?: number;
+  /**
+   * Failure message for failed or stopped runs.
+   */
+  errorMessage?: string;
   /**
    * Run creation timestamp.
    */

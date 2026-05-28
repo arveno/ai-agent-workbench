@@ -1,4 +1,4 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunViewModel as RunSnapshot } from '../../types/run';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 

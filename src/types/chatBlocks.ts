@@ -1,4 +1,4 @@
-import type { RunSnapshot } from './run';
+import type { RunViewModel as RunSnapshot } from './run';
 import type { WorkbenchMessage } from './workbench';
 
 export type ChatBlockType =

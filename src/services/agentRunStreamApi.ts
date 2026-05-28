@@ -87,9 +87,9 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
       normalizeOptionalId(event.clientRunId) ??
       normalizeOptionalId(event.run.clientRunId) ??
       normalizedClientRunId;
-    const displayRunId = normalizeOptionalId(event.run.displayRunId) ?? runId;
+    const eventConversationId = normalizeOptionalId(event.run.conversationId);
 
-    if (!runId) {
+    if (!runId || !eventConversationId) {
       return event;
     }
 
@@ -100,8 +100,8 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
       run: {
         ...event.run,
         id: runId,
+        conversationId: eventConversationId,
         clientRunId: eventClientRunId,
-        displayRunId,
       },
     };
   }

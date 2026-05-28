@@ -1,4 +1,4 @@
-import type { AgentConclusionSection, RunConclusionSource, RunSnapshot } from '@/types/run';
+import type { AgentConclusionSection, RunConclusionSource, RunViewModel as RunSnapshot } from '@/types/run';
 
 export interface ConclusionSectionView {
   title: string;

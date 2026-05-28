@@ -3,7 +3,7 @@ import type {
   RunEvent,
   RunIntent,
   RunReportState,
-  RunSnapshot,
+  RunViewModel as RunSnapshot,
   RunStatus,
   RunStepStatus,
   RunToolInvocation,

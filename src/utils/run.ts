@@ -1,4 +1,4 @@
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel as RunSnapshot } from '@/types/run';
 
 export function isDataAnalysisRun(run: RunSnapshot | null): boolean {
   return run?.intent === 'data_analysis';

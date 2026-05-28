@@ -1,4 +1,4 @@
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel as RunSnapshot } from '@/types/run';
 import { createRunDataSourceViewModel } from './runViewModel';
 import { formatToolInvocationForInspector } from './toolInvocationFormat';
 

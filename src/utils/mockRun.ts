@@ -71,16 +71,18 @@ function createMockModelTrace(): RunModelTrace {
 export function createMockRunStartedEvent(params: {
   runId: string;
   prompt: string;
-  sessionId?: string;
+  conversationId: string;
 }): RunStartedEvent {
   const timestamp = new Date().toISOString();
+  const modelTrace = createMockModelTrace();
 
   return {
     type: 'run_started',
+    runId: params.runId,
+    conversationId: params.conversationId,
     run: {
       id: params.runId,
-      displayRunId: params.runId,
-      sessionId: params.sessionId,
+      conversationId: params.conversationId,
       mode: 'mock',
       status: 'running',
       intent: 'data_analysis',
@@ -99,6 +101,13 @@ export function createMockRunStartedEvent(params: {
         schema: 'public',
         tableCount: 3,
       },
+      modelTrace,
+      reportState: 'hidden',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      startedAt: timestamp,
+    },
+    initialView: {
       steps: MOCK_RUN_STEPS.map((step) => ({
         ...step,
         status: 'pending',
@@ -106,12 +115,6 @@ export function createMockRunStartedEvent(params: {
       toolInvocations: [],
       sources: createMockRagSources(),
       conclusion: '',
-      conclusionSource: 'mock',
-      modelTrace: createMockModelTrace(),
-      reportState: 'hidden',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      startedAt: timestamp,
     },
   };
 }

@@ -11,6 +11,7 @@ import type { ConversationMode, ConversationRecord } from '../../types/persisten
 import type { RunSnapshot, SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { conversationRecordToSession } from '../../utils/conversationMapper';
 import { messageRecordToWorkbenchMessage, workbenchMessageToMessageCreateInput } from '../../utils/messageMapper';
+import { runSnapshotToViewModel } from '../../utils/runReducer';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
 import { useAuthStore } from '../authStore';
 import {
@@ -161,11 +162,16 @@ function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunSnapsh
   const conclusion =
     seed.conclusion || `历史 Mock Run 未记录完整助手回复，已根据本轮问题恢复执行轨迹：${promptSummary}`;
   const hasCompletedReply = Boolean(seed.conclusion || seed.hasReport);
-  const startedRun = createMockRunStartedEvent({
+  const startedEvent = createMockRunStartedEvent({
     runId: seed.runId,
     prompt: seed.prompt || promptSummary,
+    conversationId: sessionId,
+  });
+  const startedRun = runSnapshotToViewModel(startedEvent.run, {
     sessionId,
-  }).run;
+    displayRunId: seed.runId,
+    initialView: startedEvent.initialView,
+  });
   const stepElapsedById: Partial<Record<keyof typeof MOCK_RUN_STEP_IDS, number>> = {
     understandPrompt: 160,
     knowledgeSearch: 260,

@@ -1,4 +1,4 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunViewModel as RunSnapshot } from '../../types/run';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { shouldShowReportConfirm } from '../../utils/run';
 import { Badge } from '../ui/badge';

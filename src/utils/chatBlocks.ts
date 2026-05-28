@@ -1,5 +1,5 @@
 import type { ChatBlock } from '@/types/chatBlocks';
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel as RunSnapshot } from '@/types/run';
 import type { WorkbenchMessage, WorkbenchSession } from '@/types/workbench';
 import { createConclusionViewModel } from './runConclusionViewModel';
 import { shouldShowReportConfirm } from './run';
