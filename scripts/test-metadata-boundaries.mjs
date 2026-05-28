@@ -472,13 +472,19 @@ function testRunStartedEventContract(validate) {
   const eventSchema = validate.getSchema('events/run-started-event.schema.json');
   const envelopeRef = eventSchema.allOf[0];
   const eventConstraints = eventSchema.allOf[1];
+  const envelopeFieldNames = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
+  const businessFieldNames = ['run', 'step', 'stepId', 'tool', 'toolId', 'chartData', 'sources', 'report', 'conclusion'];
 
   assert.equal(envelopeRef.$ref, 'run-sse-event-envelope.schema.json');
   assert.equal(eventConstraints.properties.type.const, 'run_started');
   assert.equal(eventConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
   assert.equal(Object.hasOwn(eventConstraints.properties.payload.properties.run, 'properties'), false);
-  assert.equal(Object.hasOwn(eventSchema.properties, 'run'), false);
-  for (const fieldName of ['type', 'runId', 'conversationId', 'timestamp', 'payload']) {
+  assert.deepEqual(Object.keys(eventSchema.properties).sort(), envelopeFieldNames.toSorted());
+  for (const fieldName of businessFieldNames) {
+    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
+  }
+  for (const fieldName of envelopeFieldNames) {
+    assert.deepEqual(Object.keys(eventSchema.properties[fieldName]), ['$ref']);
     assert.equal(
       eventSchema.properties[fieldName].$ref,
       `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
