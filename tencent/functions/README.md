@@ -69,6 +69,8 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 
 每个函数目录独立打包。上传源码包即可，不默认把 `node_modules` 打进 zip，也不提交或上传 `package-lock.json`。在 CloudBase 创建 HTTP 云函数时开启“自动安装依赖”，由 CloudBase 根据函数目录内的 `package.json` 安装依赖。
 
+手动打包时，除入口 `index.js` 外，函数目录下同级的本地 `.js` helper 也必须复制到 zip 根目录；自动打包脚本 `pnpm cloudbase:package` 会按这个规则复制。当前示例包括 `workbench-reports/metadata-boundary.js` 和 `workbench-evaluations/metadata-boundary.js`，否则函数启动时会因为 `require('./metadata-boundary')` 缺文件失败。
+
 公开 demo templates 函数不依赖 `_shared`，可直接在函数目录打包：
 
 ```bash
@@ -134,7 +136,7 @@ if (Test-Path $stage) {
   Remove-Item -LiteralPath $stage -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
-Copy-Item workbench-reports/index.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
+Copy-Item workbench-reports/index.js,workbench-reports/metadata-boundary.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
 Copy-Item _shared/mysql.js,_shared/auth.js,_shared/agentRunModelMetadata.js -Destination (Join-Path $stage '_shared')
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-reports.zip') -Force
 ```
@@ -208,13 +210,13 @@ cd tencent/functions
 stage="$HOME/Desktop/cloudbase-workbench-evaluations-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
-cp workbench-evaluations/index.js workbench-evaluations/package.json workbench-evaluations/scf_bootstrap workbench-evaluations/README.md "$stage/"
+cp workbench-evaluations/index.js workbench-evaluations/metadata-boundary.js workbench-evaluations/package.json workbench-evaluations/scf_bootstrap workbench-evaluations/README.md "$stage/"
 cp _shared/mysql.js _shared/auth.js _shared/langsmithObservability.js _shared/agentRunModelMetadata.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
-(cd "$stage" && zip -r workbench-evaluations.zip index.js package.json README.md scf_bootstrap _shared)
+(cd "$stage" && zip -r workbench-evaluations.zip index.js metadata-boundary.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 的 zip 根目录都应包含：
+`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 的 zip 根目录至少应包含：
 
 ```txt
 _shared/
@@ -223,6 +225,8 @@ package.json
 README.md
 scf_bootstrap
 ```
+
+如果函数目录下存在入口外的本地 `.js` helper，zip 根目录也必须包含这些 helper，例如 `workbench-reports` 和 `workbench-evaluations` 当前都必须包含 `metadata-boundary.js`。
 
 `workbench-agent-run-stream` 通过 CloudBase 函数运行时、`@cloudbase/node-sdk` 和 `app.rdb()` 访问 CloudBase MySQL。Agent Run 主链路进入 LangGraph runtime；Tool / Retriever 进入 LangChain Tool / Retriever 边界。当前模型链路由前端 `selectedModelId` 进入 `_shared/langchainModelLayer.js`，通过 catalog 白名单映射到 LangChain Chat Model 和 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
