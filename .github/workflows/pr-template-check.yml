@@ -13,6 +13,8 @@ on:
 
 permissions:
   contents: read
+  issues: read
+  pull-requests: read
 
 jobs:
   pr-template-check:
@@ -21,9 +23,13 @@ jobs:
     steps:
       - name: Validate PR body
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_BODY_JSON: ${{ toJson(github.event.pull_request.body) }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           node <<'NODE'
+          const https = require('node:https');
+
           const requiredSections = [
             '# 关联 Issue',
             '# Issue Decision Snapshot',
@@ -45,6 +51,13 @@ jobs:
             .split(/\r?\n/)
             .map((line) => line.trim())
             .filter(Boolean);
+          const issueNumbers = [
+            ...new Set(
+              [...body.matchAll(/\b(?:Closes|Fixes|Resolves)\s+#(\d+)\b/gi)]
+                .map((match) => Number(match[1]))
+                .filter(Number.isInteger),
+            ),
+          ];
 
           for (const section of requiredSections) {
             if (!bodyLines.includes(section)) {
@@ -52,7 +65,7 @@ jobs:
             }
           }
 
-          if (!/\b(?:Closes|Fixes|Resolves)\s+#\d+\b/i.test(body)) {
+          if (issueNumbers.length === 0) {
             errors.push('PR body must link an issue with Closes #123, Fixes #123, or Resolves #123.');
           }
 
@@ -68,13 +81,99 @@ jobs:
             errors.push('PR body must contain at least one completed checkbox: - [x] or - [X]');
           }
 
-          if (errors.length > 0) {
-            console.error('PR Template Check failed:');
-            for (const error of errors) {
-              console.error(`- ${error}`);
+          async function readIssue(issueNumber) {
+            const token = process.env.GITHUB_TOKEN;
+            const repository = process.env.REPOSITORY;
+
+            if (!token) {
+              throw new Error('GITHUB_TOKEN is unavailable.');
             }
-            process.exit(1);
+
+            if (!repository) {
+              throw new Error('GitHub repository is unavailable.');
+            }
+
+            return new Promise((resolve, reject) => {
+              const options = {
+                hostname: 'api.github.com',
+                path: `/repos/${repository}/issues/${issueNumber}`,
+                method: 'GET',
+                headers: {
+                  Accept: 'application/vnd.github+json',
+                  Authorization: `Bearer ${token}`,
+                  'User-Agent': 'ai-agent-workbench-pr-template-check',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                },
+              };
+
+              const request = https.request(options, (response) => {
+                let data = '';
+
+                response.setEncoding('utf8');
+                response.on('data', (chunk) => {
+                  data += chunk;
+                });
+                response.on('end', () => {
+                  if (response.statusCode < 200 || response.statusCode >= 300) {
+                    reject(new Error(`GitHub API returned HTTP ${response.statusCode} for issue #${issueNumber}.`));
+                    return;
+                  }
+
+                  try {
+                    resolve(JSON.parse(data));
+                  } catch (error) {
+                    reject(new Error(`GitHub API returned invalid JSON for issue #${issueNumber}: ${error.message}`));
+                  }
+                });
+              });
+
+              request.on('error', reject);
+              request.end();
+            });
           }
 
-          console.log('PR Template Check passed.');
+          function labelNames(issue) {
+            return (issue.labels || [])
+              .map((label) => (typeof label === 'string' ? label : label.name))
+              .filter(Boolean);
+          }
+
+          async function validateIssueLabels() {
+            for (const issueNumber of issueNumbers) {
+              try {
+                const issue = await readIssue(issueNumber);
+                const labels = labelNames(issue);
+
+                if (issue.pull_request) {
+                  errors.push(`Linked reference #${issueNumber} is a pull request. Link a GitHub Issue instead.`);
+                }
+
+                if (!labels.some((label) => /^type:[^\s]+$/.test(label))) {
+                  errors.push(`Linked issue #${issueNumber} must have at least one type:* label.`);
+                }
+              } catch (error) {
+                errors.push(`Unable to read linked issue #${issueNumber}: ${error.message}`);
+              }
+            }
+          }
+
+          async function main() {
+            await validateIssueLabels();
+
+            if (errors.length > 0) {
+              console.error('PR Template Check failed:');
+              for (const error of errors) {
+                console.error(`- ${error}`);
+              }
+              process.exit(1);
+            }
+
+            console.log('PR Template Check passed.');
+          }
+
+          main().catch((error) => {
+            console.error('PR Template Check failed:');
+            console.error(`- ${error.message}`);
+            process.exit(1);
+          });
           NODE

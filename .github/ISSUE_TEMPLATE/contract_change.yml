@@ -2,12 +2,13 @@ name: Contract Change
 description: 字段契约、对象契约、mapper、ViewModel、DTO、seed、fixture、DB 字段或 runtime 输出变更。
 title: "[Contract] "
 labels:
-  - contract
+  - "type:contract"
 body:
   - type: markdown
     attributes:
       value: |
         Contract Change 准入表单。Canonical Decision Packet 由下列必填项承载。
+        本模板自动添加 `type:contract` 标签；Project Type 由人工在 Project 中维护，并应与该标签语义一致。
   - type: textarea
     id: background
     attributes:

@@ -2,8 +2,12 @@ name: Bug Fix
 description: 缺陷修复任务，用于锁定问题、复现路径、修复边界和验证方式。
 title: "[Bug] "
 labels:
-  - bug
+  - "type:bug"
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Bug Fix 准入表单。本模板自动添加 `type:bug` 标签；Project Type 由人工在 Project 中维护，并应与该标签语义一致。
   - type: textarea
     id: symptom
     attributes:
