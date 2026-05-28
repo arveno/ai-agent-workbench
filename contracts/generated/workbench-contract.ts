@@ -437,9 +437,9 @@ export interface RunSnapshot {
    */
   displayRunId?: string | null;
   /**
-   * Canonical run status.
+   * Canonical frontend RunSnapshot ViewModel status.
    */
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
   /**
    * Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none.
    */
