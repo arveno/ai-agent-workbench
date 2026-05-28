@@ -35,7 +35,6 @@ export type {
   RunMode,
   RunPlanSnapshot,
   RunReportState,
-  RunSnapshot as CanonicalRunSnapshot,
   RunSnapshotStatus,
   RunStatus,
   RunStep,
@@ -43,12 +42,9 @@ export type {
   RunToolInvocation,
   RunToolStatus,
   RunViewModel,
-  WorkbenchRunViewModel,
 } from './run';
 
 export type { RunSource, RunSourceType } from './rag';
-
-export type RunSnapshot = RunViewModel;
 
 export type {
   WorkbenchToolCategory,

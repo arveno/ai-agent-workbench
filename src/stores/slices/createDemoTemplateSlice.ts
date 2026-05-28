@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
-import type { RunSnapshot as CanonicalRunSnapshot } from '../../types/run';
-import type { DemoTemplateSlice, RunSnapshot, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
+import type { RunSnapshot } from '../../types/run';
+import type { DemoTemplateSlice, RunViewModel, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
 import { runSnapshotToViewModel } from '../../utils/runReducer';
 import { useAuthStore } from '../authStore';
@@ -119,8 +119,8 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
     }));
 }
 
-function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunSnapshot | null {
-  const rawRun = template.seed_runs[0] as Partial<CanonicalRunSnapshot> | undefined;
+function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunViewModel | null {
+  const rawRun = template.seed_runs[0] as Partial<RunSnapshot> | undefined;
 
   if (!rawRun?.id || !rawRun.conversationId) {
     return null;

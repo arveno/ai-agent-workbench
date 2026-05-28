@@ -1,9 +1,9 @@
-import type { RunViewModel as RunSnapshot } from '../../types/run';
+import type { RunViewModel } from '../../types/run';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 
 interface RunErrorBlockProps {
-  run: RunSnapshot;
+  run: RunViewModel;
 }
 
 export function RunErrorBlock({ run }: RunErrorBlockProps) {

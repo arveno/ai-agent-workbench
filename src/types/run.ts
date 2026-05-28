@@ -179,8 +179,6 @@ export interface RunViewModel {
   errorMessage?: string;
 }
 
-export type WorkbenchRunViewModel = RunViewModel;
-
 export interface RunStartedEvent {
   type: 'run_started';
   runId?: string;

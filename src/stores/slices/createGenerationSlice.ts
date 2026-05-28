@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand';
 import type {
   GenerationSlice,
   RunReportState,
-  RunSnapshot,
+  RunViewModel,
   WorkbenchMessage,
   WorkbenchSession,
   WorkbenchStore,
@@ -87,7 +87,7 @@ function insertReportMessageAfterRunAssistant(
   return [...messages, reportMessage];
 }
 
-function settleReportDecisionSteps(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
+function settleReportDecisionSteps(run: RunViewModel, reportState: RunReportState): RunViewModel {
   if (reportState !== 'generated' && reportState !== 'skipped') {
     return run;
   }
@@ -115,7 +115,7 @@ function settleReportDecisionSteps(run: RunSnapshot, reportState: RunReportState
   return didUpdateStep ? { ...run, steps } : run;
 }
 
-function updateRunReportState(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
+function updateRunReportState(run: RunViewModel, reportState: RunReportState): RunViewModel {
   return settleReportDecisionSteps(
     {
       ...run,
@@ -129,7 +129,7 @@ function updateRunReportState(run: RunSnapshot, reportState: RunReportState): Ru
 function updateSessionRunReportState(params: {
   session: WorkbenchSession;
   runId: string;
-  nextRun: RunSnapshot;
+  nextRun: RunViewModel;
   nextMessages?: WorkbenchMessage[];
 }): WorkbenchSession {
   return {

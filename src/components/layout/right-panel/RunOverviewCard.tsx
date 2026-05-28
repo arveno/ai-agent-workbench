@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunSnapshot, WorkbenchMessage } from '../../../types/workbench';
+import type { RunViewModel, WorkbenchMessage } from '../../../types/workbench';
 import type { ModelTraceViewModel } from '../../../utils/modelTraceViewModel';
 import { createModelTraceViewModel } from '../../../utils/modelTraceViewModel';
 import { getRunReuseNotice } from '../../../utils/observabilityLabels';
@@ -60,7 +60,7 @@ function getRunRoundLabel(runId: string, messages: WorkbenchMessage[]): string {
   return `第 ${runIndex + 1} 轮 / 共 ${runIds.length} 轮`;
 }
 
-function getVisibleRunModeLabel(mode: RunSnapshot['mode']): string {
+function getVisibleRunModeLabel(mode: RunViewModel['mode']): string {
   return mode === 'mock' ? '模拟模式（Mock）' : '真实 Agent';
 }
 
