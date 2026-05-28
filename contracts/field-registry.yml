@@ -1,5 +1,5 @@
 version: 1
-summary: "AI Agent Workbench canonical field registry. Keep field tables here instead of duplicating them in docs."
+summary: "AI Agent Workbench human-readable field registry. Machine object contracts live in contracts/schemas/*.schema.json; keep only field notes, historical ledger entries, and high-risk field remarks here."
 objects:
   ModelUsage:
     lifecycleNode: "11 Observability / Trace, 19 Audit / Governance / Cost"
@@ -329,6 +329,25 @@ objects:
         required: "no"
         source: "LangSmith feedback boundary"
         description: "Server-created LangSmith feedback status metadata. Request metadata cannot set it."
+schemaObjectReferences:
+  ReportArtifact:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Report"
+    owner: "workbench-reports / mapper"
+    schema: "contracts/schemas/report-artifact.schema.json"
+    summary: "Report artifact boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract."
+  EvaluationResult:
+    lifecycleNode: "15 Evaluation / Quality Gate"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations / mapper"
+    schema: "contracts/schemas/evaluation-result.schema.json"
+    summary: "Evaluation result boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract."
+  RunSource:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Source"
+    owner: "Source Lineage mapper"
+    schema: "contracts/schemas/run-source.schema.json"
+    summary: "Run source boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract."
 forbiddenFields:
   tokenUsage:
     pattern: "tokenUsage"

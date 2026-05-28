@@ -72,6 +72,25 @@ function renderFieldTable(fields) {
   return lines.join('\n');
 }
 
+function renderSchemaReferenceTable(references) {
+  const lines = [
+    '| Object | Schema | Lifecycle node | Core object | Owner | Summary |',
+    '| --- | --- | --- | --- | --- | --- |',
+  ];
+
+  for (const [name, reference] of Object.entries(references ?? {})) {
+    lines.push(
+      `| \`${escapeCell(name)}\` | \`${escapeCell(reference.schema)}\` | ${escapeCell(
+        reference.lifecycleNode,
+      )} | ${escapeCell(reference.coreObject)} | ${escapeCell(reference.owner)} | ${escapeCell(
+        reference.summary,
+      )} |`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
 function renderRegistry(registry) {
   const lines = [
     '<!-- GENERATED FILE. Do not edit directly. -->',
@@ -93,6 +112,16 @@ function renderRegistry(registry) {
     lines.push(`- Core object: ${object.coreObject ?? '-'}`);
     lines.push(`- Owner: ${object.owner ?? '-'}`);
     lines.push('', renderFieldTable(object.fields), '');
+  }
+
+  if (Object.keys(registry.schemaObjectReferences ?? {}).length > 0) {
+    lines.push('## Schema Object References', '');
+    lines.push(
+      'This section is only for human discoverability. Field-level machine contracts live in the referenced JSON Schema files and are not duplicated here.',
+      '',
+      renderSchemaReferenceTable(registry.schemaObjectReferences),
+      '',
+    );
   }
 
   lines.push('## Forbidden Fields', '');

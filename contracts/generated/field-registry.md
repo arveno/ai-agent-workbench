@@ -4,7 +4,7 @@
 
 # Field Registry
 
-AI Agent Workbench canonical field registry. Keep field tables here instead of duplicating them in docs.
+AI Agent Workbench human-readable field registry. Machine object contracts live in contracts/schemas/*.schema.json; keep only field notes, historical ledger entries, and high-risk field remarks here.
 
 ## Objects
 
@@ -151,6 +151,16 @@ Canonical evaluation metadata. Model state is inherited only as a single modelTr
 | `evaluatorVersion` | string \| null | no | evaluation runtime | Evaluator or rubric version. |
 | `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
 | `langSmithEvaluation` | Record<string, unknown> | no | LangSmith feedback boundary | Server-created LangSmith feedback status metadata. Request metadata cannot set it. |
+
+## Schema Object References
+
+This section is only for human discoverability. Field-level machine contracts live in the referenced JSON Schema files and are not duplicated here.
+
+| Object | Schema | Lifecycle node | Core object | Owner | Summary |
+| --- | --- | --- | --- | --- | --- |
+| `ReportArtifact` | `contracts/schemas/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract. |
+| `EvaluationResult` | `contracts/schemas/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract. |
+| `RunSource` | `contracts/schemas/run-source.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Source | Source Lineage mapper | Run source boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract. |
 
 ## Forbidden Fields
 
