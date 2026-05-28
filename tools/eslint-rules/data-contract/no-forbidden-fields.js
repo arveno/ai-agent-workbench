@@ -31,6 +31,18 @@ const DB_MAPPER_PROPERTIES = new Set([
   'source_no_source_reason',
 ]);
 
+const METADATA_OBJECT_LITERAL_PROPERTIES = new Set([
+  'sources',
+  'sourceCount',
+  'source_count',
+  'sourceLineage',
+  'source_lineage',
+  'sourceNoSourceReason',
+  'source_no_source_reason',
+  'tokenUsage',
+  'conclusionNotice',
+]);
+
 function normalizePathname(filename) {
   return filename.split(path.sep).join('/');
 }
@@ -51,6 +63,21 @@ function getStaticPropertyName(node) {
     property.quasis.length === 1
   ) {
     return property.quasis[0].value.cooked;
+  }
+  return null;
+}
+
+function getStaticPropertyKeyName(property) {
+  const key = property?.key;
+  if (!key || property.computed) return null;
+  if (key.type === 'Identifier') return key.name;
+  if (key.type === 'Literal') return String(key.value);
+  if (
+    key.type === 'TemplateLiteral' &&
+    key.expressions.length === 0 &&
+    key.quasis.length === 1
+  ) {
+    return key.quasis[0].value.cooked;
   }
   return null;
 }
@@ -126,6 +153,7 @@ function shouldSkipIdentifier(node) {
   }
   if (parent.type === 'MemberExpression' && parent.property === node && !parent.computed) return true;
   if (parent.type === 'Property' && parent.parent?.type === 'ObjectPattern') return true;
+  if (parent.type === 'Property' && parent.parent?.type === 'ObjectExpression' && parent.shorthand) return true;
   if (parent.type === 'Property' && parent.key === node) return true;
   if (parent.type === 'PropertyDefinition' && parent.key === node) return true;
   if (parent.type === 'MethodDefinition' && parent.key === node) return true;
@@ -162,6 +190,13 @@ function buildRuleState() {
 }
 
 const ruleState = buildRuleState();
+
+function isObjectLiteralPathRule(rule) {
+  if (rule.objectName === 'agentConclusion' || rule.objectName === 'modelTrace') return true;
+
+  if (rule.objectName !== 'metadata') return false;
+  return METADATA_OBJECT_LITERAL_PROPERTIES.has(rule.propertyName);
+}
 
 function report(context, node, rule) {
   context.report({
@@ -204,12 +239,7 @@ function checkObjectPattern(context, pattern, basePath = '') {
   for (const property of pattern.properties ?? []) {
     if (property.type !== 'Property') continue;
 
-    const keyName = property.key.type === 'Identifier'
-      ? property.key.name
-      : property.key.type === 'Literal'
-        ? String(property.key.value)
-        : null;
-
+    const keyName = getStaticPropertyKeyName(property);
     if (!keyName) continue;
 
     const fullPath = basePath ? `${basePath}.${keyName}` : keyName;
@@ -229,17 +259,36 @@ function checkObjectPattern(context, pattern, basePath = '') {
   }
 }
 
-function checkObjectExpressionProperty(context, node) {
-  if (node.parent?.type !== 'ObjectExpression') return;
+function checkObjectExpression(context, expression, basePath = '') {
+  for (const property of expression.properties ?? []) {
+    if (property.type !== 'Property') continue;
 
-  const keyName = node.key.type === 'Identifier'
-    ? node.key.name
-    : node.key.type === 'Literal'
-      ? String(node.key.value)
-      : null;
+    const keyName = getStaticPropertyKeyName(property);
+    if (!keyName) continue;
 
-  const rule = keyName ? ruleState.identifierRules.get(keyName) : null;
-  if (rule) report(context, node.key, rule);
+    const fullPath = basePath ? `${basePath}.${keyName}` : keyName;
+    const objectRule = ruleState.objectPropertyRules.find(
+      (rule) => isObjectLiteralPathRule(rule) && matchesPath(rule.label, fullPath),
+    );
+    const identifierRule = ruleState.identifierRules.get(keyName);
+
+    if (objectRule) {
+      report(context, property.key, objectRule);
+    } else if (identifierRule) {
+      report(context, property.key, identifierRule);
+    }
+
+    const value = unwrapChain(property.value);
+    if (value?.type === 'ObjectExpression') {
+      checkObjectExpression(context, value, fullPath);
+    }
+  }
+}
+
+function isNestedObjectExpressionValue(node) {
+  return node.parent?.type === 'Property' &&
+    node.parent.value === node &&
+    node.parent.parent?.type === 'ObjectExpression';
 }
 
 function checkFallbackExpression(context, node) {
@@ -279,8 +328,9 @@ export default {
         const rule = ruleState.identifierRules.get(node.name);
         if (rule) report(context, node, rule);
       },
-      Property(node) {
-        checkObjectExpressionProperty(context, node);
+      ObjectExpression(node) {
+        if (isNestedObjectExpressionValue(node)) return;
+        checkObjectExpression(context, node);
       },
       VariableDeclarator(node) {
         if (node.id?.type === 'ObjectPattern') {

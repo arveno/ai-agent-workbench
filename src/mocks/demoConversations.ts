@@ -189,7 +189,6 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
         conclusion: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
         conclusionSource: 'fallback',
         agentConclusion: {
-          source: 'fallback',
           markdownText: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
           plainText: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
           notice: '示例会话展示的是预置只读结果，不会触发新的模型请求。',
@@ -291,7 +290,6 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
         conclusionSource: 'fallback',
         agentConclusion: {
-          source: 'fallback',
           markdownText:
             '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
           plainText:
@@ -417,7 +415,6 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
         conclusion: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
         conclusionSource: 'fallback',
         agentConclusion: {
-          source: 'fallback',
           markdownText: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
           plainText: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
           notice: '示例会话展示 knowledge_search 的目标形态，不会触发新的检索请求。',
