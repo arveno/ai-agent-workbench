@@ -1,4 +1,4 @@
-import type { RunToolInvocation } from '@/types/run';
+import type { RunViewModelToolInvocation as RunToolInvocation } from '@/domain/run/view-model';
 import type { WorkbenchToolId } from '@/types/toolRegistry';
 import { getToolFailureLabel, getToolStatusLabel } from './observabilityLabels';
 import {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as echarts from 'echarts';
 import type { EChartsOption } from 'echarts';
-import type { RunChartData } from '@/types/run';
+import type { RunViewModelChartData as RunChartData } from '@/domain/run/view-model';
 import { getChartPointCount, isValidRunChartData } from '@/utils/chartData';
 
 interface RunChartProps {

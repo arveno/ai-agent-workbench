@@ -1,19 +1,21 @@
 import type {
-  RunChartData,
   RunChartReadyEvent,
   RunCompletedEvent,
   RunConclusionCompletedEvent,
   RunEvent,
-  RunModelTrace,
   RunReportPendingEvent,
   RunStartedEvent,
   RunStepCompletedEvent,
   RunStepStartedEvent,
   RunStoppedEvent,
   RunToolCompletedEvent,
-  RunToolInvocation,
   RunToolStartedEvent,
 } from '@/types/run';
+import type {
+  RunViewModelChartData as RunChartData,
+  RunViewModelToolInvocation as RunToolInvocation,
+  RunViewModelTrace as RunModelTrace,
+} from '@/domain/run/view-model';
 import { createMockRagSources } from './ragSources';
 
 export const MOCK_RUN_STEP_IDS = {

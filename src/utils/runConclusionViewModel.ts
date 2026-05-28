@@ -1,4 +1,8 @@
-import type { AgentConclusionSection, RunConclusionSource, RunSnapshot } from '@/types/run';
+import type {
+  RunViewModel,
+  RunViewModelConclusionSection as AgentConclusionSection,
+  RunViewModelConclusionSource as RunConclusionSource,
+} from '@/domain/run/view-model';
 
 export interface ConclusionSectionView {
   title: string;
@@ -75,7 +79,7 @@ function createMarkdownFromSections(sections: ConclusionSectionView[]): string {
   return sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n');
 }
 
-export function createConclusionViewModel(run: RunSnapshot): ConclusionViewModel {
+export function createConclusionViewModel(run: RunViewModel): ConclusionViewModel {
   const conclusion = run.agentConclusion;
   const fullMarkdownText = normalizeText(conclusion?.markdownText) || normalizeText(run.conclusion);
   const plainText = normalizeText(conclusion?.plainText) || normalizeText(run.conclusion);

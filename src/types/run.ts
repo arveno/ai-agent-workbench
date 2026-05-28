@@ -1,151 +1,13 @@
 import type { RunSource } from './rag';
-
-export type RunMode = 'mock' | 'agent';
-
-export type RunIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
-
-export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
-
-export type RunStepStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
-
-export type RunToolStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
-
-export type RunConclusionSource = 'model' | 'fallback' | 'mock' | 'none';
-
-export type RunReportState = 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
-
-export interface RunModelUsageCounts {
-  promptTokens: number | null;
-  completionTokens: number | null;
-  totalTokens: number | null;
-}
-
-export interface RunModelUsage extends RunModelUsageCounts {
-  usageAvailable: boolean;
-  usageSource: string | null;
-  usageUnavailableReason: string | null;
-}
-
-export interface RunModelCostEstimate {
-  estimatedCost: number | null;
-  currency: string | null;
-  pricingUnit: string | null;
-  isEstimated: boolean;
-  pricingSource: string | null;
-  costUnavailableReason: string | null;
-}
-
-export interface RunModelTrace {
-  selectedModelId: string;
-  provider: string | null;
-  model: string | null;
-  latencyMs: number | null;
-  usage: RunModelUsage;
-  costEstimate: RunModelCostEstimate;
-  fallbackReason: string | null;
-  modelErrorType: string | null;
-  modelHttpStatus?: number | null;
-  modelErrorMessage?: string | null;
-  conclusionSource: RunConclusionSource;
-}
-
-export interface AgentConclusionSection {
-  title?: string | null;
-  markdownText: string;
-  plainText: string;
-}
-
-export interface AgentConclusion {
-  markdownText: string;
-  plainText: string;
-  sections?: AgentConclusionSection[];
-  notice?: string | null;
-  rawText?: string;
-}
-
-export interface RunStep {
-  id: string;
-  title: string;
-  description?: string;
-  status: RunStepStatus;
-  startedAt?: string;
-  completedAt?: string;
-  elapsedMs?: number;
-}
-
-export interface RunToolInvocation {
-  id: string;
-  toolId: string;
-  toolName: string;
-  displayName: string;
-  status: RunToolStatus;
-  inputSummary: string;
-  outputSummary: string;
-  startedAt?: string;
-  completedAt?: string;
-  elapsedMs?: number;
-}
-
-export type RunChartType = 'bar' | 'line';
-
-export interface RunChartSeries {
-  name: string;
-  values: number[];
-}
-
-export interface RunChartData {
-  title: string;
-  chartType: RunChartType;
-  labels: string[];
-  series: RunChartSeries[];
-  summary?: string;
-}
-
-export interface RunDataSourceSnapshot {
-  provider: 'mock' | 'cloudbase_mysql';
-  name: string;
-  typeLabel: string;
-  schema?: string;
-  tableCount?: number;
-}
-
-export interface RunPlanSnapshot {
-  intent: RunIntent;
-  shouldUseDataAnalysis: boolean;
-  reason?: string;
-  metric?: string;
-  groupBy?: string;
-  timeRangeLabel?: string;
-  comparison?: 'none' | 'previous_month';
-}
-
-export interface RunSnapshot {
-  id: string;
-  clientRunId?: string;
-  displayRunId?: string;
-  sessionId?: string;
-  mode: RunMode;
-  status: RunStatus;
-  intent: RunIntent;
-  prompt: string;
-  plan?: RunPlanSnapshot;
-  dataSource?: RunDataSourceSnapshot;
-  steps: RunStep[];
-  toolInvocations: RunToolInvocation[];
-  sources?: RunSource[];
-  chartData?: RunChartData;
-  conclusion: string;
-  conclusionSource: RunConclusionSource;
-  agentConclusion?: AgentConclusion;
-  modelTrace?: RunModelTrace;
-  reportState: RunReportState;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  elapsedMs?: number;
-  errorMessage?: string;
-}
+import type {
+  RunViewModel,
+  RunViewModelAgentConclusion,
+  RunViewModelChartData,
+  RunViewModelConclusionSource,
+  RunViewModelReportState,
+  RunViewModelToolInvocation,
+  RunViewModelTrace,
+} from '../domain/run/view-model';
 
 export interface RunStartedEvent {
   type: 'run_started';
@@ -154,7 +16,7 @@ export interface RunStartedEvent {
   clientRunId?: string | null;
   conversationId?: string | null;
   timestamp?: string;
-  run: RunSnapshot;
+  run: RunViewModel;
 }
 
 export interface RunReusedEvent {
@@ -171,8 +33,8 @@ export interface RunReusedEvent {
   existingRun?: {
     id?: string;
     status?: string;
-    conclusionSource?: RunConclusionSource;
-    reportState?: RunReportState;
+    conclusionSource?: RunViewModelConclusionSource;
+    reportState?: RunViewModelReportState;
     completedAt?: string | null;
   } | null;
 }
@@ -206,7 +68,7 @@ export interface RunStepFailedEvent {
 export interface RunToolStartedEvent {
   type: 'tool_started';
   runId: string;
-  tool: RunToolInvocation;
+  tool: RunViewModelToolInvocation;
 }
 
 export interface RunToolCompletedEvent {
@@ -230,7 +92,7 @@ export interface RunToolFailedEvent {
 export interface RunChartReadyEvent {
   type: 'chart_ready';
   runId: string;
-  chartData: RunChartData;
+  chartData: RunViewModelChartData;
 }
 
 export interface RunConclusionDeltaEvent {
@@ -243,8 +105,8 @@ export interface RunConclusionCompletedEvent {
   type: 'conclusion_completed';
   runId: string;
   conclusion: string;
-  agentConclusion?: AgentConclusion;
-  modelTrace?: RunModelTrace;
+  agentConclusion?: RunViewModelAgentConclusion;
+  modelTrace?: RunViewModelTrace;
 }
 
 export interface RunRagSourcesReadyEvent {
@@ -263,7 +125,7 @@ export interface RunCompletedEvent {
   runId: string;
   completedAt: string;
   elapsedMs?: number;
-  modelTrace?: RunModelTrace;
+  modelTrace?: RunViewModelTrace;
 }
 
 export interface RunFailedEvent {

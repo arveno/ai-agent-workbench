@@ -1,29 +1,31 @@
 import type {
-  AgentConclusion,
-  AgentConclusionSection,
   RunEvent,
-  RunModelTrace,
-  RunSnapshot,
-  RunStep,
-  RunToolInvocation,
 } from '@/types/run';
+import type {
+  RunViewModel,
+  RunViewModelAgentConclusion as AgentConclusion,
+  RunViewModelConclusionSection as AgentConclusionSection,
+  RunViewModelStep as RunStep,
+  RunViewModelToolInvocation as RunToolInvocation,
+  RunViewModelTrace as RunModelTrace,
+} from '@/domain/run/view-model';
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-function isRunIdMatched(currentRun: RunSnapshot | null, runId: string): currentRun is RunSnapshot {
+function isRunIdMatched(currentRun: RunViewModel | null, runId: string): currentRun is RunViewModel {
   return Boolean(currentRun && currentRun.id === runId);
 }
 
-function withUpdatedAt(run: RunSnapshot, updatedAt = nowIso()): RunSnapshot {
+function withUpdatedAt(run: RunViewModel, updatedAt = nowIso()): RunViewModel {
   return {
     ...run,
     updatedAt,
   };
 }
 
-function withModelTrace(run: RunSnapshot, modelTrace?: RunModelTrace): RunSnapshot {
+function withModelTrace(run: RunViewModel, modelTrace?: RunModelTrace): RunViewModel {
   if (!modelTrace) {
     return run;
   }
@@ -37,7 +39,7 @@ function withModelTrace(run: RunSnapshot, modelTrace?: RunModelTrace): RunSnapsh
   };
 }
 
-function mapReusedRunStatus(status: string | null | undefined): RunSnapshot['status'] {
+function mapReusedRunStatus(status: string | null | undefined): RunViewModel['status'] {
   if (status === 'completed' || status === 'success') {
     return 'success';
   }
@@ -450,7 +452,7 @@ function updateTool(
   return toolInvocations.map((tool) => (tool.id === toolId ? updater(tool) : tool));
 }
 
-export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: RunEvent): RunSnapshot | null {
+export function applyRunEventToSnapshot(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
     const updatedAt = event.run.updatedAt || nowIso();
     const agentConclusion = normalizeAgentConclusion(

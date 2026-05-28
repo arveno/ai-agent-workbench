@@ -1,8 +1,8 @@
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/domain/run/view-model';
 import { createRunDataSourceViewModel } from './runViewModel';
 import { formatToolInvocationForInspector } from './toolInvocationFormat';
 
-function formatDataSource(run: RunSnapshot): string {
+function formatDataSource(run: RunViewModel): string {
   if (!run.dataSource) {
     return '本次未访问数据源。';
   }
@@ -13,7 +13,7 @@ function formatDataSource(run: RunSnapshot): string {
   return `${dataSourceView.name}（${dataSourceView.subtitle}，${scopeItem?.value ?? '服务端受控范围'}）`;
 }
 
-function formatToolLines(run: RunSnapshot): string {
+function formatToolLines(run: RunViewModel): string {
   if (run.toolInvocations.length === 0) {
     return '本次未调用工具。';
   }
@@ -26,7 +26,7 @@ function formatToolLines(run: RunSnapshot): string {
     .join('\n');
 }
 
-export function createRunReportMarkdown(run: RunSnapshot): string {
+export function createRunReportMarkdown(run: RunViewModel): string {
   return [
     '# 教学质量分析简版报告',
     '',

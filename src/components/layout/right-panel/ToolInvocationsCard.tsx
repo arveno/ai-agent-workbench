@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunToolStatus } from '../../../types/run';
+import type { RunViewModelToolStatus as RunToolStatus } from '../../../domain/run/view-model';
 import { formatToolInvocationForInspector } from '../../../utils/toolInvocationFormat';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';

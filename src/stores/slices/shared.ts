@@ -2,11 +2,11 @@ import type {
   AssistantStreamState,
   GenerationStatus,
   ModelProviderId,
-  RunSnapshot,
   WorkbenchMessage,
   WorkbenchMessageKind,
   WorkbenchSession,
 } from '../../types/workbench';
+import type { RunViewModel } from '../../domain/run/view-model';
 import { isModelProviderId as isKnownModelProviderId } from '../../utils/modelCatalogMetadata';
 import { createSessionTitle } from '../../utils/sessionTitle';
 import { readSessionStorageJson, writeSessionStorageJson } from '../../utils/sessionStorage';
@@ -73,7 +73,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isRunStatus(value: unknown): value is RunSnapshot['status'] {
+function isRunStatus(value: unknown): value is RunViewModel['status'] {
   return (
     value === 'idle' ||
     value === 'pending' ||
@@ -84,7 +84,7 @@ function isRunStatus(value: unknown): value is RunSnapshot['status'] {
   );
 }
 
-function isRunStepStatus(value: unknown): value is RunSnapshot['steps'][number]['status'] {
+function isRunStepStatus(value: unknown): value is RunViewModel['steps'][number]['status'] {
   return (
     value === 'pending' ||
     value === 'running' ||
@@ -95,15 +95,15 @@ function isRunStepStatus(value: unknown): value is RunSnapshot['steps'][number][
   );
 }
 
-function isRunToolStatus(value: unknown): value is RunSnapshot['toolInvocations'][number]['status'] {
+function isRunToolStatus(value: unknown): value is RunViewModel['toolInvocations'][number]['status'] {
   return isRunStepStatus(value);
 }
 
-function isRunMode(value: unknown): value is RunSnapshot['mode'] {
+function isRunMode(value: unknown): value is RunViewModel['mode'] {
   return value === 'mock' || value === 'agent';
 }
 
-function isRunIntent(value: unknown): value is RunSnapshot['intent'] {
+function isRunIntent(value: unknown): value is RunViewModel['intent'] {
   return (
     value === 'capability_intro' ||
     value === 'data_analysis' ||
@@ -112,15 +112,15 @@ function isRunIntent(value: unknown): value is RunSnapshot['intent'] {
   );
 }
 
-function isRunConclusionSource(value: unknown): value is RunSnapshot['conclusionSource'] {
+function isRunConclusionSource(value: unknown): value is RunViewModel['conclusionSource'] {
   return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none';
 }
 
-function isRunReportState(value: unknown): value is RunSnapshot['reportState'] {
+function isRunReportState(value: unknown): value is RunViewModel['reportState'] {
   return value === 'hidden' || value === 'pending' || value === 'generated' || value === 'skipped';
 }
 
-function settleInterruptedRun(run: RunSnapshot): RunSnapshot {
+function settleInterruptedRun(run: RunViewModel): RunViewModel {
   if (run.status !== 'running' && run.status !== 'pending') {
     return run;
   }
@@ -152,12 +152,12 @@ function settleInterruptedRun(run: RunSnapshot): RunSnapshot {
   };
 }
 
-function normalizeRunSnapshot(rawValue: unknown): RunSnapshot | null {
+function normalizeRunSnapshot(rawValue: unknown): RunViewModel | null {
   if (!isRecord(rawValue)) {
     return null;
   }
 
-  const run = rawValue as Partial<RunSnapshot>;
+  const run = rawValue as Partial<RunViewModel>;
 
   if (
     typeof run.id !== 'string' ||
@@ -193,15 +193,15 @@ function normalizeRunSnapshot(rawValue: unknown): RunSnapshot | null {
     return null;
   }
 
-  return settleInterruptedRun(run as RunSnapshot);
+  return settleInterruptedRun(run as RunViewModel);
 }
 
-function normalizeRunsById(rawValue: unknown): Record<string, RunSnapshot> | null {
+function normalizeRunsById(rawValue: unknown): Record<string, RunViewModel> | null {
   if (!isRecord(rawValue)) {
     return null;
   }
 
-  const runsById: Record<string, RunSnapshot> = {};
+  const runsById: Record<string, RunViewModel> = {};
 
   for (const [runId, rawRun] of Object.entries(rawValue)) {
     const normalizedRun = normalizeRunSnapshot(rawRun);
@@ -216,7 +216,7 @@ function normalizeRunsById(rawValue: unknown): Record<string, RunSnapshot> | nul
   return runsById;
 }
 
-export function getSessionLatestRun(session: WorkbenchSession | undefined): RunSnapshot | null {
+export function getSessionLatestRun(session: WorkbenchSession | undefined): RunViewModel | null {
   if (!session?.latestRunId) {
     return null;
   }
@@ -227,7 +227,7 @@ export function getSessionLatestRun(session: WorkbenchSession | undefined): RunS
 export function upsertRunIntoSessions(
   sessions: WorkbenchSession[],
   currentSessionId: string,
-  run: RunSnapshot,
+  run: RunViewModel,
 ): WorkbenchSession[] {
   let didUpdate = false;
   const timestamp = Date.now();
@@ -238,7 +238,7 @@ export function upsertRunIntoSessions(
     }
 
     didUpdate = true;
-    const runWithSession: RunSnapshot = {
+    const runWithSession: RunViewModel = {
       ...run,
       sessionId: run.sessionId ?? currentSessionId,
     };

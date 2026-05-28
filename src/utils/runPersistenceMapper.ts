@@ -6,20 +6,22 @@ import type {
 } from '@/types/persistence';
 import type { RunSource, RunSourceType } from '@/types/rag';
 import type {
-  AgentConclusion,
-  RunChartData,
-  RunConclusionSource,
-  RunDataSourceSnapshot,
   RunEvent,
-  RunIntent,
-  RunModelCostEstimate,
-  RunModelTrace,
-  RunModelUsage,
-  RunPlanSnapshot,
-  RunReportState,
-  RunSnapshot,
-  RunStatus,
 } from '@/types/run';
+import type {
+  RunViewModel,
+  RunViewModelAgentConclusion as AgentConclusion,
+  RunViewModelChartData as RunChartData,
+  RunViewModelConclusionSource as RunConclusionSource,
+  RunViewModelDataSourceSnapshot as RunDataSourceSnapshot,
+  RunViewModelIntent as RunIntent,
+  RunViewModelCostEstimate as RunModelCostEstimate,
+  RunViewModelTrace as RunModelTrace,
+  RunViewModelUsage as RunModelUsage,
+  RunViewModelPlanSnapshot as RunPlanSnapshot,
+  RunViewModelReportState as RunReportState,
+  RunViewModelStatus as RunStatus,
+} from '@/domain/run/view-model';
 import { applyRunEventToSnapshot, normalizeAgentConclusion } from './runReducer';
 import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
 
@@ -246,7 +248,7 @@ function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
 }
 
 function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
-  RunSnapshot,
+  RunViewModel,
   'id' | 'clientRunId' | 'displayRunId'
 > {
   const runId = record.id;
@@ -259,7 +261,7 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   };
 }
 
-export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
+export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunViewModel {
   const runIdentity = getAgentRunRecordIdentity(record);
   const modelTrace = getRunModelTrace(record);
   const conclusionSource = modelTrace?.conclusionSource ?? 'none';
@@ -307,9 +309,9 @@ export function runPersistenceRecordsToSnapshot(params: {
   events: RunEventRecord[];
   tools: ToolInvocationRecord[];
   sources: RunSourceRecord[];
-}): RunSnapshot {
+}): RunViewModel {
   const runEvents = runEventsRecordToRunEvents(params.events);
-  const eventSnapshot = runEvents.reduce<RunSnapshot | null>(
+  const eventSnapshot = runEvents.reduce<RunViewModel | null>(
     (snapshot, event) => applyRunEventToSnapshot(snapshot, event),
     null,
   );

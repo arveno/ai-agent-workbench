@@ -1,4 +1,4 @@
-import type { RunChartData } from '@/types/run';
+import type { RunViewModelChartData as RunChartData } from '@/domain/run/view-model';
 
 export function isValidRunChartData(
   chartData: RunChartData | undefined,

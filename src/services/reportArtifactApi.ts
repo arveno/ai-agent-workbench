@@ -5,7 +5,7 @@ import type {
   ReportArtifactListResult,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
-import type { RunReportState } from '@/types/run';
+import type { RunViewModelReportState as RunReportState } from '@/domain/run/view-model';
 import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 import {

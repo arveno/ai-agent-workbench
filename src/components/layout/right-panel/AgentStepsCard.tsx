@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunStepStatus } from '../../../types/workbench';
+import type { RunViewModelStepStatus as RunStepStatus } from '../../../domain/run/view-model';
 import { getStepStatusLabel } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons, type IconKey } from '../../common/iconMap';

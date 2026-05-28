@@ -1,9 +1,9 @@
 import type {
-  RunConclusionSource,
-  RunModelCostEstimate,
-  RunModelTrace,
-  RunModelUsage,
-} from '@/types/run';
+  RunViewModelConclusionSource as RunConclusionSource,
+  RunViewModelCostEstimate as RunModelCostEstimate,
+  RunViewModelTrace as RunModelTrace,
+  RunViewModelUsage as RunModelUsage,
+} from '@/domain/run/view-model';
 import { getConclusionSourceLabel, getFallbackReasonLabel, getModelErrorTypeLabel } from './observabilityLabels';
 
 export interface ModelTraceViewModel {

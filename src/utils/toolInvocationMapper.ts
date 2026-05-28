@@ -1,5 +1,8 @@
 import type { ToolInvocationRecord } from '@/types/persistence';
-import type { RunToolInvocation, RunToolStatus } from '@/types/run';
+import type {
+  RunViewModelToolInvocation as RunToolInvocation,
+  RunViewModelToolStatus as RunToolStatus,
+} from '@/domain/run/view-model';
 
 function mapToolStatus(status: ToolInvocationRecord['status']): RunToolStatus {
   if (status === 'completed') return 'success';

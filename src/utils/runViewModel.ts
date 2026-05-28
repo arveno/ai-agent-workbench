@@ -1,14 +1,16 @@
 import type {
-  RunConclusionSource,
-  RunDataSourceSnapshot,
   RunEvent,
-  RunIntent,
-  RunMode,
-  RunSnapshot,
-  RunStatus,
-  RunStepStatus,
-  RunToolStatus,
 } from '@/types/run';
+import type {
+  RunViewModel,
+  RunViewModelConclusionSource as RunConclusionSource,
+  RunViewModelDataSourceSnapshot as RunDataSourceSnapshot,
+  RunViewModelIntent as RunIntent,
+  RunViewModelMode as RunMode,
+  RunViewModelStatus as RunStatus,
+  RunViewModelStepStatus as RunStepStatus,
+  RunViewModelToolStatus as RunToolStatus,
+} from '@/domain/run/view-model';
 import {
   getConclusionSourceLabel as getObservabilityConclusionSourceLabel,
   getRunStatusLabel as getObservabilityRunStatusLabel,
@@ -69,7 +71,7 @@ export function getConclusionSourceLabel(source: RunConclusionSource): string {
   return getObservabilityConclusionSourceLabel(source);
 }
 
-export function getRunDisplayId(run: Pick<RunSnapshot, 'id' | 'displayRunId'> | null): string {
+export function getRunDisplayId(run: Pick<RunViewModel, 'id' | 'displayRunId'> | null): string {
   if (!run) {
     return '-';
   }
@@ -79,7 +81,7 @@ export function getRunDisplayId(run: Pick<RunSnapshot, 'id' | 'displayRunId'> | 
 
 export function isRunEventForRun(
   event: Pick<RunEvent, 'runId'> & { clientRunId?: string | null },
-  run: Pick<RunSnapshot, 'id' | 'clientRunId'> | null,
+  run: Pick<RunViewModel, 'id' | 'clientRunId'> | null,
 ): boolean {
   if (!run) {
     return false;
@@ -93,7 +95,7 @@ export function isRunEventForRun(
 }
 
 export function getLatestRunReusedEventForRun(
-  run: Pick<RunSnapshot, 'id' | 'clientRunId'> | null,
+  run: Pick<RunViewModel, 'id' | 'clientRunId'> | null,
   events: RunEvent[],
 ): Extract<RunEvent, { type: 'run_reused' }> | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -107,7 +109,7 @@ export function getLatestRunReusedEventForRun(
   return null;
 }
 
-export function formatRunElapsed(run: RunSnapshot | null): string {
+export function formatRunElapsed(run: RunViewModel | null): string {
   if (!run) {
     return '-';
   }
@@ -126,7 +128,7 @@ export function formatRunElapsed(run: RunSnapshot | null): string {
   return `${completedAt - startedAt}ms`;
 }
 
-export function getRunTitle(run: RunSnapshot | null): string {
+export function getRunTitle(run: RunViewModel | null): string {
   if (!run) {
     return '暂无 Run';
   }
@@ -146,7 +148,7 @@ export function getRunTitle(run: RunSnapshot | null): string {
   return run.mode === 'mock' ? 'Mock Run' : 'Agent Run';
 }
 
-function getDataSourceBusinessName(run: Pick<RunSnapshot, 'mode' | 'intent'>): string {
+function getDataSourceBusinessName(run: Pick<RunViewModel, 'mode' | 'intent'>): string {
   if (run.mode === 'mock') {
     return '演示数据源';
   }
@@ -158,7 +160,7 @@ function getDataSourceBusinessName(run: Pick<RunSnapshot, 'mode' | 'intent'>): s
   return '教学质量数据源';
 }
 
-function getDataSourceSubtitle(run: Pick<RunSnapshot, 'mode'>): string {
+function getDataSourceSubtitle(run: Pick<RunViewModel, 'mode'>): string {
   return run.mode === 'mock' ? '本地演示数据' : '服务端受控数据源';
 }
 
@@ -171,7 +173,7 @@ function getDataSourceScope(source: RunDataSourceSnapshot | undefined): string {
 }
 
 export function createRunDataSourceViewModel(
-  run: Pick<RunSnapshot, 'mode' | 'intent' | 'status' | 'dataSource'>,
+  run: Pick<RunViewModel, 'mode' | 'intent' | 'status' | 'dataSource'>,
 ): RunDataSourceViewModel {
   return {
     name: getDataSourceBusinessName(run),

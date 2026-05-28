@@ -1,7 +1,5 @@
-import type {
-  RunDataSourceSnapshot,
-  RunStartedEvent,
-} from '@/types/run';
+import type { RunViewModelDataSourceSnapshot as RunDataSourceSnapshot } from '@/domain/run/view-model';
+import type { RunStartedEvent } from '@/types/run';
 
 function createCloudBaseAgentDataSource(): RunDataSourceSnapshot {
   return {

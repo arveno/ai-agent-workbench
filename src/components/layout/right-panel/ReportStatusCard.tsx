@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunReportState } from '../../../types/run';
+import type { RunViewModelReportState as RunReportState } from '../../../domain/run/view-model';
 import {
   getReportStatusDescription,
   getReportStatusLabel,
