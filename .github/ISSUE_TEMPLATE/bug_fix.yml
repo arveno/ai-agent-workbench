@@ -37,6 +37,31 @@ body:
     validations:
       required: true
   - type: textarea
+    id: root_cause_attribution
+    attributes:
+      label: 问题归因
+      description: 先判断 review comment 或问题现象属于孤立单点还是一类问题，再决定当前 Issue、后置 Issue 或新 Issue 承载。
+      placeholder: |
+        - 这是孤立单点，还是一类问题：
+        - 是否涉及 contract / mapper / ViewModel / seed / DB 字段：
+        - 如果不是孤立单点，挂当前 Issue、已有后置 Issue，还是新建 Issue：
+        - 是否允许直接修：
+    validations:
+      required: true
+  - type: textarea
+    id: canonical_decision_gate
+    attributes:
+      label: Canonical Decision Gate
+      description: 判断修复是否需要 canonical 字段、数据层级或契约决策；不涉及时必须明确写“不涉及”。
+      placeholder: |
+        - 是否涉及 schema / mapper / ViewModel / seed / DB 字段 / runtime 输出：
+        - 如果涉及，是否已完成 canonical decision：
+        - 如果不涉及：不涉及
+        - 是否允许 Codex 改代码：
+        - 是否需要新建 / 关联后置 Issue：
+    validations:
+      required: true
+  - type: textarea
     id: fix_boundary
     attributes:
       label: 修复边界

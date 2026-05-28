@@ -68,6 +68,19 @@ body:
     validations:
       required: true
   - type: textarea
+    id: canonical_decision_gate
+    attributes:
+      label: Canonical Decision Gate
+      description: 判断本任务是否涉及字段契约或数据链路决策；不涉及时必须明确写“不涉及”。
+      placeholder: |
+        - 是否涉及 schema / mapper / ViewModel / seed / DB 字段 / runtime 输出：
+        - 如果涉及，是否已完成 canonical decision：
+        - 如果不涉及：不涉及
+        - 是否允许 Codex 改代码：
+        - 是否需要新建 / 关联后置 Issue：
+    validations:
+      required: true
+  - type: textarea
     id: acceptance_criteria
     attributes:
       label: 验收标准

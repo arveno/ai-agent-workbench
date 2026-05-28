@@ -55,10 +55,35 @@ body:
     validations:
       required: true
   - type: textarea
+    id: canonical_decision
+    attributes:
+      label: Canonical Decision
+      description: 明确架构变更中的 canonical 对象、字段、数据层级和旧数据处理策略。
+      placeholder: |
+        - 哪些字段 / 对象是 canonical：
+        - 是否允许修改现有字段：
+        - 是否允许删除旧数据：
+        - 是否允许重建 seed：
+        - 不允许保留的 oldField/newField / legacy fallback：
+    validations:
+      required: true
+  - type: textarea
     id: out_of_scope
     attributes:
       label: 明确不做
       description: 明确本次架构变更不处理的范围，避免阶段混杂。
+    validations:
+      required: true
+  - type: textarea
+    id: pr_exit_conditions
+    attributes:
+      label: PR 退出条件
+      description: 判断何时停止当前 PR，关闭重开，或改由后置 Issue 承载。
+      placeholder: |
+        - 如果当前 PR 方向错误，是否应关闭重开：
+        - 哪些情况不允许继续在旧 PR 上堆 commit：
+        - 哪些情况必须拆出后置 Issue：
+        - 退出后的恢复路径：
     validations:
       required: true
   - type: textarea

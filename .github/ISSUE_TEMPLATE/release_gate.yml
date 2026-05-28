@@ -1,0 +1,120 @@
+name: Release Gate
+description: stage -> main、main -> deploy、deploy -> smoke 的发布门禁。
+title: "[Release Gate] "
+labels:
+  - release-gate
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Release Gate 只用于发布判断、检查和用户最终 merge 决策，不承载修复 commit。
+        如果发现 blocker，必须新建 release-blocker Issue，并用小 PR 回到对应 stage 分支修复。
+  - type: textarea
+    id: release_target
+    attributes:
+      label: 发布目标
+      description: 明确本次发布是 stage -> main、main -> deploy，还是 deploy -> smoke。
+      placeholder: |
+        - 类型：
+        - 目标环境：
+        - 关联 Tracking Issue：
+    validations:
+      required: true
+  - type: textarea
+    id: base_head
+    attributes:
+      label: base / head
+      description: 明确 base 分支、head 分支和对应 PR。
+      placeholder: |
+        - base:
+        - head:
+        - PR:
+    validations:
+      required: true
+  - type: textarea
+    id: release_scope
+    attributes:
+      label: release 范围
+      description: 列出本次 release 包含的 Issue、PR、主要能力、文档或配置变更。
+    validations:
+      required: true
+  - type: textarea
+    id: pre_release_checks
+    attributes:
+      label: release 前检查
+      description: 列出 merge 前必须确认的范围、风险、文档、Issue 更新和人工 Review。
+      placeholder: |
+        - 所有关联 PR 已合并到 release head
+        - Tracking Issue 已更新
+        - ChatGPT Review / 用户 Review 已完成
+    validations:
+      required: true
+  - type: textarea
+    id: required_checks
+    attributes:
+      label: required checks
+      description: 列出必须通过的 GitHub Checks、CI、PR Template Check、Contract Pack 或 ruleset 门禁。
+      placeholder: |
+        - CI Lint and Build:
+        - PR Template Check:
+        - Contract Pack:
+        - Review Gate:
+    validations:
+      required: true
+  - type: textarea
+    id: package_deploy_smoke_checks
+    attributes:
+      label: package / deploy / smoke 检查
+      description: 列出需要执行或确认的 package、deploy、smoke 命令和结果；不涉及时必须写“不涉及”。
+      placeholder: |
+        - package:
+        - deploy:
+        - smoke:
+    validations:
+      required: true
+  - type: textarea
+    id: open_blocker_checks
+    attributes:
+      label: open blocker 检查
+      description: 列出 open blocker、未完成后置 Issue、失败检查、未完成 Review 或已知风险。
+      placeholder: |
+        - open blocker:
+        - 未完成后置 Issue:
+        - 失败检查:
+        - 已知风险:
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 明确不做
+      description: 必须确认 release PR 不承载修复 commit，不混入范围外代码或模板修改。
+      placeholder: |
+        - release PR 不承载修复 commit
+        - 不在 release PR 上直接修 blocker
+        - 不绕过 CI / PR Template Check / 用户最终 merge 决策
+    validations:
+      required: true
+  - type: textarea
+    id: blocker_handling
+    attributes:
+      label: blocker 处理方式
+      description: 必须说明 blocker 如何新建 release-blocker Issue，并以小 PR 回到 stage 分支修复。
+      placeholder: |
+        - release-blocker Issue:
+        - 修复 PR base:
+        - 修复 PR head:
+        - 回归验证：
+    validations:
+      required: true
+  - type: textarea
+    id: user_merge_decision
+    attributes:
+      label: 用户最终 merge 决策
+      description: 记录用户是否已确认 CI、Review、Release Gate 和风险，并由用户决定是否 merge。
+      placeholder: |
+        - 用户是否已确认：
+        - merge 决策：
+        - 决策时间：
+    validations:
+      required: true

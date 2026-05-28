@@ -1,0 +1,82 @@
+name: Governance Task
+description: 流程、模板、AGENTS、workflow、CI、GitHub ruleset 等治理任务。
+title: "[Governance] "
+labels:
+  - governance
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Governance Task 只固化流程和门禁，不承载业务代码、运行时链路或 Contract Pack schema 变更。
+        如果治理规则改变长期契约，必须先更新对应事实源文档。
+  - type: textarea
+    id: governance_background
+    attributes:
+      label: 治理背景
+      description: 描述当前流程缺口、口头规则、风险和需要固化的原因。
+    validations:
+      required: true
+  - type: textarea
+    id: rules_to_canonicalize
+    attributes:
+      label: 要固化的规则
+      description: 列出本次需要写入模板、AGENTS、workflow、CI 或 GitHub ruleset 的长期规则。
+      placeholder: |
+        - 没有 Issue，不进代码
+        - Review comment 必须先归因
+        - Release PR 不承载修复 commit
+    validations:
+      required: true
+  - type: textarea
+    id: change_scope
+    attributes:
+      label: 修改范围
+      description: 明确允许修改的治理文件、模板、工作流或规则配置。
+      placeholder: |
+        允许修改：
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 明确不做
+      description: 明确禁止修改的业务代码、Contract Pack、runtime、mapper、ViewModel、依赖或部署配置。
+      placeholder: |
+        明确不做：
+        - 不修改业务代码
+        - 不修改 Contract Pack schema
+        - 不新增依赖
+        - 不修改 runtime / mapper / ViewModel
+    validations:
+      required: true
+  - type: textarea
+    id: codex_constraints
+    attributes:
+      label: 对 Codex 行为的约束
+      description: 明确 Codex 在本任务中的执行边界、禁止项、验证命令、PR 和 merge 边界。
+      placeholder: |
+        - 只能修改允许文件
+        - 不自动 merge
+        - 不 push main
+        - 完成后输出 Review Packet
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 验收标准
+      description: 列出模板、文档、门禁和流程闭环的完成判定标准。
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: 验证方式
+      description: 列出需要执行的命令、模板检查、手动 Review 或 GitHub UI 验证方式。
+      placeholder: |
+        - pnpm lint
+        - pnpm build
+        - 手动检查 Issue / PR 模板
+    validations:
+      required: true
