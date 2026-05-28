@@ -47,7 +47,6 @@ jobs:
 
           const body = JSON.parse(process.env.PR_BODY_JSON || '""') || '';
           const errors = [];
-          const warnings = [];
           const bodyLines = body
             .split(/\r?\n/)
             .map((line) => line.trim())
@@ -152,10 +151,6 @@ jobs:
                 if (!labels.some((label) => /^type:[^\s]+$/.test(label))) {
                   errors.push(`Linked issue #${issueNumber} must have at least one type:* label.`);
                 }
-
-                if (!labels.some((label) => /^(area|scope):[^\s]+$/.test(label))) {
-                  warnings.push(`Linked issue #${issueNumber} does not have an area:* or scope:* label.`);
-                }
               } catch (error) {
                 errors.push(`Unable to read linked issue #${issueNumber}: ${error.message}`);
               }
@@ -164,10 +159,6 @@ jobs:
 
           async function main() {
             await validateIssueLabels();
-
-            for (const warning of warnings) {
-              console.warn(`Warning: ${warning}`);
-            }
 
             if (errors.length > 0) {
               console.error('PR Template Check failed:');

@@ -62,7 +62,9 @@
 
 - 没有可读取的 Issue，不允许改代码。
 - 每个可执行 Issue 必须至少具备一个 `type:*` 标签。
-- 可执行 Issue 建议同时具备 `area:*` 或 `scope:*` 标签，用于说明影响范围。
+- Project 字段 `Type` 是人工管理视图，必须与 Issue 的 `type:*` 标签语义一致。
+- 不使用 `area:*` / `scope:*` 多层标签体系。
+- 不做 Project API 自动同步。
 - 任务类型由人 / ChatGPT 判断，但判断结果必须沉淀为 Issue label；CI 只做机械检查，不做复杂语义判断。
 - PR body 必须通过 `Closes #123`、`Fixes #123` 或 `Resolves #123` 关联 Issue。
 - PR Template Check 必须读取关联 Issue 并检查其是否存在 `type:*` 标签；缺少关联 Issue 或缺少 `type:*` 标签时必须失败。

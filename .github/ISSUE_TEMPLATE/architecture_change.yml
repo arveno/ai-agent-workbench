@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Architecture Change 准入表单。执行硬规则见 `AGENTS.md`，长期事实源列在下方。
-        本模板自动添加 `type:architecture` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
+        本模板自动添加 `type:architecture` 标签；Project Type 由人工在 Project 中维护，并应与该标签语义一致。
   - type: textarea
     id: related_docs
     attributes:

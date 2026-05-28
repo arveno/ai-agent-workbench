@@ -113,6 +113,8 @@ Tracking Issue
 - 阶段 PR 必须关联 Tracking Issue，base 必须是 main。
 - PR body 必须通过 `Closes #123`、`Fixes #123` 或 `Resolves #123` 关联 Issue。
 - 关联 Issue 必须具备至少一个 `type:*` 标签。
+- Project 字段 `Type` 是人工管理视图，必须与 Issue 的 `type:*` 标签语义一致。
+- 不使用 `area:*` / `scope:*` 多层标签体系，不做 Project API 自动同步。
 - PR 必须按 PR Template 自检。
 - CI 通过不等于可以 merge。
 - PR Template Check 通过不等于可以 merge。
@@ -172,7 +174,9 @@ merge 后更新 Tracking Issue / 后置 Issue
 - Governance Task：流程、模板、AGENTS、workflow、CI、GitHub ruleset 等治理任务，使用 `.github/ISSUE_TEMPLATE/governance_task.yml`，必须具备 `type:governance` 标签。
 - Release Gate：stage -> main、main -> deploy、deploy -> smoke，使用 `.github/ISSUE_TEMPLATE/release_gate.yml`，必须具备 `type:release` 标签。
 
-每个可执行 Issue 必须至少具备一个 `type:*` 标签；建议同时具备 `area:*` 或 `scope:*` 标签，用于说明影响范围。任务类型由人 / ChatGPT 判断，但判断结果必须沉淀为 Issue label。CI 只检查 PR 是否关联 Issue，以及关联 Issue 是否存在 `type:*` 标签；不做复杂语义判断。
+当前仓库没有 tracking / audit Issue 模板；如后续新增，分别使用 `type:tracking` 和 `type:audit`。
+
+每个可执行 Issue 必须至少具备一个 `type:*` 标签。Project 字段 `Type` 是人工管理视图，必须与 Issue 的 `type:*` 标签语义一致。任务类型由人 / ChatGPT 判断，但判断结果必须沉淀为 Issue label；CI 只检查 PR 是否关联 Issue，以及关联 Issue 是否存在 `type:*` 标签；不做复杂语义判断。不使用 `area:*` / `scope:*` 多层标签体系，不做 Project API 自动同步。
 
 ## 4.3 Issue Gate / Canonical Decision
 
@@ -180,7 +184,7 @@ Issue Gate 是 Codex 执行前的准入步骤：
 
 - 按任务类型填写对应 Issue 模板。
 - 确认 Issue 至少具备一个 `type:*` 标签。
-- 建议补充 `area:*` 或 `scope:*` 标签说明影响范围。
+- 确认 Project 字段 `Type` 由人工维护，并与 Issue 的 `type:*` 标签语义一致。
 - Contract Change 使用 `.github/ISSUE_TEMPLATE/contract_change.yml` 承载 Canonical Decision。
 - Phase / Bug / Architecture 任务如涉及契约或数据链路，在各自模板的 Canonical Decision 区块中说明；不涉及时写“不涉及”。
 

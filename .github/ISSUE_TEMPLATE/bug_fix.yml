@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Bug Fix 准入表单。本模板自动添加 `type:bug` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
+        Bug Fix 准入表单。本模板自动添加 `type:bug` 标签；Project Type 由人工在 Project 中维护，并应与该标签语义一致。
   - type: textarea
     id: symptom
     attributes:

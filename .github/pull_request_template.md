@@ -2,13 +2,13 @@
 
 Closes #
 
-关联 Issue 必须具备至少一个 `type:*` 标签；建议同时具备 `area:*` 或 `scope:*` 标签。
+关联 Issue 必须具备至少一个 `type:*` 标签。Project Type 由人工在 Project 中维护，必须与 Issue type label 语义一致；当前不做 Project API 自动同步。
 
 # Issue Decision Snapshot
 
 - 关联 Issue：
 - Issue type label：
-- Issue area / scope label：
+- Project Type：
 - Issue 是否完成 Canonical Decision：
 - 本 PR 是否涉及 schema / mapper / ViewModel / seed / DB 字段：
 - canonical 字段是什么：

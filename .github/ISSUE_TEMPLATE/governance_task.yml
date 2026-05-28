@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Governance Task 准入表单，用于流程、模板、AGENTS、workflow、CI 或 GitHub ruleset。
-        本模板自动添加 `type:governance` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
+        本模板自动添加 `type:governance` 标签；Project Type 由人工在 Project 中维护，并应与该标签语义一致。
   - type: textarea
     id: governance_background
     attributes:
