@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/run-failed-event.schema.json",
+  "title": "RunFailedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "run_failed",
+          "description": "SSE event 类型，表示 Agent Run 执行失败。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["errorMessage", "metadata", "modelTrace"],
+          "description": "run_failed 事件业务数据。",
+          "properties": {
+            "errorMessage": {
+              "type": "string",
+              "description": "用户可见的 Run 失败信息。"
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Run failure runtime metadata。"
+            },
+            "modelTrace": {
+              "$ref": "../objects/model-trace.schema.json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

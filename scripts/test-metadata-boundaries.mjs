@@ -85,6 +85,23 @@ const MODEL_TRACE = {
   conclusionSource: 'model',
 };
 
+const AGENT_CONCLUSION = {
+  markdownText: '分析完成，核心指标保持稳定。',
+  plainText: '分析完成，核心指标保持稳定。',
+  notice: null,
+};
+
+const RUN_SOURCE = {
+  id: 'source-1',
+  runId: RUN_ID,
+  conversationId: 'conversation-1',
+  sourceOrder: 1,
+  title: '知识库片段',
+  preview: '与问题相关的知识库内容。',
+  sourceType: 'knowledge',
+  createdAt: CREATED_AT,
+};
+
 const MALICIOUS_MODEL_TRACE = {
   ...MODEL_TRACE,
   selectedModelId: 'request-model',
@@ -426,22 +443,244 @@ function createRunSnapshotFixture(status) {
   };
 }
 
+function createEventEnvelope(type, payload) {
+  return {
+    type,
+    runId: RUN_ID,
+    conversationId: 'conversation-1',
+    timestamp: CREATED_AT,
+    payload,
+  };
+}
+
 function createRunStartedEventFixture(status = 'running') {
   const run = createRunSnapshotFixture(status);
-  return {
-    type: 'run_started',
-    runId: run.id,
-    conversationId: run.conversationId,
-    timestamp: CREATED_AT,
-    payload: {
-      run,
+  return createEventEnvelope('run_started', { run });
+}
+
+function createRunReusedEventFixture() {
+  return createEventEnvelope('run_reused', {
+    duplicate: true,
+    reused: true,
+    reason: 'existing_run',
+    status: 'running',
+    reusedRun: {
+      id: RUN_ID,
+      status: 'running',
+      conclusionSource: 'none',
+      reportState: 'hidden',
+      completedAt: null,
     },
-  };
+  });
+}
+
+function createStepStartedEventFixture() {
+  return createEventEnvelope('step_started', {
+    step: {
+      stepId: 'step_schema',
+      title: '读取数据源 Schema',
+      description: '通过 schema_inspect 读取允许访问的表和字段。',
+      startedAt: CREATED_AT,
+    },
+  });
+}
+
+function createStepCompletedEventFixture() {
+  return createEventEnvelope('step_completed', {
+    stepDelta: {
+      stepId: 'step_schema',
+      completedAt: UPDATED_AT,
+      elapsedMs: 123,
+    },
+  });
+}
+
+function createStepFailedEventFixture() {
+  return createEventEnvelope('step_failed', {
+    stepDelta: {
+      stepId: 'step_knowledge_search',
+      errorMessage: '知识检索失败。',
+      completedAt: UPDATED_AT,
+      elapsedMs: 123,
+      fallbackReason: 'rag_query_failed',
+    },
+  });
+}
+
+function createToolStartedEventFixture() {
+  return createEventEnvelope('tool_started', {
+    toolInvocation: {
+      id: 'schema_inspect',
+      toolId: 'schema_inspect',
+      toolName: 'schema_inspect',
+      displayName: '数据源结构读取',
+      status: 'running',
+      inputSummary: 'includeColumns=true',
+      outputSummary: '',
+      startedAt: CREATED_AT,
+    },
+  });
+}
+
+function createToolCompletedEventFixture() {
+  return createEventEnvelope('tool_completed', {
+    toolDelta: {
+      toolId: 'schema_inspect',
+      outputSummary: '读取 1 张表',
+      completedAt: UPDATED_AT,
+      elapsedMs: 123,
+    },
+  });
+}
+
+function createToolFailedEventFixture() {
+  return createEventEnvelope('tool_failed', {
+    toolDelta: {
+      toolId: 'knowledge_search',
+      errorMessage: '知识检索失败。',
+      fallbackReason: 'rag_query_failed',
+      completedAt: UPDATED_AT,
+      elapsedMs: 123,
+    },
+  });
+}
+
+function createChartReadyEventFixture() {
+  return createEventEnvelope('chart_ready', {
+    chartData: {
+      title: '教学质量趋势',
+      chartType: 'bar',
+      labels: ['一班'],
+      series: [{ name: '平均分', values: [88] }],
+    },
+  });
+}
+
+function createConclusionDeltaEventFixture() {
+  return createEventEnvelope('conclusion_delta', {
+    delta: '核心指标保持稳定。',
+  });
+}
+
+function createConclusionCompletedEventFixture() {
+  return createEventEnvelope('conclusion_completed', {
+    conclusion: AGENT_CONCLUSION.markdownText,
+    agentConclusion: AGENT_CONCLUSION,
+    modelTrace: MODEL_TRACE,
+  });
+}
+
+function createRagSourcesReadyEventFixture() {
+  return createEventEnvelope('rag_sources_ready', {
+    sources: [RUN_SOURCE],
+  });
+}
+
+function createReportPendingEventFixture() {
+  return createEventEnvelope('report_pending', {
+    metadata: {
+      runtime: 'langgraph',
+      langGraphNode: 'processing',
+    },
+  });
+}
+
+function createRunCompletedEventFixture() {
+  return createEventEnvelope('run_completed', {
+    completedAt: UPDATED_AT,
+    elapsedMs: 123,
+    assistantMessageId: 'message-1',
+    metadata: {
+      langSmithTrace: {
+        traceId: 'trace-1',
+      },
+    },
+    modelTrace: MODEL_TRACE,
+  });
+}
+
+function createRunFailedEventFixture() {
+  return createEventEnvelope('run_failed', {
+    errorMessage: 'Agent Run 执行失败，请检查数据源或模型配置。',
+    metadata: {
+      langSmithTrace: {
+        traceId: 'trace-1',
+      },
+    },
+    modelTrace: MODEL_TRACE,
+  });
 }
 
 function assertRunStartedEventIdentity(event) {
   assert.equal(event.runId, event.payload.run.id);
   assert.equal(event.conversationId, event.payload.run.conversationId);
+}
+
+const SSE_EVENT_SCHEMA_CASES = [
+  ['events/run-started-event.schema.json', 'run_started', createRunStartedEventFixture],
+  ['events/run-reused-event.schema.json', 'run_reused', createRunReusedEventFixture],
+  ['events/step-started-event.schema.json', 'step_started', createStepStartedEventFixture],
+  ['events/step-completed-event.schema.json', 'step_completed', createStepCompletedEventFixture],
+  ['events/step-failed-event.schema.json', 'step_failed', createStepFailedEventFixture],
+  ['events/tool-started-event.schema.json', 'tool_started', createToolStartedEventFixture],
+  ['events/tool-completed-event.schema.json', 'tool_completed', createToolCompletedEventFixture],
+  ['events/tool-failed-event.schema.json', 'tool_failed', createToolFailedEventFixture],
+  ['events/chart-ready-event.schema.json', 'chart_ready', createChartReadyEventFixture],
+  ['events/conclusion-delta-event.schema.json', 'conclusion_delta', createConclusionDeltaEventFixture],
+  ['events/conclusion-completed-event.schema.json', 'conclusion_completed', createConclusionCompletedEventFixture],
+  ['events/rag-sources-ready-event.schema.json', 'rag_sources_ready', createRagSourcesReadyEventFixture],
+  ['events/report-pending-event.schema.json', 'report_pending', createReportPendingEventFixture],
+  ['events/run-completed-event.schema.json', 'run_completed', createRunCompletedEventFixture],
+  ['events/run-failed-event.schema.json', 'run_failed', createRunFailedEventFixture],
+];
+
+const SSE_EVENT_ENVELOPE_FIELDS = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
+const SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS = [
+  'run',
+  'step',
+  'stepDelta',
+  'stepId',
+  'tool',
+  'toolInvocation',
+  'toolDelta',
+  'toolId',
+  'chartData',
+  'sources',
+  'report',
+  'reportState',
+  'conclusion',
+  'agentConclusion',
+  'modelTrace',
+  'metadata',
+  'errorMessage',
+  'completedAt',
+  'elapsedMs',
+];
+
+function assertSseEventSchemaConvention(validate, file, eventType) {
+  const eventSchema = validate.getSchema(file);
+  const envelopeRef = eventSchema.allOf?.[0];
+  const eventConstraints = eventSchema.allOf?.[1];
+
+  assert.equal(envelopeRef?.$ref, 'run-sse-event-envelope.schema.json');
+  assert.equal(eventConstraints?.properties?.type?.const, eventType);
+  assert.deepEqual(eventSchema.required.toSorted(), SSE_EVENT_ENVELOPE_FIELDS.toSorted());
+  assert.deepEqual(Object.keys(eventSchema.properties).sort(), SSE_EVENT_ENVELOPE_FIELDS.toSorted());
+  assert.equal(eventConstraints.required.includes('payload'), true);
+  assert.equal(eventConstraints.properties.payload.type, 'object');
+  assert.equal(eventConstraints.properties.payload.additionalProperties, false);
+
+  for (const fieldName of SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS) {
+    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
+  }
+
+  for (const fieldName of SSE_EVENT_ENVELOPE_FIELDS) {
+    assert.deepEqual(Object.keys(eventSchema.properties[fieldName]), ['$ref']);
+    assert.equal(
+      eventSchema.properties[fieldName].$ref,
+      `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
+    );
+  }
 }
 
 function testRunSnapshotStatusContract(validate) {
@@ -468,35 +707,24 @@ function testRunSnapshotStatusContract(validate) {
   }
 }
 
-function testRunStartedEventContract(validate) {
-  const eventSchema = validate.getSchema('events/run-started-event.schema.json');
-  const envelopeRef = eventSchema.allOf[0];
-  const eventConstraints = eventSchema.allOf[1];
-  const envelopeFieldNames = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
-  const businessFieldNames = ['run', 'step', 'stepId', 'tool', 'toolId', 'chartData', 'sources', 'report', 'conclusion'];
-
-  assert.equal(envelopeRef.$ref, 'run-sse-event-envelope.schema.json');
-  assert.equal(eventConstraints.properties.type.const, 'run_started');
-  assert.equal(eventConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
-  assert.equal(Object.hasOwn(eventConstraints.properties.payload.properties.run, 'properties'), false);
-  assert.deepEqual(Object.keys(eventSchema.properties).sort(), envelopeFieldNames.toSorted());
-  for (const fieldName of businessFieldNames) {
-    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
-  }
-  for (const fieldName of envelopeFieldNames) {
-    assert.deepEqual(Object.keys(eventSchema.properties[fieldName]), ['$ref']);
-    assert.equal(
-      eventSchema.properties[fieldName].$ref,
-      `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
-    );
+function testRunSseEventContracts(validate) {
+  for (const [file, eventType, createFixture] of SSE_EVENT_SCHEMA_CASES) {
+    assertSseEventSchemaConvention(validate, file, eventType);
+    validate.assertValid(file, createFixture());
+    validate.assertInvalid(file, {
+      ...createFixture(),
+      type: 'unexpected_event',
+    });
+    validate.assertInvalid(file, {
+      ...createFixture(),
+      step: { stepId: 'top-level-business-field' },
+    });
   }
 
-  validate.assertValid('events/run-started-event.schema.json', createRunStartedEventFixture());
+  const runStartedConstraints = validate.getSchema('events/run-started-event.schema.json').allOf[1];
+  assert.equal(runStartedConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
+  assert.equal(Object.hasOwn(runStartedConstraints.properties.payload.properties.run, 'properties'), false);
   assertRunStartedEventIdentity(createRunStartedEventFixture());
-  validate.assertInvalid('events/run-started-event.schema.json', {
-    ...createRunStartedEventFixture(),
-    type: 'run_completed',
-  });
   validate.assertInvalid('events/run-started-event.schema.json', {
     ...createRunStartedEventFixture(),
     run: createRunSnapshotFixture('running'),
@@ -510,6 +738,32 @@ function testRunStartedEventContract(validate) {
       },
     },
   });
+
+  const conclusionCompletedConstraints = validate.getSchema('events/conclusion-completed-event.schema.json').allOf[1];
+  assert.equal(
+    conclusionCompletedConstraints.properties.payload.properties.agentConclusion.$ref,
+    '../objects/agent-conclusion.schema.json',
+  );
+  assert.equal(
+    conclusionCompletedConstraints.properties.payload.properties.modelTrace.$ref,
+    '../objects/model-trace.schema.json',
+  );
+  const ragSourcesReadyConstraints = validate.getSchema('events/rag-sources-ready-event.schema.json').allOf[1];
+  assert.equal(
+    ragSourcesReadyConstraints.properties.payload.properties.sources.items.$ref,
+    '../objects/run-source.schema.json',
+  );
+  const runCompletedConstraints = validate.getSchema('events/run-completed-event.schema.json').allOf[1];
+  assert.equal(
+    runCompletedConstraints.properties.payload.properties.modelTrace.$ref,
+    '../objects/model-trace.schema.json',
+  );
+  const runFailedConstraints = validate.getSchema('events/run-failed-event.schema.json').allOf[1];
+  assert.equal(
+    runFailedConstraints.properties.payload.properties.modelTrace.$ref,
+    '../objects/model-trace.schema.json',
+  );
+
   assert.throws(() =>
     assertRunStartedEventIdentity({
       ...createRunStartedEventFixture(),
@@ -536,6 +790,6 @@ testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotStatusContract(validate);
-testRunStartedEventContract(validate);
+testRunSseEventContracts(validate);
 
 console.log('Metadata boundary tests passed.');

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/tool-completed-event.schema.json",
+  "title": "ToolCompletedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "tool_completed",
+          "description": "SSE event 类型，表示 Tool Invocation 已完成。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["toolDelta"],
+          "description": "tool_completed 事件业务数据。",
+          "properties": {
+            "toolDelta": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["toolId", "outputSummary", "completedAt", "elapsedMs"],
+              "description": "Tool Invocation 完成状态增量。",
+              "properties": {
+                "toolId": {
+                  "type": "string",
+                  "description": "runtime tool invocation ID。"
+                },
+                "outputSummary": {
+                  "type": "string",
+                  "description": "Tool 输出摘要。"
+                },
+                "completedAt": {
+                  "type": "string",
+                  "description": "Tool Invocation 完成时间。"
+                },
+                "elapsedMs": {
+                  "type": "number",
+                  "description": "Tool Invocation 执行耗时，单位毫秒。"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/tool-started-event.schema.json",
+  "title": "ToolStartedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "tool_started",
+          "description": "SSE event 类型，表示 Tool Invocation 开始执行。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["toolInvocation"],
+          "description": "tool_started 事件业务数据。",
+          "properties": {
+            "toolInvocation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "toolId", "toolName", "displayName", "status", "inputSummary", "outputSummary", "startedAt"],
+              "description": "开始执行的 Tool Invocation 快照；深层 canonical ToolInvocation schema 后续收口。",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "runtime tool invocation ID。"
+                },
+                "toolId": {
+                  "type": "string",
+                  "description": "runtime tool invocation ID，保持当前 runtime 命名。"
+                },
+                "toolName": {
+                  "type": "string",
+                  "description": "LangChain Tool 名称。"
+                },
+                "displayName": {
+                  "type": "string",
+                  "description": "Tool 展示名称快照。"
+                },
+                "status": {
+                  "const": "running",
+                  "description": "Tool Invocation 已开始且仍在执行。"
+                },
+                "inputSummary": {
+                  "type": "string",
+                  "description": "Tool 输入摘要。"
+                },
+                "outputSummary": {
+                  "type": "string",
+                  "description": "Tool 输出摘要，开始时为空字符串。"
+                },
+                "startedAt": {
+                  "type": "string",
+                  "description": "Tool Invocation 开始时间。"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

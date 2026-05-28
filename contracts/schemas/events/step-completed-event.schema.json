@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/step-completed-event.schema.json",
+  "title": "StepCompletedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "step_completed",
+          "description": "SSE event 类型，表示 Run step 已完成。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stepDelta"],
+          "description": "step_completed 事件业务数据。",
+          "properties": {
+            "stepDelta": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["stepId", "completedAt"],
+              "description": "step 完成状态增量。",
+              "properties": {
+                "stepId": {
+                  "type": "string",
+                  "description": "runtime step 稳定 ID。"
+                },
+                "completedAt": {
+                  "type": "string",
+                  "description": "step 完成时间。"
+                },
+                "elapsedMs": {
+                  "type": "number",
+                  "description": "step 执行耗时，单位毫秒。"
+                },
+                "plannerSource": {
+                  "type": "string",
+                  "description": "planner 结果来源。"
+                },
+                "fallbackReason": {
+                  "type": ["string", "null"],
+                  "description": "step fallback 原因。"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "step runtime metadata。"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

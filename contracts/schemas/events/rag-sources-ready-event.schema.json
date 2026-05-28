@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/rag-sources-ready-event.schema.json",
+  "title": "RagSourcesReadyEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "rag_sources_ready",
+          "description": "SSE event 类型，表示 RAG source lineage 已可用。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sources"],
+          "description": "rag_sources_ready 事件业务数据。",
+          "properties": {
+            "sources": {
+              "type": "array",
+              "items": {
+                "$ref": "../objects/run-source.schema.json"
+              },
+              "description": "当前 Run 的 canonical source 列表；不进入 RunSnapshot。"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
