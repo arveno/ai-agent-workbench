@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ai-agent-workbench.local/contracts/report-artifact.schema.json",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/report-artifact.schema.json",
   "title": "ReportArtifact",
   "type": "object",
   "additionalProperties": false,
@@ -69,7 +69,7 @@
     "sources": {
       "type": "array",
       "items": {
-        "$ref": "objects/run-source.schema.json"
+        "$ref": "run-source.schema.json"
       },
       "description": "从 run_sources 填充的 canonical report sources。"
     },

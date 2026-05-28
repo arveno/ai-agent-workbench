@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ai-agent-workbench.local/contracts/evaluation-result.schema.json",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/evaluation-result.schema.json",
   "title": "EvaluationResult",
   "type": "object",
   "additionalProperties": false,

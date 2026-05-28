@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ai-agent-workbench.local/contracts/evaluation-metadata.schema.json",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/evaluation-metadata.schema.json",
   "title": "EvaluationMetadata",
   "type": "object",
   "additionalProperties": false,
@@ -21,7 +21,7 @@
     },
     "modelTrace": {
       "anyOf": [
-        { "$ref": "objects/model-trace.schema.json" },
+        { "$ref": "model-trace.schema.json" },
         { "type": "null" }
       ],
       "description": "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"

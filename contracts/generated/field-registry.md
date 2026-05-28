@@ -166,8 +166,8 @@ This section is only for human discoverability. Field-level machine contracts li
 
 | Object | Schema | Lifecycle node | Core object | Owner | Summary |
 | --- | --- | --- | --- | --- | --- |
-| `ReportArtifact` | `contracts/schemas/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
-| `EvaluationResult` | `contracts/schemas/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `ReportArtifact` | `contracts/schemas/objects/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `EvaluationResult` | `contracts/schemas/objects/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `RunSource` | `contracts/schemas/objects/run-source.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Source | Source Lineage mapper | Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `RunStartedEvent` | `contracts/schemas/events/run-started-event.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Event, Run | Agent Run SSE boundary | run_started SSE boundary schema，通过 $ref 引用 canonical RunSnapshot，不重复定义 RunSnapshot 字段。 |
 

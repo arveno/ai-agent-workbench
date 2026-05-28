@@ -5,47 +5,122 @@
  */
 
 export interface WorkbenchContract {
-  evaluationMetadata: EvaluationMetadata;
-  evaluationResult: EvaluationResult;
   runStartedEvent: RunStartedEvent;
   agentConclusion: AgentConclusion;
+  evaluationMetadata: EvaluationMetadata;
+  evaluationResult: EvaluationResult;
   modelTrace: ModelTrace;
-  runSnapshot: RunSnapshot;
-  runSource: RunSource;
   reportArtifact: ReportArtifact;
   reportMetadata: ReportMetadata;
+  runSnapshot: RunSnapshot;
+  runSource: RunSource;
 }
-export interface EvaluationMetadata {
+export interface RunStartedEvent {
   /**
-   * 该 evaluation result 评估的 canonical runId。
+   * SSE event 类型，表示 Agent Run 已创建并进入运行边界。
+   */
+  type: 'run_started';
+  /**
+   * event-level canonical runId，应与 run.id 一致。
    */
   runId: string;
   /**
-   * 服务端设置的 evaluation metadata 来源。
+   * event-level conversationId，应与 run.conversationId 一致。
    */
-  source: 'workbench-evaluation';
+  conversationId: string;
   /**
-   * evaluation metadata 格式版本。
+   * run_started 事件产生时间。
    */
-  resultVersion: number;
+  timestamp: string;
+  run: RunSnapshot;
+}
+export interface RunSnapshot {
   /**
-   * 继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。
+   * canonical runId，只指向 DB agent_runs.id。
    */
-  modelTrace?: ModelTrace | null;
+  id: string;
   /**
-   * evaluator 或 rubric 版本。
+   * 拥有当前 Run 的 conversation。
    */
-  evaluatorVersion?: string | null;
+  conversationId: string;
   /**
-   * 外部 observability ID；不替代 canonical runId。
+   * 前端 pending 与请求幂等 ID，不作为业务外键。
    */
-  langSmithTraceId?: string | null;
+  clientRunId?: string | null;
   /**
-   * 服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。
+   * 持久化后的 usage 记录 ID。
    */
-  langSmithEvaluation?: {
+  usageId?: string | null;
+  /**
+   * runtime 与 persistence 边界上的 Run 执行模式。
+   */
+  mode: 'mock' | 'agent';
+  /**
+   * runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。
+   */
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+  /**
+   * Agent Run planner 已识别的意图。
+   */
+  intent?: 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
+  /**
+   * 当前 Run 捕获的用户输入。
+   */
+  prompt?: string;
+  /**
+   * runtime plan 快照；plan 细节不是 UI ViewModel 契约。
+   */
+  plan?: {
     [k: string]: unknown;
   };
+  /**
+   * runtime 数据源快照。
+   */
+  dataSource?: {
+    [k: string]: unknown;
+  };
+  /**
+   * 当前 Run 产出的 canonical 图表 payload。
+   */
+  chartData?: {
+    [k: string]: unknown;
+  };
+  /**
+   * 当前 Run 的 canonical model trace。
+   */
+  modelTrace: ModelTrace | null;
+  /**
+   * 当前 Run 的 canonical 结论信封。
+   */
+  agentConclusion?: AgentConclusion | null;
+  /**
+   * 绑定在当前 Run 上的 canonical report 可用性与生成状态。
+   */
+  reportState: 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
+  /**
+   * Run 创建时间。
+   */
+  createdAt: string;
+  /**
+   * Run 更新时间。
+   */
+  updatedAt: string;
+  /**
+   * Run 开始时间。
+   */
+  startedAt?: string;
+  /**
+   * Run 完成时间。
+   */
+  completedAt?: string;
+  /**
+   * Run 耗时，单位为毫秒。
+   */
+  elapsedMs?: number;
+  /**
+   * Run 失败时可展示的安全错误信息。
+   */
+  errorMessage?: string;
 }
 export interface ModelTrace {
   /**
@@ -156,6 +231,78 @@ export interface CostEstimate {
    */
   costUnavailableReason: string | null;
 }
+export interface AgentConclusion {
+  /**
+   * 面向 assistant 消息展示的最终 markdown 结论。
+   */
+  markdownText: string;
+  /**
+   * 用于搜索、预览和非 markdown 场景的纯文本结论。
+   */
+  plainText: string;
+  /**
+   * 可选的结构化结论段落。
+   */
+  sections?: AgentConclusionSection[];
+  /**
+   * 可选的用户可见结论提示，用于说明限制或展示上下文。
+   */
+  notice?: string | null;
+  /**
+   * 可选的原始结论文本，仅用于 debug 或无损渲染。
+   */
+  rawText?: string;
+}
+/**
+ * This interface was referenced by `AgentConclusion`'s JSON-Schema
+ * via the `definition` "AgentConclusionSection".
+ */
+export interface AgentConclusionSection {
+  /**
+   * 可选的段落标题。
+   */
+  title?: string | null;
+  /**
+   * 段落 markdown 文本。
+   */
+  markdownText: string;
+  /**
+   * 段落纯文本。
+   */
+  plainText: string;
+}
+export interface EvaluationMetadata {
+  /**
+   * 该 evaluation result 评估的 canonical runId。
+   */
+  runId: string;
+  /**
+   * 服务端设置的 evaluation metadata 来源。
+   */
+  source: 'workbench-evaluation';
+  /**
+   * evaluation metadata 格式版本。
+   */
+  resultVersion: number;
+  /**
+   * 继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。
+   */
+  modelTrace?: ModelTrace | null;
+  /**
+   * evaluator 或 rubric 版本。
+   */
+  evaluatorVersion?: string | null;
+  /**
+   * 外部 observability ID；不替代 canonical runId。
+   */
+  langSmithTraceId?: string | null;
+  /**
+   * 服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。
+   */
+  langSmithEvaluation?: {
+    [k: string]: unknown;
+  };
+}
 export interface EvaluationResult {
   /**
    * Evaluation result 主 ID。
@@ -222,225 +369,6 @@ export interface EvaluationResult {
    * evaluation result 更新时间。
    */
   updatedAt: string;
-}
-export interface RunStartedEvent {
-  /**
-   * SSE event 类型，表示 Agent Run 已创建并进入运行边界。
-   */
-  type: 'run_started';
-  /**
-   * event-level canonical runId，应与 run.id 一致。
-   */
-  runId: string;
-  /**
-   * event-level conversationId，应与 run.conversationId 一致。
-   */
-  conversationId: string;
-  /**
-   * run_started 事件产生时间。
-   */
-  timestamp: string;
-  run: RunSnapshot;
-}
-export interface RunSnapshot {
-  /**
-   * canonical runId，只指向 DB agent_runs.id。
-   */
-  id: string;
-  /**
-   * 拥有当前 Run 的 conversation。
-   */
-  conversationId: string;
-  /**
-   * 前端 pending 与请求幂等 ID，不作为业务外键。
-   */
-  clientRunId?: string | null;
-  /**
-   * 持久化后的 usage 记录 ID。
-   */
-  usageId?: string | null;
-  /**
-   * runtime 与 persistence 边界上的 Run 执行模式。
-   */
-  mode: 'mock' | 'agent';
-  /**
-   * runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。
-   */
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
-  /**
-   * Agent Run planner 已识别的意图。
-   */
-  intent?: 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
-  /**
-   * 当前 Run 捕获的用户输入。
-   */
-  prompt?: string;
-  /**
-   * runtime plan 快照；plan 细节不是 UI ViewModel 契约。
-   */
-  plan?: {
-    [k: string]: unknown;
-  };
-  /**
-   * runtime 数据源快照。
-   */
-  dataSource?: {
-    [k: string]: unknown;
-  };
-  /**
-   * 当前 Run 产出的 canonical 图表 payload。
-   */
-  chartData?: {
-    [k: string]: unknown;
-  };
-  /**
-   * 当前 Run 的 canonical model trace。
-   */
-  modelTrace: ModelTrace | null;
-  /**
-   * 当前 Run 的 canonical 结论信封。
-   */
-  agentConclusion?: AgentConclusion | null;
-  /**
-   * 绑定在当前 Run 上的 canonical report 可用性与生成状态。
-   */
-  reportState: 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
-  /**
-   * Run 创建时间。
-   */
-  createdAt: string;
-  /**
-   * Run 更新时间。
-   */
-  updatedAt: string;
-  /**
-   * Run 开始时间。
-   */
-  startedAt?: string;
-  /**
-   * Run 完成时间。
-   */
-  completedAt?: string;
-  /**
-   * Run 耗时，单位为毫秒。
-   */
-  elapsedMs?: number;
-  /**
-   * Run 失败时可展示的安全错误信息。
-   */
-  errorMessage?: string;
-}
-export interface AgentConclusion {
-  /**
-   * 面向 assistant 消息展示的最终 markdown 结论。
-   */
-  markdownText: string;
-  /**
-   * 用于搜索、预览和非 markdown 场景的纯文本结论。
-   */
-  plainText: string;
-  /**
-   * 可选的结构化结论段落。
-   */
-  sections?: AgentConclusionSection[];
-  /**
-   * 可选的用户可见结论提示，用于说明限制或展示上下文。
-   */
-  notice?: string | null;
-  /**
-   * 可选的原始结论文本，仅用于 debug 或无损渲染。
-   */
-  rawText?: string;
-}
-/**
- * This interface was referenced by `AgentConclusion`'s JSON-Schema
- * via the `definition` "AgentConclusionSection".
- */
-export interface AgentConclusionSection {
-  /**
-   * 可选的段落标题。
-   */
-  title?: string | null;
-  /**
-   * 段落 markdown 文本。
-   */
-  markdownText: string;
-  /**
-   * 段落纯文本。
-   */
-  plainText: string;
-}
-export interface RunSource {
-  /**
-   * Run source 主 ID。
-   */
-  id: string;
-  /**
-   * 拥有该 source 的 canonical runId。
-   */
-  runId: string;
-  /**
-   * 拥有该 source 的 conversation。
-   */
-  conversationId: string;
-  /**
-   * 产生该 source 的 Tool Invocation。
-   */
-  toolInvocationId?: string;
-  /**
-   * 该 source 关联的 retrieval log。
-   */
-  retrievalLogId?: string;
-  /**
-   * 知识库文档快照 ID。
-   */
-  documentId?: string;
-  /**
-   * 知识库 chunk 快照 ID。
-   */
-  chunkId?: string;
-  /**
-   * 仅用于展示的 citation label。
-   */
-  citationLabel?: string;
-  /**
-   * 稳定的 source 展示顺序。
-   */
-  sourceOrder: number;
-  /**
-   * source 标题快照。
-   */
-  title: string;
-  /**
-   * source 内容预览文本。
-   */
-  preview: string;
-  /**
-   * retriever 返回的相关性分数。
-   */
-  score?: number;
-  /**
-   * canonical source 类型。
-   */
-  sourceType: 'knowledge' | 'tool' | 'report' | 'manual';
-  /**
-   * 该 source 是否被最终回答引用。
-   */
-  usedInAnswer?: boolean;
-  /**
-   * 无 source 时的明确原因。
-   */
-  noSourceReason?: string;
-  /**
-   * source 创建时间。
-   */
-  createdAt: string;
-  /**
-   * 用于检索策略、provider 和 debug 上下文的 source metadata。
-   */
-  metadata?: {
-    [k: string]: unknown;
-  };
 }
 export interface ReportArtifact {
   /**
@@ -526,4 +454,76 @@ export interface ReportMetadata {
    * 外部 observability ID；不替代 canonical runId。
    */
   langSmithTraceId?: string | null;
+}
+export interface RunSource {
+  /**
+   * Run source 主 ID。
+   */
+  id: string;
+  /**
+   * 拥有该 source 的 canonical runId。
+   */
+  runId: string;
+  /**
+   * 拥有该 source 的 conversation。
+   */
+  conversationId: string;
+  /**
+   * 产生该 source 的 Tool Invocation。
+   */
+  toolInvocationId?: string;
+  /**
+   * 该 source 关联的 retrieval log。
+   */
+  retrievalLogId?: string;
+  /**
+   * 知识库文档快照 ID。
+   */
+  documentId?: string;
+  /**
+   * 知识库 chunk 快照 ID。
+   */
+  chunkId?: string;
+  /**
+   * 仅用于展示的 citation label。
+   */
+  citationLabel?: string;
+  /**
+   * 稳定的 source 展示顺序。
+   */
+  sourceOrder: number;
+  /**
+   * source 标题快照。
+   */
+  title: string;
+  /**
+   * source 内容预览文本。
+   */
+  preview: string;
+  /**
+   * retriever 返回的相关性分数。
+   */
+  score?: number;
+  /**
+   * canonical source 类型。
+   */
+  sourceType: 'knowledge' | 'tool' | 'report' | 'manual';
+  /**
+   * 该 source 是否被最终回答引用。
+   */
+  usedInAnswer?: boolean;
+  /**
+   * 无 source 时的明确原因。
+   */
+  noSourceReason?: string;
+  /**
+   * source 创建时间。
+   */
+  createdAt: string;
+  /**
+   * 用于检索策略、provider 和 debug 上下文的 source metadata。
+   */
+  metadata?: {
+    [k: string]: unknown;
+  };
 }

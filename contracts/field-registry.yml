@@ -374,13 +374,13 @@ schemaObjectReferences:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"
     owner: "workbench-reports / mapper"
-    schema: "contracts/schemas/report-artifact.schema.json"
+    schema: "contracts/schemas/objects/report-artifact.schema.json"
     summary: "Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
   EvaluationResult:
     lifecycleNode: "15 Evaluation / Quality Gate"
     coreObject: "Evaluation"
     owner: "workbench-evaluations / mapper"
-    schema: "contracts/schemas/evaluation-result.schema.json"
+    schema: "contracts/schemas/objects/evaluation-result.schema.json"
     summary: "Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
   RunSource:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"

@@ -234,7 +234,7 @@ function testReportCreateMetadata(validate) {
     ...FORBIDDEN_METADATA_FIELDS,
     ...REPORT_REQUEST_ONLY_FORBIDDEN_FIELDS,
   ]);
-  validate.assertValid('report-metadata.schema.json', metadata);
+  validate.assertValid('objects/report-metadata.schema.json', metadata);
 }
 
 function testReportPersistedRead(validate) {
@@ -252,7 +252,7 @@ function testReportPersistedRead(validate) {
   assert.equal(metadata.langSmithTraceId, 'trace-report-1');
   assert.deepEqual(metadata.modelTrace, MODEL_TRACE);
   assertNoTopLevelFields(metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('report-metadata.schema.json', metadata);
+  validate.assertValid('objects/report-metadata.schema.json', metadata);
 }
 
 function testMapReport(validate) {
@@ -283,8 +283,8 @@ function testMapReport(validate) {
   assert.equal(report.sourceLineage, 'run_sources');
   assert.equal(report.sourceNoSourceReason, null);
   assertNoTopLevelFields(report.metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('report-metadata.schema.json', report.metadata);
-  validate.assertValid('report-artifact.schema.json', report);
+  validate.assertValid('objects/report-metadata.schema.json', report.metadata);
+  validate.assertValid('objects/report-artifact.schema.json', report);
 }
 
 function testEvaluationRequestMetadata() {
@@ -325,7 +325,7 @@ function testEvaluationCreateMetadata(validate) {
   assert.deepEqual(metadata.modelTrace, MODEL_TRACE);
   assert.notDeepEqual(metadata.modelTrace, MALICIOUS_MODEL_TRACE);
   assertNoTopLevelFields(metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('evaluation-metadata.schema.json', metadata);
+  validate.assertValid('objects/evaluation-metadata.schema.json', metadata);
 }
 
 function testEvaluationPersistedRead(validate) {
@@ -353,7 +353,7 @@ function testEvaluationPersistedRead(validate) {
   assert.deepEqual(metadata.modelTrace, MODEL_TRACE);
   assert.notDeepEqual(metadata.modelTrace, MALICIOUS_MODEL_TRACE);
   assertNoTopLevelFields(metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('evaluation-metadata.schema.json', metadata);
+  validate.assertValid('objects/evaluation-metadata.schema.json', metadata);
 
   assert.throws(
     () => evaluationBoundary.readPersistedEvaluationMetadata({ ...row, run_id: null }),
@@ -391,8 +391,8 @@ function testMapResult(validate) {
   assert.equal(result.runId, RUN_ID);
   assert.deepEqual(result.metadata.modelTrace, MODEL_TRACE);
   assertNoTopLevelFields(result.metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('evaluation-metadata.schema.json', result.metadata);
-  validate.assertValid('evaluation-result.schema.json', result);
+  validate.assertValid('objects/evaluation-metadata.schema.json', result.metadata);
+  validate.assertValid('objects/evaluation-result.schema.json', result);
 }
 
 function testModelLayerPricingSource(validate) {
