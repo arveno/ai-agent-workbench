@@ -424,6 +424,30 @@ function testRunSnapshotStatusContract(validate) {
       [fieldName]: value,
     });
   }
+
+  const runtimeStartedSnapshot = createRunSnapshotFixture('running');
+  assert.equal(Object.hasOwn(runtimeStartedSnapshot, 'chartData'), false);
+  validate.assertValid('run-snapshot.schema.json', runtimeStartedSnapshot);
+
+  validate.assertInvalid('run-snapshot.schema.json', {
+    ...runtimeStartedSnapshot,
+    chartData: null,
+  });
+
+  validate.assertValid('run-snapshot.schema.json', {
+    ...runtimeStartedSnapshot,
+    chartData: {
+      title: '月度成绩趋势',
+      chartType: 'bar',
+      labels: ['一班', '二班'],
+      series: [
+        {
+          name: '平均分',
+          values: [88, 91],
+        },
+      ],
+    },
+  });
 }
 
 const validate = await createSchemaValidators();

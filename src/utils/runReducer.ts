@@ -71,6 +71,154 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function normalizeOptionalString(value: unknown): string | undefined {
+  const normalizedValue = typeof value === 'string' ? value.trim() : '';
+  return normalizedValue || undefined;
+}
+
+function normalizeOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function normalizeStartedRunStatus(value: unknown): RunSnapshot['status'] {
+  const status = normalizeOptionalString(value);
+
+  if (status === 'completed' || status === 'success') {
+    return 'success';
+  }
+
+  if (status === 'failed' || status === 'error') {
+    return 'error';
+  }
+
+  if (status === 'pending' || status === 'running' || status === 'stopped') {
+    return status;
+  }
+
+  return 'pending';
+}
+
+function normalizeStartedRunMode(value: unknown): RunSnapshot['mode'] {
+  return value === 'mock' ? 'mock' : 'agent';
+}
+
+function normalizeStartedRunIntent(value: unknown): RunSnapshot['intent'] {
+  if (
+    value === 'capability_intro' ||
+    value === 'data_analysis' ||
+    value === 'knowledge_qa' ||
+    value === 'unsupported' ||
+    value === 'unknown'
+  ) {
+    return value;
+  }
+
+  return 'unknown';
+}
+
+function normalizeStartedRunReportState(value: unknown): RunSnapshot['reportState'] {
+  if (
+    value === 'hidden' ||
+    value === 'pending' ||
+    value === 'generating' ||
+    value === 'generated' ||
+    value === 'skipped' ||
+    value === 'failed'
+  ) {
+    return value;
+  }
+
+  return 'hidden';
+}
+
+function normalizeStartedRunConclusionSource(value: unknown): RunSnapshot['conclusionSource'] {
+  if (value === 'model' || value === 'fallback' || value === 'mock' || value === 'none') {
+    return value;
+  }
+
+  return 'none';
+}
+
+function asRunPlan(value: unknown): RunSnapshot['plan'] {
+  return isRecord(value) ? (value as unknown as RunSnapshot['plan']) : undefined;
+}
+
+function asRunDataSource(value: unknown): RunSnapshot['dataSource'] {
+  return isRecord(value) ? (value as unknown as RunSnapshot['dataSource']) : undefined;
+}
+
+function asRunChartData(value: unknown): RunSnapshot['chartData'] {
+  return isRecord(value) ? (value as unknown as RunSnapshot['chartData']) : undefined;
+}
+
+function asRunModelTrace(value: unknown): RunSnapshot['modelTrace'] {
+  return isRecord(value) ? (value as unknown as RunSnapshot['modelTrace']) : undefined;
+}
+
+function asRunSteps(value: unknown): RunSnapshot['steps'] {
+  return Array.isArray(value) ? (value as RunSnapshot['steps']) : [];
+}
+
+function asRunTools(value: unknown): RunSnapshot['toolInvocations'] {
+  return Array.isArray(value) ? (value as RunSnapshot['toolInvocations']) : [];
+}
+
+function asRunSources(value: unknown): NonNullable<RunSnapshot['sources']> {
+  return Array.isArray(value) ? (value as NonNullable<RunSnapshot['sources']>) : [];
+}
+
+function createRunViewModelFromStartedEvent(currentRun: RunSnapshot | null, event: Extract<RunEvent, { type: 'run_started' }>): RunSnapshot {
+  const runRecord: Record<string, unknown> = isRecord(event.run) ? event.run : {};
+  const runId =
+    normalizeOptionalString(event.runId) ??
+    normalizeOptionalString(runRecord.id) ??
+    currentRun?.id ??
+    '';
+  const clientRunId = normalizeOptionalString(event.clientRunId) ?? normalizeOptionalString(runRecord.clientRunId);
+  const conversationId = normalizeOptionalString(event.conversationId);
+  const createdAt = normalizeOptionalString(runRecord.createdAt) ?? normalizeOptionalString(event.timestamp) ?? nowIso();
+  const updatedAt = normalizeOptionalString(runRecord.updatedAt) ?? createdAt;
+  const modelTrace = asRunModelTrace(runRecord.modelTrace);
+  const rawConclusion = normalizeOptionalString(runRecord.conclusion) ?? '';
+  const agentConclusion = normalizeAgentConclusion(rawConclusion, runRecord.agentConclusion);
+  const conclusionSource = normalizeStartedRunConclusionSource(
+    isRecord(runRecord.modelTrace) ? runRecord.modelTrace.conclusionSource : runRecord.conclusionSource,
+  );
+  const viewModel: RunSnapshot = {
+    id: runId,
+    clientRunId,
+    displayRunId: runId,
+    sessionId: conversationId,
+    mode: normalizeStartedRunMode(runRecord.mode),
+    status: normalizeStartedRunStatus(runRecord.status),
+    intent: normalizeStartedRunIntent(runRecord.intent),
+    prompt: normalizeOptionalString(runRecord.prompt) ?? '',
+    plan: asRunPlan(runRecord.plan),
+    dataSource: asRunDataSource(runRecord.dataSource),
+    steps: asRunSteps(runRecord.steps),
+    toolInvocations: asRunTools(runRecord.toolInvocations),
+    sources: asRunSources(runRecord.sources),
+    conclusion: agentConclusion.plainText,
+    conclusionSource,
+    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
+    modelTrace,
+    reportState: normalizeStartedRunReportState(runRecord.reportState),
+    createdAt,
+    updatedAt,
+    startedAt: normalizeOptionalString(runRecord.startedAt),
+    completedAt: normalizeOptionalString(runRecord.completedAt),
+    elapsedMs: normalizeOptionalNumber(runRecord.elapsedMs),
+    errorMessage: normalizeOptionalString(runRecord.errorMessage),
+  };
+  const chartData = asRunChartData(runRecord.chartData);
+
+  if (chartData) {
+    viewModel.chartData = chartData;
+  }
+
+  return viewModel;
+}
+
 function stripJsonFence(value: string): string {
   return value
     .trim()
@@ -452,19 +600,7 @@ function updateTool(
 
 export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: RunEvent): RunSnapshot | null {
   if (event.type === 'run_started') {
-    const updatedAt = event.run.updatedAt || nowIso();
-    const agentConclusion = normalizeAgentConclusion(
-      event.run.conclusion,
-      event.run.agentConclusion,
-    );
-
-    return {
-      ...event.run,
-      status: event.run.status === 'idle' ? 'pending' : event.run.status,
-      conclusion: agentConclusion.plainText,
-      agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-      updatedAt,
-    };
+    return createRunViewModelFromStartedEvent(currentRun, event);
   }
 
   if (event.type === 'run_reused') {

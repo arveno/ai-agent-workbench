@@ -22,7 +22,7 @@ const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isRunEvent(value: unknown): value is RunEvent {
@@ -69,13 +69,20 @@ function consumeSseBlocks(buffer: string, onEvent: (event: RunEvent) => void): s
   return remainingBuffer;
 }
 
-function normalizeOptionalId(value: string | null | undefined): string | undefined {
-  const normalizedValue = value?.trim();
+function normalizeOptionalId(value: unknown): string | undefined {
+  const normalizedValue = typeof value === 'string' ? value.trim() : '';
   return normalizedValue || undefined;
 }
 
-function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunEvent {
-  const normalizedClientRunId = clientRunId?.trim();
+function normalizeRunEventForClient(
+  event: RunEvent,
+  context: {
+    clientRunId?: string;
+    conversationId: string;
+  },
+): RunEvent {
+  const normalizedClientRunId = context.clientRunId?.trim();
+  const normalizedConversationId = context.conversationId.trim();
 
   if (event.type === 'run_started') {
     const eventRunId = normalizeOptionalId(event.runId);
@@ -87,7 +94,7 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
       normalizeOptionalId(event.clientRunId) ??
       normalizeOptionalId(event.run.clientRunId) ??
       normalizedClientRunId;
-    const displayRunId = normalizeOptionalId(event.run.displayRunId) ?? runId;
+    const eventConversationId = normalizeOptionalId(event.conversationId) ?? normalizedConversationId;
 
     if (!runId) {
       return event;
@@ -97,12 +104,7 @@ function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunE
       ...event,
       runId,
       clientRunId: eventClientRunId,
-      run: {
-        ...event.run,
-        id: runId,
-        clientRunId: eventClientRunId,
-        displayRunId,
-      },
+      conversationId: eventConversationId,
     };
   }
 
@@ -214,12 +216,12 @@ export async function streamAgentRunAnalysis(params: {
 
     buffer += decoder.decode(value, { stream: true });
     buffer = consumeSseBlocks(buffer, (event) => {
-      params.onEvent(normalizeRunEventForClient(event, params.clientRunId));
+      params.onEvent(normalizeRunEventForClient(event, params));
     });
   }
 
   buffer += decoder.decode();
   consumeSseBlocks(`${buffer}\n\n`, (event) => {
-    params.onEvent(normalizeRunEventForClient(event, params.clientRunId));
+    params.onEvent(normalizeRunEventForClient(event, params));
   });
 }

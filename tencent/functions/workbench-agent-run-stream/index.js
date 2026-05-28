@@ -1018,9 +1018,11 @@ function createRunSnapshot(context, options = {}) {
   const plan = options.plan || context.plan;
   const intent = plan?.intent || context.intent || 'unknown';
   const modelTrace = options.modelTrace || context.modelTrace || null;
-
-  return {
+  const chartData = options.chartData || context.chartData;
+  const agentConclusion = options.agentConclusion || context.agentConclusion;
+  const snapshot = {
     id: context.runId,
+    conversationId: context.conversationId,
     mode: 'agent',
     status: options.status || 'running',
     intent,
@@ -1031,18 +1033,30 @@ function createRunSnapshot(context, options = {}) {
       reason: '正在判断任务类型',
     },
     dataSource: context.dataSourceSnapshot || getDataSourceSnapshot(),
-    steps: options.steps || context.steps || [],
-    toolInvocations: options.toolInvocations || context.toolInvocations || [],
-    chartData: options.chartData || context.chartData,
-    conclusion: options.conclusion || context.conclusion || '',
-    conclusionSource: modelTrace?.conclusionSource || 'none',
-    agentConclusion: options.agentConclusion || context.agentConclusion,
     modelTrace,
     reportState: options.reportState || context.reportState || 'hidden',
     createdAt,
     updatedAt: nowIso(),
     startedAt: createdAt,
   };
+
+  if (context.clientRunId) {
+    snapshot.clientRunId = context.clientRunId;
+  }
+
+  if (context.usageId) {
+    snapshot.usageId = context.usageId;
+  }
+
+  if (isRecord(chartData)) {
+    snapshot.chartData = chartData;
+  }
+
+  if (isRecord(agentConclusion)) {
+    snapshot.agentConclusion = agentConclusion;
+  }
+
+  return snapshot;
 }
 
 function createRunStep(id, title, status, description) {
