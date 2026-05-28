@@ -23,6 +23,7 @@
       "description": "SSE event 产生时间。"
     },
     "payload": {
+      "title": "RunSseEventPayload",
       "type": "object",
       "additionalProperties": true,
       "description": "当前事件的业务数据；公共 envelope 不定义具体业务字段。"

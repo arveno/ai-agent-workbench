@@ -470,9 +470,20 @@ function testRunSnapshotStatusContract(validate) {
 
 function testRunStartedEventContract(validate) {
   const eventSchema = validate.getSchema('events/run-started-event.schema.json');
-  assert.equal(eventSchema.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
-  assert.equal(Object.hasOwn(eventSchema.properties.payload.properties.run, 'properties'), false);
+  const envelopeRef = eventSchema.allOf[0];
+  const eventConstraints = eventSchema.allOf[1];
+
+  assert.equal(envelopeRef.$ref, 'run-sse-event-envelope.schema.json');
+  assert.equal(eventConstraints.properties.type.const, 'run_started');
+  assert.equal(eventConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
+  assert.equal(Object.hasOwn(eventConstraints.properties.payload.properties.run, 'properties'), false);
   assert.equal(Object.hasOwn(eventSchema.properties, 'run'), false);
+  for (const fieldName of ['type', 'runId', 'conversationId', 'timestamp', 'payload']) {
+    assert.equal(
+      eventSchema.properties[fieldName].$ref,
+      `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
+    );
+  }
 
   validate.assertValid('events/run-started-event.schema.json', createRunStartedEventFixture());
   assertRunStartedEventIdentity(createRunStartedEventFixture());
