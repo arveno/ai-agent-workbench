@@ -63,12 +63,14 @@ function parseFallbackPattern(pattern) {
 function classifyRule([id, field]) {
   const pattern = String(field.pattern ?? '').trim();
   const fallback = parseFallbackPattern(pattern);
+  const enforcement = String(field.enforcement ?? 'globalLint').trim();
 
   if (fallback) {
     return {
       id,
       kind: 'fallbackExpression',
       label: pattern,
+      enforcement,
       ...fallback,
       reason: field.reason ?? '',
     };
@@ -80,6 +82,7 @@ function classifyRule([id, field]) {
       id,
       kind: 'objectProperty',
       label: pattern,
+      enforcement,
       objectName: parts.at(-2),
       propertyName: parts.at(-1),
       reason: field.reason ?? '',
@@ -90,6 +93,7 @@ function classifyRule([id, field]) {
     id,
     kind: 'identifier',
     label: pattern,
+    enforcement,
     identifier: pattern,
     reason: field.reason ?? '',
   };

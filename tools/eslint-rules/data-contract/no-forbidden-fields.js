@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const rulesPath = path.join(rootDir, 'contracts/generated/data-contract-lint-rules.json');
 const generatedRules = JSON.parse(readFileSync(rulesPath, 'utf8'));
+const GLOBAL_LINT_ENFORCEMENT = 'globalLint';
 
 const FORBIDDEN_PROPERTY_ALLOWLIST = new Map([
   [
@@ -29,24 +30,6 @@ const DB_MAPPER_PROPERTIES = new Set([
   'source_count',
   'source_lineage',
   'source_no_source_reason',
-]);
-
-const NON_CONTRACT_METADATA_KEYS = new Set([
-  'langChainToolName',
-  'retrieverProvider',
-  'runLifecycle',
-  'runtime',
-  'runtimeToolId',
-  'sourceName',
-  'toolRuntime',
-]);
-
-const NON_CONTRACT_METADATA_CONTAINER_KEYS = new Set([
-  'citationLabel',
-  'pageContent',
-  'sourceOrder',
-  'sourceType',
-  'tags',
 ]);
 
 function normalizePathname(filename) {
@@ -173,54 +156,14 @@ function matchesPath(ruleLabel, memberPath) {
   return memberPath === ruleLabel || memberPath.endsWith(`.${ruleLabel}`);
 }
 
-function getObjectExpressionKeyNames(expression) {
-  const keys = new Set();
-  if (expression?.type !== 'ObjectExpression') return keys;
-
-  for (const property of expression.properties ?? []) {
-    if (property.type !== 'Property') continue;
-
-    const keyName = getStaticPropertyKeyName(property);
-    if (keyName) keys.add(keyName);
-  }
-
-  return keys;
-}
-
-function hasAnyKey(keys, expectedKeys) {
-  for (const key of expectedKeys) {
-    if (keys.has(key)) return true;
-  }
-  return false;
-}
-
-function getContainingObjectExpression(expression) {
-  if (
-    expression?.parent?.type === 'Property' &&
-    expression.parent.value === expression &&
-    expression.parent.parent?.type === 'ObjectExpression'
-  ) {
-    return expression.parent.parent;
-  }
-  return null;
-}
-
-function isAllowedNonContractMetadataBoundary(expression, fullPath) {
-  if (!fullPath.startsWith('metadata.')) return false;
-
-  const metadataKeys = getObjectExpressionKeyNames(expression);
-  if (hasAnyKey(metadataKeys, NON_CONTRACT_METADATA_KEYS)) return true;
-
-  const containerKeys = getObjectExpressionKeyNames(getContainingObjectExpression(expression));
-  return hasAnyKey(containerKeys, NON_CONTRACT_METADATA_CONTAINER_KEYS);
-}
-
 function buildRuleState() {
   const identifierRules = new Map();
   const objectPropertyRules = [];
   const fallbackRules = [];
 
   for (const rule of generatedRules.rules ?? []) {
+    if (rule.enforcement !== GLOBAL_LINT_ENFORCEMENT) continue;
+
     if (rule.kind === 'identifier') {
       identifierRules.set(rule.identifier, rule);
     } else if (rule.kind === 'objectProperty') {
@@ -311,7 +254,7 @@ function checkObjectExpression(context, expression, basePath = '') {
     const objectRule = ruleState.objectPropertyRules.find((rule) => matchesPath(rule.label, fullPath));
     const identifierRule = ruleState.identifierRules.get(keyName);
 
-    if (objectRule && !isAllowedNonContractMetadataBoundary(expression, fullPath)) {
+    if (objectRule) {
       report(context, property.key, objectRule);
     } else if (identifierRule) {
       report(context, property.key, identifierRule);
@@ -330,9 +273,20 @@ function isNestedObjectExpressionValue(node) {
     node.parent.parent?.type === 'ObjectExpression';
 }
 
+function getObjectExpressionBasePath(node) {
+  const parent = node.parent;
+  if (parent?.type === 'VariableDeclarator') return getExpressionLabel(parent.id) ?? '';
+  if (parent?.type === 'AssignmentExpression') return getExpressionLabel(parent.left) ?? '';
+  return '';
+}
+
 function checkFallbackExpression(context, node) {
   const rule = findFallbackRule(node);
   if (rule) report(context, node, rule);
+}
+
+function matchesFallbackOperand(ruleOperand, expressionLabel) {
+  return expressionLabel === ruleOperand || expressionLabel.endsWith(`.${ruleOperand}`);
 }
 
 function findFallbackRule(node) {
@@ -341,7 +295,10 @@ function findFallbackRule(node) {
   if (!left || !right) return null;
 
   return ruleState.fallbackRules.find(
-    (candidate) => candidate.operator === node.operator && candidate.left === left && candidate.right === right,
+    (candidate) =>
+      candidate.operator === node.operator &&
+      matchesFallbackOperand(candidate.left, left) &&
+      matchesFallbackOperand(candidate.right, right),
   ) ?? null;
 }
 
@@ -369,7 +326,7 @@ export default {
       },
       ObjectExpression(node) {
         if (isNestedObjectExpressionValue(node)) return;
-        checkObjectExpression(context, node);
+        checkObjectExpression(context, node, getObjectExpressionBasePath(node));
       },
       VariableDeclarator(node) {
         if (node.id?.type === 'ObjectPattern') {

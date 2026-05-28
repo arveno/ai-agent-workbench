@@ -6,6 +6,7 @@
       "id": "tokenUsage",
       "kind": "identifier",
       "label": "tokenUsage",
+      "enforcement": "globalLint",
       "identifier": "tokenUsage",
       "reason": "Legacy usage object. Use ModelTrace.usage."
     },
@@ -13,6 +14,7 @@
       "id": "conclusionNotice",
       "kind": "identifier",
       "label": "conclusionNotice",
+      "enforcement": "globalLint",
       "identifier": "conclusionNotice",
       "reason": "Legacy fallback notice. Use AgentConclusion.notice for user-facing notices and ModelTrace for fallback / model error state."
     },
@@ -20,6 +22,7 @@
       "id": "agentConclusionSource",
       "kind": "objectProperty",
       "label": "agentConclusion.source",
+      "enforcement": "globalLint",
       "objectName": "agentConclusion",
       "propertyName": "source",
       "reason": "AgentConclusion owns text and notice only. Use ModelTrace.conclusionSource."
@@ -28,6 +31,7 @@
       "id": "agentConclusionConclusionSource",
       "kind": "objectProperty",
       "label": "agentConclusion.conclusionSource",
+      "enforcement": "globalLint",
       "objectName": "agentConclusion",
       "propertyName": "conclusionSource",
       "reason": "Conclusion source belongs to ModelTrace.conclusionSource."
@@ -36,6 +40,7 @@
       "id": "agentConclusionFallbackReason",
       "kind": "objectProperty",
       "label": "agentConclusion.fallbackReason",
+      "enforcement": "globalLint",
       "objectName": "agentConclusion",
       "propertyName": "fallbackReason",
       "reason": "Fallback reason belongs to ModelTrace.fallbackReason."
@@ -44,6 +49,7 @@
       "id": "agentConclusionModelErrorType",
       "kind": "objectProperty",
       "label": "agentConclusion.modelErrorType",
+      "enforcement": "globalLint",
       "objectName": "agentConclusion",
       "propertyName": "modelErrorType",
       "reason": "Model error type belongs to ModelTrace.modelErrorType."
@@ -52,6 +58,7 @@
       "id": "agentConclusionContent",
       "kind": "objectProperty",
       "label": "agentConclusion.content",
+      "enforcement": "globalLint",
       "objectName": "agentConclusion",
       "propertyName": "content",
       "reason": "Use AgentConclusion.markdownText and AgentConclusion.plainText."
@@ -60,6 +67,7 @@
       "id": "agentConclusionSummary",
       "kind": "objectProperty",
       "label": "agentConclusion.summary",
+      "enforcement": "globalLint",
       "objectName": "agentConclusion",
       "propertyName": "summary",
       "reason": "Use AgentConclusion.sections or AgentConclusion.notice."
@@ -68,6 +76,7 @@
       "id": "metadataClientRunId",
       "kind": "objectProperty",
       "label": "metadata.clientRunId",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "clientRunId",
       "reason": "clientRunId is only pending / idempotency state, not persisted metadata relationship."
@@ -76,6 +85,7 @@
       "id": "modelTraceTokenUsage",
       "kind": "objectProperty",
       "label": "modelTrace.tokenUsage",
+      "enforcement": "globalLint",
       "objectName": "modelTrace",
       "propertyName": "tokenUsage",
       "reason": "Legacy model trace field. Use modelTrace.usage."
@@ -84,6 +94,7 @@
       "id": "usageNullishTokenUsage",
       "kind": "fallbackExpression",
       "label": "usage ?? tokenUsage",
+      "enforcement": "globalLint",
       "left": "usage",
       "operator": "??",
       "right": "tokenUsage",
@@ -93,6 +104,7 @@
       "id": "tokenUsageOrUsage",
       "kind": "fallbackExpression",
       "label": "tokenUsage || usage",
+      "enforcement": "globalLint",
       "left": "tokenUsage",
       "operator": "||",
       "right": "usage",
@@ -102,6 +114,7 @@
       "id": "usageOrTokenUsage",
       "kind": "fallbackExpression",
       "label": "usage || tokenUsage",
+      "enforcement": "globalLint",
       "left": "usage",
       "operator": "||",
       "right": "tokenUsage",
@@ -111,6 +124,7 @@
       "id": "rawRunConclusionSourceMock",
       "kind": "fallbackExpression",
       "label": "rawRun.conclusionSource ?? 'mock'",
+      "enforcement": "globalLint",
       "left": "rawRun.conclusionSource",
       "operator": "??",
       "right": "'mock'",
@@ -120,6 +134,7 @@
       "id": "metadataProvider",
       "kind": "objectProperty",
       "label": "metadata.provider",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "provider",
       "reason": "Provider must come from canonical modelTrace."
@@ -128,6 +143,7 @@
       "id": "metadataSelectedModelId",
       "kind": "objectProperty",
       "label": "metadata.selectedModelId",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "selectedModelId",
       "reason": "Selected model id must come from canonical modelTrace."
@@ -136,6 +152,7 @@
       "id": "metadataModel",
       "kind": "objectProperty",
       "label": "metadata.model",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "model",
       "reason": "Model must come from canonical modelTrace."
@@ -144,6 +161,7 @@
       "id": "metadataConclusionSource",
       "kind": "objectProperty",
       "label": "metadata.conclusionSource",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "conclusionSource",
       "reason": "Conclusion source must come from canonical modelTrace.conclusionSource."
@@ -152,6 +170,7 @@
       "id": "metadataUsage",
       "kind": "objectProperty",
       "label": "metadata.usage",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "usage",
       "reason": "Usage must come from canonical modelTrace.usage."
@@ -160,6 +179,7 @@
       "id": "metadataCostEstimate",
       "kind": "objectProperty",
       "label": "metadata.costEstimate",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "costEstimate",
       "reason": "Cost estimate must come from canonical modelTrace.costEstimate."
@@ -168,6 +188,7 @@
       "id": "metadataFallbackReason",
       "kind": "objectProperty",
       "label": "metadata.fallbackReason",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "fallbackReason",
       "reason": "Fallback reason must come from canonical modelTrace.fallbackReason."
@@ -176,6 +197,7 @@
       "id": "metadataModelErrorType",
       "kind": "objectProperty",
       "label": "metadata.modelErrorType",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "modelErrorType",
       "reason": "Model error type must come from canonical modelTrace.modelErrorType."
@@ -184,6 +206,7 @@
       "id": "metadataSources",
       "kind": "objectProperty",
       "label": "metadata.sources",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "sources",
       "reason": "Source lineage must be exposed through canonical top-level sources, not report metadata."
@@ -192,6 +215,7 @@
       "id": "metadataSourceCount",
       "kind": "objectProperty",
       "label": "metadata.sourceCount",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "sourceCount",
       "reason": "Source count must be exposed through canonical top-level sourceCount, not report metadata."
@@ -200,6 +224,7 @@
       "id": "metadataSourceCountSnake",
       "kind": "objectProperty",
       "label": "metadata.source_count",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "source_count",
       "reason": "Legacy snake_case source count must stay inside DB / mapper boundaries."
@@ -208,6 +233,7 @@
       "id": "metadataSourceLineage",
       "kind": "objectProperty",
       "label": "metadata.sourceLineage",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "sourceLineage",
       "reason": "Source lineage must be exposed through canonical top-level sourceLineage, not report metadata."
@@ -216,6 +242,7 @@
       "id": "metadataSourceLineageSnake",
       "kind": "objectProperty",
       "label": "metadata.source_lineage",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "source_lineage",
       "reason": "Legacy snake_case source lineage must stay inside DB / mapper boundaries."
@@ -224,6 +251,7 @@
       "id": "metadataSourceNoSourceReason",
       "kind": "objectProperty",
       "label": "metadata.sourceNoSourceReason",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "sourceNoSourceReason",
       "reason": "No-source reason must be exposed through canonical top-level sourceNoSourceReason, not report metadata."
@@ -232,6 +260,7 @@
       "id": "metadataSourceNoSourceReasonSnake",
       "kind": "objectProperty",
       "label": "metadata.source_no_source_reason",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "source_no_source_reason",
       "reason": "Legacy snake_case no-source reason must stay inside DB / mapper boundaries."
@@ -240,6 +269,7 @@
       "id": "metadataTokenUsage",
       "kind": "objectProperty",
       "label": "metadata.tokenUsage",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "tokenUsage",
       "reason": "Usage must come from canonical modelTrace.usage."
@@ -248,6 +278,7 @@
       "id": "metadataConclusionNotice",
       "kind": "objectProperty",
       "label": "metadata.conclusionNotice",
+      "enforcement": "contractMetadataBoundary",
       "objectName": "metadata",
       "propertyName": "conclusionNotice",
       "reason": "Conclusion notice belongs to AgentConclusion.notice."
@@ -256,6 +287,7 @@
       "id": "runtimeRunIdSnake",
       "kind": "identifier",
       "label": "runtime_run_id",
+      "enforcement": "globalLint",
       "identifier": "runtime_run_id",
       "reason": "Legacy runtime run id is removed. Use canonical runId / agent_runs.id."
     },
@@ -263,6 +295,7 @@
       "id": "conclusionSourceSnake",
       "kind": "identifier",
       "label": "conclusion_source",
+      "enforcement": "globalLint",
       "identifier": "conclusion_source",
       "reason": "Legacy DB conclusion source field is removed. Use modelTrace.conclusionSource."
     },
@@ -270,6 +303,7 @@
       "id": "sourceCountSnake",
       "kind": "identifier",
       "label": "source_count",
+      "enforcement": "globalLint",
       "identifier": "source_count",
       "reason": "Legacy snake_case source count must not appear outside DB / mapper boundaries."
     },
@@ -277,6 +311,7 @@
       "id": "sourceLineageSnake",
       "kind": "identifier",
       "label": "source_lineage",
+      "enforcement": "globalLint",
       "identifier": "source_lineage",
       "reason": "Legacy snake_case source lineage must not appear outside DB / mapper boundaries."
     },
@@ -284,6 +319,7 @@
       "id": "sourceNoSourceReasonSnake",
       "kind": "identifier",
       "label": "source_no_source_reason",
+      "enforcement": "globalLint",
       "identifier": "source_no_source_reason",
       "reason": "Legacy snake_case no-source reason must not appear outside DB / mapper boundaries."
     },
@@ -291,6 +327,7 @@
       "id": "sourceCountNullishSourceCountSnake",
       "kind": "fallbackExpression",
       "label": "sourceCount ?? source_count",
+      "enforcement": "globalLint",
       "left": "sourceCount",
       "operator": "??",
       "right": "source_count",
@@ -300,6 +337,7 @@
       "id": "sourceCountSnakeNullishSourceCount",
       "kind": "fallbackExpression",
       "label": "source_count ?? sourceCount",
+      "enforcement": "globalLint",
       "left": "source_count",
       "operator": "??",
       "right": "sourceCount",
@@ -309,6 +347,7 @@
       "id": "sourceLineageOrSourceLineageSnake",
       "kind": "fallbackExpression",
       "label": "sourceLineage || source_lineage",
+      "enforcement": "globalLint",
       "left": "sourceLineage",
       "operator": "||",
       "right": "source_lineage",
@@ -318,6 +357,7 @@
       "id": "sourceLineageSnakeOrSourceLineage",
       "kind": "fallbackExpression",
       "label": "source_lineage || sourceLineage",
+      "enforcement": "globalLint",
       "left": "source_lineage",
       "operator": "||",
       "right": "sourceLineage",
@@ -327,6 +367,7 @@
       "id": "runIdOrRunIdSnake",
       "kind": "fallbackExpression",
       "label": "runId || run_id",
+      "enforcement": "globalLint",
       "left": "runId",
       "operator": "||",
       "right": "run_id",
@@ -336,6 +377,7 @@
       "id": "runIdSnakeOrRunId",
       "kind": "fallbackExpression",
       "label": "run_id || runId",
+      "enforcement": "globalLint",
       "left": "run_id",
       "operator": "||",
       "right": "runId",
@@ -345,6 +387,7 @@
       "id": "sourceNoSourceReasonOrSnake",
       "kind": "fallbackExpression",
       "label": "sourceNoSourceReason || source_no_source_reason",
+      "enforcement": "globalLint",
       "left": "sourceNoSourceReason",
       "operator": "||",
       "right": "source_no_source_reason",
@@ -354,6 +397,7 @@
       "id": "sourceNoSourceReasonSnakeOrCanonical",
       "kind": "fallbackExpression",
       "label": "source_no_source_reason || sourceNoSourceReason",
+      "enforcement": "globalLint",
       "left": "source_no_source_reason",
       "operator": "||",
       "right": "sourceNoSourceReason",
@@ -363,6 +407,7 @@
       "id": "conclusionNoticeOrNotice",
       "kind": "fallbackExpression",
       "label": "conclusionNotice || notice",
+      "enforcement": "globalLint",
       "left": "conclusionNotice",
       "operator": "||",
       "right": "notice",
@@ -372,6 +417,7 @@
       "id": "noticeOrConclusionNotice",
       "kind": "fallbackExpression",
       "label": "notice || conclusionNotice",
+      "enforcement": "globalLint",
       "left": "notice",
       "operator": "||",
       "right": "conclusionNotice",
@@ -381,6 +427,7 @@
       "id": "sourcesOrMetadataSources",
       "kind": "fallbackExpression",
       "label": "sources || metadata.sources",
+      "enforcement": "globalLint",
       "left": "sources",
       "operator": "||",
       "right": "metadata.sources",
@@ -390,6 +437,7 @@
       "id": "metadataSourcesOrSources",
       "kind": "fallbackExpression",
       "label": "metadata.sources || sources",
+      "enforcement": "globalLint",
       "left": "metadata.sources",
       "operator": "||",
       "right": "sources",

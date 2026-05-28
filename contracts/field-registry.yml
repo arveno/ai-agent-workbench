@@ -332,145 +332,193 @@ objects:
 forbiddenFields:
   tokenUsage:
     pattern: "tokenUsage"
+    enforcement: "globalLint"
     reason: "Legacy usage object. Use ModelTrace.usage."
   conclusionNotice:
     pattern: "conclusionNotice"
+    enforcement: "globalLint"
     reason: "Legacy fallback notice. Use AgentConclusion.notice for user-facing notices and ModelTrace for fallback / model error state."
   agentConclusionSource:
     pattern: "agentConclusion.source"
+    enforcement: "globalLint"
     reason: "AgentConclusion owns text and notice only. Use ModelTrace.conclusionSource."
   agentConclusionConclusionSource:
     pattern: "agentConclusion.conclusionSource"
+    enforcement: "globalLint"
     reason: "Conclusion source belongs to ModelTrace.conclusionSource."
   agentConclusionFallbackReason:
     pattern: "agentConclusion.fallbackReason"
+    enforcement: "globalLint"
     reason: "Fallback reason belongs to ModelTrace.fallbackReason."
   agentConclusionModelErrorType:
     pattern: "agentConclusion.modelErrorType"
+    enforcement: "globalLint"
     reason: "Model error type belongs to ModelTrace.modelErrorType."
   agentConclusionContent:
     pattern: "agentConclusion.content"
+    enforcement: "globalLint"
     reason: "Use AgentConclusion.markdownText and AgentConclusion.plainText."
   agentConclusionSummary:
     pattern: "agentConclusion.summary"
+    enforcement: "globalLint"
     reason: "Use AgentConclusion.sections or AgentConclusion.notice."
   metadataClientRunId:
     pattern: "metadata.clientRunId"
+    enforcement: "contractMetadataBoundary"
     reason: "clientRunId is only pending / idempotency state, not persisted metadata relationship."
   modelTraceTokenUsage:
     pattern: "modelTrace.tokenUsage"
+    enforcement: "globalLint"
     reason: "Legacy model trace field. Use modelTrace.usage."
   usageNullishTokenUsage:
     pattern: "usage ?? tokenUsage"
+    enforcement: "globalLint"
     reason: "Old/new fallback chain. Normalize usage once in mapper."
   tokenUsageOrUsage:
     pattern: "tokenUsage || usage"
+    enforcement: "globalLint"
     reason: "Old/new fallback chain. Normalize usage once in mapper."
   usageOrTokenUsage:
     pattern: "usage || tokenUsage"
+    enforcement: "globalLint"
     reason: "Old/new fallback chain. Normalize usage once in mapper."
   rawRunConclusionSourceMock:
     pattern: "rawRun.conclusionSource ?? 'mock'"
+    enforcement: "globalLint"
     reason: "Mock source must be explicit and not a raw fallback."
   metadataProvider:
     pattern: "metadata.provider"
+    enforcement: "contractMetadataBoundary"
     reason: "Provider must come from canonical modelTrace."
   metadataSelectedModelId:
     pattern: "metadata.selectedModelId"
+    enforcement: "contractMetadataBoundary"
     reason: "Selected model id must come from canonical modelTrace."
   metadataModel:
     pattern: "metadata.model"
+    enforcement: "contractMetadataBoundary"
     reason: "Model must come from canonical modelTrace."
   metadataConclusionSource:
     pattern: "metadata.conclusionSource"
+    enforcement: "contractMetadataBoundary"
     reason: "Conclusion source must come from canonical modelTrace.conclusionSource."
   metadataUsage:
     pattern: "metadata.usage"
+    enforcement: "contractMetadataBoundary"
     reason: "Usage must come from canonical modelTrace.usage."
   metadataCostEstimate:
     pattern: "metadata.costEstimate"
+    enforcement: "contractMetadataBoundary"
     reason: "Cost estimate must come from canonical modelTrace.costEstimate."
   metadataFallbackReason:
     pattern: "metadata.fallbackReason"
+    enforcement: "contractMetadataBoundary"
     reason: "Fallback reason must come from canonical modelTrace.fallbackReason."
   metadataModelErrorType:
     pattern: "metadata.modelErrorType"
+    enforcement: "contractMetadataBoundary"
     reason: "Model error type must come from canonical modelTrace.modelErrorType."
   metadataSources:
     pattern: "metadata.sources"
+    enforcement: "contractMetadataBoundary"
     reason: "Source lineage must be exposed through canonical top-level sources, not report metadata."
   metadataSourceCount:
     pattern: "metadata.sourceCount"
+    enforcement: "contractMetadataBoundary"
     reason: "Source count must be exposed through canonical top-level sourceCount, not report metadata."
   metadataSourceCountSnake:
     pattern: "metadata.source_count"
+    enforcement: "contractMetadataBoundary"
     reason: "Legacy snake_case source count must stay inside DB / mapper boundaries."
   metadataSourceLineage:
     pattern: "metadata.sourceLineage"
+    enforcement: "contractMetadataBoundary"
     reason: "Source lineage must be exposed through canonical top-level sourceLineage, not report metadata."
   metadataSourceLineageSnake:
     pattern: "metadata.source_lineage"
+    enforcement: "contractMetadataBoundary"
     reason: "Legacy snake_case source lineage must stay inside DB / mapper boundaries."
   metadataSourceNoSourceReason:
     pattern: "metadata.sourceNoSourceReason"
+    enforcement: "contractMetadataBoundary"
     reason: "No-source reason must be exposed through canonical top-level sourceNoSourceReason, not report metadata."
   metadataSourceNoSourceReasonSnake:
     pattern: "metadata.source_no_source_reason"
+    enforcement: "contractMetadataBoundary"
     reason: "Legacy snake_case no-source reason must stay inside DB / mapper boundaries."
   metadataTokenUsage:
     pattern: "metadata.tokenUsage"
+    enforcement: "contractMetadataBoundary"
     reason: "Usage must come from canonical modelTrace.usage."
   metadataConclusionNotice:
     pattern: "metadata.conclusionNotice"
+    enforcement: "contractMetadataBoundary"
     reason: "Conclusion notice belongs to AgentConclusion.notice."
   runtimeRunIdSnake:
     pattern: "runtime_run_id"
+    enforcement: "globalLint"
     reason: "Legacy runtime run id is removed. Use canonical runId / agent_runs.id."
   conclusionSourceSnake:
     pattern: "conclusion_source"
+    enforcement: "globalLint"
     reason: "Legacy DB conclusion source field is removed. Use modelTrace.conclusionSource."
   sourceCountSnake:
     pattern: "source_count"
+    enforcement: "globalLint"
     reason: "Legacy snake_case source count must not appear outside DB / mapper boundaries."
   sourceLineageSnake:
     pattern: "source_lineage"
+    enforcement: "globalLint"
     reason: "Legacy snake_case source lineage must not appear outside DB / mapper boundaries."
   sourceNoSourceReasonSnake:
     pattern: "source_no_source_reason"
+    enforcement: "globalLint"
     reason: "Legacy snake_case no-source reason must not appear outside DB / mapper boundaries."
   sourceCountNullishSourceCountSnake:
     pattern: "sourceCount ?? source_count"
+    enforcement: "globalLint"
     reason: "Release checks must validate canonical sourceCount only."
   sourceCountSnakeNullishSourceCount:
     pattern: "source_count ?? sourceCount"
+    enforcement: "globalLint"
     reason: "Release checks must validate canonical sourceCount only."
   sourceLineageOrSourceLineageSnake:
     pattern: "sourceLineage || source_lineage"
+    enforcement: "globalLint"
     reason: "Release checks must validate canonical sourceLineage only."
   sourceLineageSnakeOrSourceLineage:
     pattern: "source_lineage || sourceLineage"
+    enforcement: "globalLint"
     reason: "Release checks must validate canonical sourceLineage only."
   runIdOrRunIdSnake:
     pattern: "runId || run_id"
+    enforcement: "globalLint"
     reason: "API checks must validate canonical runId only."
   runIdSnakeOrRunId:
     pattern: "run_id || runId"
+    enforcement: "globalLint"
     reason: "API checks must validate canonical runId only."
   sourceNoSourceReasonOrSnake:
     pattern: "sourceNoSourceReason || source_no_source_reason"
+    enforcement: "globalLint"
     reason: "Release checks must validate canonical sourceNoSourceReason only."
   sourceNoSourceReasonSnakeOrCanonical:
     pattern: "source_no_source_reason || sourceNoSourceReason"
+    enforcement: "globalLint"
     reason: "Release checks must validate canonical sourceNoSourceReason only."
   conclusionNoticeOrNotice:
     pattern: "conclusionNotice || notice"
+    enforcement: "globalLint"
     reason: "AgentConclusion.notice is the canonical user-facing notice."
   noticeOrConclusionNotice:
     pattern: "notice || conclusionNotice"
+    enforcement: "globalLint"
     reason: "AgentConclusion.notice is the canonical user-facing notice."
   sourcesOrMetadataSources:
     pattern: "sources || metadata.sources"
+    enforcement: "globalLint"
     reason: "Source lineage must come from canonical top-level sources."
   metadataSourcesOrSources:
     pattern: "metadata.sources || sources"
+    enforcement: "globalLint"
     reason: "Source lineage must come from canonical top-level sources."
