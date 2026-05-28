@@ -101,6 +101,36 @@ component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 
 - 不允许绕过 Contract Pack 或 `.github/workflows/contract-pack-check.yml` 的 generated 一致性门禁。
 - 不允许在 architecture / lifecycle 中重复维护字段表；这些文档只能引用 `contracts/`。
 
+## 5.2 规则型代码与 Linter 实现
+
+实现 Linter、parser、mapper、contract check、smoke check、schema validator 等规则型代码时，必须先补覆盖矩阵和负例测试，再实现规则逻辑。
+
+覆盖矩阵至少包括：
+
+- dot access
+- bracket access
+- optional chaining
+- variable destructuring
+- parameter destructuring
+- object literal key
+- nested object literal path
+- logical fallback
+- nullish fallback
+- allowed boundary
+- forbidden boundary
+
+要求：
+
+- 不允许只覆盖主路径。
+- 不允许只按当前报错写临时判断。
+- 不允许为了通过测试修改业务逻辑。
+- 不允许新增第二套字段事实源。
+- 不允许用大范围 ignore 掩盖真实问题。
+- 规则数据必须来自既有事实源或 generated 文件。
+- Codex 实现前必须说明覆盖矩阵。
+- Codex 实现后必须补 self-test / regression test。
+- 修 Review 反馈时优先补测试矩阵，再改规则逻辑。
+
 ## 6. Model / Tool / RAG 终态
 
 长期终态模型调用必须走：
