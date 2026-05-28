@@ -2,12 +2,13 @@ name: Phase Task
 description: 阶段任务或功能任务，用于明确目标、边界、架构约束和验收方式。
 title: "[Phase] "
 labels:
-  - phase-task
+  - "type:feature"
 body:
   - type: markdown
     attributes:
       value: |
         Phase Task 准入表单。执行硬规则见 `AGENTS.md`，流程顺序见 `docs/workflow.md`。
+        本模板自动添加 `type:feature` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
   - type: textarea
     id: lifecycle_nodes
     attributes:

@@ -61,6 +61,11 @@
 ## 3.1 Issue 与 Canonical Decision 门禁
 
 - 没有可读取的 Issue，不允许改代码。
+- 每个可执行 Issue 必须至少具备一个 `type:*` 标签。
+- 可执行 Issue 建议同时具备 `area:*` 或 `scope:*` 标签，用于说明影响范围。
+- 任务类型由人 / ChatGPT 判断，但判断结果必须沉淀为 Issue label；CI 只做机械检查，不做复杂语义判断。
+- PR body 必须通过 `Closes #123`、`Fixes #123` 或 `Resolves #123` 关联 Issue。
+- PR Template Check 必须读取关联 Issue 并检查其是否存在 `type:*` 标签；缺少关联 Issue 或缺少 `type:*` 标签时必须失败。
 - 仅在治理流程尚未落地前的 bootstrap / facts-source correction 中，且用户明确 prompt 授权时，允许临时例外修改流程事实源本身；只能修改被授权的文档、模板或工作流文件，仍必须走任务分支和 PR，并在 PR body 说明原因、范围和退出条件。
 - PR #94 合并后，后续 Governance Task 必须使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
 - 用户明确 prompt 不能作为长期绕过 Issue 的通用入口。

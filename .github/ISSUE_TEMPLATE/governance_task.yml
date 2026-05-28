@@ -2,12 +2,13 @@ name: Governance Task
 description: 流程、模板、AGENTS、workflow、CI、GitHub ruleset 等治理任务。
 title: "[Governance] "
 labels:
-  - governance
+  - "type:governance"
 body:
   - type: markdown
     attributes:
       value: |
         Governance Task 准入表单，用于流程、模板、AGENTS、workflow、CI 或 GitHub ruleset。
+        本模板自动添加 `type:governance` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
   - type: textarea
     id: governance_background
     attributes:

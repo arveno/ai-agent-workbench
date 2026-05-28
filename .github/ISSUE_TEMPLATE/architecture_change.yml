@@ -2,12 +2,13 @@ name: Architecture Change
 description: 架构变更任务，用于先明确事实源、目标架构、迁移策略和退出条件。
 title: "[Architecture] "
 labels:
-  - architecture
+  - "type:architecture"
 body:
   - type: markdown
     attributes:
       value: |
         Architecture Change 准入表单。执行硬规则见 `AGENTS.md`，长期事实源列在下方。
+        本模板自动添加 `type:architecture` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
   - type: textarea
     id: related_docs
     attributes:

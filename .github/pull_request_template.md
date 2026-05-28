@@ -2,9 +2,13 @@
 
 Closes #
 
+关联 Issue 必须具备至少一个 `type:*` 标签；建议同时具备 `area:*` 或 `scope:*` 标签。
+
 # Issue Decision Snapshot
 
 - 关联 Issue：
+- Issue type label：
+- Issue area / scope label：
 - Issue 是否完成 Canonical Decision：
 - 本 PR 是否涉及 schema / mapper / ViewModel / seed / DB 字段：
 - canonical 字段是什么：

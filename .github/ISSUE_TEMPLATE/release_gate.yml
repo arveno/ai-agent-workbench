@@ -2,12 +2,13 @@ name: Release Gate
 description: stage -> main、main -> deploy、deploy -> smoke 的发布门禁。
 title: "[Release Gate] "
 labels:
-  - release-gate
+  - "type:release"
 body:
   - type: markdown
     attributes:
       value: |
         Release Gate 准入表单，用于发布判断、检查和用户最终 merge 决策。
+        本模板自动添加 `type:release` 标签；创建后建议补充 `area:*` 或 `scope:*` 标签标明影响范围。
   - type: textarea
     id: release_target
     attributes:
