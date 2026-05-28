@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/evaluation-result.schema.json",
+  "title": "EvaluationResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "caseId",
+    "conversationId",
+    "runId",
+    "verdict",
+    "badCaseReason",
+    "humanNote",
+    "actualSummary",
+    "modelTrace",
+    "toolSummary",
+    "ragSummary",
+    "reportSummary",
+    "metadata",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Evaluation result id."
+    },
+    "caseId": {
+      "type": "string",
+      "description": "Evaluation case id."
+    },
+    "conversationId": {
+      "type": ["string", "null"],
+      "description": "Conversation associated with the evaluated run."
+    },
+    "runId": {
+      "type": "string",
+      "description": "Canonical runId evaluated by this result."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "unknown"],
+      "description": "Human or evaluator verdict."
+    },
+    "badCaseReason": {
+      "type": ["string", "null"],
+      "description": "Bad case reason when verdict is fail."
+    },
+    "humanNote": {
+      "type": ["string", "null"],
+      "description": "Optional human review note."
+    },
+    "actualSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation actual output summary."
+    },
+    "modelTrace": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Persisted eval_results.model_trace snapshot. Canonical metadata.modelTrace is defined by EvaluationMetadata."
+    },
+    "toolSummary": {
+      "type": "array",
+      "items": {},
+      "description": "Evaluation tool summary."
+    },
+    "ragSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation RAG summary."
+    },
+    "reportSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation report summary."
+    },
+    "metadata": {
+      "$ref": "evaluation-metadata.schema.json"
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "Evaluation result creation timestamp."
+    },
+    "updatedAt": {
+      "type": "string",
+      "description": "Evaluation result update timestamp."
+    }
+  }
+}
