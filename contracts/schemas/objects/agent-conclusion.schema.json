@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ai-agent-workbench.local/contracts/agent-conclusion.schema.json",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/agent-conclusion.schema.json",
   "title": "AgentConclusion",
   "type": "object",
   "additionalProperties": false,
@@ -8,26 +8,26 @@
   "properties": {
     "markdownText": {
       "type": "string",
-      "description": "Final assistant-facing conclusion rendered as markdown."
+      "description": "面向 assistant 消息展示的最终 markdown 结论。"
     },
     "plainText": {
       "type": "string",
-      "description": "Plain text conclusion for search, previews, and non-markdown surfaces."
+      "description": "用于搜索、预览和非 markdown 场景的纯文本结论。"
     },
     "sections": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/AgentConclusionSection"
       },
-      "description": "Optional structured conclusion sections."
+      "description": "可选的结构化结论段落。"
     },
     "notice": {
       "type": ["string", "null"],
-      "description": "Optional user-facing notice about conclusion limitations or display context."
+      "description": "可选的用户可见结论提示，用于说明限制或展示上下文。"
     },
     "rawText": {
       "type": "string",
-      "description": "Optional raw conclusion text for debug or lossless rendering."
+      "description": "可选的原始结论文本，仅用于 debug 或无损渲染。"
     }
   },
   "$defs": {
@@ -38,15 +38,15 @@
       "properties": {
         "title": {
           "type": ["string", "null"],
-          "description": "Optional section title."
+          "description": "可选的段落标题。"
         },
         "markdownText": {
           "type": "string",
-          "description": "Section markdown text."
+          "description": "段落 markdown 文本。"
         },
         "plainText": {
           "type": "string",
-          "description": "Section plain text."
+          "description": "段落纯文本。"
         }
       }
     }

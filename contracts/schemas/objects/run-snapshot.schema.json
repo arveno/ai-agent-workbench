@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ai-agent-workbench.local/contracts/run-snapshot.schema.json",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-snapshot.schema.json",
   "title": "RunSnapshot",
   "type": "object",
   "additionalProperties": false,

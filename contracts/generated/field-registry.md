@@ -4,13 +4,13 @@
 
 # Field Registry
 
-AI Agent Workbench human-readable field registry. Machine object contracts live in contracts/schemas/*.schema.json; keep only field notes, historical ledger entries, and high-risk field remarks here.
+AI Agent Workbench 人读字段登记表。机器可读契约位于 contracts/schemas/**/*.schema.json；此处只保留字段说明、历史记录和高风险字段备注。
 
 ## Objects
 
 ### ModelUsage
 
-Canonical model usage state. It represents usage availability and token counts without legacy fallback fields.
+Canonical 模型用量状态，表达 usage 可用性和 token 数，不保留 legacy fallback 字段。
 
 - Lifecycle node: 11 Observability / Trace, 19 Audit / Governance / Cost
 - Core object: Usage
@@ -18,16 +18,16 @@ Canonical model usage state. It represents usage availability and token counts w
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `promptTokens` | number \| null | yes | LangChain model layer | Prompt token count when the provider returns it. |
-| `completionTokens` | number \| null | yes | LangChain model layer | Completion token count when the provider returns it. |
-| `totalTokens` | number \| null | yes | LangChain model layer | Total token count when the provider returns it. |
-| `usageAvailable` | boolean | yes | LangChain model layer | Whether provider usage data is available. |
-| `usageSource` | provider \| unavailable \| none \| estimated | yes | LangChain model layer | Canonical usage source label. |
-| `usageUnavailableReason` | string \| null | yes | LangChain model layer | Explicit reason when usage is unavailable. |
+| `promptTokens` | number \| null | yes | LangChain model layer | provider 返回的 prompt token 数。 |
+| `completionTokens` | number \| null | yes | LangChain model layer | provider 返回的 completion token 数。 |
+| `totalTokens` | number \| null | yes | LangChain model layer | provider 返回的总 token 数。 |
+| `usageAvailable` | boolean | yes | LangChain model layer | provider usage 数据是否可用。 |
+| `usageSource` | provider \| unavailable \| none \| estimated | yes | LangChain model layer | 模型用量来源的 canonical 标记。 |
+| `usageUnavailableReason` | string \| null | yes | LangChain model layer | usage 不可用时的明确原因。 |
 
 ### CostEstimate
 
-Canonical estimated cost state. It is metadata only and not a billing record.
+Canonical 预估成本状态，仅作为 metadata，不是计费记录。
 
 - Lifecycle node: 19 Audit / Governance / Cost
 - Core object: Usage
@@ -35,16 +35,16 @@ Canonical estimated cost state. It is metadata only and not a billing record.
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `estimatedCost` | number \| null | yes | LangChain model layer | Estimated cost amount when pricing is available. |
-| `currency` | string \| null | yes | model catalog | Currency code for the estimate. |
-| `pricingUnit` | string \| null | yes | model catalog | Pricing unit used for the estimate. |
-| `isEstimated` | boolean | yes | LangChain model layer | Whether the amount is an estimate. |
-| `pricingSource` | catalog \| unavailable \| none | yes | model catalog | Source of pricing metadata. |
-| `costUnavailableReason` | string \| null | yes | LangChain model layer | Explicit reason when cost cannot be estimated. |
+| `estimatedCost` | number \| null | yes | LangChain model layer | 价格可用时的预估成本金额。 |
+| `currency` | string \| null | yes | model catalog | 预估成本使用的币种代码。 |
+| `pricingUnit` | string \| null | yes | model catalog | 预估成本使用的计价单位。 |
+| `isEstimated` | boolean | yes | LangChain model layer | 成本金额是否为预估值。 |
+| `pricingSource` | catalog \| unavailable \| none | yes | model catalog | 价格元数据来源。 |
+| `costUnavailableReason` | string \| null | yes | LangChain model layer | 成本不可估算时的明确原因。 |
 
 ### ModelTrace
 
-Canonical model trace attached to a run, report metadata, evaluation metadata, and Run Trace.
+绑定到 Run、report metadata、evaluation metadata 和 Run Trace 的 canonical model trace。
 
 - Lifecycle node: 11 Observability / Trace, 19 Audit / Governance / Cost
 - Core object: Run, Usage
@@ -52,21 +52,21 @@ Canonical model trace attached to a run, report metadata, evaluation metadata, a
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `selectedModelId` | string | yes | request selectedModelId | Catalog model id selected by the frontend. |
-| `provider` | string \| null | yes | model catalog | Provider resolved by catalog on the backend. |
-| `model` | string \| null | yes | model catalog | Provider model name resolved by catalog on the backend. |
-| `latencyMs` | number \| null | yes | LangChain model layer | Model call latency in milliseconds. |
-| `usage` | ModelUsage | yes | LangChain model layer | Canonical usage object. |
-| `costEstimate` | CostEstimate | yes | LangChain model layer | Canonical cost estimate object. |
-| `fallbackReason` | string \| null | yes | Agent Run runtime | Fallback reason when conclusionSource is fallback. |
-| `modelErrorType` | string \| null | yes | LangChain model layer | Normalized model error type. |
-| `modelHttpStatus` | number \| null | no | LangChain model layer | HTTP status when the provider reports one. |
-| `modelErrorMessage` | string \| null | no | LangChain model layer | Sanitized model error message. |
-| `conclusionSource` | model \| fallback \| mock \| none | yes | Agent Run runtime | Canonical conclusion source shared by Chat, Run Trace, Report, and Evaluation. |
+| `selectedModelId` | string | yes | request selectedModelId | 前端选择的 model catalog ID。 |
+| `provider` | string \| null | yes | model catalog | 后端通过 model catalog 解析出的 provider。 |
+| `model` | string \| null | yes | model catalog | 后端通过 model catalog 解析出的 provider model 名称。 |
+| `latencyMs` | number \| null | yes | LangChain model layer | 模型调用耗时，单位为毫秒。 |
+| `usage` | ModelUsage | yes | LangChain model layer | canonical usage 对象。 |
+| `costEstimate` | CostEstimate | yes | LangChain model layer | canonical cost estimate 对象。 |
+| `fallbackReason` | string \| null | yes | Agent Run runtime | conclusionSource 为 fallback 时的兜底原因。 |
+| `modelErrorType` | string \| null | yes | LangChain model layer | 标准化后的模型错误类型。 |
+| `modelHttpStatus` | number \| null | no | LangChain model layer | provider 返回的 HTTP 状态码。 |
+| `modelErrorMessage` | string \| null | no | LangChain model layer | 经过安全处理的模型错误信息。 |
+| `conclusionSource` | model \| fallback \| mock \| none | yes | Agent Run runtime | Chat、Run Trace、Report 和 Evaluation 共用的 canonical 结论来源。 |
 
 ### AgentConclusion
 
-Canonical conclusion envelope. It owns conclusion text and notice only; model source, fallback, and model error state belong to ModelTrace.
+Canonical 结论信封，只拥有结论文本和提示；模型来源、兜底和模型错误状态属于 ModelTrace。
 
 - Lifecycle node: 12 Response, 13 Artifact / Source / Report
 - Core object: Run, Message, Report
@@ -74,15 +74,15 @@ Canonical conclusion envelope. It owns conclusion text and notice only; model so
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `markdownText` | string | yes | Agent Run runtime | Final assistant-facing conclusion rendered as markdown. |
-| `plainText` | string | yes | Agent Run runtime | Plain text conclusion for search, previews, and non-markdown surfaces. |
-| `sections` | AgentConclusionSection[] | no | Agent Run runtime | Optional structured conclusion sections. |
-| `notice` | string \| null | no | Agent Run runtime | Optional user-facing notice about conclusion limitations or display context. |
-| `rawText` | string | no | Agent Run runtime | Optional raw conclusion text for debug or lossless rendering. |
+| `markdownText` | string | yes | Agent Run runtime | 面向 assistant 消息展示的最终 markdown 结论。 |
+| `plainText` | string | yes | Agent Run runtime | 用于搜索、预览和非 markdown 场景的纯文本结论。 |
+| `sections` | AgentConclusionSection[] | no | Agent Run runtime | 可选的结构化结论段落。 |
+| `notice` | string \| null | no | Agent Run runtime | 可选的用户可见结论提示，用于说明限制或展示上下文。 |
+| `rawText` | string | no | Agent Run runtime | 可选的原始结论文本，仅用于 debug 或无损渲染。 |
 
 ### AgentConclusionSection
 
-Optional structured section inside AgentConclusion.
+AgentConclusion 内部的可选结构化段落。
 
 - Lifecycle node: 12 Response, 13 Artifact / Source / Report
 - Core object: Run, Message, Report
@@ -90,9 +90,9 @@ Optional structured section inside AgentConclusion.
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `title` | string \| null | no | Agent Run runtime | Optional section title. |
-| `markdownText` | string | yes | Agent Run runtime | Section markdown text. |
-| `plainText` | string | yes | Agent Run runtime | Section plain text. |
+| `title` | string \| null | no | Agent Run runtime | 可选的段落标题。 |
+| `markdownText` | string | yes | Agent Run runtime | 段落 markdown 文本。 |
+| `plainText` | string | yes | Agent Run runtime | 段落纯文本。 |
 
 ### RunSnapshot
 
@@ -127,7 +127,7 @@ runtime 与 persistence 边界上的 canonical RunSnapshot。UI-only sessionId�
 
 ### ReportMetadata
 
-Canonical report metadata. Model state is inherited only as a single modelTrace object.
+Canonical report metadata。模型状态只能以单一 modelTrace 对象继承。
 
 - Lifecycle node: 13 Artifact / Source / Report, 14 Persistence / Lineage
 - Core object: Report
@@ -135,16 +135,16 @@ Canonical report metadata. Model state is inherited only as a single modelTrace 
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `runId` | string | yes | report_artifacts.run_id | Canonical runId owning the report. |
-| `source` | string \| null | no | Report metadata input allowlist | Report metadata provenance. Request metadata can only set this through the explicit allowlist. |
-| `reportState` | string \| null | no | workbench-reports | Report decision marker state for persisted report status artifacts. |
-| `toolNames` | string[] | no | Report metadata input allowlist | Business metadata listing tool names used by the owning run. It is not model usage metadata. |
-| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Single inherited model trace object. Do not expand model fields at metadata top level. |
-| `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
+| `runId` | string | yes | report_artifacts.run_id | 拥有该 report 的 canonical runId。 |
+| `source` | string \| null | no | Report metadata input allowlist | report metadata 来源；请求 metadata 只能通过显式 allowlist 设置。 |
+| `reportState` | string \| null | no | workbench-reports | 用于持久化 report status artifact 的 report decision 状态。 |
+| `toolNames` | string[] | no | Report metadata input allowlist | 拥有该 report 的 Run 使用过的工具名列表；不是模型用量 metadata。 |
+| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | 继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。 |
+| `langSmithTraceId` | string \| null | no | LangSmith metadata | 外部 observability ID；不替代 canonical runId。 |
 
 ### EvaluationMetadata
 
-Canonical evaluation metadata. Model state is inherited only as a single modelTrace object.
+Canonical evaluation metadata。模型状态只能以单一 modelTrace 对象继承。
 
 - Lifecycle node: 15 Evaluation / Quality Gate
 - Core object: Evaluation
@@ -152,13 +152,13 @@ Canonical evaluation metadata. Model state is inherited only as a single modelTr
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `runId` | string | yes | eval_results.run_id | Canonical runId evaluated by this result. |
-| `source` | string | yes | workbench-evaluations | Evaluation metadata provenance set by the server. |
-| `resultVersion` | number | yes | workbench-evaluations | Evaluation metadata format version. |
-| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Single inherited model trace object. Do not expand model fields at metadata top level. |
-| `evaluatorVersion` | string \| null | no | evaluation runtime | Evaluator or rubric version. |
-| `langSmithTraceId` | string \| null | no | LangSmith metadata | External observability id. It does not replace canonical runId. |
-| `langSmithEvaluation` | Record<string, unknown> | no | LangSmith feedback boundary | Server-created LangSmith feedback status metadata. Request metadata cannot set it. |
+| `runId` | string | yes | eval_results.run_id | 该 evaluation result 评估的 canonical runId。 |
+| `source` | string | yes | workbench-evaluations | 服务端设置的 evaluation metadata 来源。 |
+| `resultVersion` | number | yes | workbench-evaluations | evaluation metadata 格式版本。 |
+| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | 继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。 |
+| `evaluatorVersion` | string \| null | no | evaluation runtime | evaluator 或 rubric 版本。 |
+| `langSmithTraceId` | string \| null | no | LangSmith metadata | 外部 observability ID；不替代 canonical runId。 |
+| `langSmithEvaluation` | Record<string, unknown> | no | LangSmith feedback boundary | 服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。 |
 
 ## Schema Object References
 
@@ -166,9 +166,10 @@ This section is only for human discoverability. Field-level machine contracts li
 
 | Object | Schema | Lifecycle node | Core object | Owner | Summary |
 | --- | --- | --- | --- | --- | --- |
-| `ReportArtifact` | `contracts/schemas/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract. |
-| `EvaluationResult` | `contracts/schemas/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract. |
-| `RunSource` | `contracts/schemas/run-source.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Source | Source Lineage mapper | Run source boundary object. Field details are intentionally not duplicated in field-registry.yml; use the schema as the machine contract. |
+| `ReportArtifact` | `contracts/schemas/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `EvaluationResult` | `contracts/schemas/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `RunSource` | `contracts/schemas/objects/run-source.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Source | Source Lineage mapper | Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `RunStartedEvent` | `contracts/schemas/events/run-started-event.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Event, Run | Agent Run SSE boundary | run_started SSE boundary schema，通过 $ref 引用 canonical RunSnapshot，不重复定义 RunSnapshot 字段。 |
 
 ## Forbidden Fields
 

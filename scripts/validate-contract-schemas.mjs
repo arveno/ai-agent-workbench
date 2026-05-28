@@ -5,9 +5,30 @@ import Ajv2020 from 'ajv/dist/2020.js';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(rootDir, 'contracts/schemas');
-const schemaFiles = (await readdir(schemaDir))
-  .filter((file) => file.endsWith('.schema.json'))
-  .sort();
+
+async function listSchemaFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return listSchemaFiles(entryPath);
+      }
+
+      return entry.name.endsWith('.schema.json') ? [entryPath] : [];
+    }),
+  );
+
+  return files.flat();
+}
+
+function toSchemaRelativePath(filePath) {
+  return path.relative(schemaDir, filePath).split(path.sep).join('/');
+}
+
+const schemaFiles = (await listSchemaFiles(schemaDir)).sort((a, b) =>
+  toSchemaRelativePath(a).localeCompare(toSchemaRelativePath(b)),
+);
 
 const ajv = new Ajv2020({
   allErrors: true,
@@ -19,24 +40,24 @@ const ajv = new Ajv2020({
 const schemas = [];
 
 for (const file of schemaFiles) {
-  const schemaPath = path.join(schemaDir, file);
-  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+  const schema = JSON.parse(await readFile(file, 'utf8'));
+  const schemaRelativePath = toSchemaRelativePath(file);
 
   for (const field of ['$schema', '$id', 'title', 'type', 'properties', 'required']) {
     if (schema[field] === undefined) {
-      throw new Error(`${path.relative(rootDir, schemaPath)} is missing ${field}.`);
+      throw new Error(`${path.relative(rootDir, file)} is missing ${field}.`);
     }
   }
 
   if (schema.type !== 'object') {
-    throw new Error(`${path.relative(rootDir, schemaPath)} must define a root object schema.`);
+    throw new Error(`${path.relative(rootDir, file)} must define a root object schema.`);
   }
 
   if (schema.additionalProperties !== false) {
-    throw new Error(`${path.relative(rootDir, schemaPath)} must set additionalProperties: false.`);
+    throw new Error(`${path.relative(rootDir, file)} must set additionalProperties: false.`);
   }
 
-  schemas.push({ file, schema });
+  schemas.push({ file: schemaRelativePath, schema });
   ajv.addSchema(schema);
 }
 

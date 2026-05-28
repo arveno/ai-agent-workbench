@@ -24,68 +24,68 @@
   "properties": {
     "id": {
       "type": "string",
-      "description": "Evaluation result id."
+      "description": "Evaluation result 主 ID。"
     },
     "caseId": {
       "type": "string",
-      "description": "Evaluation case id."
+      "description": "Evaluation case ID。"
     },
     "conversationId": {
       "type": ["string", "null"],
-      "description": "Conversation associated with the evaluated run."
+      "description": "被评估 Run 关联的 conversation。"
     },
     "runId": {
       "type": "string",
-      "description": "Canonical runId evaluated by this result."
+      "description": "该 evaluation result 评估的 canonical runId。"
     },
     "verdict": {
       "type": "string",
       "enum": ["pass", "fail", "unknown"],
-      "description": "Human or evaluator verdict."
+      "description": "人工或 evaluator 给出的评估结论。"
     },
     "badCaseReason": {
       "type": ["string", "null"],
-      "description": "Bad case reason when verdict is fail."
+      "description": "verdict 为 fail 时的 bad case 原因。"
     },
     "humanNote": {
       "type": ["string", "null"],
-      "description": "Optional human review note."
+      "description": "可选的人工 review 备注。"
     },
     "actualSummary": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Evaluation actual output summary."
+      "description": "evaluation 实际输出摘要。"
     },
     "modelTrace": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Persisted eval_results.model_trace snapshot. Canonical metadata.modelTrace is defined by EvaluationMetadata."
+      "description": "持久化的 eval_results.model_trace 快照；canonical metadata.modelTrace 由 EvaluationMetadata 定义。"
     },
     "toolSummary": {
       "type": "array",
       "items": {},
-      "description": "Evaluation tool summary."
+      "description": "evaluation tool 摘要。"
     },
     "ragSummary": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Evaluation RAG summary."
+      "description": "evaluation RAG 摘要。"
     },
     "reportSummary": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Evaluation report summary."
+      "description": "evaluation report 摘要。"
     },
     "metadata": {
       "$ref": "evaluation-metadata.schema.json"
     },
     "createdAt": {
       "type": "string",
-      "description": "Evaluation result creation timestamp."
+      "description": "evaluation result 创建时间。"
     },
     "updatedAt": {
       "type": "string",
-      "description": "Evaluation result update timestamp."
+      "description": "evaluation result 更新时间。"
     }
   }
 }

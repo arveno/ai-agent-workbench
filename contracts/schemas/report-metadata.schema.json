@@ -8,31 +8,31 @@
   "properties": {
     "runId": {
       "type": "string",
-      "description": "Canonical runId owning the report."
+      "description": "拥有该 report 的 canonical runId。"
     },
     "source": {
       "type": ["string", "null"],
-      "description": "Report metadata provenance. Request metadata can only set this through the explicit allowlist."
+      "description": "report metadata 来源；请求 metadata 只能通过显式 allowlist 设置。"
     },
     "reportState": {
       "type": ["string", "null"],
-      "description": "Report decision marker state for persisted report status artifacts."
+      "description": "用于持久化 report status artifact 的 report decision 状态。"
     },
     "toolNames": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Business metadata listing tool names used by the owning run. It is not model usage metadata."
+      "description": "拥有该 report 的 Run 使用过的工具名列表；不是模型用量 metadata。"
     },
     "modelTrace": {
       "anyOf": [
-        { "$ref": "model-trace.schema.json" },
+        { "$ref": "objects/model-trace.schema.json" },
         { "type": "null" }
       ],
-      "description": "Single inherited model trace object. Do not expand model fields at metadata top level."
+      "description": "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"
     },
     "langSmithTraceId": {
       "type": ["string", "null"],
-      "description": "External observability id. It does not replace canonical runId."
+      "description": "外部 observability ID；不替代 canonical runId。"
     }
   }
 }

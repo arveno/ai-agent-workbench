@@ -10,6 +10,26 @@ const require = createRequire(import.meta.url);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(rootDir, 'contracts/schemas');
 
+async function listSchemaFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return listSchemaFiles(entryPath);
+      }
+
+      return entry.name.endsWith('.schema.json') ? [entryPath] : [];
+    }),
+  );
+
+  return files.flat();
+}
+
+function toSchemaRelativePath(filePath) {
+  return path.relative(schemaDir, filePath).split(path.sep).join('/');
+}
+
 function requireCommonJsFile(filePath, stubs = {}) {
   const loadedModule = new Module(filePath);
   loadedModule.filename = filePath;
@@ -101,19 +121,23 @@ async function createSchemaValidators() {
     strict: true,
     validateSchema: true,
   });
-  const schemaFiles = (await readdir(schemaDir))
-    .filter((file) => file.endsWith('.schema.json'))
-    .sort();
+  const schemaFiles = (await listSchemaFiles(schemaDir)).sort((a, b) =>
+    toSchemaRelativePath(a).localeCompare(toSchemaRelativePath(b)),
+  );
   const schemasByFile = new Map();
 
   for (const file of schemaFiles) {
-    const schemaPath = path.join(schemaDir, file);
-    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-    schemasByFile.set(file, schema);
+    const schema = JSON.parse(await readFile(file, 'utf8'));
+    schemasByFile.set(toSchemaRelativePath(file), schema);
     ajv.addSchema(schema);
   }
 
   return {
+    getSchema(file) {
+      const schema = schemasByFile.get(file);
+      assert.ok(schema, `Missing schema fixture: ${file}`);
+      return schema;
+    },
     assertValid(file, data) {
       const schema = schemasByFile.get(file);
       assert.ok(schema, `Missing schema fixture: ${file}`);
@@ -382,7 +406,7 @@ function testModelLayerPricingSource(validate) {
   });
 
   assert.equal(usageCostMetadata.costEstimate.pricingSource, 'catalog');
-  validate.assertValid('model-trace.schema.json', {
+  validate.assertValid('objects/model-trace.schema.json', {
     ...MODEL_TRACE,
     usage: usageCostMetadata.usage,
     costEstimate: usageCostMetadata.costEstimate,
@@ -402,13 +426,24 @@ function createRunSnapshotFixture(status) {
   };
 }
 
+function createRunStartedEventFixture(status = 'running') {
+  const run = createRunSnapshotFixture(status);
+  return {
+    type: 'run_started',
+    runId: run.id,
+    conversationId: run.conversationId,
+    timestamp: CREATED_AT,
+    run,
+  };
+}
+
 function testRunSnapshotStatusContract(validate) {
   for (const status of ['pending', 'running', 'completed', 'failed', 'stopped']) {
-    validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+    validate.assertValid('objects/run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
 
   for (const status of ['idle', 'success', 'error', 'cancelled']) {
-    validate.assertInvalid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+    validate.assertInvalid('objects/run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
 
   for (const [fieldName, value] of [
@@ -419,11 +454,30 @@ function testRunSnapshotStatusContract(validate) {
     ['toolInvocations', []],
     ['sources', []],
   ]) {
-    validate.assertInvalid('run-snapshot.schema.json', {
+    validate.assertInvalid('objects/run-snapshot.schema.json', {
       ...createRunSnapshotFixture('completed'),
       [fieldName]: value,
     });
   }
+}
+
+function testRunStartedEventContract(validate) {
+  const eventSchema = validate.getSchema('events/run-started-event.schema.json');
+  assert.equal(eventSchema.properties.run.$ref, '../objects/run-snapshot.schema.json');
+  assert.equal(Object.hasOwn(eventSchema.properties.run, 'properties'), false);
+
+  validate.assertValid('events/run-started-event.schema.json', createRunStartedEventFixture());
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    type: 'run_completed',
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    run: {
+      ...createRunSnapshotFixture('running'),
+      steps: [],
+    },
+  });
 }
 
 const validate = await createSchemaValidators();
@@ -438,5 +492,6 @@ testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotStatusContract(validate);
+testRunStartedEventContract(validate);
 
 console.log('Metadata boundary tests passed.');

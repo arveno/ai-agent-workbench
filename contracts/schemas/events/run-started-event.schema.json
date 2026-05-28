@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/run-started-event.schema.json",
+  "title": "RunStartedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "run"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "run_started",
+      "description": "SSE event 类型，表示 Agent Run 已创建并进入运行边界。"
+    },
+    "runId": {
+      "type": "string",
+      "description": "event-level canonical runId，应与 run.id 一致。"
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "event-level conversationId，应与 run.conversationId 一致。"
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "run_started 事件产生时间。"
+    },
+    "run": {
+      "$ref": "../objects/run-snapshot.schema.json"
+    }
+  }
+}

@@ -8,36 +8,36 @@
   "properties": {
     "runId": {
       "type": "string",
-      "description": "Canonical runId evaluated by this result."
+      "description": "该 evaluation result 评估的 canonical runId。"
     },
     "source": {
       "type": "string",
       "const": "workbench-evaluation",
-      "description": "Evaluation metadata provenance set by the server."
+      "description": "服务端设置的 evaluation metadata 来源。"
     },
     "resultVersion": {
       "type": "number",
-      "description": "Evaluation metadata format version."
+      "description": "evaluation metadata 格式版本。"
     },
     "modelTrace": {
       "anyOf": [
-        { "$ref": "model-trace.schema.json" },
+        { "$ref": "objects/model-trace.schema.json" },
         { "type": "null" }
       ],
-      "description": "Single inherited model trace object. Do not expand model fields at metadata top level."
+      "description": "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"
     },
     "evaluatorVersion": {
       "type": ["string", "null"],
-      "description": "Evaluator or rubric version."
+      "description": "evaluator 或 rubric 版本。"
     },
     "langSmithTraceId": {
       "type": ["string", "null"],
-      "description": "External observability id. It does not replace canonical runId."
+      "description": "外部 observability ID；不替代 canonical runId。"
     },
     "langSmithEvaluation": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Server-created LangSmith feedback status metadata. Request metadata cannot set it."
+      "description": "服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。"
     }
   }
 }
