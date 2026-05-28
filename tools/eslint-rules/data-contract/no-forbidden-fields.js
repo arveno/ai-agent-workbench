@@ -6,6 +6,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../.
 const rulesPath = path.join(rootDir, 'contracts/generated/data-contract-lint-rules.json');
 const generatedRules = JSON.parse(readFileSync(rulesPath, 'utf8'));
 const GLOBAL_LINT_ENFORCEMENT = 'globalLint';
+const CONTRACT_METADATA_BOUNDARY_ENFORCEMENT = 'contractMetadataBoundary';
 
 const FORBIDDEN_PROPERTY_ALLOWLIST = new Map([
   [
@@ -99,6 +100,21 @@ function getExpressionLabel(node) {
   return null;
 }
 
+function getDestructuringBaseLabel(node) {
+  const expression = unwrapChain(node);
+  if (!expression) return null;
+
+  if (expression.type === 'AssignmentPattern') {
+    return getDestructuringBaseLabel(expression.right) ?? getDestructuringBaseLabel(expression.left);
+  }
+
+  if (expression.type === 'LogicalExpression' && (expression.operator === '??' || expression.operator === '||')) {
+    return getDestructuringBaseLabel(expression.left);
+  }
+
+  return getExpressionLabel(expression);
+}
+
 function isDeleteOperand(node) {
   return node.parent?.type === 'UnaryExpression' && node.parent.operator === 'delete';
 }
@@ -159,15 +175,27 @@ function matchesPath(ruleLabel, memberPath) {
 function buildRuleState() {
   const identifierRules = new Map();
   const objectPropertyRules = [];
+  const objectPatternRules = [];
   const fallbackRules = [];
 
   for (const rule of generatedRules.rules ?? []) {
-    if (rule.enforcement !== GLOBAL_LINT_ENFORCEMENT) continue;
+    if (
+      rule.enforcement !== GLOBAL_LINT_ENFORCEMENT &&
+      rule.enforcement !== CONTRACT_METADATA_BOUNDARY_ENFORCEMENT
+    ) {
+      continue;
+    }
+
+    if (rule.enforcement === CONTRACT_METADATA_BOUNDARY_ENFORCEMENT) {
+      if (rule.kind === 'objectProperty') objectPatternRules.push(rule);
+      continue;
+    }
 
     if (rule.kind === 'identifier') {
       identifierRules.set(rule.identifier, rule);
     } else if (rule.kind === 'objectProperty') {
       objectPropertyRules.push(rule);
+      objectPatternRules.push(rule);
     } else if (rule.kind === 'fallbackExpression') {
       fallbackRules.push(rule);
     }
@@ -176,6 +204,7 @@ function buildRuleState() {
   return {
     identifierRules,
     objectPropertyRules,
+    objectPatternRules,
     fallbackRules,
   };
 }
@@ -228,7 +257,7 @@ function checkObjectPattern(context, pattern, basePath = '') {
 
     const fullPath = basePath ? `${basePath}.${keyName}` : keyName;
     const identifierRule = ruleState.identifierRules.get(keyName);
-    const objectRule = ruleState.objectPropertyRules.find((rule) => matchesPath(rule.label, fullPath));
+    const objectRule = ruleState.objectPatternRules.find((rule) => matchesPath(rule.label, fullPath));
 
     if (identifierRule) {
       report(context, property.key, identifierRule);
@@ -330,27 +359,36 @@ export default {
       },
       VariableDeclarator(node) {
         if (node.id?.type === 'ObjectPattern') {
-          checkObjectPattern(context, node.id, getExpressionLabel(node.init) ?? '');
+          checkObjectPattern(context, node.id, getDestructuringBaseLabel(node.init) ?? '');
         }
       },
       AssignmentExpression(node) {
         if (node.left?.type === 'ObjectPattern') {
-          checkObjectPattern(context, node.left, getExpressionLabel(node.right) ?? '');
+          checkObjectPattern(context, node.left, getDestructuringBaseLabel(node.right) ?? '');
         }
       },
       FunctionDeclaration(node) {
         for (const param of node.params ?? []) {
-          if (param.type === 'ObjectPattern') checkObjectPattern(context, param);
+          const pattern = param.type === 'AssignmentPattern' ? param.left : param;
+          if (pattern.type === 'ObjectPattern') {
+            checkObjectPattern(context, pattern, getDestructuringBaseLabel(param) ?? '');
+          }
         }
       },
       FunctionExpression(node) {
         for (const param of node.params ?? []) {
-          if (param.type === 'ObjectPattern') checkObjectPattern(context, param);
+          const pattern = param.type === 'AssignmentPattern' ? param.left : param;
+          if (pattern.type === 'ObjectPattern') {
+            checkObjectPattern(context, pattern, getDestructuringBaseLabel(param) ?? '');
+          }
         }
       },
       ArrowFunctionExpression(node) {
         for (const param of node.params ?? []) {
-          if (param.type === 'ObjectPattern') checkObjectPattern(context, param);
+          const pattern = param.type === 'AssignmentPattern' ? param.left : param;
+          if (pattern.type === 'ObjectPattern') {
+            checkObjectPattern(context, pattern, getDestructuringBaseLabel(param) ?? '');
+          }
         }
       },
       LogicalExpression(node) {
