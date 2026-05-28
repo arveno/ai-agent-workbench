@@ -5,6 +5,7 @@
  */
 
 export interface WorkbenchContract {
+  runSseEventEnvelope: RunSseEventEnvelope;
   runStartedEvent: RunStartedEvent;
   agentConclusion: AgentConclusion;
   evaluationMetadata: EvaluationMetadata;
@@ -15,24 +16,53 @@ export interface WorkbenchContract {
   runSnapshot: RunSnapshot;
   runSource: RunSource;
 }
+export interface RunSseEventEnvelope {
+  /**
+   * SSE event 类型，表示当前事件的稳定身份。
+   */
+  type: string;
+  /**
+   * event-level canonical runId，只承担事件路由职责。
+   */
+  runId: string;
+  /**
+   * event-level conversationId，只承担事件路由职责。
+   */
+  conversationId: string;
+  /**
+   * SSE event 产生时间。
+   */
+  timestamp: string;
+  /**
+   * 当前事件的业务数据；公共 envelope 不定义具体业务字段。
+   */
+  payload: {
+    [k: string]: unknown;
+  };
+}
 export interface RunStartedEvent {
   /**
    * SSE event 类型，表示 Agent Run 已创建并进入运行边界。
    */
   type: 'run_started';
   /**
-   * event-level canonical runId，应与 run.id 一致。
+   * event-level canonical runId，应与 payload.run.id 一致。
    */
   runId: string;
   /**
-   * event-level conversationId，应与 run.conversationId 一致。
+   * event-level conversationId，应与 payload.run.conversationId 一致。
    */
   conversationId: string;
   /**
    * run_started 事件产生时间。
    */
   timestamp: string;
-  run: RunSnapshot;
+  /**
+   * run_started 事件业务数据。
+   */
+  payload: {
+    run: RunSnapshot;
+  };
 }
 export interface RunSnapshot {
   /**

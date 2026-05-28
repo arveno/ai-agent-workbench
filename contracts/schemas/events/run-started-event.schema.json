@@ -4,7 +4,7 @@
   "title": "RunStartedEvent",
   "type": "object",
   "additionalProperties": false,
-  "required": ["type", "runId", "conversationId", "timestamp", "run"],
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
   "properties": {
     "type": {
       "type": "string",
@@ -13,18 +13,26 @@
     },
     "runId": {
       "type": "string",
-      "description": "event-level canonical runId，应与 run.id 一致。"
+      "description": "event-level canonical runId，应与 payload.run.id 一致。"
     },
     "conversationId": {
       "type": "string",
-      "description": "event-level conversationId，应与 run.conversationId 一致。"
+      "description": "event-level conversationId，应与 payload.run.conversationId 一致。"
     },
     "timestamp": {
       "type": "string",
       "description": "run_started 事件产生时间。"
     },
-    "run": {
-      "$ref": "../objects/run-snapshot.schema.json"
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run"],
+      "description": "run_started 事件业务数据。",
+      "properties": {
+        "run": {
+          "$ref": "../objects/run-snapshot.schema.json"
+        }
+      }
     }
   }
 }

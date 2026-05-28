@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/run-sse-event-envelope.schema.json",
+  "title": "RunSseEventEnvelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "SSE event 类型，表示当前事件的稳定身份。"
+    },
+    "runId": {
+      "type": "string",
+      "description": "event-level canonical runId，只承担事件路由职责。"
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "event-level conversationId，只承担事件路由职责。"
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "SSE event 产生时间。"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "当前事件的业务数据；公共 envelope 不定义具体业务字段。"
+    }
+  }
+}

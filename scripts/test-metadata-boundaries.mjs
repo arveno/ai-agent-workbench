@@ -433,8 +433,15 @@ function createRunStartedEventFixture(status = 'running') {
     runId: run.id,
     conversationId: run.conversationId,
     timestamp: CREATED_AT,
-    run,
+    payload: {
+      run,
+    },
   };
+}
+
+function assertRunStartedEventIdentity(event) {
+  assert.equal(event.runId, event.payload.run.id);
+  assert.equal(event.conversationId, event.payload.run.conversationId);
 }
 
 function testRunSnapshotStatusContract(validate) {
@@ -463,21 +470,41 @@ function testRunSnapshotStatusContract(validate) {
 
 function testRunStartedEventContract(validate) {
   const eventSchema = validate.getSchema('events/run-started-event.schema.json');
-  assert.equal(eventSchema.properties.run.$ref, '../objects/run-snapshot.schema.json');
-  assert.equal(Object.hasOwn(eventSchema.properties.run, 'properties'), false);
+  assert.equal(eventSchema.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
+  assert.equal(Object.hasOwn(eventSchema.properties.payload.properties.run, 'properties'), false);
+  assert.equal(Object.hasOwn(eventSchema.properties, 'run'), false);
 
   validate.assertValid('events/run-started-event.schema.json', createRunStartedEventFixture());
+  assertRunStartedEventIdentity(createRunStartedEventFixture());
   validate.assertInvalid('events/run-started-event.schema.json', {
     ...createRunStartedEventFixture(),
     type: 'run_completed',
   });
   validate.assertInvalid('events/run-started-event.schema.json', {
     ...createRunStartedEventFixture(),
-    run: {
-      ...createRunSnapshotFixture('running'),
-      steps: [],
+    run: createRunSnapshotFixture('running'),
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    payload: {
+      run: {
+        ...createRunSnapshotFixture('running'),
+        steps: [],
+      },
     },
   });
+  assert.throws(() =>
+    assertRunStartedEventIdentity({
+      ...createRunStartedEventFixture(),
+      runId: 'run-mismatch',
+    }),
+  );
+  assert.throws(() =>
+    assertRunStartedEventIdentity({
+      ...createRunStartedEventFixture(),
+      conversationId: 'conversation-mismatch',
+    }),
+  );
 }
 
 const validate = await createSchemaValidators();
