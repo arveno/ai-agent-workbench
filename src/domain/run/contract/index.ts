@@ -1,1 +1,1 @@
-// Reserved for future Run contract boundary helpers. Canonical RunSnapshot imports stay direct.
+// Reserved for direct generated RunSnapshot imports, no runtime behavior here.
