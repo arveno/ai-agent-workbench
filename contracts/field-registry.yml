@@ -253,10 +253,10 @@ objects:
         source: "mapper / reducer ViewModel"
         description: "Run tool invocation ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance."
       sources:
-        type: "object[]"
+        type: "RunSource[]"
         required: "no"
-        source: "Source Lineage mapper"
-        description: "Run source ViewModel array. Source deep shape stays in Source Lineage governance."
+        source: "run-source.schema.json"
+        description: "Run source ViewModel array. Items reuse the existing RunSource schema."
       chartData:
         type: "object"
         required: "no"
@@ -271,7 +271,7 @@ objects:
         type: "model | fallback | mock | none"
         required: "yes"
         source: "Derived from modelTrace.conclusionSource"
-        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
+        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource. It must be none when modelTrace is absent or null, and must match modelTrace.conclusionSource when modelTrace exists."
       modelTrace:
         type: "ModelTrace | null"
         required: "no"

@@ -1,6 +1,37 @@
 import type { DemoConversationTemplateRecord } from '../types/persistence';
+import type { RunConclusionSource, RunModelTrace } from '../types/run';
 
 const NOW = '2026-05-18T00:00:00.000Z';
+
+function createDemoModelTrace(conclusionSource: Extract<RunConclusionSource, 'fallback' | 'mock'>): RunModelTrace {
+  const isMock = conclusionSource === 'mock';
+
+  return {
+    selectedModelId: isMock ? 'mock-agent' : 'demo-seed',
+    provider: isMock ? 'mock' : 'demo_seed',
+    model: isMock ? '本地模拟' : '预置示例',
+    latencyMs: null,
+    usage: {
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      usageAvailable: false,
+      usageSource: 'none',
+      usageUnavailableReason: 'model_not_invoked',
+    },
+    costEstimate: {
+      estimatedCost: null,
+      currency: null,
+      pricingUnit: null,
+      isEstimated: false,
+      pricingSource: 'none',
+      costUnavailableReason: 'model_not_invoked',
+    },
+    fallbackReason: conclusionSource === 'fallback' ? 'demo_seed' : null,
+    modelErrorType: null,
+    conclusionSource,
+  };
+}
 
 export const PHASE4_DEMO_TEMPLATE_KEYS = [
   'phase4_long_text_review',
@@ -67,6 +98,7 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
         toolInvocations: [],
         conclusion: '长文本示例已完成结构化摘要、风险点和行动项输出。',
         conclusionSource: 'mock',
+        modelTrace: createDemoModelTrace('mock'),
         reportState: 'skipped',
         createdAt: NOW,
         updatedAt: NOW,
@@ -188,8 +220,8 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
         },
         conclusion: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
         conclusionSource: 'fallback',
+        modelTrace: createDemoModelTrace('fallback'),
         agentConclusion: {
-          source: 'fallback',
           markdownText: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
           plainText: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
           notice: '示例会话展示的是预置只读结果，不会触发新的模型请求。',
@@ -290,8 +322,8 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
         conclusion:
           '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
         conclusionSource: 'fallback',
+        modelTrace: createDemoModelTrace('fallback'),
         agentConclusion: {
-          source: 'fallback',
           markdownText:
             '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
           plainText:
@@ -416,8 +448,8 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
         ],
         conclusion: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
         conclusionSource: 'fallback',
+        modelTrace: createDemoModelTrace('fallback'),
         agentConclusion: {
-          source: 'fallback',
           markdownText: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
           plainText: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
           notice: '示例会话展示 knowledge_search 的目标形态，不会触发新的检索请求。',

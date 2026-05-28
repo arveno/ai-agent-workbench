@@ -116,10 +116,10 @@ Canonical run snapshot consumed by ViewModel builders.
 | `dataSource` | object | no | mapper / reducer ViewModel | Run data source snapshot. Deep shape is intentionally deferred to Runtime Contract Governance. |
 | `steps` | object[] | yes | mapper / reducer ViewModel | Run step ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance. |
 | `toolInvocations` | object[] | yes | mapper / reducer ViewModel | Run tool invocation ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance. |
-| `sources` | object[] | no | Source Lineage mapper | Run source ViewModel array. Source deep shape stays in Source Lineage governance. |
+| `sources` | RunSource[] | no | run-source.schema.json | Run source ViewModel array. Items reuse the existing RunSource schema. |
 | `chartData` | object | no | mapper / reducer ViewModel | Run chart ViewModel data. Deep shape is intentionally deferred to Runtime Contract Governance. |
 | `conclusion` | string | yes | AgentConclusion ViewModel | Plain text conclusion shown by the RunSnapshot ViewModel. |
-| `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. |
+| `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource. It must be none when modelTrace is absent or null, and must match modelTrace.conclusionSource when modelTrace exists. |
 | `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |
 | `reportState` | hidden \| pending \| generating \| generated \| skipped \| failed | yes | mapper / reducer ViewModel | Frontend report action state carried by the RunSnapshot ViewModel. |

@@ -4,6 +4,88 @@
   "title": "RunSnapshot",
   "type": "object",
   "additionalProperties": false,
+  "not": {
+    "anyOf": [
+      {
+        "type": "object",
+        "required": ["conclusionSource"],
+        "properties": {
+          "conclusionSource": { "enum": ["model", "fallback", "mock"] }
+        },
+        "not": {
+          "type": "object",
+          "required": ["modelTrace"],
+          "properties": {
+            "modelTrace": {}
+          }
+        }
+      },
+      {
+        "type": "object",
+        "required": ["conclusionSource", "modelTrace"],
+        "properties": {
+          "conclusionSource": { "enum": ["model", "fallback", "mock"] },
+          "modelTrace": { "type": "null" }
+        }
+      },
+      {
+        "type": "object",
+        "required": ["conclusionSource", "modelTrace"],
+        "properties": {
+          "conclusionSource": { "const": "none" },
+          "modelTrace": {
+            "type": "object",
+            "required": ["conclusionSource"],
+            "properties": {
+              "conclusionSource": { "not": { "const": "none" } }
+            }
+          }
+        }
+      },
+      {
+        "type": "object",
+        "required": ["conclusionSource", "modelTrace"],
+        "properties": {
+          "conclusionSource": { "const": "model" },
+          "modelTrace": {
+            "type": "object",
+            "required": ["conclusionSource"],
+            "properties": {
+              "conclusionSource": { "not": { "const": "model" } }
+            }
+          }
+        }
+      },
+      {
+        "type": "object",
+        "required": ["conclusionSource", "modelTrace"],
+        "properties": {
+          "conclusionSource": { "const": "fallback" },
+          "modelTrace": {
+            "type": "object",
+            "required": ["conclusionSource"],
+            "properties": {
+              "conclusionSource": { "not": { "const": "fallback" } }
+            }
+          }
+        }
+      },
+      {
+        "type": "object",
+        "required": ["conclusionSource", "modelTrace"],
+        "properties": {
+          "conclusionSource": { "const": "mock" },
+          "modelTrace": {
+            "type": "object",
+            "required": ["conclusionSource"],
+            "properties": {
+              "conclusionSource": { "not": { "const": "mock" } }
+            }
+          }
+        }
+      }
+    ]
+  },
   "required": [
     "id",
     "mode",
@@ -82,11 +164,8 @@
     },
     "sources": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "description": "Run source ViewModel array. Source deep shape stays in Source Lineage governance."
+      "items": { "$ref": "run-source.schema.json" },
+      "description": "Run source ViewModel array. Items reuse the existing RunSource schema."
     },
     "chartData": {
       "type": "object",
@@ -100,7 +179,7 @@
     "conclusionSource": {
       "type": "string",
       "enum": ["model", "fallback", "mock", "none"],
-      "description": "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
+      "description": "Derived display field only. Source of Truth is modelTrace.conclusionSource. It must be none when modelTrace is absent or null, and must match modelTrace.conclusionSource when modelTrace exists."
     },
     "modelTrace": {
       "anyOf": [

@@ -390,7 +390,7 @@ function testModelLayerPricingSource(validate) {
 }
 
 function createRunSnapshotFixture(status, overrides = {}) {
-  return {
+  const fixture = {
     id: RUN_ID,
     clientRunId: REQUEST_RUN_ID,
     displayRunId: RUN_ID,
@@ -460,6 +460,21 @@ function createRunSnapshotFixture(status, overrides = {}) {
     elapsedMs: 1000,
     ...overrides,
   };
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value === undefined) {
+      delete fixture[key];
+    }
+  }
+
+  return fixture;
+}
+
+function createModelTraceWithConclusionSource(conclusionSource) {
+  return {
+    ...MODEL_TRACE,
+    conclusionSource,
+  };
 }
 
 function testRunSnapshotStatusContract(validate) {
@@ -479,7 +494,7 @@ function testRunSnapshotViewModelContract(validate) {
     'run-snapshot.schema.json',
     createRunSnapshotFixture('success', {
       modelTrace: undefined,
-      conclusionSource: 'fallback',
+      conclusionSource: 'none',
       reportState: 'pending',
     }),
   );
@@ -488,6 +503,53 @@ function testRunSnapshotViewModelContract(validate) {
     'run-snapshot.schema.json',
     createRunSnapshotFixture('success', {
       conversationId: 'conversation-1',
+    }),
+  );
+}
+
+function testRunSnapshotSourceContract(validate) {
+  validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture('success'));
+
+  validate.assertInvalid(
+    'run-snapshot.schema.json',
+    createRunSnapshotFixture('success', {
+      sources: [{}],
+    }),
+  );
+}
+
+function testRunSnapshotConclusionSourceContract(validate) {
+  validate.assertValid(
+    'run-snapshot.schema.json',
+    createRunSnapshotFixture('success', {
+      conclusionSource: 'none',
+      modelTrace: undefined,
+    }),
+  );
+
+  for (const conclusionSource of ['model', 'fallback', 'mock']) {
+    validate.assertInvalid(
+      'run-snapshot.schema.json',
+      createRunSnapshotFixture('success', {
+        conclusionSource,
+        modelTrace: undefined,
+      }),
+    );
+
+    validate.assertValid(
+      'run-snapshot.schema.json',
+      createRunSnapshotFixture('success', {
+        conclusionSource,
+        modelTrace: createModelTraceWithConclusionSource(conclusionSource),
+      }),
+    );
+  }
+
+  validate.assertInvalid(
+    'run-snapshot.schema.json',
+    createRunSnapshotFixture('success', {
+      conclusionSource: 'fallback',
+      modelTrace: createModelTraceWithConclusionSource('model'),
     }),
   );
 }
@@ -505,5 +567,7 @@ testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotStatusContract(validate);
 testRunSnapshotViewModelContract(validate);
+testRunSnapshotSourceContract(validate);
+testRunSnapshotConclusionSourceContract(validate);
 
 console.log('Metadata boundary tests passed.');

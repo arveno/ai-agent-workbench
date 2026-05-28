@@ -477,11 +477,9 @@ export interface RunSnapshot {
     [k: string]: unknown;
   }[];
   /**
-   * Run source ViewModel array. Source deep shape stays in Source Lineage governance.
+   * Run source ViewModel array. Items reuse the existing RunSource schema.
    */
-  sources?: {
-    [k: string]: unknown;
-  }[];
+  sources?: RunSource[];
   /**
    * Run chart ViewModel data. Deep shape is intentionally deferred to Runtime Contract Governance.
    */
@@ -493,7 +491,7 @@ export interface RunSnapshot {
    */
   conclusion: string;
   /**
-   * Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none.
+   * Derived display field only. Source of Truth is modelTrace.conclusionSource. It must be none when modelTrace is absent or null, and must match modelTrace.conclusionSource when modelTrace exists.
    */
   conclusionSource: 'model' | 'fallback' | 'mock' | 'none';
   modelTrace?: ModelTrace | null;
