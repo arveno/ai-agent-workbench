@@ -1,5 +1,5 @@
 import type { RunSource } from '@/types/rag';
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/types/run';
 import { getRagEmptyStateLabel, getRagSourcesDescription } from './observabilityLabels';
 import { formatSourceScore, getRunRagSources } from './ragSources';
 
@@ -41,7 +41,7 @@ function truncateSnippet(value: string): string {
   return `${normalizedValue.slice(0, 139)}…`;
 }
 
-function sourceToView(source: RunSource, runMode: RunSnapshot['mode']): RagSourceView {
+function sourceToView(source: RunSource, runMode: RunViewModel['mode']): RagSourceView {
   const title = source.title || '未命名来源';
   const preview = source.preview || '';
   const sourceName = runMode === 'mock' ? '公开演示来源' : '教学评价制度示例知识库';
@@ -59,7 +59,7 @@ function sourceToView(source: RunSource, runMode: RunSnapshot['mode']): RagSourc
 }
 
 export function createRagSourcesView(params: {
-  run: RunSnapshot | null;
+  run: RunViewModel | null;
   isLoading: boolean;
   errorMessage: string | null;
 }): RagSourcesView {

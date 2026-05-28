@@ -1,8 +1,10 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
-import type { DemoTemplateSlice, RunSnapshot, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
+import type { RunSnapshot } from '../../types/run';
+import type { DemoTemplateSlice, RunViewModel, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
+import { runSnapshotToViewModel } from '../../utils/runReducer';
 import { useAuthStore } from '../authStore';
 import {
   createEmptySession,
@@ -117,29 +119,27 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
     }));
 }
 
-function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunSnapshot | null {
+function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunViewModel | null {
   const rawRun = template.seed_runs[0] as Partial<RunSnapshot> | undefined;
 
-  if (!rawRun?.id) {
+  if (!rawRun?.id || !rawRun.conversationId) {
     return null;
   }
 
-  return {
+  return runSnapshotToViewModel({
     id: rawRun.id,
-    sessionId,
+    conversationId: rawRun.conversationId,
+    clientRunId: rawRun.clientRunId,
+    usageId: rawRun.usageId,
     mode: rawRun.mode ?? 'mock',
-    status: rawRun.status ?? 'success',
+    status: rawRun.status ?? 'completed',
     intent: rawRun.intent ?? 'unknown',
     prompt: rawRun.prompt ?? template.title,
     plan: rawRun.plan,
     dataSource: rawRun.dataSource,
-    steps: rawRun.steps ?? [],
-    toolInvocations: rawRun.toolInvocations ?? [],
-    sources: rawRun.sources,
     chartData: rawRun.chartData,
-    conclusion: rawRun.conclusion ?? '',
-    conclusionSource: rawRun.modelTrace?.conclusionSource ?? 'none',
-    agentConclusion: rawRun.agentConclusion,
+    agentConclusion: rawRun.agentConclusion ?? null,
+    modelTrace: rawRun.modelTrace ?? null,
     reportState: rawRun.reportState ?? 'skipped',
     createdAt: rawRun.createdAt ?? template.created_at,
     updatedAt: rawRun.updatedAt ?? template.updated_at,
@@ -147,7 +147,10 @@ function createDemoRun(template: DemoConversationTemplateRecord, sessionId: stri
     completedAt: rawRun.completedAt,
     elapsedMs: rawRun.elapsedMs,
     errorMessage: rawRun.errorMessage,
-  };
+  }, {
+    sessionId,
+    displayRunId: rawRun.id,
+  });
 }
 
 function createReadonlyDemoSessionFromTemplate(template: DemoConversationTemplateRecord): WorkbenchSession {

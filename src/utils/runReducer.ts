@@ -4,26 +4,87 @@ import type {
   RunEvent,
   RunModelTrace,
   RunSnapshot,
+  RunStartedInitialView,
   RunStep,
   RunToolInvocation,
+  RunViewModel,
 } from '@/types/run';
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-function isRunIdMatched(currentRun: RunSnapshot | null, runId: string): currentRun is RunSnapshot {
+export function mapRunSnapshotStatusToViewStatus(status: RunSnapshot['status']): RunViewModel['status'] {
+  if (status === 'completed') {
+    return 'success';
+  }
+
+  if (status === 'failed') {
+    return 'error';
+  }
+
+  return status;
+}
+
+function getRunViewConclusionSource(modelTrace: RunModelTrace | null | undefined): RunViewModel['conclusionSource'] {
+  return modelTrace?.conclusionSource ?? 'none';
+}
+
+export function runSnapshotToViewModel(
+  snapshot: RunSnapshot,
+  options: {
+    sessionId: string;
+    displayRunId?: string;
+    initialView?: RunStartedInitialView;
+  },
+): RunViewModel {
+  const conclusionText = options.initialView?.conclusion ?? snapshot.agentConclusion?.plainText ?? '';
+  const agentConclusion = normalizeAgentConclusion(
+    conclusionText,
+    snapshot.agentConclusion ?? undefined,
+  );
+
+  return {
+    id: snapshot.id,
+    clientRunId: snapshot.clientRunId ?? undefined,
+    displayRunId: options.displayRunId ?? snapshot.id,
+    sessionId: options.sessionId,
+    mode: snapshot.mode,
+    status: mapRunSnapshotStatusToViewStatus(snapshot.status),
+    intent: snapshot.intent ?? 'unknown',
+    prompt: snapshot.prompt ?? '',
+    plan: snapshot.plan,
+    dataSource: snapshot.dataSource,
+    steps: options.initialView?.steps ?? [],
+    toolInvocations: options.initialView?.toolInvocations ?? [],
+    sources: options.initialView?.sources,
+    chartData: snapshot.chartData,
+    conclusion: agentConclusion.plainText,
+    conclusionSource: getRunViewConclusionSource(snapshot.modelTrace),
+    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
+    modelTrace: snapshot.modelTrace ?? undefined,
+    reportState: snapshot.reportState,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
+    startedAt: snapshot.startedAt,
+    completedAt: snapshot.completedAt,
+    elapsedMs: snapshot.elapsedMs,
+    errorMessage: snapshot.errorMessage,
+  };
+}
+
+function isRunIdMatched(currentRun: RunViewModel | null, runId: string): currentRun is RunViewModel {
   return Boolean(currentRun && currentRun.id === runId);
 }
 
-function withUpdatedAt(run: RunSnapshot, updatedAt = nowIso()): RunSnapshot {
+function withUpdatedAt(run: RunViewModel, updatedAt = nowIso()): RunViewModel {
   return {
     ...run,
     updatedAt,
   };
 }
 
-function withModelTrace(run: RunSnapshot, modelTrace?: RunModelTrace): RunSnapshot {
+function withModelTrace(run: RunViewModel, modelTrace?: RunModelTrace): RunViewModel {
   if (!modelTrace) {
     return run;
   }
@@ -37,7 +98,7 @@ function withModelTrace(run: RunSnapshot, modelTrace?: RunModelTrace): RunSnapsh
   };
 }
 
-function mapReusedRunStatus(status: string | null | undefined): RunSnapshot['status'] {
+function mapReusedRunStatus(status: string | null | undefined): RunViewModel['status'] {
   if (status === 'completed' || status === 'success') {
     return 'success';
   }
@@ -450,21 +511,19 @@ function updateTool(
   return toolInvocations.map((tool) => (tool.id === toolId ? updater(tool) : tool));
 }
 
-export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: RunEvent): RunSnapshot | null {
+export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
-    const updatedAt = event.run.updatedAt || nowIso();
-    const agentConclusion = normalizeAgentConclusion(
-      event.run.conclusion,
-      event.run.agentConclusion,
+    return runSnapshotToViewModel(
+      {
+        ...event.run,
+        updatedAt: event.run.updatedAt || nowIso(),
+      },
+      {
+        sessionId: event.run.conversationId,
+        displayRunId: event.run.id,
+        initialView: event.initialView,
+      },
     );
-
-    return {
-      ...event.run,
-      status: event.run.status === 'idle' ? 'pending' : event.run.status,
-      conclusion: agentConclusion.plainText,
-      agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-      updatedAt,
-    };
   }
 
   if (event.type === 'run_reused') {
@@ -472,7 +531,8 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
       return currentRun;
     }
 
-    const reusedRunId = event.clientRunId?.trim() || event.runId;
+    const eventClientRunId = event.clientRunId?.trim();
+    const reusedRunId = eventClientRunId ? eventClientRunId : event.runId;
 
     if (reusedRunId && currentRun.id !== reusedRunId) {
       return currentRun;
@@ -597,7 +657,6 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
   }
 
   if (event.type === 'conclusion_completed') {
-    const conclusionSource = event.modelTrace?.conclusionSource ?? currentRun.modelTrace?.conclusionSource ?? 'none';
     const agentConclusion = normalizeAgentConclusion(
       event.conclusion,
       event.agentConclusion,
@@ -608,7 +667,7 @@ export function applyRunEventToSnapshot(currentRun: RunSnapshot | null, event: R
         {
           ...currentRun,
           conclusion: agentConclusion.plainText,
-          conclusionSource,
+          conclusionSource: getRunViewConclusionSource(event.modelTrace ?? currentRun.modelTrace),
           agentConclusion,
         },
         event.modelTrace,

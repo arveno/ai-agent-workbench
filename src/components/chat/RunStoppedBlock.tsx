@@ -1,9 +1,9 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunViewModel } from '../../types/run';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 
 interface RunStoppedBlockProps {
-  run: RunSnapshot;
+  run: RunViewModel;
 }
 
 export function RunStoppedBlock({ run }: RunStoppedBlockProps) {

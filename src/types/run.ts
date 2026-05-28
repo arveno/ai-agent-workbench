@@ -4,6 +4,8 @@ export type RunMode = 'mock' | 'agent';
 
 export type RunIntent = 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
 
+export type RunSnapshotStatus = 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+
 export type RunStatus = 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
 
 export type RunStepStatus = 'pending' | 'running' | 'success' | 'error' | 'skipped' | 'stopped';
@@ -121,9 +123,39 @@ export interface RunPlanSnapshot {
 
 export interface RunSnapshot {
   id: string;
+  conversationId: string;
+  clientRunId?: string | null;
+  usageId?: string | null;
+  mode: RunMode;
+  status: RunSnapshotStatus;
+  intent?: RunIntent;
+  prompt?: string;
+  plan?: RunPlanSnapshot;
+  dataSource?: RunDataSourceSnapshot;
+  chartData?: RunChartData;
+  agentConclusion?: AgentConclusion | null;
+  modelTrace: RunModelTrace | null;
+  reportState: RunReportState;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  elapsedMs?: number;
+  errorMessage?: string;
+}
+
+export interface RunStartedInitialView {
+  steps?: RunStep[];
+  toolInvocations?: RunToolInvocation[];
+  sources?: RunSource[];
+  conclusion?: string;
+}
+
+export interface RunViewModel {
+  id: string;
   clientRunId?: string;
-  displayRunId?: string;
-  sessionId?: string;
+  displayRunId: string;
+  sessionId: string;
   mode: RunMode;
   status: RunStatus;
   intent: RunIntent;
@@ -155,6 +187,7 @@ export interface RunStartedEvent {
   conversationId?: string | null;
   timestamp?: string;
   run: RunSnapshot;
+  initialView?: RunStartedInitialView;
 }
 
 export interface RunReusedEvent {
@@ -171,7 +204,6 @@ export interface RunReusedEvent {
   existingRun?: {
     id?: string;
     status?: string;
-    conclusionSource?: RunConclusionSource;
     reportState?: RunReportState;
     completedAt?: string | null;
   } | null;

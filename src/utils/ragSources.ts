@@ -1,5 +1,5 @@
 import type { RunSource } from '@/types/rag';
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/types/run';
 
 export function createMockRagSources(): RunSource[] {
   return [
@@ -60,7 +60,7 @@ export function createMockRagSources(): RunSource[] {
   ];
 }
 
-export function getRunRagSources(run: RunSnapshot | null): RunSource[] {
+export function getRunRagSources(run: RunViewModel | null): RunSource[] {
   return run?.sources ?? [];
 }
 

@@ -5,6 +5,7 @@ import path from 'node:path';
 import Module, { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
+import ts from 'typescript';
 
 const require = createRequire(import.meta.url);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,6 +23,31 @@ function requireCommonJsFile(filePath, stubs = {}) {
     return Module.prototype.require.call(loadedModule, request);
   };
   loadedModule._compile(readFileSync(filePath, 'utf8'), filePath);
+  return loadedModule.exports;
+}
+
+function requireTypeScriptFile(filePath, stubs = {}) {
+  const source = readFileSync(filePath, 'utf8');
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+      verbatimModuleSyntax: false,
+    },
+    fileName: filePath,
+  });
+  const loadedModule = new Module(filePath);
+  loadedModule.filename = filePath;
+  loadedModule.paths = Module._nodeModulePaths(path.dirname(filePath));
+  loadedModule.require = (request) => {
+    if (Object.hasOwn(stubs, request)) {
+      return stubs[request];
+    }
+
+    return Module.prototype.require.call(loadedModule, request);
+  };
+  loadedModule._compile(output.outputText, filePath);
   return loadedModule.exports;
 }
 
@@ -393,21 +419,57 @@ function createRunSnapshotFixture(status) {
   return {
     id: RUN_ID,
     conversationId: 'conversation-1',
+    mode: 'agent',
     status,
-    conclusionSource: 'none',
     modelTrace: null,
+    reportState: 'hidden',
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
   };
 }
 
 function testRunSnapshotStatusContract(validate) {
-  for (const status of ['idle', 'pending', 'running', 'success', 'error', 'stopped']) {
+  for (const status of ['pending', 'running', 'completed', 'failed', 'stopped']) {
     validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
 
-  for (const status of ['completed', 'failed', 'cancelled']) {
+  for (const status of ['idle', 'success', 'error', 'cancelled']) {
     validate.assertInvalid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+  }
+}
+
+function testDemoSeedRunSnapshotBoundary(validate) {
+  const { demoConversationTemplates } = requireTypeScriptFile(
+    path.join(rootDir, 'src/mocks/demoConversations.ts'),
+  );
+  const { runSnapshotToViewModel } = requireTypeScriptFile(
+    path.join(rootDir, 'src/utils/runReducer.ts'),
+  );
+
+  for (const template of demoConversationTemplates) {
+    const seedRun = template.seed_runs[0];
+    assert.ok(seedRun, `${template.id} must include a seed run`);
+    assert.equal(seedRun.conversationId, template.id);
+    assert.equal(Object.hasOwn(seedRun, 'sessionId'), false);
+    assert.equal(Object.hasOwn(seedRun, 'displayRunId'), false);
+    assert.equal(Object.hasOwn(seedRun, 'steps'), false);
+    assert.equal(Object.hasOwn(seedRun, 'toolInvocations'), false);
+    assert.equal(Object.hasOwn(seedRun, 'sources'), false);
+    assert.equal(Object.hasOwn(seedRun, 'conclusion'), false);
+    assert.equal(Object.hasOwn(seedRun, 'conclusionSource'), false);
+    validate.assertValid('run-snapshot.schema.json', seedRun);
+
+    const sessionId = `demo_${template.id}`;
+    const viewModel = runSnapshotToViewModel(seedRun, {
+      sessionId,
+      displayRunId: seedRun.id,
+    });
+
+    assert.equal(viewModel.sessionId, sessionId);
+    assert.equal(viewModel.displayRunId, seedRun.id);
+    assert.equal(viewModel.conclusionSource, seedRun.modelTrace?.conclusionSource ?? 'none');
+    assert.equal(viewModel.status, 'success');
+    assert.equal(Object.hasOwn(viewModel, 'conversationId'), false);
   }
 }
 
@@ -423,5 +485,6 @@ testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotStatusContract(validate);
+testDemoSeedRunSnapshotBoundary(validate);
 
 console.log('Metadata boundary tests passed.');

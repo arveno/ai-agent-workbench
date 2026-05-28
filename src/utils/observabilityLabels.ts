@@ -3,7 +3,7 @@ import type {
   RunEvent,
   RunIntent,
   RunReportState,
-  RunSnapshot,
+  RunViewModel,
   RunStatus,
   RunStepStatus,
   RunToolInvocation,
@@ -141,7 +141,7 @@ export function getReportStatusTone(reportState: RunReportState): ObservabilityT
   return 'muted';
 }
 
-export function getReportStatusDescription(run: RunSnapshot, canGenerateReport: boolean): string {
+export function getReportStatusDescription(run: RunViewModel, canGenerateReport: boolean): string {
   if (run.reportState === 'generated') {
     return '当前选中 Run 已生成报告，可在聊天记录中查看和恢复。';
   }
@@ -174,7 +174,7 @@ export interface RagEmptyStateLabel {
   description: string;
 }
 
-function getRunFallbackReason(run: RunSnapshot): string | null {
+function getRunFallbackReason(run: RunViewModel): string | null {
   return normalizeCode(run.modelTrace?.fallbackReason) || null;
 }
 
@@ -182,7 +182,7 @@ function isRagIntent(intent: RunIntent): boolean {
   return intent === 'knowledge_qa';
 }
 
-export function getRagEmptyStateLabel(run: RunSnapshot | null): RagEmptyStateLabel {
+export function getRagEmptyStateLabel(run: RunViewModel | null): RagEmptyStateLabel {
   if (!run) {
     return {
       title: '暂无 RAG 来源',
@@ -233,7 +233,7 @@ export function getRagEmptyStateLabel(run: RunSnapshot | null): RagEmptyStateLab
   };
 }
 
-export function getRagSourcesDescription(run: RunSnapshot | null, usedSourceCount: number, sourceCount: number): string {
+export function getRagSourcesDescription(run: RunViewModel | null, usedSourceCount: number, sourceCount: number): string {
   if (!run) {
     return 'CloudBase knowledge_search 返回的来源、引用与证据链';
   }

@@ -1,19 +1,19 @@
 import type { ChatBlock } from '@/types/chatBlocks';
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/types/run';
 import type { WorkbenchMessage, WorkbenchSession } from '@/types/workbench';
 import { createConclusionViewModel } from './runConclusionViewModel';
 import { shouldShowReportConfirm } from './run';
 
 export interface BuildChatBlocksParams {
   session: WorkbenchSession | null;
-  currentRun: RunSnapshot | null;
+  currentRun: RunViewModel | null;
 }
 
 function getRunForMessage(
   message: WorkbenchMessage,
   session: WorkbenchSession,
-  currentRun: RunSnapshot | null,
-): RunSnapshot | null {
+  currentRun: RunViewModel | null,
+): RunViewModel | null {
   if (!message.runId) {
     return null;
   }
@@ -47,7 +47,7 @@ function hasReportMessage(messages: WorkbenchMessage[], runId: string): boolean 
 
 function getCurrentRunAnchorMessageId(
   messages: WorkbenchMessage[],
-  currentRun: RunSnapshot | null,
+  currentRun: RunViewModel | null,
 ): string | null {
   if (!currentRun) {
     return null;
@@ -63,8 +63,8 @@ function getCurrentRunAnchorMessageId(
 }
 
 function createRunFollowUpBlocks(params: {
-  run: RunSnapshot;
-  currentRun: RunSnapshot | null;
+  run: RunViewModel;
+  currentRun: RunViewModel | null;
   messages: WorkbenchMessage[];
   insertedStreamingRunIds: Set<string>;
   insertedErrorRunIds: Set<string>;

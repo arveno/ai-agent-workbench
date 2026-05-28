@@ -96,24 +96,32 @@ Optional structured section inside AgentConclusion.
 
 ### RunSnapshot
 
-Canonical run snapshot consumed by ViewModel builders.
+Canonical runtime and persistence run snapshot. UI-only sessionId, displayRunId, conclusionSource, steps, toolInvocations, and sources belong to RunViewModel.
 
 - Lifecycle node: 10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage
 - Core object: Run
-- Owner: mapper / reducer
+- Owner: Agent Run runtime / persistence mapper / API boundary
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | agent_runs.id | Canonical runId. It only points to DB agent_runs.id. |
 | `conversationId` | string | yes | conversations.id | Conversation owning the run. |
 | `clientRunId` | string \| null | no | request idempotency | Pending and idempotency id. It is not a business foreign key. |
-| `displayRunId` | string \| null | no | ViewModel | UI-only short id. |
-| `status` | idle \| pending \| running \| success \| error \| stopped | yes | mapper / reducer ViewModel | Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract. |
-| `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. |
+| `usageId` | string \| null | no | agent_runs.usage_id | Usage record id when persisted. |
+| `mode` | mock \| agent | yes | Agent Run runtime | Run execution mode at the runtime and persistence boundary. |
+| `status` | pending \| running \| completed \| failed \| stopped | yes | agent_runs.status / Agent Run runtime | Canonical runtime and persistence run status. UI status is mapped in RunViewModel. |
+| `intent` | capability_intro \| data_analysis \| knowledge_qa \| unsupported \| unknown | no | Agent Run planner | Planner intent when known. |
+| `prompt` | string | no | Agent Run request | User prompt captured for this run. |
+| `plan` | object | no | Agent Run planner | Runtime plan snapshot. Plan details are not a UI ViewModel contract. |
+| `dataSource` | object | no | Agent Run runtime | Runtime data source snapshot. |
+| `chartData` | object | no | Agent Run runtime | Canonical chart payload produced by the run when available. |
 | `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |
-| `usageId` | string \| null | no | agent_runs.usage_id | Usage record id when persisted. |
-| `reportId` | string \| null | no | report_artifacts.id | Report artifact id when generated. |
+| `reportState` | hidden \| pending \| generating \| generated \| skipped \| failed | yes | agent_runs.report_state / report artifact mapper | Report decision state attached to the run boundary. |
+| `startedAt` | string | no | agent_runs.started_at | Run start timestamp. |
+| `completedAt` | string | no | agent_runs.completed_at | Run completion timestamp. |
+| `elapsedMs` | number | no | agent_runs.elapsed_ms | Elapsed runtime in milliseconds. |
+| `errorMessage` | string | no | agent_runs.error_message | Failure message for failed or stopped runs. |
 | `createdAt` | string | yes | agent_runs.created_at | Run creation timestamp. |
 | `updatedAt` | string | yes | agent_runs.updated_at | Run update timestamp. |
 

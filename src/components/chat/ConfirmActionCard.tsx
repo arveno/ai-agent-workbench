@@ -1,4 +1,4 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunViewModel } from '../../types/run';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import { shouldShowReportConfirm } from '../../utils/run';
 import { Badge } from '../ui/badge';
@@ -6,7 +6,7 @@ import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 
 interface ConfirmActionCardProps {
-  run: RunSnapshot;
+  run: RunViewModel;
 }
 
 export function ConfirmActionCard({ run }: ConfirmActionCardProps) {

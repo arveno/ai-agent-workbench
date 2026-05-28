@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
+import type { GenerationStatus, RunViewModel } from '../../types/workbench';
 import {
   formatRunElapsed,
   getRunStatusLabel,
@@ -59,7 +59,7 @@ function getGenerationStatusTone(status: GenerationStatus): RunStatusTone {
   return 'muted';
 }
 
-function getRunSummaryItems(currentRun: RunSnapshot | null): string[] {
+function getRunSummaryItems(currentRun: RunViewModel | null): string[] {
   if (!currentRun) {
     return ['尚未开始 Run'];
   }

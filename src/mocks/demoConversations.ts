@@ -2,6 +2,43 @@ import type { DemoConversationTemplateRecord } from '../types/persistence';
 
 const NOW = '2026-05-18T00:00:00.000Z';
 
+const MOCK_MODEL_TRACE = {
+  selectedModelId: 'mock-agent',
+  provider: 'mock',
+  model: '本地模拟',
+  latencyMs: null,
+  usage: {
+    promptTokens: null,
+    completionTokens: null,
+    totalTokens: null,
+    usageAvailable: false,
+    usageSource: 'none',
+    usageUnavailableReason: 'model_not_invoked',
+  },
+  costEstimate: {
+    estimatedCost: null,
+    currency: null,
+    pricingUnit: null,
+    isEstimated: false,
+    pricingSource: 'none',
+    costUnavailableReason: 'model_not_invoked',
+  },
+  fallbackReason: null,
+  modelErrorType: null,
+  modelHttpStatus: null,
+  modelErrorMessage: null,
+  conclusionSource: 'mock',
+} as const;
+
+const DEMO_FALLBACK_MODEL_TRACE = {
+  ...MOCK_MODEL_TRACE,
+  selectedModelId: 'demo-seed',
+  provider: null,
+  model: null,
+  fallbackReason: 'demo_seed',
+  conclusionSource: 'fallback',
+} as const;
+
 export const PHASE4_DEMO_TEMPLATE_KEYS = [
   'phase4_long_text_review',
   'phase4_teaching_anomaly_report',
@@ -37,36 +74,16 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
     seed_runs: [
       {
         id: 'demo_run_long_text_review',
+        conversationId: '20000000-0000-4000-8000-000000000001',
         mode: 'mock',
-        status: 'success',
+        status: 'completed',
         intent: 'capability_intro',
         prompt: '请阅读这份教研复盘长文，输出三部分：核心摘要、主要风险、下周行动项。',
-        steps: [
-          {
-            id: 'step_extract_structure',
-            title: '提取长文本结构',
-            description: '识别复盘材料中的结论、问题和行动线索。',
-            status: 'success',
-            elapsedMs: 180,
-          },
-          {
-            id: 'step_risk_summary',
-            title: '归纳风险点',
-            description: '把分散描述整理成可跟进的风险列表。',
-            status: 'success',
-            elapsedMs: 220,
-          },
-          {
-            id: 'step_action_items',
-            title: '生成行动项',
-            description: '输出面向下周教研会的结构化待办。',
-            status: 'success',
-            elapsedMs: 160,
-          },
-        ],
-        toolInvocations: [],
-        conclusion: '长文本示例已完成结构化摘要、风险点和行动项输出。',
-        conclusionSource: 'mock',
+        agentConclusion: {
+          markdownText: '长文本示例已完成结构化摘要、风险点和行动项输出。',
+          plainText: '长文本示例已完成结构化摘要、风险点和行动项输出。',
+        },
+        modelTrace: MOCK_MODEL_TRACE,
         reportState: 'skipped',
         createdAt: NOW,
         updatedAt: NOW,
@@ -121,8 +138,9 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
     seed_runs: [
       {
         id: 'demo_run_teaching_anomaly',
+        conversationId: '20000000-0000-4000-8000-000000000002',
         mode: 'agent',
-        status: 'success',
+        status: 'completed',
         intent: 'data_analysis',
         prompt: '分析 2026 年 5 月教学质量数据，找出异常指标、异常班级和可能原因，并生成简版报告。',
         plan: {
@@ -141,44 +159,6 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           schema: 'public_demo',
           tableCount: 1,
         },
-        steps: [
-          { id: 'step_schema', title: '读取数据表结构', status: 'success', elapsedMs: 120 },
-          { id: 'step_aggregate', title: '聚合异常指标', status: 'success', elapsedMs: 260 },
-          { id: 'step_chart', title: '生成异常对比图', status: 'success', elapsedMs: 140 },
-          { id: 'step_report', title: '生成简版报告', status: 'success', elapsedMs: 280 },
-        ],
-        toolInvocations: [
-          {
-            id: 'tool_schema_inspect',
-            toolId: 'schema_inspect',
-            toolName: 'schema_inspect',
-            displayName: '读取表结构',
-            status: 'success',
-            inputSummary: 'teaching_metrics',
-            outputSummary: '识别 avg_score、attendance_rate、homework_completion_rate、warning_count。',
-            elapsedMs: 120,
-          },
-          {
-            id: 'tool_aggregate_table',
-            toolId: 'aggregate_table',
-            toolName: 'aggregate_table',
-            displayName: '聚合教学指标',
-            status: 'success',
-            inputSummary: 'month=2026-05，groupBy=class_name，metric=warning_count',
-            outputSummary: '八年级 2 班数学 warning_count 最高，为 8。',
-            elapsedMs: 260,
-          },
-          {
-            id: 'tool_chart_render',
-            toolId: 'chart_render',
-            toolName: 'chart_render',
-            displayName: '生成图表',
-            status: 'success',
-            inputSummary: '按班级展示 warning_count Top 4。',
-            outputSummary: '生成异常指标柱状图。',
-            elapsedMs: 140,
-          },
-        ],
         chartData: {
           title: '2026-05 异常指标 Top 4',
           chartType: 'bar',
@@ -186,14 +166,12 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           series: [{ name: 'warning_count', values: [8, 6, 6, 5] }],
           summary: 'warning_count 越高，表示该维度需要优先排查的风险越多。',
         },
-        conclusion: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
-        conclusionSource: 'fallback',
         agentConclusion: {
-          source: 'fallback',
           markdownText: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
           plainText: '八年级 2 班数学是本月最高优先级异常项，建议结合出勤、作业订正和测验题型复盘。',
           notice: '示例会话展示的是预置只读结果，不会触发新的模型请求。',
         },
+        modelTrace: DEMO_FALLBACK_MODEL_TRACE,
         reportState: 'generated',
         createdAt: NOW,
         updatedAt: NOW,
@@ -240,8 +218,9 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
     seed_runs: [
       {
         id: 'demo_run_metric_trend',
+        conversationId: '20000000-0000-4000-8000-000000000003',
         mode: 'agent',
-        status: 'success',
+        status: 'completed',
         intent: 'data_analysis',
         prompt: '对比 2026 年 4 月和 5 月教学质量指标，说明改善项、下降项，并解释 warning_count。',
         plan: {
@@ -260,23 +239,6 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           schema: 'public_demo',
           tableCount: 1,
         },
-        steps: [
-          { id: 'step_schema', title: '读取指标口径', status: 'success', elapsedMs: 110 },
-          { id: 'step_compare', title: '计算月度对比', status: 'success', elapsedMs: 240 },
-          { id: 'step_explain', title: '解释 warning_count', status: 'success', elapsedMs: 170 },
-        ],
-        toolInvocations: [
-          {
-            id: 'tool_metric_compare',
-            toolId: 'aggregate_table',
-            toolName: 'aggregate_table',
-            displayName: '月度指标对比',
-            status: 'success',
-            inputSummary: 'month=2026-04/2026-05，metrics=avg_score,warning_count',
-            outputSummary: '八年级数学 warning_count 上升，九年级语文保持低风险。',
-            elapsedMs: 240,
-          },
-        ],
         chartData: {
           title: '4 月至 5 月关键指标趋势',
           chartType: 'line',
@@ -287,17 +249,14 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           ],
           summary: '平均分下降同时 warning_count 上升，说明需要优先排查。',
         },
-        conclusion:
-          '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
-        conclusionSource: 'fallback',
         agentConclusion: {
-          source: 'fallback',
           markdownText:
             '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
           plainText:
             '趋势对比显示八年级数学风险升高。warning_count 应结合 avg_score、attendance_rate 和 homework_completion_rate 共同解释。',
           notice: '示例会话为预置只读结果，不会消耗 quota。',
         },
+        modelTrace: DEMO_FALLBACK_MODEL_TRACE,
         reportState: 'skipped',
         createdAt: NOW,
         updatedAt: NOW,
@@ -344,8 +303,9 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
     seed_runs: [
       {
         id: 'demo_run_knowledge_search',
+        conversationId: '20000000-0000-4000-8000-000000000004',
         mode: 'agent',
-        status: 'success',
+        status: 'completed',
         intent: 'knowledge_qa',
         prompt: 'warning_count 是什么？为什么不能只看平均分判断教学风险？请给出知识库引用。',
         plan: {
@@ -360,68 +320,12 @@ export const demoConversationTemplates: DemoConversationTemplateRecord[] = [
           schema: 'knowledge_documents / knowledge_chunks',
           tableCount: 2,
         },
-        steps: [
-          { id: 'step_knowledge_search', title: '检索知识库片段', status: 'success', elapsedMs: 190 },
-          { id: 'step_answer', title: '生成带引用回答', status: 'success', elapsedMs: 210 },
-        ],
-        toolInvocations: [
-          {
-            id: 'tool_knowledge_search',
-            toolId: 'knowledge_search',
-            toolName: 'knowledge_search',
-            displayName: '知识检索',
-            status: 'success',
-            inputSummary: 'query=warning_count 平均分 教学风险，topK=3',
-            outputSummary: '知识库命中 2 条来源。',
-            elapsedMs: 190,
-          },
-        ],
-        sources: [
-          {
-            id: 'kb-chunk-warning-001',
-            runId: 'demo_run_knowledge_search',
-            conversationId: '20000000-0000-4000-8000-000000000004',
-            documentId: 'kb-doc-warning',
-            chunkId: 'kb-chunk-warning-001',
-            citationLabel: '[S1]',
-            sourceOrder: 1,
-            title: '异常指标与 warning_count 解释',
-            preview: 'warning_count 表示当前维度下需要关注的预警或异常数量。',
-            score: 0.92,
-            usedInAnswer: true,
-            sourceType: 'knowledge',
-            createdAt: NOW,
-            metadata: {
-              provider: 'knowledge_search',
-            },
-          },
-          {
-            id: 'kb-chunk-warning-002',
-            runId: 'demo_run_knowledge_search',
-            conversationId: '20000000-0000-4000-8000-000000000004',
-            documentId: 'kb-doc-warning',
-            chunkId: 'kb-chunk-warning-002',
-            citationLabel: '[S2]',
-            sourceOrder: 2,
-            title: '异常指标与 warning_count 解释',
-            preview: 'warning_count 较高时，应结合 avg_score、attendance_rate 和 homework_completion_rate 交叉验证。',
-            score: 0.86,
-            usedInAnswer: true,
-            sourceType: 'knowledge',
-            createdAt: NOW,
-            metadata: {
-              provider: 'knowledge_search',
-            },
-          },
-        ],
-        conclusion: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
-        conclusionSource: 'fallback',
         agentConclusion: {
-          source: 'fallback',
           markdownText: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
           plainText: 'RAG 示例命中 2 条知识片段，并在回答中显式给出引用来源。',
           notice: '示例会话展示 knowledge_search 的目标形态，不会触发新的检索请求。',
         },
+        modelTrace: DEMO_FALLBACK_MODEL_TRACE,
         reportState: 'skipped',
         createdAt: NOW,
         updatedAt: NOW,

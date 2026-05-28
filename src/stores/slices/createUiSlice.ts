@@ -129,7 +129,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
     const pendingRunEvent = createAgentPendingRunStartedEvent({
       runId,
       prompt,
-      sessionId,
+      conversationId: sessionId,
     });
     let hasFailed = false;
 

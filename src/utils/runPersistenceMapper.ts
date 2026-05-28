@@ -18,9 +18,10 @@ import type {
   RunPlanSnapshot,
   RunReportState,
   RunSnapshot,
-  RunStatus,
+  RunSnapshotStatus,
+  RunViewModel,
 } from '@/types/run';
-import { applyRunEventToSnapshot, normalizeAgentConclusion } from './runReducer';
+import { applyRunEventToViewModel, normalizeAgentConclusion, runSnapshotToViewModel } from './runReducer';
 import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
 
 const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
@@ -50,9 +51,9 @@ function isRunEvent(value: unknown): value is RunEvent {
   return isRecord(value) && typeof value.type === 'string' && RUN_EVENT_TYPES.has(value.type as RunEvent['type']);
 }
 
-function mapRunStatus(status: AgentRunRecord['status']): RunStatus {
-  if (status === 'completed') return 'success';
-  if (status === 'failed') return 'error';
+function mapRunSnapshotStatus(status: AgentRunRecord['status']): RunSnapshotStatus {
+  if (status === 'completed') return 'completed';
+  if (status === 'failed') return 'failed';
   if (status === 'stopped') return 'stopped';
   if (status === 'pending') return 'pending';
   return 'running';
@@ -245,24 +246,18 @@ function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
   };
 }
 
-function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
-  RunSnapshot,
-  'id' | 'clientRunId' | 'displayRunId'
-> {
+function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<RunSnapshot, 'id' | 'clientRunId'> {
   const runId = record.id;
-  const clientRunId = record.client_run_id === null ? undefined : record.client_run_id;
 
   return {
     id: runId,
-    clientRunId,
-    displayRunId: runId,
+    clientRunId: record.client_run_id,
   };
 }
 
-export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
+export function agentRunRecordToSnapshot(record: AgentRunRecord): RunSnapshot {
   const runIdentity = getAgentRunRecordIdentity(record);
   const modelTrace = getRunModelTrace(record);
-  const conclusionSource = modelTrace?.conclusionSource ?? 'none';
   const agentConclusion = normalizeAgentConclusion(
     record.conclusion ?? '',
     record.metadata.agentConclusion as AgentConclusion | undefined,
@@ -270,20 +265,16 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
 
   return {
     ...runIdentity,
-    sessionId: record.conversation_id,
+    conversationId: record.conversation_id,
     mode: record.mode,
-    status: mapRunStatus(record.status),
+    status: mapRunSnapshotStatus(record.status),
     intent: mapIntent(record.intent),
     prompt: record.prompt ?? '',
     plan: asPlan(record.plan),
     dataSource: asDataSource(record.data_source_snapshot),
-    steps: [],
-    toolInvocations: [],
     chartData: asChartData(record.chart_data),
-    conclusion: agentConclusion.plainText,
-    conclusionSource,
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    modelTrace,
+    modelTrace: modelTrace ?? null,
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,
     updatedAt: record.completed_at ?? record.started_at,
@@ -294,6 +285,13 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
   };
 }
 
+export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewModel {
+  return runSnapshotToViewModel(agentRunRecordToSnapshot(record), {
+    sessionId: record.conversation_id,
+    displayRunId: record.id,
+  });
+}
+
 export function runEventsRecordToRunEvents(records: RunEventRecord[]): RunEvent[] {
   return records
     .slice()
@@ -302,39 +300,41 @@ export function runEventsRecordToRunEvents(records: RunEventRecord[]): RunEvent[
     .filter((event): event is RunEvent => event !== null);
 }
 
-export function runPersistenceRecordsToSnapshot(params: {
+export function runPersistenceRecordsToViewModel(params: {
   run: AgentRunRecord;
   events: RunEventRecord[];
   tools: ToolInvocationRecord[];
   sources: RunSourceRecord[];
-}): RunSnapshot {
+}): RunViewModel {
   const runEvents = runEventsRecordToRunEvents(params.events);
-  const eventSnapshot = runEvents.reduce<RunSnapshot | null>(
-    (snapshot, event) => applyRunEventToSnapshot(snapshot, event),
+  const eventViewModel = runEvents.reduce<RunViewModel | null>(
+    (snapshot, event) => applyRunEventToViewModel(snapshot, event),
     null,
   );
-  const baseSnapshot = agentRunRecordToBaseSnapshot(params.run);
-  const snapshot = eventSnapshot ? { ...baseSnapshot, ...eventSnapshot } : baseSnapshot;
+  const baseViewModel = agentRunRecordToBaseViewModel(params.run);
+  const viewModel = eventViewModel ? { ...baseViewModel, ...eventViewModel } : baseViewModel;
   const agentConclusion = normalizeAgentConclusion(
-    snapshot.conclusion,
-    snapshot.agentConclusion,
+    viewModel.conclusion,
+    viewModel.agentConclusion,
   );
   const persistedTools = params.tools.map((tool) => toolInvocationRecordToRunTool(tool));
   const persistedSources = params.sources.map((source) => runSourceRecordToRunSource(source));
   const persistedReportState = mapReportState(params.run.report_state);
   const runIdentity = getAgentRunRecordIdentity(params.run);
-  const modelTrace = snapshot.modelTrace ?? getRunModelTrace(params.run);
+  const modelTrace = viewModel.modelTrace ?? getRunModelTrace(params.run);
 
   return {
-    ...snapshot,
-    ...runIdentity,
+    ...viewModel,
+    id: runIdentity.id,
+    clientRunId: runIdentity.clientRunId ?? undefined,
+    displayRunId: params.run.id,
     conclusion: agentConclusion.plainText,
     conclusionSource: modelTrace?.conclusionSource ?? 'none',
     agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
     modelTrace,
-    sessionId: params.run.conversation_id,
-    toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
+    toolInvocations: persistedTools.length > 0 ? persistedTools : viewModel.toolInvocations,
     sources: persistedSources,
-    reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : snapshot.reportState,
+    reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : viewModel.reportState,
+    sessionId: params.run.conversation_id,
   };
 }

@@ -152,7 +152,7 @@ function getWorkflowInputSummary(step: WorkflowStepDefinition): string {
     return 'toolContext, chartSummary';
   }
 
-  return 'runSnapshot';
+  return 'runViewModel';
 }
 
 function renderWorkflowStep(step: WorkflowStepDefinition, index: number, isLast: boolean) {

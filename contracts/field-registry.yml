@@ -189,8 +189,8 @@ objects:
   RunSnapshot:
     lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage"
     coreObject: "Run"
-    owner: "mapper / reducer"
-    summary: "Canonical run snapshot consumed by ViewModel builders."
+    owner: "Agent Run runtime / persistence mapper / API boundary"
+    summary: "Canonical runtime and persistence run snapshot. UI-only sessionId, displayRunId, conclusionSource, steps, toolInvocations, and sources belong to RunViewModel."
     fields:
       id:
         type: "string"
@@ -207,21 +207,46 @@ objects:
         required: "no"
         source: "request idempotency"
         description: "Pending and idempotency id. It is not a business foreign key."
-      displayRunId:
+      usageId:
         type: "string | null"
         required: "no"
-        source: "ViewModel"
-        description: "UI-only short id."
+        source: "agent_runs.usage_id"
+        description: "Usage record id when persisted."
+      mode:
+        type: "mock | agent"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "Run execution mode at the runtime and persistence boundary."
       status:
-        type: "idle | pending | running | success | error | stopped"
+        type: "pending | running | completed | failed | stopped"
         required: "yes"
-        source: "mapper / reducer ViewModel"
-        description: "Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract."
-      conclusionSource:
-        type: "model | fallback | mock | none"
-        required: "yes"
-        source: "Derived from modelTrace.conclusionSource"
-        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
+        source: "agent_runs.status / Agent Run runtime"
+        description: "Canonical runtime and persistence run status. UI status is mapped in RunViewModel."
+      intent:
+        type: "capability_intro | data_analysis | knowledge_qa | unsupported | unknown"
+        required: "no"
+        source: "Agent Run planner"
+        description: "Planner intent when known."
+      prompt:
+        type: "string"
+        required: "no"
+        source: "Agent Run request"
+        description: "User prompt captured for this run."
+      plan:
+        type: "object"
+        required: "no"
+        source: "Agent Run planner"
+        description: "Runtime plan snapshot. Plan details are not a UI ViewModel contract."
+      dataSource:
+        type: "object"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "Runtime data source snapshot."
+      chartData:
+        type: "object"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "Canonical chart payload produced by the run when available."
       modelTrace:
         type: "ModelTrace | null"
         required: "yes"
@@ -232,16 +257,31 @@ objects:
         required: "no"
         source: "Agent Run runtime"
         description: "Canonical conclusion envelope."
-      usageId:
-        type: "string | null"
+      reportState:
+        type: "hidden | pending | generating | generated | skipped | failed"
+        required: "yes"
+        source: "agent_runs.report_state / report artifact mapper"
+        description: "Report decision state attached to the run boundary."
+      startedAt:
+        type: "string"
         required: "no"
-        source: "agent_runs.usage_id"
-        description: "Usage record id when persisted."
-      reportId:
-        type: "string | null"
+        source: "agent_runs.started_at"
+        description: "Run start timestamp."
+      completedAt:
+        type: "string"
         required: "no"
-        source: "report_artifacts.id"
-        description: "Report artifact id when generated."
+        source: "agent_runs.completed_at"
+        description: "Run completion timestamp."
+      elapsedMs:
+        type: "number"
+        required: "no"
+        source: "agent_runs.elapsed_ms"
+        description: "Elapsed runtime in milliseconds."
+      errorMessage:
+        type: "string"
+        required: "no"
+        source: "agent_runs.error_message"
+        description: "Failure message for failed or stopped runs."
       createdAt:
         type: "string"
         required: "yes"

@@ -344,13 +344,8 @@ async function fetchConversationRecord(db, currentUser, conversationId) {
   return rows.length > 0 ? rows[0] : null;
 }
 
-function normalizeRunConclusionSource(value) {
-  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none' ? value : 'none';
-}
-
 function mapAgentRun(row) {
   const metadata = parseJsonObject(row.metadata);
-  const modelTrace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
 
   return {
     id: String(row.id ?? ''),
@@ -358,7 +353,6 @@ function mapAgentRun(row) {
     usageId: row.usage_id ? String(row.usage_id) : null,
     clientRunId: row.client_run_id ? String(row.client_run_id) : null,
     status: String(row.status ?? 'running'),
-    conclusionSource: normalizeRunConclusionSource(modelTrace?.conclusionSource),
     reportState: row.report_state ? String(row.report_state) : null,
     completedAt: row.completed_at ? String(row.completed_at) : null,
     metadata,
@@ -425,19 +419,18 @@ function releaseIdempotencyGuard(key) {
 function createRunReusePayload(context, existingRun, reason) {
   return {
     type: 'run_reused',
-    runId: existingRun?.id || null,
-    usageId: existingRun?.usageId || null,
+    runId: existingRun?.id ?? null,
+    usageId: existingRun?.usageId ?? null,
     clientRunId: context.clientRunId,
-    conversationId: existingRun?.conversationId || context.conversationId,
+    conversationId: existingRun?.conversationId ?? context.conversationId,
     timestamp: new Date().toISOString(),
     duplicate: true,
     reused: true,
     reason,
-    status: existingRun?.status || 'running',
+    status: existingRun?.status ?? 'running',
     existingRun: existingRun ? {
       id: existingRun.id,
       status: existingRun.status,
-      conclusionSource: existingRun.conclusionSource,
       reportState: existingRun.reportState,
       completedAt: existingRun.completedAt,
     } : null,
@@ -1021,6 +1014,9 @@ function createRunSnapshot(context, options = {}) {
 
   return {
     id: context.runId,
+    conversationId: context.conversationId,
+    usageId: context.usageId || null,
+    clientRunId: context.clientRunId || null,
     mode: 'agent',
     status: options.status || 'running',
     intent,
@@ -1031,11 +1027,7 @@ function createRunSnapshot(context, options = {}) {
       reason: '正在判断任务类型',
     },
     dataSource: context.dataSourceSnapshot || getDataSourceSnapshot(),
-    steps: options.steps || context.steps || [],
-    toolInvocations: options.toolInvocations || context.toolInvocations || [],
     chartData: options.chartData || context.chartData,
-    conclusion: options.conclusion || context.conclusion || '',
-    conclusionSource: modelTrace?.conclusionSource || 'none',
     agentConclusion: options.agentConclusion || context.agentConclusion,
     modelTrace,
     reportState: options.reportState || context.reportState || 'hidden',

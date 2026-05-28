@@ -5,7 +5,7 @@ import type {
   DemoConversationTemplateRecord,
   ConversationVisibility,
 } from './persistence';
-import type { RunEvent, RunSnapshot } from './run';
+import type { RunEvent, RunViewModel } from './run';
 import type { ModelProviderId } from '../utils/modelCatalogMetadata';
 
 export type SessionId = string;
@@ -35,12 +35,13 @@ export type {
   RunMode,
   RunPlanSnapshot,
   RunReportState,
-  RunSnapshot,
+  RunSnapshotStatus,
   RunStatus,
   RunStep,
   RunStepStatus,
   RunToolInvocation,
   RunToolStatus,
+  RunViewModel,
 } from './run';
 
 export type { RunSource, RunSourceType } from './rag';
@@ -79,7 +80,7 @@ export interface WorkbenchSession {
   updatedAt: number;
   messages: WorkbenchMessage[];
   taskId?: string;
-  runsById: Record<string, RunSnapshot>;
+  runsById: Record<string, RunViewModel>;
   latestRunId?: string;
   mode?: ConversationMode;
   status?: ConversationStatus;
@@ -301,7 +302,7 @@ export interface UiSlice {
 }
 
 export interface RunSlice {
-  currentRun: RunSnapshot | null;
+  currentRun: RunViewModel | null;
   selectedRunId: string | null;
   runEventLog: RunEvent[];
   isLatestRunLoading: boolean;
@@ -312,7 +313,7 @@ export interface RunSlice {
   reportArtifactsError: string | null;
   isRagSourcesLoading: boolean;
   ragSourcesError: string | null;
-  setCurrentRun: (run: RunSnapshot | null) => void;
+  setCurrentRun: (run: RunViewModel | null) => void;
   clearCurrentRun: () => void;
   applyRunEvent: (event: RunEvent) => void;
   selectRunForCurrentSession: (runId: string) => Promise<void>;
