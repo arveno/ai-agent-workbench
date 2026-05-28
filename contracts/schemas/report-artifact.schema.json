@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/report-artifact.schema.json",
+  "title": "ReportArtifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conversation_id",
+    "runId",
+    "user_id",
+    "title",
+    "content_markdown",
+    "status",
+    "version",
+    "created_at",
+    "updated_at",
+    "metadata",
+    "sources",
+    "sourceCount",
+    "sourceLineage",
+    "sourceNoSourceReason"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Report artifact id."
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "Conversation owning the report artifact."
+    },
+    "runId": {
+      "type": "string",
+      "description": "Canonical runId owning the report artifact."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Workbench user id owning the report artifact."
+    },
+    "title": {
+      "type": "string",
+      "description": "Report title."
+    },
+    "content_markdown": {
+      "type": "string",
+      "description": "Report content in markdown."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "generated", "archived"],
+      "description": "Report artifact status."
+    },
+    "version": {
+      "type": "integer",
+      "description": "Report artifact version."
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Report creation timestamp."
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "Report update timestamp."
+    },
+    "metadata": {
+      "$ref": "report-metadata.schema.json"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "run-source.schema.json"
+      },
+      "description": "Canonical report sources hydrated from run_sources."
+    },
+    "sourceCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of hydrated canonical report sources."
+    },
+    "sourceLineage": {
+      "type": "string",
+      "const": "run_sources",
+      "description": "Lineage source used to hydrate report sources."
+    },
+    "sourceNoSourceReason": {
+      "type": ["string", "null"],
+      "description": "Explicit reason when no report sources are available."
+    }
+  }
+}

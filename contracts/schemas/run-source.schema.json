@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/run-source.schema.json",
+  "title": "RunSource",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "runId",
+    "conversationId",
+    "sourceOrder",
+    "title",
+    "preview",
+    "sourceType",
+    "createdAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Run source id."
+    },
+    "runId": {
+      "type": "string",
+      "description": "Canonical runId owning this source."
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "Conversation owning this source."
+    },
+    "toolInvocationId": {
+      "type": "string",
+      "description": "Tool invocation that produced this source."
+    },
+    "retrievalLogId": {
+      "type": "string",
+      "description": "Retrieval log associated with this source."
+    },
+    "documentId": {
+      "type": "string",
+      "description": "Knowledge document snapshot id."
+    },
+    "chunkId": {
+      "type": "string",
+      "description": "Knowledge chunk snapshot id."
+    },
+    "citationLabel": {
+      "type": "string",
+      "description": "Display-only citation label."
+    },
+    "sourceOrder": {
+      "type": "integer",
+      "description": "Stable source display order."
+    },
+    "title": {
+      "type": "string",
+      "description": "Source title snapshot."
+    },
+    "preview": {
+      "type": "string",
+      "description": "Source preview text."
+    },
+    "score": {
+      "type": "number",
+      "description": "Retriever score when available."
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": ["knowledge", "tool", "report", "manual"],
+      "description": "Canonical source type."
+    },
+    "usedInAnswer": {
+      "type": "boolean",
+      "description": "Whether this source was used in the final answer."
+    },
+    "noSourceReason": {
+      "type": "string",
+      "description": "Explicit no-source reason when applicable."
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "Source creation timestamp."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Source metadata for retrieval strategy, provider and debug context."
+    }
+  }
+}

@@ -11,6 +11,7 @@
       "description": "Canonical runId evaluated by this result."
     },
     "source": {
+      "type": "string",
       "const": "workbench-evaluation",
       "description": "Evaluation metadata provenance set by the server."
     },
@@ -35,6 +36,7 @@
     },
     "langSmithEvaluation": {
       "type": "object",
+      "additionalProperties": true,
       "description": "Server-created LangSmith feedback status metadata. Request metadata cannot set it."
     }
   }

@@ -4,14 +4,16 @@
 
 ## 事实源
 
-- `contracts/field-registry.yml`：字段总账，登记对象、字段、责任边界和禁止字段。
-- `contracts/schemas/*.schema.json`：机器可读契约，用于生成前端可引用类型。
+- `contracts/schemas/*.schema.json`：机器可读对象契约，用于 schema validation 和生成前端可引用类型。
+- `contracts/field-registry.yml`：人读字段说明、历史字段总账和高风险字段备注；不作为机器校验主链路。
 - `contracts/generated/workbench-contract.ts`：由 schema 生成的 TypeScript 类型。
 - `contracts/generated/field-registry.md`：由字段总账生成的人读字段表。
 
 ## 使用规则
 
 新增或修改业务字段时，必须先更新 `field-registry.yml` 和对应 schema，再更新后端输出、前端 type、mapper 和 ViewModel。组件层只能消费 ViewModel，不得绕过 mapper 读取 raw payload 或旧字段 fallback。
+
+新增 schema 对象必须能在 `field-registry.yml` 的人读说明层面被发现；字段细节不得复制成第二事实源，必须以对应 `contracts/schemas/*.schema.json` 为准。
 
 职责边界：
 
@@ -22,11 +24,12 @@
 生成命令：
 
 ```bash
+node scripts/validate-contract-schemas.mjs
 node scripts/generate-field-registry-doc.mjs
 node scripts/generate-contract-types.mjs
 ```
 
-`Contract Pack Check` 只校验 generated 文件与契约源文件一致。本基础设施包不承担 forbidden 字段静态扫描；字段违规扫描应在后续独立 Data Contract Linter 中实现。
+`Contract Pack Check` 会先校验 schema 可被 Ajv 2020-12 编译，再生成字段表和 TypeScript 类型，并检查 generated 文件与契约源文件一致。本基础设施包不承担 forbidden 字段静态扫描；不得在本链路中新增自研 AST Linter 或 forbidden field scanner。
 
 ## 文档边界
 
