@@ -105,17 +105,30 @@ Canonical run snapshot consumed by ViewModel builders.
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | agent_runs.id | Canonical runId. It only points to DB agent_runs.id. |
-| `conversationId` | string | yes | conversations.id | Conversation owning the run. |
+| `sessionId` | string | no | frontend session ViewModel | Frontend workspace session id. It may equal conversationId or a local temporary session id and is not a DB foreign key. |
 | `clientRunId` | string \| null | no | request idempotency | Pending and idempotency id. It is not a business foreign key. |
 | `displayRunId` | string \| null | no | ViewModel | UI-only short id. |
+| `mode` | mock \| agent | yes | mapper / reducer ViewModel | Run ViewModel mode. |
 | `status` | idle \| pending \| running \| success \| error \| stopped | yes | mapper / reducer ViewModel | Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract. |
+| `intent` | capability_intro \| data_analysis \| knowledge_qa \| unsupported \| unknown | yes | mapper / reducer ViewModel | Normalized frontend RunSnapshot intent. |
+| `prompt` | string | yes | user input / agent_runs.prompt | User prompt shown for this run. |
+| `plan` | object | no | planner ViewModel | Run plan snapshot. Deep shape is intentionally deferred to Runtime Contract Governance. |
+| `dataSource` | object | no | mapper / reducer ViewModel | Run data source snapshot. Deep shape is intentionally deferred to Runtime Contract Governance. |
+| `steps` | object[] | yes | mapper / reducer ViewModel | Run step ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance. |
+| `toolInvocations` | object[] | yes | mapper / reducer ViewModel | Run tool invocation ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance. |
+| `sources` | object[] | no | Source Lineage mapper | Run source ViewModel array. Source deep shape stays in Source Lineage governance. |
+| `chartData` | object | no | mapper / reducer ViewModel | Run chart ViewModel data. Deep shape is intentionally deferred to Runtime Contract Governance. |
+| `conclusion` | string | yes | AgentConclusion ViewModel | Plain text conclusion shown by the RunSnapshot ViewModel. |
 | `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. |
-| `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
+| `modelTrace` | ModelTrace \| null | no | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |
-| `usageId` | string \| null | no | agent_runs.usage_id | Usage record id when persisted. |
-| `reportId` | string \| null | no | report_artifacts.id | Report artifact id when generated. |
+| `reportState` | hidden \| pending \| generating \| generated \| skipped \| failed | yes | mapper / reducer ViewModel | Frontend report action state carried by the RunSnapshot ViewModel. |
 | `createdAt` | string | yes | agent_runs.created_at | Run creation timestamp. |
 | `updatedAt` | string | yes | agent_runs.updated_at | Run update timestamp. |
+| `startedAt` | string | no | agent_runs.started_at | Run start timestamp when available. |
+| `completedAt` | string | no | agent_runs.completed_at | Run completion timestamp when available. |
+| `elapsedMs` | number | no | agent_runs.elapsed_ms | Run elapsed time in milliseconds when available. |
+| `errorMessage` | string | no | agent_runs.error_message | Run error message when status is error. |
 
 ### ReportMetadata
 

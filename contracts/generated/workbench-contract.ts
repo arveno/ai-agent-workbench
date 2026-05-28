@@ -425,9 +425,9 @@ export interface RunSnapshot {
    */
   id: string;
   /**
-   * Conversation owning the run.
+   * Frontend workspace session id. It may equal conversationId or a local temporary session id and is not a DB foreign key.
    */
-  conversationId: string;
+  sessionId?: string;
   /**
    * Pending and idempotency id. It is not a business foreign key.
    */
@@ -437,23 +437,71 @@ export interface RunSnapshot {
    */
   displayRunId?: string | null;
   /**
+   * Run ViewModel mode.
+   */
+  mode: 'mock' | 'agent';
+  /**
    * Canonical frontend RunSnapshot ViewModel status.
    */
   status: 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
   /**
+   * Normalized frontend RunSnapshot intent.
+   */
+  intent: 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
+  /**
+   * User prompt shown for this run.
+   */
+  prompt: string;
+  /**
+   * Run plan snapshot. Deep shape is intentionally deferred to Runtime Contract Governance.
+   */
+  plan?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Run data source snapshot. Deep shape is intentionally deferred to Runtime Contract Governance.
+   */
+  dataSource?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Run step ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance.
+   */
+  steps: {
+    [k: string]: unknown;
+  }[];
+  /**
+   * Run tool invocation ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance.
+   */
+  toolInvocations: {
+    [k: string]: unknown;
+  }[];
+  /**
+   * Run source ViewModel array. Source deep shape stays in Source Lineage governance.
+   */
+  sources?: {
+    [k: string]: unknown;
+  }[];
+  /**
+   * Run chart ViewModel data. Deep shape is intentionally deferred to Runtime Contract Governance.
+   */
+  chartData?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Plain text conclusion shown by the RunSnapshot ViewModel.
+   */
+  conclusion: string;
+  /**
    * Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none.
    */
   conclusionSource: 'model' | 'fallback' | 'mock' | 'none';
-  modelTrace: ModelTrace | null;
+  modelTrace?: ModelTrace | null;
   agentConclusion?: AgentConclusion | null;
   /**
-   * Usage record id when persisted.
+   * Frontend report action state carried by the RunSnapshot ViewModel.
    */
-  usageId?: string | null;
-  /**
-   * Report artifact id when generated.
-   */
-  reportId?: string | null;
+  reportState: 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
   /**
    * Run creation timestamp.
    */
@@ -462,4 +510,20 @@ export interface RunSnapshot {
    * Run update timestamp.
    */
   updatedAt: string;
+  /**
+   * Run start timestamp when available.
+   */
+  startedAt?: string;
+  /**
+   * Run completion timestamp when available.
+   */
+  completedAt?: string;
+  /**
+   * Run elapsed time in milliseconds when available.
+   */
+  elapsedMs?: number;
+  /**
+   * Run error message when status is error.
+   */
+  errorMessage?: string;
 }

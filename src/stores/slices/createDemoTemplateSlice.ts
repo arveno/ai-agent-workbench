@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
+import type { RunConclusionSource } from '../../types/run';
 import type { DemoTemplateSlice, RunSnapshot, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
 import { useAuthStore } from '../authStore';
@@ -104,6 +105,14 @@ function getSeedMessageRunId(message: DemoSeedMessage): string | undefined {
   return typeof runId === 'string' && runId.trim() ? runId : undefined;
 }
 
+function toDemoConclusionSource(value: unknown): RunConclusionSource | null {
+  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none' ? value : null;
+}
+
+function getDemoRunConclusionSource(rawRun: Partial<RunSnapshot>): RunConclusionSource {
+  return toDemoConclusionSource(rawRun.modelTrace?.conclusionSource) ?? toDemoConclusionSource(rawRun.conclusionSource) ?? 'none';
+}
+
 function createDemoMessages(template: DemoConversationTemplateRecord, createdAt: number): WorkbenchMessage[] {
   return template.seed_messages
     .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -138,7 +147,7 @@ function createDemoRun(template: DemoConversationTemplateRecord, sessionId: stri
     sources: rawRun.sources,
     chartData: rawRun.chartData,
     conclusion: rawRun.conclusion ?? '',
-    conclusionSource: rawRun.modelTrace?.conclusionSource ?? 'none',
+    conclusionSource: getDemoRunConclusionSource(rawRun),
     agentConclusion: rawRun.agentConclusion,
     reportState: rawRun.reportState ?? 'skipped',
     createdAt: rawRun.createdAt ?? template.created_at,

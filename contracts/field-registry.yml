@@ -197,11 +197,11 @@ objects:
         required: "yes"
         source: "agent_runs.id"
         description: "Canonical runId. It only points to DB agent_runs.id."
-      conversationId:
+      sessionId:
         type: "string"
-        required: "yes"
-        source: "conversations.id"
-        description: "Conversation owning the run."
+        required: "no"
+        source: "frontend session ViewModel"
+        description: "Frontend workspace session id. It may equal conversationId or a local temporary session id and is not a DB foreign key."
       clientRunId:
         type: "string | null"
         required: "no"
@@ -212,11 +212,61 @@ objects:
         required: "no"
         source: "ViewModel"
         description: "UI-only short id."
+      mode:
+        type: "mock | agent"
+        required: "yes"
+        source: "mapper / reducer ViewModel"
+        description: "Run ViewModel mode."
       status:
         type: "idle | pending | running | success | error | stopped"
         required: "yes"
         source: "mapper / reducer ViewModel"
         description: "Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract."
+      intent:
+        type: "capability_intro | data_analysis | knowledge_qa | unsupported | unknown"
+        required: "yes"
+        source: "mapper / reducer ViewModel"
+        description: "Normalized frontend RunSnapshot intent."
+      prompt:
+        type: "string"
+        required: "yes"
+        source: "user input / agent_runs.prompt"
+        description: "User prompt shown for this run."
+      plan:
+        type: "object"
+        required: "no"
+        source: "planner ViewModel"
+        description: "Run plan snapshot. Deep shape is intentionally deferred to Runtime Contract Governance."
+      dataSource:
+        type: "object"
+        required: "no"
+        source: "mapper / reducer ViewModel"
+        description: "Run data source snapshot. Deep shape is intentionally deferred to Runtime Contract Governance."
+      steps:
+        type: "object[]"
+        required: "yes"
+        source: "mapper / reducer ViewModel"
+        description: "Run step ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance."
+      toolInvocations:
+        type: "object[]"
+        required: "yes"
+        source: "mapper / reducer ViewModel"
+        description: "Run tool invocation ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance."
+      sources:
+        type: "object[]"
+        required: "no"
+        source: "Source Lineage mapper"
+        description: "Run source ViewModel array. Source deep shape stays in Source Lineage governance."
+      chartData:
+        type: "object"
+        required: "no"
+        source: "mapper / reducer ViewModel"
+        description: "Run chart ViewModel data. Deep shape is intentionally deferred to Runtime Contract Governance."
+      conclusion:
+        type: "string"
+        required: "yes"
+        source: "AgentConclusion ViewModel"
+        description: "Plain text conclusion shown by the RunSnapshot ViewModel."
       conclusionSource:
         type: "model | fallback | mock | none"
         required: "yes"
@@ -224,7 +274,7 @@ objects:
         description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
       modelTrace:
         type: "ModelTrace | null"
-        required: "yes"
+        required: "no"
         source: "agent_runs.metadata.modelTrace"
         description: "Canonical model trace for the run."
       agentConclusion:
@@ -232,16 +282,11 @@ objects:
         required: "no"
         source: "Agent Run runtime"
         description: "Canonical conclusion envelope."
-      usageId:
-        type: "string | null"
-        required: "no"
-        source: "agent_runs.usage_id"
-        description: "Usage record id when persisted."
-      reportId:
-        type: "string | null"
-        required: "no"
-        source: "report_artifacts.id"
-        description: "Report artifact id when generated."
+      reportState:
+        type: "hidden | pending | generating | generated | skipped | failed"
+        required: "yes"
+        source: "mapper / reducer ViewModel"
+        description: "Frontend report action state carried by the RunSnapshot ViewModel."
       createdAt:
         type: "string"
         required: "yes"
@@ -252,6 +297,26 @@ objects:
         required: "yes"
         source: "agent_runs.updated_at"
         description: "Run update timestamp."
+      startedAt:
+        type: "string"
+        required: "no"
+        source: "agent_runs.started_at"
+        description: "Run start timestamp when available."
+      completedAt:
+        type: "string"
+        required: "no"
+        source: "agent_runs.completed_at"
+        description: "Run completion timestamp when available."
+      elapsedMs:
+        type: "number"
+        required: "no"
+        source: "agent_runs.elapsed_ms"
+        description: "Run elapsed time in milliseconds when available."
+      errorMessage:
+        type: "string"
+        required: "no"
+        source: "agent_runs.error_message"
+        description: "Run error message when status is error."
   ReportMetadata:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"

@@ -389,15 +389,76 @@ function testModelLayerPricingSource(validate) {
   });
 }
 
-function createRunSnapshotFixture(status) {
+function createRunSnapshotFixture(status, overrides = {}) {
   return {
     id: RUN_ID,
-    conversationId: 'conversation-1',
+    clientRunId: REQUEST_RUN_ID,
+    displayRunId: RUN_ID,
+    sessionId: 'conversation-1',
+    mode: 'agent',
     status,
-    conclusionSource: 'none',
-    modelTrace: null,
+    intent: 'knowledge_qa',
+    prompt: 'Explain warning_count with sources.',
+    plan: {
+      intent: 'knowledge_qa',
+      shouldUseDataAnalysis: false,
+      reason: 'Use knowledge_search for the explanation.',
+    },
+    dataSource: {
+      provider: 'cloudbase_mysql',
+      name: 'CloudBase MySQL / knowledge_documents',
+      typeLabel: 'CloudBase MySQL',
+    },
+    steps: [
+      {
+        id: 'step_knowledge_search',
+        title: 'Search knowledge base',
+        status: 'success',
+      },
+    ],
+    toolInvocations: [
+      {
+        id: 'tool_knowledge_search',
+        toolId: 'knowledge_search',
+        toolName: 'knowledge_search',
+        displayName: 'Knowledge search',
+        status: 'success',
+        inputSummary: 'warning_count',
+        outputSummary: '2 sources',
+      },
+    ],
+    sources: [
+      {
+        id: 'source-1',
+        runId: RUN_ID,
+        conversationId: 'conversation-1',
+        sourceOrder: 1,
+        title: 'Warning count guide',
+        preview: 'warning_count describes risk signals.',
+        sourceType: 'knowledge',
+        createdAt: CREATED_AT,
+      },
+    ],
+    chartData: {
+      title: 'Warnings',
+      chartType: 'bar',
+      labels: ['A'],
+      series: [{ name: 'warning_count', values: [1] }],
+    },
+    conclusion: 'warning_count describes risk signals.',
+    conclusionSource: MODEL_TRACE.conclusionSource,
+    agentConclusion: {
+      markdownText: 'warning_count describes risk signals.',
+      plainText: 'warning_count describes risk signals.',
+    },
+    modelTrace: MODEL_TRACE,
+    reportState: 'generated',
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
+    startedAt: CREATED_AT,
+    completedAt: UPDATED_AT,
+    elapsedMs: 1000,
+    ...overrides,
   };
 }
 
@@ -409,6 +470,26 @@ function testRunSnapshotStatusContract(validate) {
   for (const status of ['completed', 'failed', 'cancelled']) {
     validate.assertInvalid('run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
+}
+
+function testRunSnapshotViewModelContract(validate) {
+  validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture('success'));
+
+  validate.assertValid(
+    'run-snapshot.schema.json',
+    createRunSnapshotFixture('success', {
+      modelTrace: undefined,
+      conclusionSource: 'fallback',
+      reportState: 'pending',
+    }),
+  );
+
+  validate.assertInvalid(
+    'run-snapshot.schema.json',
+    createRunSnapshotFixture('success', {
+      conversationId: 'conversation-1',
+    }),
+  );
 }
 
 const validate = await createSchemaValidators();
@@ -423,5 +504,6 @@ testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotStatusContract(validate);
+testRunSnapshotViewModelContract(validate);
 
 console.log('Metadata boundary tests passed.');

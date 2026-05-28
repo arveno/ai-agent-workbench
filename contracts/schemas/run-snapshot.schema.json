@@ -6,10 +6,15 @@
   "additionalProperties": false,
   "required": [
     "id",
-    "conversationId",
+    "mode",
     "status",
+    "intent",
+    "prompt",
+    "steps",
+    "toolInvocations",
+    "conclusion",
     "conclusionSource",
-    "modelTrace",
+    "reportState",
     "createdAt",
     "updatedAt"
   ],
@@ -18,9 +23,9 @@
       "type": "string",
       "description": "Canonical runId. It only points to DB agent_runs.id."
     },
-    "conversationId": {
+    "sessionId": {
       "type": "string",
-      "description": "Conversation owning the run."
+      "description": "Frontend workspace session id. It may equal conversationId or a local temporary session id and is not a DB foreign key."
     },
     "clientRunId": {
       "type": ["string", "null"],
@@ -30,10 +35,67 @@
       "type": ["string", "null"],
       "description": "UI-only short id."
     },
+    "mode": {
+      "type": "string",
+      "enum": ["mock", "agent"],
+      "description": "Run ViewModel mode."
+    },
     "status": {
       "type": "string",
       "enum": ["idle", "pending", "running", "success", "error", "stopped"],
       "description": "Canonical frontend RunSnapshot ViewModel status."
+    },
+    "intent": {
+      "type": "string",
+      "enum": ["capability_intro", "data_analysis", "knowledge_qa", "unsupported", "unknown"],
+      "description": "Normalized frontend RunSnapshot intent."
+    },
+    "prompt": {
+      "type": "string",
+      "description": "User prompt shown for this run."
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Run plan snapshot. Deep shape is intentionally deferred to Runtime Contract Governance."
+    },
+    "dataSource": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Run data source snapshot. Deep shape is intentionally deferred to Runtime Contract Governance."
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Run step ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance."
+    },
+    "toolInvocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Run tool invocation ViewModel array. Deep item shape is intentionally deferred to Runtime Contract Governance."
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Run source ViewModel array. Source deep shape stays in Source Lineage governance."
+    },
+    "chartData": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Run chart ViewModel data. Deep shape is intentionally deferred to Runtime Contract Governance."
+    },
+    "conclusion": {
+      "type": "string",
+      "description": "Plain text conclusion shown by the RunSnapshot ViewModel."
     },
     "conclusionSource": {
       "type": "string",
@@ -52,13 +114,10 @@
         { "type": "null" }
       ]
     },
-    "usageId": {
-      "type": ["string", "null"],
-      "description": "Usage record id when persisted."
-    },
-    "reportId": {
-      "type": ["string", "null"],
-      "description": "Report artifact id when generated."
+    "reportState": {
+      "type": "string",
+      "enum": ["hidden", "pending", "generating", "generated", "skipped", "failed"],
+      "description": "Frontend report action state carried by the RunSnapshot ViewModel."
     },
     "createdAt": {
       "type": "string",
@@ -67,6 +126,22 @@
     "updatedAt": {
       "type": "string",
       "description": "Run update timestamp."
+    },
+    "startedAt": {
+      "type": "string",
+      "description": "Run start timestamp when available."
+    },
+    "completedAt": {
+      "type": "string",
+      "description": "Run completion timestamp when available."
+    },
+    "elapsedMs": {
+      "type": "number",
+      "description": "Run elapsed time in milliseconds when available."
+    },
+    "errorMessage": {
+      "type": "string",
+      "description": "Run error message when status is error."
     }
   }
 }
