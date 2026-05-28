@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        使用本模板前，请先按 `AGENTS.md` 与 `docs/workflow.md` 判断任务阶段、边界和事实源。
+        Phase Task 准入表单。执行硬规则见 `AGENTS.md`，流程顺序见 `docs/workflow.md`。
   - type: textarea
     id: lifecycle_nodes
     attributes:
@@ -65,6 +65,19 @@ body:
         - 数据链路遵守 Raw -> Canonical -> ViewModel -> UI
         - component 不解析 raw / metadata / legacy 字段
         - 不新增双轨实现或旧字段 fallback
+    validations:
+      required: true
+  - type: textarea
+    id: canonical_decision_gate
+    attributes:
+      label: Canonical Decision Gate
+      description: 判断本任务是否涉及字段契约或数据链路决策；不涉及时必须明确写“不涉及”。
+      placeholder: |
+        - 是否涉及 schema / mapper / ViewModel / seed / DB 字段 / runtime 输出：
+        - 如果涉及，是否已完成 canonical decision：
+        - 如果不涉及：不涉及
+        - 是否允许 Codex 改代码：
+        - 是否需要新建 / 关联后置 Issue：
     validations:
       required: true
   - type: textarea

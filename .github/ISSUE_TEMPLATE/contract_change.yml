@@ -1,0 +1,143 @@
+name: Contract Change
+description: 字段契约、对象契约、mapper、ViewModel、DTO、seed、fixture、DB 字段或 runtime 输出变更。
+title: "[Contract] "
+labels:
+  - contract
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Contract Change 准入表单。Canonical Decision Packet 由下列必填项承载。
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 描述触发原因、当前问题、相关历史上下文和已知风险。
+    validations:
+      required: true
+  - type: textarea
+    id: affected_objects
+    attributes:
+      label: 涉及对象
+      description: 列出涉及的核心对象、字段、DTO、schema、mapper、ViewModel、DB 表、seed 或 fixture。
+      placeholder: |
+        - Run:
+        - ModelTrace:
+        - Usage:
+        - ReportMetadata:
+        - DB / seed / fixture:
+    validations:
+      required: true
+  - type: checkboxes
+    id: object_layers
+    attributes:
+      label: 对象所属层级
+      description: 勾选所有涉及层级。
+      options:
+        - label: runtime
+        - label: persistence
+        - label: API boundary
+        - label: mapper
+        - label: ViewModel
+        - label: UI
+        - label: demo seed
+    validations:
+      required: true
+  - type: textarea
+    id: canonical_field_decision
+    attributes:
+      label: canonical 字段决策
+      description: 明确哪些字段、对象或 ID 是 canonical；如替换旧字段，说明旧字段删除条件和迁移策略。
+      placeholder: |
+        - canonical 字段 / 对象：
+        - 不再使用的旧字段 / 命名：
+        - 删除或迁移策略：
+    validations:
+      required: true
+  - type: textarea
+    id: legacy_pressure
+    attributes:
+      label: 是否被旧字段 / UI 命名 / seed / 历史数据牵引
+      description: 判断当前设计是否只是为了适配旧字段、旧 UI 命名、旧 seed 或历史数据；如是，说明为什么允许或为什么必须先清理。
+      placeholder: |
+        - 是否存在牵引：
+        - 牵引来源：
+        - 是否允许保留：
+        - 删除条件：
+    validations:
+      required: true
+  - type: dropdown
+    id: data_rebuild_allowed
+    attributes:
+      label: 数据库数据 / seed / fixture 是否允许删除或重建
+      description: 如果不允许，必须说明迁移边界；如果允许，必须说明重建范围和验证方式。
+      options:
+        - 允许删除或重建，并已说明范围
+        - 不允许删除或重建，并已说明迁移策略
+        - 待决策，Codex 暂不允许改代码
+    validations:
+      required: true
+  - type: textarea
+    id: current_issue_scope
+    attributes:
+      label: 当前 Issue 范围
+      description: 明确本 Issue 允许修改的文件、模块、字段和数据范围。
+      placeholder: |
+        允许修改：
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 明确不做
+      description: 明确本 Issue 禁止修改的文件、模块、字段、数据、兼容链或部署事项。
+      placeholder: |
+        明确不做：
+        - 不新增无关依赖
+        - 不保留 oldField/newField 双轨字段
+        - 不新增长期兼容 fallback
+    validations:
+      required: true
+  - type: textarea
+    id: follow_up_issues
+    attributes:
+      label: 后置 Issue
+      description: 列出必须新建、已存在或明确不需要的后置 Issue；如不需要，写“不需要后置 Issue”。
+    validations:
+      required: true
+  - type: dropdown
+    id: codex_code_allowed
+    attributes:
+      label: Codex 是否允许改代码
+      description: 只有 Canonical Decision Packet 完成且范围明确时才能允许 Codex 改代码。
+      options:
+        - 允许，Canonical Decision Packet 已完成
+        - 不允许，仅允许只读审查
+        - 不允许，需先补充 Issue 决策
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 验收标准
+      description: 列出字段契约、数据链路、旧字段清理、生成文件同步和 UI 展示的一致性验收标准。
+      placeholder: |
+        - Contract Pack 已更新或明确不适用
+        - generated 文件已同步或明确不适用
+        - mapper / ViewModel / UI 使用 canonical 字段
+        - 没有 oldField/newField 双轨或 legacy fallback
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: 验证方式
+      description: 列出命令、手动验证、数据检查、截图、smoke 或回归步骤。
+      placeholder: |
+        - pnpm contract:check
+        - pnpm lint
+        - pnpm build
+        - 手动验证：
+    validations:
+      required: true
