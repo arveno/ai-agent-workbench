@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { getManifest, resolveUserPath } from './cloudbase-functions-manifest.mjs';
+import { getManifest, repoRoot, resolveUserPath } from './cloudbase-functions-manifest.mjs';
 
 function printUsage() {
   console.log(`Usage:
@@ -130,6 +130,28 @@ function checkSharedFiles(dir, manifest, warnings, errors) {
   }
 }
 
+async function readLocalSourceFiles(manifest, errors) {
+  const sourceDir = path.join(repoRoot, manifest.sourceDir);
+
+  try {
+    const entries = await readdir(sourceDir, { withFileTypes: true });
+
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.js') && entry.name !== manifest.entry)
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+  } catch (error) {
+    errors.push(`Unable to read source directory for local helper checks: ${sourceDir}; ${error.message}`);
+    return [];
+  }
+}
+
+function checkLocalSourceFiles(dir, localSourceFiles, errors) {
+  for (const fileName of localSourceFiles) {
+    pushMissingFileError(errors, dir, fileName, 'local source helper');
+  }
+}
+
 function checkNestedFunctionDir(dir, manifest, errors) {
   const nestedEntry = path.join(dir, manifest.name, manifest.entry);
 
@@ -178,16 +200,17 @@ async function checkPackage(options) {
   const manifest = getManifest(options.functionName);
   const warnings = [];
   const errors = [];
+  const localSourceFiles = await readLocalSourceFiles(manifest, errors);
 
   if (!existsSync(options.dir)) {
     errors.push(`Staging directory does not exist: ${options.dir}`);
-    return { manifest, warnings, errors, rootEntries: [] };
+    return { manifest, warnings, errors, rootEntries: [], localSourceFiles };
   }
 
   const dirStat = await stat(options.dir);
   if (!dirStat.isDirectory()) {
     errors.push(`Staging path is not a directory: ${options.dir}`);
-    return { manifest, warnings, errors, rootEntries: [] };
+    return { manifest, warnings, errors, rootEntries: [], localSourceFiles };
   }
 
   pushMissingFileError(errors, options.dir, manifest.entry, 'entry file');
@@ -196,6 +219,7 @@ async function checkPackage(options) {
 
   await checkPackageJson(options.dir, manifest, warnings, errors);
   await checkScfBootstrap(options.dir, manifest, errors);
+  checkLocalSourceFiles(options.dir, localSourceFiles, errors);
   checkSharedFiles(options.dir, manifest, warnings, errors);
   checkNestedFunctionDir(options.dir, manifest, errors);
   await checkForbiddenContent(options.dir, errors);
@@ -205,6 +229,7 @@ async function checkPackage(options) {
     warnings,
     errors,
     rootEntries: await readRootEntries(options.dir),
+    localSourceFiles,
   };
 }
 
@@ -232,6 +257,12 @@ function printResult(options, result) {
     console.log(`Required shared files: ${result.manifest.sharedFiles.map((file) => `_shared/${file}`).join(', ')}`);
   } else {
     console.log('Required shared files: none');
+  }
+
+  if (result.localSourceFiles.length > 0) {
+    console.log(`Required local source files: ${result.localSourceFiles.join(', ')}`);
+  } else {
+    console.log('Required local source files: none');
   }
 }
 

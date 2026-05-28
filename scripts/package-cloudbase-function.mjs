@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, copyFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import {
   defaultPackageOutputRoot,
@@ -104,6 +104,18 @@ async function copyOptionalReadme(sourceDir, outputDir) {
   }
 }
 
+async function copyLocalSourceFiles(sourceDir, outputDir, manifest) {
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.js') || entry.name === manifest.entry) {
+      continue;
+    }
+
+    await copyFile(path.join(sourceDir, entry.name), path.join(outputDir, entry.name));
+  }
+}
+
 async function copySharedFiles(manifest, outputDir) {
   if (manifest.sharedFiles.length === 0) {
     return;
@@ -153,6 +165,7 @@ async function packageFunction(manifest, options) {
 
   await mkdir(outputDir, { recursive: true });
   await copyRequiredFile(sourceDir, outputDir, manifest.entry, `${manifest.name}/${manifest.entry}`);
+  await copyLocalSourceFiles(sourceDir, outputDir, manifest);
   await copyRequiredFile(sourceDir, outputDir, manifest.packageJson, `${manifest.name}/${manifest.packageJson}`);
   await copyRequiredFile(sourceDir, outputDir, manifest.scfBootstrap, `${manifest.name}/${manifest.scfBootstrap}`);
   await copyOptionalReadme(sourceDir, outputDir);

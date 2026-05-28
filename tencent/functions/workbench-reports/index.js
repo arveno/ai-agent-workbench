@@ -64,10 +64,11 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
+const { createAgentRunModelMetadata } = loadSharedModule('agentRunModelMetadata');
 const {
-  createAgentRunModelMetadata,
-  createReportRequestMetadata,
-} = loadSharedModule('agentRunModelMetadata');
+  createReportMetadata,
+  mapReport,
+} = require('./metadata-boundary');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -328,68 +329,6 @@ function mapRunSource(row) {
   };
 }
 
-function createReportMetadata(metadata, runModelMetadata = {}, options = {}) {
-  const nextMetadata = createReportRequestMetadata(metadata);
-
-  if (typeof options.runId === 'string' && options.runId.trim()) {
-    nextMetadata.runId = options.runId.trim();
-  }
-
-  delete nextMetadata.sources;
-  delete nextMetadata.sourceCount;
-  delete nextMetadata.source_count;
-  delete nextMetadata.sourceLineage;
-  delete nextMetadata.source_lineage;
-  delete nextMetadata.sourceNoSourceReason;
-  delete nextMetadata.source_no_source_reason;
-
-  return {
-    ...nextMetadata,
-    ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
-  };
-}
-
-function readPersistedReportMetadata(metadata) {
-  const source = isRecord(metadata) ? metadata : {};
-  const nextMetadata = {};
-
-  if (typeof source.source === 'string' && source.source.trim()) {
-    nextMetadata.source = source.source.trim();
-  }
-
-  if (typeof source.runId === 'string' && source.runId.trim()) {
-    nextMetadata.runId = source.runId.trim();
-  }
-
-  if (typeof source.reportState === 'string' && source.reportState.trim()) {
-    nextMetadata.reportState = source.reportState.trim();
-  }
-
-  if (Array.isArray(source.toolNames)) {
-    const toolNames = source.toolNames
-      .filter((toolName) => typeof toolName === 'string' && toolName.trim())
-      .map((toolName) => toolName.trim());
-
-    if (toolNames.length > 0) {
-      nextMetadata.toolNames = toolNames;
-    }
-  }
-
-  if (isRecord(source.modelTrace)) {
-    nextMetadata.modelTrace = { ...source.modelTrace };
-  } else if (source.modelTrace === null) {
-    nextMetadata.modelTrace = null;
-  }
-
-  if (typeof source.langSmithTraceId === 'string' && source.langSmithTraceId.trim()) {
-    nextMetadata.langSmithTraceId = source.langSmithTraceId.trim();
-  } else if (source.langSmithTraceId === null) {
-    nextMetadata.langSmithTraceId = null;
-  }
-
-  return nextMetadata;
-}
-
 function toUuidOrNull(value) {
   if (typeof value !== 'string') {
     return null;
@@ -407,26 +346,6 @@ function readRequiredRunId(value) {
   }
 
   return runId;
-}
-
-function mapReport(row) {
-  return {
-    id: String(row.id ?? ''),
-    conversation_id: String(row.conversation_id ?? ''),
-    runId: String(row.run_id ?? ''),
-    user_id: String(row.user_id ?? ''),
-    title: String(row.title ?? '分析报告'),
-    content_markdown: String(row.content_markdown ?? ''),
-    status: String(row.status ?? 'generated'),
-    version: normalizeNumber(row.version),
-    created_at: normalizeDateTime(row.created_at),
-    updated_at: normalizeDateTime(row.updated_at),
-    metadata: readPersistedReportMetadata(parseJsonObject(row.metadata)),
-    sources: [],
-    sourceCount: 0,
-    sourceLineage: 'run_sources',
-    sourceNoSourceReason: null,
-  };
 }
 
 function hasExpectedConversationOwner(row, currentUser) {

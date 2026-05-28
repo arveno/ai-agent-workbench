@@ -76,3 +76,5 @@ Package with the repo script:
 ```bash
 pnpm cloudbase:package -- --function workbench-evaluations --out ./.cloudbase-packages --clean --check
 ```
+
+The package root must include `index.js`, `metadata-boundary.js`, `package.json`, `README.md`, `scf_bootstrap`, and the required `_shared` files. If packaging manually, copy any local `.js` helper beside `index.js` into the package root; this function requires `metadata-boundary.js`.

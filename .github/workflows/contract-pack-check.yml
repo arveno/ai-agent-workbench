@@ -28,11 +28,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate contract schemas
-        run: pnpm contract:validate
-
-      - name: Generate contracts
-        run: pnpm contract:generate
-
-      - name: Verify generated contracts are committed
-        run: git diff --exit-code contracts/generated
+      - name: Check contracts
+        run: pnpm contract:check

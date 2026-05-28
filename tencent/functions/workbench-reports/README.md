@@ -109,7 +109,7 @@ The response uses canonical API fields such as `runId`, `sources`, `sourceCount`
 
 Upload a source package only. Do not include `node_modules`, and do not submit or upload `package-lock.json`. Enable CloudBase automatic dependency installation.
 
-Because this function uses shared helpers, stage the source package in a Desktop temporary directory and include `_shared` in the zip. Do not commit the zip.
+Because this function uses shared helpers, stage the source package in a Desktop temporary directory and include `_shared` in the zip. Manual packages must also copy local `.js` helpers beside `index.js` into the zip root; this function requires `metadata-boundary.js`. Do not commit the zip.
 
 ```powershell
 cd tencent/functions
@@ -118,7 +118,7 @@ if (Test-Path $stage) {
   Remove-Item -LiteralPath $stage -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
-Copy-Item workbench-reports/index.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
+Copy-Item workbench-reports/index.js,workbench-reports/metadata-boundary.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
 Copy-Item _shared/mysql.js,_shared/auth.js,_shared/agentRunModelMetadata.js -Destination (Join-Path $stage '_shared')
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-reports.zip') -Force
 ```
@@ -128,6 +128,7 @@ Zip root must contain:
 ```txt
 _shared/
 index.js
+metadata-boundary.js
 package.json
 README.md
 scf_bootstrap

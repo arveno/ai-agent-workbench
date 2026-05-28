@@ -88,8 +88,11 @@ const {
 } = loadSharedModule('langsmithObservability');
 const {
   createAgentRunModelMetadata,
-  createEvaluationRequestMetadata,
 } = loadSharedModule('agentRunModelMetadata');
+const {
+  createEvaluationMetadata,
+  mapResult,
+} = require('./metadata-boundary');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -468,101 +471,12 @@ function mapCase(row) {
   };
 }
 
-function mapResult(row) {
-  return {
-    id: String(row.id ?? ''),
-    caseId: String(row.case_id ?? ''),
-    conversationId: toNullableString(row.conversation_id),
-    runId: toNullableString(row.run_id),
-    verdict: String(row.verdict ?? 'unknown'),
-    badCaseReason: toNullableString(row.bad_case_reason),
-    humanNote: toNullableString(row.human_note),
-    actualSummary: parseJsonObject(row.actual_summary),
-    modelTrace: parseJsonObject(row.model_trace),
-    toolSummary: parseJsonArray(row.tool_summary),
-    ragSummary: parseJsonObject(row.rag_summary),
-    reportSummary: parseJsonObject(row.report_summary),
-    metadata: readPersistedEvaluationMetadata(row),
-    createdAt: normalizeDateTime(row.created_at),
-    updatedAt: normalizeDateTime(row.updated_at),
-  };
-}
-
 function hasCanonicalEvaluationRun(row) {
   return UUID_PATTERN.test(String(row.run_id ?? ''));
 }
 
 function createEvaluationModelTrace(runModelMetadata) {
   return isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
-}
-
-function createPayloadMetadata(payloadMetadata) {
-  return createEvaluationRequestMetadata(payloadMetadata);
-}
-
-function createEvaluationMetadata(payloadMetadata, runModelMetadata, langSmithEvaluation, options = {}) {
-  const metadata = createPayloadMetadata(payloadMetadata);
-  const runId = toNullableString(options.runId);
-
-  if (!runId) {
-    throw new Error('Evaluation metadata requires canonical runId.');
-  }
-
-  if (
-    isRecord(langSmithEvaluation) &&
-    typeof langSmithEvaluation.langSmithTraceId === 'string' &&
-    langSmithEvaluation.langSmithTraceId.trim()
-  ) {
-    metadata.langSmithTraceId = langSmithEvaluation.langSmithTraceId.trim();
-  }
-
-  return {
-    ...metadata,
-    ...(isRecord(runModelMetadata) ? runModelMetadata : {}),
-    runId,
-    source: 'workbench-evaluation',
-    resultVersion: 1,
-    langSmithEvaluation,
-  };
-}
-
-function readPersistedResultVersion(value) {
-  const resultVersion = Number(value);
-  return Number.isFinite(resultVersion) && resultVersion > 0 ? resultVersion : 1;
-}
-
-function readPersistedEvaluationMetadata(row) {
-  const runId = toNullableString(row.run_id);
-
-  if (!runId || !UUID_PATTERN.test(runId)) {
-    throw new Error('Persisted evaluation result is missing canonical runId.');
-  }
-
-  const storedMetadata = parseJsonObject(row.metadata);
-  const requestMetadata = createPayloadMetadata(storedMetadata);
-  const metadata = {
-    ...requestMetadata,
-    runId,
-    source: 'workbench-evaluation',
-    resultVersion: readPersistedResultVersion(storedMetadata.resultVersion),
-  };
-  const modelTrace = parseJsonObject(row.model_trace);
-
-  if (Object.keys(modelTrace).length > 0) {
-    metadata.modelTrace = modelTrace;
-  }
-
-  if (typeof storedMetadata.langSmithTraceId === 'string' && storedMetadata.langSmithTraceId.trim()) {
-    metadata.langSmithTraceId = storedMetadata.langSmithTraceId.trim();
-  } else if (storedMetadata.langSmithTraceId === null) {
-    metadata.langSmithTraceId = null;
-  }
-
-  if (isRecord(storedMetadata.langSmithEvaluation)) {
-    metadata.langSmithEvaluation = storedMetadata.langSmithEvaluation;
-  }
-
-  return metadata;
 }
 
 async function fetchCases(params) {
