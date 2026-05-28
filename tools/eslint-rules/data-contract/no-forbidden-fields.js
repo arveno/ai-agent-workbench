@@ -69,8 +69,8 @@ function getStaticPropertyName(node) {
 
 function getStaticPropertyKeyName(property) {
   const key = property?.key;
-  if (!key || property.computed) return null;
-  if (key.type === 'Identifier') return key.name;
+  if (!key) return null;
+  if (!property.computed && key.type === 'Identifier') return key.name;
   if (key.type === 'Literal') return String(key.value);
   if (
     key.type === 'TemplateLiteral' &&
