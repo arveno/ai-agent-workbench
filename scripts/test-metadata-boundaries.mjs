@@ -10,6 +10,26 @@ const require = createRequire(import.meta.url);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(rootDir, 'contracts/schemas');
 
+async function listSchemaFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return listSchemaFiles(entryPath);
+      }
+
+      return entry.name.endsWith('.schema.json') ? [entryPath] : [];
+    }),
+  );
+
+  return files.flat();
+}
+
+function toSchemaRelativePath(filePath) {
+  return path.relative(schemaDir, filePath).split(path.sep).join('/');
+}
+
 function requireCommonJsFile(filePath, stubs = {}) {
   const loadedModule = new Module(filePath);
   loadedModule.filename = filePath;
@@ -101,19 +121,23 @@ async function createSchemaValidators() {
     strict: true,
     validateSchema: true,
   });
-  const schemaFiles = (await readdir(schemaDir))
-    .filter((file) => file.endsWith('.schema.json'))
-    .sort();
+  const schemaFiles = (await listSchemaFiles(schemaDir)).sort((a, b) =>
+    toSchemaRelativePath(a).localeCompare(toSchemaRelativePath(b)),
+  );
   const schemasByFile = new Map();
 
   for (const file of schemaFiles) {
-    const schemaPath = path.join(schemaDir, file);
-    const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
-    schemasByFile.set(file, schema);
+    const schema = JSON.parse(await readFile(file, 'utf8'));
+    schemasByFile.set(toSchemaRelativePath(file), schema);
     ajv.addSchema(schema);
   }
 
   return {
+    getSchema(file) {
+      const schema = schemasByFile.get(file);
+      assert.ok(schema, `Missing schema fixture: ${file}`);
+      return schema;
+    },
     assertValid(file, data) {
       const schema = schemasByFile.get(file);
       assert.ok(schema, `Missing schema fixture: ${file}`);
@@ -210,7 +234,7 @@ function testReportCreateMetadata(validate) {
     ...FORBIDDEN_METADATA_FIELDS,
     ...REPORT_REQUEST_ONLY_FORBIDDEN_FIELDS,
   ]);
-  validate.assertValid('report-metadata.schema.json', metadata);
+  validate.assertValid('objects/report-metadata.schema.json', metadata);
 }
 
 function testReportPersistedRead(validate) {
@@ -228,7 +252,7 @@ function testReportPersistedRead(validate) {
   assert.equal(metadata.langSmithTraceId, 'trace-report-1');
   assert.deepEqual(metadata.modelTrace, MODEL_TRACE);
   assertNoTopLevelFields(metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('report-metadata.schema.json', metadata);
+  validate.assertValid('objects/report-metadata.schema.json', metadata);
 }
 
 function testMapReport(validate) {
@@ -259,8 +283,8 @@ function testMapReport(validate) {
   assert.equal(report.sourceLineage, 'run_sources');
   assert.equal(report.sourceNoSourceReason, null);
   assertNoTopLevelFields(report.metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('report-metadata.schema.json', report.metadata);
-  validate.assertValid('report-artifact.schema.json', report);
+  validate.assertValid('objects/report-metadata.schema.json', report.metadata);
+  validate.assertValid('objects/report-artifact.schema.json', report);
 }
 
 function testEvaluationRequestMetadata() {
@@ -301,7 +325,7 @@ function testEvaluationCreateMetadata(validate) {
   assert.deepEqual(metadata.modelTrace, MODEL_TRACE);
   assert.notDeepEqual(metadata.modelTrace, MALICIOUS_MODEL_TRACE);
   assertNoTopLevelFields(metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('evaluation-metadata.schema.json', metadata);
+  validate.assertValid('objects/evaluation-metadata.schema.json', metadata);
 }
 
 function testEvaluationPersistedRead(validate) {
@@ -329,7 +353,7 @@ function testEvaluationPersistedRead(validate) {
   assert.deepEqual(metadata.modelTrace, MODEL_TRACE);
   assert.notDeepEqual(metadata.modelTrace, MALICIOUS_MODEL_TRACE);
   assertNoTopLevelFields(metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('evaluation-metadata.schema.json', metadata);
+  validate.assertValid('objects/evaluation-metadata.schema.json', metadata);
 
   assert.throws(
     () => evaluationBoundary.readPersistedEvaluationMetadata({ ...row, run_id: null }),
@@ -367,8 +391,8 @@ function testMapResult(validate) {
   assert.equal(result.runId, RUN_ID);
   assert.deepEqual(result.metadata.modelTrace, MODEL_TRACE);
   assertNoTopLevelFields(result.metadata, FORBIDDEN_METADATA_FIELDS);
-  validate.assertValid('evaluation-metadata.schema.json', result.metadata);
-  validate.assertValid('evaluation-result.schema.json', result);
+  validate.assertValid('objects/evaluation-metadata.schema.json', result.metadata);
+  validate.assertValid('objects/evaluation-result.schema.json', result);
 }
 
 function testModelLayerPricingSource(validate) {
@@ -382,7 +406,7 @@ function testModelLayerPricingSource(validate) {
   });
 
   assert.equal(usageCostMetadata.costEstimate.pricingSource, 'catalog');
-  validate.assertValid('model-trace.schema.json', {
+  validate.assertValid('objects/model-trace.schema.json', {
     ...MODEL_TRACE,
     usage: usageCostMetadata.usage,
     costEstimate: usageCostMetadata.costEstimate,
@@ -393,22 +417,111 @@ function createRunSnapshotFixture(status) {
   return {
     id: RUN_ID,
     conversationId: 'conversation-1',
+    mode: 'agent',
     status,
-    conclusionSource: 'none',
     modelTrace: null,
+    reportState: 'hidden',
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
   };
 }
 
+function createRunStartedEventFixture(status = 'running') {
+  const run = createRunSnapshotFixture(status);
+  return {
+    type: 'run_started',
+    runId: run.id,
+    conversationId: run.conversationId,
+    timestamp: CREATED_AT,
+    payload: {
+      run,
+    },
+  };
+}
+
+function assertRunStartedEventIdentity(event) {
+  assert.equal(event.runId, event.payload.run.id);
+  assert.equal(event.conversationId, event.payload.run.conversationId);
+}
+
 function testRunSnapshotStatusContract(validate) {
-  for (const status of ['idle', 'pending', 'running', 'success', 'error', 'stopped']) {
-    validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+  for (const status of ['pending', 'running', 'completed', 'failed', 'stopped']) {
+    validate.assertValid('objects/run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
 
-  for (const status of ['completed', 'failed', 'cancelled']) {
-    validate.assertInvalid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+  for (const status of ['idle', 'success', 'error', 'cancelled']) {
+    validate.assertInvalid('objects/run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
+
+  for (const [fieldName, value] of [
+    ['sessionId', 'session-1'],
+    ['displayRunId', 'RUN-1'],
+    ['conclusionSource', 'none'],
+    ['steps', []],
+    ['toolInvocations', []],
+    ['sources', []],
+  ]) {
+    validate.assertInvalid('objects/run-snapshot.schema.json', {
+      ...createRunSnapshotFixture('completed'),
+      [fieldName]: value,
+    });
+  }
+}
+
+function testRunStartedEventContract(validate) {
+  const eventSchema = validate.getSchema('events/run-started-event.schema.json');
+  const envelopeRef = eventSchema.allOf[0];
+  const eventConstraints = eventSchema.allOf[1];
+  const envelopeFieldNames = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
+  const businessFieldNames = ['run', 'step', 'stepId', 'tool', 'toolId', 'chartData', 'sources', 'report', 'conclusion'];
+
+  assert.equal(envelopeRef.$ref, 'run-sse-event-envelope.schema.json');
+  assert.equal(eventConstraints.properties.type.const, 'run_started');
+  assert.equal(eventConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
+  assert.equal(Object.hasOwn(eventConstraints.properties.payload.properties.run, 'properties'), false);
+  assert.deepEqual(Object.keys(eventSchema.properties).sort(), envelopeFieldNames.toSorted());
+  for (const fieldName of businessFieldNames) {
+    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
+  }
+  for (const fieldName of envelopeFieldNames) {
+    assert.deepEqual(Object.keys(eventSchema.properties[fieldName]), ['$ref']);
+    assert.equal(
+      eventSchema.properties[fieldName].$ref,
+      `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
+    );
+  }
+
+  validate.assertValid('events/run-started-event.schema.json', createRunStartedEventFixture());
+  assertRunStartedEventIdentity(createRunStartedEventFixture());
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    type: 'run_completed',
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    run: createRunSnapshotFixture('running'),
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    payload: {
+      run: {
+        ...createRunSnapshotFixture('running'),
+        steps: [],
+      },
+    },
+  });
+  assert.throws(() =>
+    assertRunStartedEventIdentity({
+      ...createRunStartedEventFixture(),
+      runId: 'run-mismatch',
+    }),
+  );
+  assert.throws(() =>
+    assertRunStartedEventIdentity({
+      ...createRunStartedEventFixture(),
+      conversationId: 'conversation-mismatch',
+    }),
+  );
 }
 
 const validate = await createSchemaValidators();
@@ -423,5 +536,6 @@ testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotStatusContract(validate);
+testRunStartedEventContract(validate);
 
 console.log('Metadata boundary tests passed.');

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ai-agent-workbench.local/contracts/run-source.schema.json",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-source.schema.json",
   "title": "RunSource",
   "type": "object",
   "additionalProperties": false,
@@ -17,73 +17,73 @@
   "properties": {
     "id": {
       "type": "string",
-      "description": "Run source id."
+      "description": "Run source 主 ID。"
     },
     "runId": {
       "type": "string",
-      "description": "Canonical runId owning this source."
+      "description": "拥有该 source 的 canonical runId。"
     },
     "conversationId": {
       "type": "string",
-      "description": "Conversation owning this source."
+      "description": "拥有该 source 的 conversation。"
     },
     "toolInvocationId": {
       "type": "string",
-      "description": "Tool invocation that produced this source."
+      "description": "产生该 source 的 Tool Invocation。"
     },
     "retrievalLogId": {
       "type": "string",
-      "description": "Retrieval log associated with this source."
+      "description": "该 source 关联的 retrieval log。"
     },
     "documentId": {
       "type": "string",
-      "description": "Knowledge document snapshot id."
+      "description": "知识库文档快照 ID。"
     },
     "chunkId": {
       "type": "string",
-      "description": "Knowledge chunk snapshot id."
+      "description": "知识库 chunk 快照 ID。"
     },
     "citationLabel": {
       "type": "string",
-      "description": "Display-only citation label."
+      "description": "仅用于展示的 citation label。"
     },
     "sourceOrder": {
       "type": "integer",
-      "description": "Stable source display order."
+      "description": "稳定的 source 展示顺序。"
     },
     "title": {
       "type": "string",
-      "description": "Source title snapshot."
+      "description": "source 标题快照。"
     },
     "preview": {
       "type": "string",
-      "description": "Source preview text."
+      "description": "source 内容预览文本。"
     },
     "score": {
       "type": "number",
-      "description": "Retriever score when available."
+      "description": "retriever 返回的相关性分数。"
     },
     "sourceType": {
       "type": "string",
       "enum": ["knowledge", "tool", "report", "manual"],
-      "description": "Canonical source type."
+      "description": "canonical source 类型。"
     },
     "usedInAnswer": {
       "type": "boolean",
-      "description": "Whether this source was used in the final answer."
+      "description": "该 source 是否被最终回答引用。"
     },
     "noSourceReason": {
       "type": "string",
-      "description": "Explicit no-source reason when applicable."
+      "description": "无 source 时的明确原因。"
     },
     "createdAt": {
       "type": "string",
-      "description": "Source creation timestamp."
+      "description": "source 创建时间。"
     },
     "metadata": {
       "type": "object",
       "additionalProperties": true,
-      "description": "Source metadata for retrieval strategy, provider and debug context."
+      "description": "用于检索策略、provider 和 debug 上下文的 source metadata。"
     }
   }
 }
