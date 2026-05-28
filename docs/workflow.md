@@ -159,6 +159,9 @@ merge 后更新 Tracking Issue / 后置 Issue
 - 字段语义变化，先确认 Contract Pack 和 canonical decision。
 - Release PR 只做发布判断，不承载修复 commit。
 - merge 后必须更新 Tracking Issue、当前 Issue 和仍需跟进的后置 Issue。
+- PR #94 是 Canonical Decision Gate 落地前的一次性 bootstrap governance PR。
+- PR #94 合并后，后续所有 Governance Task 都必须先使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
+- 用户明确 prompt 不能作为长期绕过 Issue 的通用入口。
 
 ## 4.2 任务类型与 Issue 模板
 
@@ -222,10 +225,12 @@ Release Gate 必须检查：
 
 - 代码任务没有可读取的关联 Issue，不进入 Codex 执行。
 - 代码任务 Issue 读取失败时，Codex 必须停止，不允许修改文件。
-- 流程事实源纠偏可由用户明确 prompt 直接发起，仍必须走任务分支和 PR。
 - prompt 与仓库文档冲突时，停止执行并报告冲突。
 - 需要超出 Issue 范围时，停止并说明原因。
-- 没有 Issue，不进代码；流程事实源纠偏只能修改被授权的文档、模板或工作流文件。
+- 没有 Issue，不进代码是常规规则；流程事实源纠偏不是长期绕过 Issue 的入口。
+- 只有在修复流程事实源本身、治理门禁尚未落地或当前门禁阻止流程落地，且用户明确授权时，才允许临时 bootstrap / facts-source correction 例外。
+- 临时例外只能修改被授权的文档、模板或工作流文件，仍必须走任务分支和 PR，并必须在 PR body 说明原因、范围和退出条件。
+- PR #94 合并后，后续所有 Governance Task 必须先使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
 - 没有范围，不让 Codex 改。
 - 长期规则变化，先改文档。
 - 字段语义变化，先确认 contract。
