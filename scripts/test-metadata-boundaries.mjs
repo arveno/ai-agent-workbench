@@ -393,21 +393,36 @@ function createRunSnapshotFixture(status) {
   return {
     id: RUN_ID,
     conversationId: 'conversation-1',
+    mode: 'agent',
     status,
-    conclusionSource: 'none',
     modelTrace: null,
+    reportState: 'hidden',
     createdAt: CREATED_AT,
     updatedAt: UPDATED_AT,
   };
 }
 
 function testRunSnapshotStatusContract(validate) {
-  for (const status of ['idle', 'pending', 'running', 'success', 'error', 'stopped']) {
+  for (const status of ['pending', 'running', 'completed', 'failed', 'stopped']) {
     validate.assertValid('run-snapshot.schema.json', createRunSnapshotFixture(status));
   }
 
-  for (const status of ['completed', 'failed', 'cancelled']) {
+  for (const status of ['idle', 'success', 'error', 'cancelled']) {
     validate.assertInvalid('run-snapshot.schema.json', createRunSnapshotFixture(status));
+  }
+
+  for (const [fieldName, value] of [
+    ['sessionId', 'session-1'],
+    ['displayRunId', 'RUN-1'],
+    ['conclusionSource', 'none'],
+    ['steps', []],
+    ['toolInvocations', []],
+    ['sources', []],
+  ]) {
+    validate.assertInvalid('run-snapshot.schema.json', {
+      ...createRunSnapshotFixture('completed'),
+      [fieldName]: value,
+    });
   }
 }
 

@@ -421,45 +421,89 @@ export interface RunSource {
 }
 export interface RunSnapshot {
   /**
-   * Canonical runId. It only points to DB agent_runs.id.
+   * canonical runId，只指向 DB agent_runs.id。
    */
   id: string;
   /**
-   * Conversation owning the run.
+   * 拥有当前 Run 的 conversation。
    */
   conversationId: string;
   /**
-   * Pending and idempotency id. It is not a business foreign key.
+   * 前端 pending 与请求幂等 ID，不作为业务外键。
    */
   clientRunId?: string | null;
   /**
-   * UI-only short id.
-   */
-  displayRunId?: string | null;
-  /**
-   * Canonical frontend RunSnapshot ViewModel status.
-   */
-  status: 'idle' | 'pending' | 'running' | 'success' | 'error' | 'stopped';
-  /**
-   * Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none.
-   */
-  conclusionSource: 'model' | 'fallback' | 'mock' | 'none';
-  modelTrace: ModelTrace | null;
-  agentConclusion?: AgentConclusion | null;
-  /**
-   * Usage record id when persisted.
+   * 持久化后的 usage 记录 ID。
    */
   usageId?: string | null;
   /**
-   * Report artifact id when generated.
+   * runtime 与 persistence 边界上的 Run 执行模式。
    */
-  reportId?: string | null;
+  mode: 'mock' | 'agent';
   /**
-   * Run creation timestamp.
+   * runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。
+   */
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+  /**
+   * Agent Run planner 已识别的意图。
+   */
+  intent?: 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
+  /**
+   * 当前 Run 捕获的用户输入。
+   */
+  prompt?: string;
+  /**
+   * runtime plan 快照；plan 细节不是 UI ViewModel 契约。
+   */
+  plan?: {
+    [k: string]: unknown;
+  };
+  /**
+   * runtime 数据源快照。
+   */
+  dataSource?: {
+    [k: string]: unknown;
+  };
+  /**
+   * 当前 Run 产出的 canonical 图表 payload。
+   */
+  chartData?: {
+    [k: string]: unknown;
+  };
+  /**
+   * 当前 Run 的 canonical model trace。
+   */
+  modelTrace: ModelTrace | null;
+  /**
+   * 当前 Run 的 canonical 结论信封。
+   */
+  agentConclusion?: AgentConclusion | null;
+  /**
+   * 绑定在当前 Run 上的 canonical report 可用性与生成状态。
+   */
+  reportState: 'hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed';
+  /**
+   * Run 创建时间。
    */
   createdAt: string;
   /**
-   * Run update timestamp.
+   * Run 更新时间。
    */
   updatedAt: string;
+  /**
+   * Run 开始时间。
+   */
+  startedAt?: string;
+  /**
+   * Run 完成时间。
+   */
+  completedAt?: string;
+  /**
+   * Run 耗时，单位为毫秒。
+   */
+  elapsedMs?: number;
+  /**
+   * Run 失败时可展示的安全错误信息。
+   */
+  errorMessage?: string;
 }

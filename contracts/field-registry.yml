@@ -189,69 +189,109 @@ objects:
   RunSnapshot:
     lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage"
     coreObject: "Run"
-    owner: "mapper / reducer"
-    summary: "Canonical run snapshot consumed by ViewModel builders."
+    owner: "Agent Run runtime / persistence mapper / API boundary"
+    summary: "runtime 与 persistence 边界上的 canonical RunSnapshot。UI-only sessionId、displayRunId、conclusionSource、steps、toolInvocations、sources 属于 RunViewModel。"
     fields:
       id:
         type: "string"
         required: "yes"
         source: "agent_runs.id"
-        description: "Canonical runId. It only points to DB agent_runs.id."
+        description: "canonical runId，只指向 DB agent_runs.id。"
       conversationId:
         type: "string"
         required: "yes"
         source: "conversations.id"
-        description: "Conversation owning the run."
+        description: "拥有当前 Run 的 conversation。"
       clientRunId:
         type: "string | null"
         required: "no"
         source: "request idempotency"
-        description: "Pending and idempotency id. It is not a business foreign key."
-      displayRunId:
-        type: "string | null"
-        required: "no"
-        source: "ViewModel"
-        description: "UI-only short id."
-      status:
-        type: "idle | pending | running | success | error | stopped"
-        required: "yes"
-        source: "mapper / reducer ViewModel"
-        description: "Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract."
-      conclusionSource:
-        type: "model | fallback | mock | none"
-        required: "yes"
-        source: "Derived from modelTrace.conclusionSource"
-        description: "Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none."
-      modelTrace:
-        type: "ModelTrace | null"
-        required: "yes"
-        source: "agent_runs.metadata.modelTrace"
-        description: "Canonical model trace for the run."
-      agentConclusion:
-        type: "AgentConclusion | null"
-        required: "no"
-        source: "Agent Run runtime"
-        description: "Canonical conclusion envelope."
+        description: "前端 pending 与请求幂等 ID，不作为业务外键。"
       usageId:
         type: "string | null"
         required: "no"
         source: "agent_runs.usage_id"
-        description: "Usage record id when persisted."
-      reportId:
-        type: "string | null"
+        description: "持久化后的 usage 记录 ID。"
+      mode:
+        type: "mock | agent"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "runtime 与 persistence 边界上的 Run 执行模式。"
+      status:
+        type: "pending | running | completed | failed | stopped"
+        required: "yes"
+        source: "agent_runs.status / Agent Run runtime"
+        description: "runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。"
+      intent:
+        type: "capability_intro | data_analysis | knowledge_qa | unsupported | unknown"
         required: "no"
-        source: "report_artifacts.id"
-        description: "Report artifact id when generated."
+        source: "Agent Run planner"
+        description: "Agent Run planner 已识别的意图。"
+      prompt:
+        type: "string"
+        required: "no"
+        source: "Agent Run request"
+        description: "当前 Run 捕获的用户输入。"
+      plan:
+        type: "object"
+        required: "no"
+        source: "Agent Run planner"
+        description: "runtime plan 快照；plan 细节不是 UI ViewModel 契约。"
+      dataSource:
+        type: "object"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "runtime 数据源快照。"
+      chartData:
+        type: "object"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "当前 Run 产出的 canonical 图表 payload。"
+      agentConclusion:
+        type: "AgentConclusion | null"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "当前 Run 的 canonical 结论信封。"
+      modelTrace:
+        type: "ModelTrace | null"
+        required: "yes"
+        source: "agent_runs.metadata.modelTrace"
+        description: "当前 Run 的 canonical model trace。"
+      reportState:
+        type: "hidden | pending | generating | generated | skipped | failed"
+        required: "yes"
+        source: "Agent Run runtime / report_artifacts"
+        description: "绑定在当前 Run 上的 canonical report 可用性与生成状态。"
       createdAt:
         type: "string"
         required: "yes"
         source: "agent_runs.created_at"
-        description: "Run creation timestamp."
+        description: "Run 创建时间。"
       updatedAt:
         type: "string"
         required: "yes"
         source: "agent_runs.updated_at"
-        description: "Run update timestamp."
+        description: "Run 更新时间。"
+      startedAt:
+        type: "string"
+        required: "no"
+        source: "agent_runs.started_at"
+        description: "Run 开始时间。"
+      completedAt:
+        type: "string"
+        required: "no"
+        source: "agent_runs.completed_at"
+        description: "Run 完成时间。"
+      elapsedMs:
+        type: "number"
+        required: "no"
+        source: "agent_runs.elapsed_ms"
+        description: "Run 耗时，单位为毫秒。"
+      errorMessage:
+        type: "string"
+        required: "no"
+        source: "agent_runs.error_message"
+        description: "Run 失败时可展示的安全错误信息。"
   ReportMetadata:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"

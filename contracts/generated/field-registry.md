@@ -96,26 +96,34 @@ Optional structured section inside AgentConclusion.
 
 ### RunSnapshot
 
-Canonical run snapshot consumed by ViewModel builders.
+runtime 与 persistence 边界上的 canonical RunSnapshot。UI-only sessionId、displayRunId、conclusionSource、steps、toolInvocations、sources 属于 RunViewModel。
 
 - Lifecycle node: 10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage
 - Core object: Run
-- Owner: mapper / reducer
+- Owner: Agent Run runtime / persistence mapper / API boundary
 
 | Field | Type | Required | Source | Description |
 | --- | --- | --- | --- | --- |
-| `id` | string | yes | agent_runs.id | Canonical runId. It only points to DB agent_runs.id. |
-| `conversationId` | string | yes | conversations.id | Conversation owning the run. |
-| `clientRunId` | string \| null | no | request idempotency | Pending and idempotency id. It is not a business foreign key. |
-| `displayRunId` | string \| null | no | ViewModel | UI-only short id. |
-| `status` | idle \| pending \| running \| success \| error \| stopped | yes | mapper / reducer ViewModel | Canonical frontend RunSnapshot ViewModel status. DB agent_runs.status is mapped at the persistence boundary and must not be mixed into this contract. |
-| `conclusionSource` | model \| fallback \| mock \| none | yes | Derived from modelTrace.conclusionSource | Derived display field only. Source of Truth is modelTrace.conclusionSource; it is not persisted as an independent model source. If no modelTrace exists, use none. |
-| `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | Canonical model trace for the run. |
-| `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | Canonical conclusion envelope. |
-| `usageId` | string \| null | no | agent_runs.usage_id | Usage record id when persisted. |
-| `reportId` | string \| null | no | report_artifacts.id | Report artifact id when generated. |
-| `createdAt` | string | yes | agent_runs.created_at | Run creation timestamp. |
-| `updatedAt` | string | yes | agent_runs.updated_at | Run update timestamp. |
+| `id` | string | yes | agent_runs.id | canonical runId，只指向 DB agent_runs.id。 |
+| `conversationId` | string | yes | conversations.id | 拥有当前 Run 的 conversation。 |
+| `clientRunId` | string \| null | no | request idempotency | 前端 pending 与请求幂等 ID，不作为业务外键。 |
+| `usageId` | string \| null | no | agent_runs.usage_id | 持久化后的 usage 记录 ID。 |
+| `mode` | mock \| agent | yes | Agent Run runtime | runtime 与 persistence 边界上的 Run 执行模式。 |
+| `status` | pending \| running \| completed \| failed \| stopped | yes | agent_runs.status / Agent Run runtime | runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。 |
+| `intent` | capability_intro \| data_analysis \| knowledge_qa \| unsupported \| unknown | no | Agent Run planner | Agent Run planner 已识别的意图。 |
+| `prompt` | string | no | Agent Run request | 当前 Run 捕获的用户输入。 |
+| `plan` | object | no | Agent Run planner | runtime plan 快照；plan 细节不是 UI ViewModel 契约。 |
+| `dataSource` | object | no | Agent Run runtime | runtime 数据源快照。 |
+| `chartData` | object | no | Agent Run runtime | 当前 Run 产出的 canonical 图表 payload。 |
+| `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | 当前 Run 的 canonical 结论信封。 |
+| `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | 当前 Run 的 canonical model trace。 |
+| `reportState` | hidden \| pending \| generating \| generated \| skipped \| failed | yes | Agent Run runtime / report_artifacts | 绑定在当前 Run 上的 canonical report 可用性与生成状态。 |
+| `createdAt` | string | yes | agent_runs.created_at | Run 创建时间。 |
+| `updatedAt` | string | yes | agent_runs.updated_at | Run 更新时间。 |
+| `startedAt` | string | no | agent_runs.started_at | Run 开始时间。 |
+| `completedAt` | string | no | agent_runs.completed_at | Run 完成时间。 |
+| `elapsedMs` | number | no | agent_runs.elapsed_ms | Run 耗时，单位为毫秒。 |
+| `errorMessage` | string | no | agent_runs.error_message | Run 失败时可展示的安全错误信息。 |
 
 ### ReportMetadata
 
