@@ -152,7 +152,7 @@ function settleInterruptedRun(run: RunViewModel): RunViewModel {
   };
 }
 
-function normalizeRunSnapshot(rawValue: unknown): RunViewModel | null {
+function normalizeRunViewModel(rawValue: unknown): RunViewModel | null {
   if (!isRecord(rawValue)) {
     return null;
   }
@@ -204,7 +204,7 @@ function normalizeRunsById(rawValue: unknown): Record<string, RunViewModel> | nu
   const runsById: Record<string, RunViewModel> = {};
 
   for (const [runId, rawRun] of Object.entries(rawValue)) {
-    const normalizedRun = normalizeRunSnapshot(rawRun);
+    const normalizedRun = normalizeRunViewModel(rawRun);
 
     if (!normalizedRun || normalizedRun.id !== runId) {
       return null;

@@ -12,9 +12,9 @@ import type {
   RunToolStartedEvent,
 } from '@/types/run';
 import type {
-  RunViewModelChartData as RunChartData,
-  RunViewModelToolInvocation as RunToolInvocation,
-  RunViewModelTrace as RunModelTrace,
+  RunViewModelChartData,
+  RunViewModelToolInvocation,
+  RunViewModelTrace,
 } from '@/domain/run/view-model';
 import { createMockRagSources } from './ragSources';
 
@@ -42,7 +42,7 @@ const MOCK_RUN_STEPS = [
   { id: MOCK_RUN_STEP_IDS.generateConclusion, title: '生成最终结论' },
 ] as const;
 
-function createMockModelTrace(): RunModelTrace {
+function createMockModelTrace(): RunViewModelTrace {
   return {
     selectedModelId: 'mock-agent',
     provider: 'mock',
@@ -144,7 +144,7 @@ export function createMockStepCompletedEvent(
 
 export function createMockToolStartedEvent(
   runId: string,
-  tool: RunToolInvocation,
+  tool: RunViewModelToolInvocation,
 ): RunToolStartedEvent {
   return {
     type: 'tool_started',
@@ -212,7 +212,7 @@ export function createMockRunStoppedEvent(runId: string): RunStoppedEvent {
   };
 }
 
-export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS): RunToolInvocation {
+export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS): RunViewModelToolInvocation {
   const timestamp = new Date().toISOString();
 
   if (toolId === 'knowledgeSearch') {
@@ -253,7 +253,7 @@ export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS)
   };
 }
 
-export function createMockChartData(): RunChartData {
+export function createMockChartData(): RunViewModelChartData {
   return {
     title: '各年级平均分对比',
     chartType: 'bar',

@@ -1,8 +1,8 @@
-import type { RunViewModelChartData as RunChartData } from '@/domain/run/view-model';
+import type { RunViewModelChartData } from '@/domain/run/view-model';
 
 export function isValidRunChartData(
-  chartData: RunChartData | undefined,
-): chartData is RunChartData {
+  chartData: RunViewModelChartData | undefined,
+): chartData is RunViewModelChartData {
   if (!chartData || chartData.labels.length === 0 || chartData.series.length === 0) {
     return false;
   }
@@ -11,7 +11,7 @@ export function isValidRunChartData(
 }
 
 export function getPrimaryChartValue(
-  chartData: RunChartData | undefined,
+  chartData: RunViewModelChartData | undefined,
   index: number,
 ): number | null {
   if (!isValidRunChartData(chartData)) {
@@ -23,7 +23,7 @@ export function getPrimaryChartValue(
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-export function getChartPointCount(chartData: RunChartData | undefined): number {
+export function getChartPointCount(chartData: RunViewModelChartData | undefined): number {
   if (!isValidRunChartData(chartData)) {
     return 0;
   }
@@ -33,7 +33,7 @@ export function getChartPointCount(chartData: RunChartData | undefined): number 
 }
 
 export function getChartValueExtent(
-  chartData: RunChartData | undefined,
+  chartData: RunViewModelChartData | undefined,
 ): { min: number; max: number } | null {
   if (!isValidRunChartData(chartData)) {
     return null;

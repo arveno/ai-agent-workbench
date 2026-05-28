@@ -3,13 +3,13 @@ import type {
 } from '@/types/run';
 import type {
   RunViewModel,
-  RunViewModelConclusionSource as RunConclusionSource,
-  RunViewModelDataSourceSnapshot as RunDataSourceSnapshot,
-  RunViewModelIntent as RunIntent,
-  RunViewModelMode as RunMode,
-  RunViewModelStatus as RunStatus,
-  RunViewModelStepStatus as RunStepStatus,
-  RunViewModelToolStatus as RunToolStatus,
+  RunViewModelConclusionSource,
+  RunViewModelDataSourceSnapshot,
+  RunViewModelIntent,
+  RunViewModelMode,
+  RunViewModelStatus,
+  RunViewModelStepStatus,
+  RunViewModelToolStatus,
 } from '@/domain/run/view-model';
 import {
   getConclusionSourceLabel as getObservabilityConclusionSourceLabel,
@@ -31,11 +31,11 @@ export interface RunDataSourceViewModel {
   }>;
 }
 
-export function getRunModeLabel(mode: RunMode): string {
+export function getRunModeLabel(mode: RunViewModelMode): string {
   return mode === 'mock' ? '公开演示模式（Mock）' : '真实 Agent';
 }
 
-export function getRunIntentLabel(intent: RunIntent): string {
+export function getRunIntentLabel(intent: RunViewModelIntent): string {
   if (intent === 'capability_intro') {
     return '能力说明';
   }
@@ -51,23 +51,23 @@ export function getRunIntentLabel(intent: RunIntent): string {
   return '待判断';
 }
 
-export function getRunStatusLabel(status: RunStatus): string {
+export function getRunStatusLabel(status: RunViewModelStatus): string {
   return getObservabilityRunStatusLabel(status);
 }
 
-export function getRunStatusTone(status: RunStatus): RunStatusTone {
+export function getRunStatusTone(status: RunViewModelStatus): RunStatusTone {
   return getObservabilityRunStatusTone(status);
 }
 
-export function getStepStatusLabel(status: RunStepStatus): string {
+export function getStepStatusLabel(status: RunViewModelStepStatus): string {
   return getObservabilityStepStatusLabel(status);
 }
 
-export function getToolStatusLabel(status: RunToolStatus): string {
+export function getToolStatusLabel(status: RunViewModelToolStatus): string {
   return getObservabilityToolStatusLabel(status);
 }
 
-export function getConclusionSourceLabel(source: RunConclusionSource): string {
+export function getConclusionSourceLabel(source: RunViewModelConclusionSource): string {
   return getObservabilityConclusionSourceLabel(source);
 }
 
@@ -164,7 +164,7 @@ function getDataSourceSubtitle(run: Pick<RunViewModel, 'mode'>): string {
   return run.mode === 'mock' ? '本地演示数据' : '服务端受控数据源';
 }
 
-function getDataSourceScope(source: RunDataSourceSnapshot | undefined): string {
+function getDataSourceScope(source: RunViewModelDataSourceSnapshot | undefined): string {
   if (typeof source?.tableCount === 'number' && source.tableCount > 0) {
     return `${source.tableCount} 个受控数据对象`;
   }

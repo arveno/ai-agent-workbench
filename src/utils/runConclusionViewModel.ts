@@ -1,7 +1,7 @@
 import type {
   RunViewModel,
-  RunViewModelConclusionSection as AgentConclusionSection,
-  RunViewModelConclusionSource as RunConclusionSource,
+  RunViewModelConclusionSection,
+  RunViewModelConclusionSource,
 } from '@/domain/run/view-model';
 
 export interface ConclusionSectionView {
@@ -14,7 +14,7 @@ export interface ConclusionViewModel {
   plainText: string;
   compactSections: ConclusionSectionView[];
   compactMarkdownText: string;
-  source: RunConclusionSource;
+  source: RunViewModelConclusionSource;
   notice: string | null;
 }
 
@@ -26,7 +26,7 @@ function normalizeText(value: string | null | undefined): string {
   return typeof value === 'string' ? value.replace(/\\n/g, '\n').trim() : '';
 }
 
-function normalizeSection(section: AgentConclusionSection): ConclusionSectionView | null {
+function normalizeSection(section: RunViewModelConclusionSection): ConclusionSectionView | null {
   const title = normalizeText(section.title);
   const content = normalizeText(section.plainText) || normalizeText(section.markdownText);
 
@@ -40,7 +40,7 @@ function normalizeSection(section: AgentConclusionSection): ConclusionSectionVie
   };
 }
 
-function getCompactSections(sections: AgentConclusionSection[] | undefined): ConclusionSectionView[] {
+function getCompactSections(sections: RunViewModelConclusionSection[] | undefined): ConclusionSectionView[] {
   const normalizedSections = (sections ?? [])
     .map((section) => normalizeSection(section))
     .filter((section): section is ConclusionSectionView => section !== null);

@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { RunViewModel, RunViewModelReportState as RunReportState } from '../../domain/run/view-model';
+import type { RunViewModel, RunViewModelReportState } from '../../domain/run/view-model';
 import type {
   GenerationSlice,
   WorkbenchMessage,
@@ -86,7 +86,7 @@ function insertReportMessageAfterRunAssistant(
   return [...messages, reportMessage];
 }
 
-function settleReportDecisionSteps(run: RunViewModel, reportState: RunReportState): RunViewModel {
+function settleReportDecisionSteps(run: RunViewModel, reportState: RunViewModelReportState): RunViewModel {
   if (reportState !== 'generated' && reportState !== 'skipped') {
     return run;
   }
@@ -114,7 +114,7 @@ function settleReportDecisionSteps(run: RunViewModel, reportState: RunReportStat
   return didUpdateStep ? { ...run, steps } : run;
 }
 
-function updateRunReportState(run: RunViewModel, reportState: RunReportState): RunViewModel {
+function updateRunReportState(run: RunViewModel, reportState: RunViewModelReportState): RunViewModel {
   return settleReportDecisionSteps(
     {
       ...run,

@@ -1,10 +1,10 @@
 import type { ToolInvocationRecord } from '@/types/persistence';
 import type {
-  RunViewModelToolInvocation as RunToolInvocation,
-  RunViewModelToolStatus as RunToolStatus,
+  RunViewModelToolInvocation,
+  RunViewModelToolStatus,
 } from '@/domain/run/view-model';
 
-function mapToolStatus(status: ToolInvocationRecord['status']): RunToolStatus {
+function mapToolStatus(status: ToolInvocationRecord['status']): RunViewModelToolStatus {
   if (status === 'completed') return 'success';
   if (status === 'failed') return 'error';
   if (status === 'skipped') return 'skipped';
@@ -12,7 +12,7 @@ function mapToolStatus(status: ToolInvocationRecord['status']): RunToolStatus {
   return 'running';
 }
 
-export function toolInvocationRecordToRunTool(record: ToolInvocationRecord): RunToolInvocation {
+export function toolInvocationRecordToRunTool(record: ToolInvocationRecord): RunViewModelToolInvocation {
   return {
     id: record.id,
     toolId: record.tool_name,

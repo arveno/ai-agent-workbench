@@ -3,11 +3,11 @@ import type {
 } from '@/types/run';
 import type {
   RunViewModel,
-  RunViewModelAgentConclusion as AgentConclusion,
-  RunViewModelConclusionSection as AgentConclusionSection,
-  RunViewModelStep as RunStep,
-  RunViewModelToolInvocation as RunToolInvocation,
-  RunViewModelTrace as RunModelTrace,
+  RunViewModelAgentConclusion,
+  RunViewModelConclusionSection,
+  RunViewModelStep,
+  RunViewModelToolInvocation,
+  RunViewModelTrace,
 } from '@/domain/run/view-model';
 
 function nowIso(): string {
@@ -25,7 +25,7 @@ function withUpdatedAt(run: RunViewModel, updatedAt = nowIso()): RunViewModel {
   };
 }
 
-function withModelTrace(run: RunViewModel, modelTrace?: RunModelTrace): RunViewModel {
+function withModelTrace(run: RunViewModel, modelTrace?: RunViewModelTrace): RunViewModel {
   if (!modelTrace) {
     return run;
   }
@@ -193,7 +193,7 @@ function parseConclusionJson(value: string): unknown | null {
   }
 }
 
-function normalizeSections(sections: AgentConclusionSection[]): AgentConclusionSection[] | undefined {
+function normalizeSections(sections: RunViewModelConclusionSection[]): RunViewModelConclusionSection[] | undefined {
   const normalizedSections = sections
     .map((section) => {
       const markdownText = normalizeMarkdownText(section.markdownText);
@@ -215,18 +215,18 @@ function normalizeNotice(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function createPlainTextFromSections(sections: AgentConclusionSection[] | undefined): string {
+function createPlainTextFromSections(sections: RunViewModelConclusionSection[] | undefined): string {
   return sections?.map((section) => (section.title ? `${section.title}：${section.plainText}` : section.plainText)).join('\n\n') ?? '';
 }
 
-function createMarkdownTextFromSections(sections: AgentConclusionSection[] | undefined): string {
+function createMarkdownTextFromSections(sections: RunViewModelConclusionSection[] | undefined): string {
   return sections?.map((section) => (section.title ? `**${section.title}**：${section.markdownText}` : section.markdownText)).join('\n\n') ?? '';
 }
 
-function extractSectionsFromMarkdown(value: string): AgentConclusionSection[] | undefined {
+function extractSectionsFromMarkdown(value: string): RunViewModelConclusionSection[] | undefined {
   const normalizedValue = normalizeMarkdownText(value);
-  const sections: AgentConclusionSection[] = [];
-  let currentSection: AgentConclusionSection | null = null;
+  const sections: RunViewModelConclusionSection[] = [];
+  let currentSection: RunViewModelConclusionSection | null = null;
 
   for (const line of normalizedValue.split('\n')) {
     const matchedSection = matchConclusionSectionLine(line);
@@ -259,7 +259,7 @@ function extractSectionsFromMarkdown(value: string): AgentConclusionSection[] | 
   return normalizeSections(sections);
 }
 
-function normalizeParsedConclusion(value: unknown): Pick<AgentConclusion, 'markdownText' | 'plainText' | 'sections'> {
+function normalizeParsedConclusion(value: unknown): Pick<RunViewModelAgentConclusion, 'markdownText' | 'plainText' | 'sections'> {
   if (typeof value === 'string') {
     return normalizeConclusionText(value);
   }
@@ -320,7 +320,7 @@ function normalizeParsedConclusion(value: unknown): Pick<AgentConclusion, 'markd
   };
 }
 
-function matchConclusionSectionLine(line: string): AgentConclusionSection | null {
+function matchConclusionSectionLine(line: string): RunViewModelConclusionSection | null {
   const titleAlternatives = CONCLUSION_SECTION_TITLES.join('|');
   const labelPattern = new RegExp(
     `^\\s*(?:\\d+[.)、]\\s*)?(?:[-*+]\\s*)?(?:#{1,6}\\s*)?(?:\\*\\*)?\\s*(${titleAlternatives})\\s*(?:\\*\\*)?\\s*[：:]\\s*(.*)$`,
@@ -353,7 +353,7 @@ function matchConclusionSectionLine(line: string): AgentConclusionSection | null
   return null;
 }
 
-function normalizeConclusionText(value: string): Pick<AgentConclusion, 'markdownText' | 'plainText' | 'sections'> {
+function normalizeConclusionText(value: string): Pick<RunViewModelAgentConclusion, 'markdownText' | 'plainText' | 'sections'> {
   const markdownText = normalizeMarkdownText(value);
   const sections = extractSectionsFromMarkdown(markdownText);
 
@@ -364,7 +364,7 @@ function normalizeConclusionText(value: string): Pick<AgentConclusion, 'markdown
   };
 }
 
-function coerceAgentConclusion(value: unknown, fallbackText: string): AgentConclusion | null {
+function coerceAgentConclusion(value: unknown, fallbackText: string): RunViewModelAgentConclusion | null {
   if (!isRecord(value) || (typeof value.markdownText !== 'string' && typeof value.plainText !== 'string')) {
     return null;
   }
@@ -406,7 +406,7 @@ function coerceAgentConclusion(value: unknown, fallbackText: string): AgentConcl
 export function normalizeAgentConclusion(
   rawText: string,
   existingConclusion?: unknown,
-): AgentConclusion {
+): RunViewModelAgentConclusion {
   const hasExistingMarkdownText =
     isRecord(existingConclusion) && typeof existingConclusion.markdownText === 'string' && existingConclusion.markdownText.trim();
   const existing = hasExistingMarkdownText ? coerceAgentConclusion(existingConclusion, rawText) : null;
@@ -437,22 +437,22 @@ export function normalizeAgentConclusion(
 }
 
 function updateStep(
-  steps: RunStep[],
+  steps: RunViewModelStep[],
   stepId: string,
-  updater: (step: RunStep) => RunStep,
-): RunStep[] {
+  updater: (step: RunViewModelStep) => RunViewModelStep,
+): RunViewModelStep[] {
   return steps.map((step) => (step.id === stepId ? updater(step) : step));
 }
 
 function updateTool(
-  toolInvocations: RunToolInvocation[],
+  toolInvocations: RunViewModelToolInvocation[],
   toolId: string,
-  updater: (tool: RunToolInvocation) => RunToolInvocation,
-): RunToolInvocation[] {
+  updater: (tool: RunViewModelToolInvocation) => RunViewModelToolInvocation,
+): RunViewModelToolInvocation[] {
   return toolInvocations.map((tool) => (tool.id === toolId ? updater(tool) : tool));
 }
 
-export function applyRunEventToSnapshot(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
+export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
     const updatedAt = event.run.updatedAt || nowIso();
     const agentConclusion = normalizeAgentConclusion(
@@ -496,7 +496,7 @@ export function applyRunEventToSnapshot(currentRun: RunViewModel | null, event: 
 
   if (event.type === 'step_started') {
     const existingStep = currentRun.steps.find((step) => step.id === event.stepId);
-    const nextStep: RunStep = {
+    const nextStep: RunViewModelStep = {
       id: event.stepId,
       title: event.title,
       description: event.description,

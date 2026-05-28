@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunViewModelStepStatus as RunStepStatus } from '../../../domain/run/view-model';
+import type { RunViewModelStepStatus } from '../../../domain/run/view-model';
 import { getStepStatusLabel } from '../../../utils/runViewModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons, type IconKey } from '../../common/iconMap';
@@ -8,7 +8,7 @@ import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
-function getStepClass(status: RunStepStatus): string {
+function getStepClass(status: RunViewModelStepStatus): string {
   if (status === 'success') {
     return 'done';
   }
@@ -28,7 +28,7 @@ function getStepClass(status: RunStepStatus): string {
   return 'pending';
 }
 
-function getStepIcon(status: RunStepStatus): IconKey {
+function getStepIcon(status: RunViewModelStepStatus): IconKey {
   if (status === 'success') {
     return 'stepDone';
   }

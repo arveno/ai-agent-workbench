@@ -1,4 +1,4 @@
-import type { RunViewModelToolInvocation as RunToolInvocation } from '@/domain/run/view-model';
+import type { RunViewModelToolInvocation } from '@/domain/run/view-model';
 import type { WorkbenchToolId } from '@/types/toolRegistry';
 import { getToolFailureLabel, getToolStatusLabel } from './observabilityLabels';
 import {
@@ -48,7 +48,7 @@ export function tryParseJsonObject(value: string): Record<string, unknown> | nul
   return null;
 }
 
-function getKnownToolId(invocation: RunToolInvocation): WorkbenchToolId | null {
+function getKnownToolId(invocation: RunViewModelToolInvocation): WorkbenchToolId | null {
   return normalizeWorkbenchToolId(invocation.toolId);
 }
 
@@ -114,7 +114,7 @@ function extractCount(text: string, unitPattern: string): string | null {
   return match?.[1] ?? null;
 }
 
-function formatInputText(toolId: WorkbenchToolId | null, invocation: RunToolInvocation): string {
+function formatInputText(toolId: WorkbenchToolId | null, invocation: RunViewModelToolInvocation): string {
   const inputObject = tryParseJsonObject(invocation.inputSummary);
 
   if (toolId === 'schema_inspect') {
@@ -141,7 +141,7 @@ function formatInputText(toolId: WorkbenchToolId | null, invocation: RunToolInvo
   return invocation.inputSummary.trim().startsWith('{') ? '执行工具调用。' : invocation.inputSummary || '执行工具调用。';
 }
 
-function formatOutputText(toolId: WorkbenchToolId | null, invocation: RunToolInvocation): string {
+function formatOutputText(toolId: WorkbenchToolId | null, invocation: RunViewModelToolInvocation): string {
   if (invocation.status === 'error') {
     return '工具执行异常。';
   }
@@ -181,7 +181,7 @@ function formatElapsedText(elapsedMs: number | undefined): string {
   return typeof elapsedMs === 'number' && Number.isFinite(elapsedMs) ? `${elapsedMs}ms` : '-';
 }
 
-function formatToolInvocation(invocation: RunToolInvocation, limits: FormatLimits): FormattedToolInvocation {
+function formatToolInvocation(invocation: RunViewModelToolInvocation, limits: FormatLimits): FormattedToolInvocation {
   const toolId = getKnownToolId(invocation);
   const toolDefinition = toolId ? getWorkbenchToolDefinition(toolId) : null;
   const displayName = (toolDefinition?.displayName ?? invocation.displayName) || invocation.toolName;
@@ -201,7 +201,7 @@ function formatToolInvocation(invocation: RunToolInvocation, limits: FormatLimit
 }
 
 export function formatToolInvocationForChat(
-  invocation: RunToolInvocation,
+  invocation: RunViewModelToolInvocation,
 ): FormattedToolInvocation {
   return formatToolInvocation(invocation, {
     input: 80,
@@ -210,7 +210,7 @@ export function formatToolInvocationForChat(
 }
 
 export function formatToolInvocationForInspector(
-  invocation: RunToolInvocation,
+  invocation: RunViewModelToolInvocation,
 ): FormattedToolInvocation {
   return formatToolInvocation(invocation, {
     input: 120,
