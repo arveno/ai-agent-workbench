@@ -1,8 +1,8 @@
-# AGENTS.md
+# AI Agent Workbench 强制规则 V1
 
-本文件只定义 Codex / AI Coding Agent 在本仓库执行代码任务时必须遵守的硬规则。
+本文件只定义 Codex / AI Coding Agent 在本仓库执行任务时必须遵守的硬规则。
 
-## 1. 必读事实源
+## 0. 必读事实源
 
 改动前按任务范围读取对应文档：
 
@@ -17,230 +17,175 @@
 
 如果任务说明、聊天上下文或临时指令与仓库文档冲突，必须停止并报告冲突。需要改变长期契约时，先更新对应事实源文档，再改代码。
 
-## 2. 默认执行原则
+## 1. Issue 定范围
 
-- 默认单轨实现，不新增兼容链。
-- 不保留新旧链路并存。
-- LangGraph 是长期 Agent Runtime / Graph 编排核心。
-- LangChain 是长期 Model / Tool / RAG 能力层。
-- LangSmith 是长期 Trace / Evaluation / Observability 标准平台。
-- 当前 Agent Run 主链路已进入 LangGraph runtime；不得恢复自研 imperative runtime、basic / mock 主线或旧 runtime 旁路。
-- 后续不得在旧 runtime 旁新增 LangChain 包装层或旁路执行链。
-- 不做无关重构。
-- 不新增无关依赖。
-- 代码优先简洁、直接、易读，优先保证阅读路径连贯，不为拆而拆。
-- 不做过度抽象。
-- 不做过度封装。
-- 不引入无意义 helper / manager / engine / factory / adapter / wrapper。
-- 不用临时兜底遮盖主链路问题。
-- 死代码、废弃代码、冗余代码、旧兼容代码默认删除。
-- 当前主链路不需要的代码默认删除。
-- 旧兼容逻辑确实暂时不能删除时，必须说明原因、影响范围和删除条件。
+没有 Issue，不改代码。
+Codex 只能做当前 Issue 内的事，不允许顺手修、顺手优化、顺手重构。
 
-抽象边界：只有存在真实复用、职责边界更清楚、能减少重复、能隔离复杂逻辑、收敛复杂业务链路或明显提升可读性时，才抽取函数 / 模块。禁止为拆而拆，禁止把同一文件内连续清楚的逻辑拆成大量小函数、简单逻辑多层调用或频繁跳转，禁止为了显得架构化或未来可能用到提前设计 helper / manager / factory / adapter / wrapper / 扩展层。
+## 2. PR 承载代码
 
-处理顺序：
+一个普通 Issue 默认一个分支、一个 PR。
+PR 是 CI / Review / 验收入口。Codex 不能 push main，不能 merge main。最终 merge 必须由用户决定。
+
+## 3. 不换框架
+
+当前不引入 MVC / MVVM / OpenAPI / AsyncAPI / Pact / Spectral / Schemathesis。
+先用现有 React + Vite + JSON Schema + Ajv + generated contract + CI。
+
+## 4. 数据只走一条链路
 
 ```text
-先删除确定无用代码 -> 再合并重复逻辑 -> 再收敛职责边界 -> 最后调整目录结构
+Raw
+↓
+Schema / Ajv
+↓
+Canonical
+↓
+Mapper
+↓
+ViewModel
+↓
+UI
 ```
 
-## 3. 生命周期门禁
+任何绕过这条链路的代码，不通过。
 
-任何功能变更前必须判断：
+## 5. Schema 是字段事实源
 
-- 属于 `docs/agent-run-lifecycle.md` 的哪个生命周期节点。
-- 绑定哪些核心对象。
-- 是否涉及 conversation / message / run / report / source / usage / evaluation ID。
-- 是否涉及 Source / RAG lineage。
-- 是否涉及工具定义、工具参数、Tool Invocation、Run Trace 或前端工具展示。
-- 是否会新增多轨实现、重复状态、重复字段、重复 formatter。
+字段含义、类型、枚举值以 schema 为准。
+改 schema 必须同步 generated contract。
+不允许 schema、runtime、generated 三套不一致。
 
-涉及 ID、Source 或 Tool 的细节不得在代码任务中临时决定，必须遵守对应契约文档。
+## 6. 不自己写业务校验器
 
-## 3.1 Issue 与 Canonical Decision 门禁
+禁止自研 `validateXxx()` 业务校验器。
+允许在 fixture / boundary test 中写结构一致性断言，例如 event-level id 与 payload id 一致。
+但这些断言不能变成主链路业务校验器。校验规则主体必须来自 JSON Schema + Ajv。
 
-- 没有可读取的 Issue，不允许改代码。
-- 仅在治理流程尚未落地前的 bootstrap / facts-source correction 中，且用户明确 prompt 授权时，允许临时例外修改流程事实源本身；只能修改被授权的文档、模板或工作流文件，仍必须走任务分支和 PR，并在 PR body 说明原因、范围和退出条件。
-- PR #94 合并后，后续 Governance Task 必须使用 `.github/ISSUE_TEMPLATE/governance_task.yml` 建 Issue。
-- 用户明确 prompt 不能作为长期绕过 Issue 的通用入口。
-- 涉及 contract / schema / mapper / ViewModel / seed / DB 字段的任务，没有按对应 Issue 模板完成 Canonical Decision Packet，不允许改代码。
-- Review comment 不能直接变成修复 prompt，必须先归因。
-- 不是孤立单点的问题，必须归入当前 Issue 或新建 / 挂接后置 Issue。
-- 不允许为了历史数据、旧 seed、旧字段保留长期兼容 fallback。
-- 如果 PR 方向已经错误，应停止并建议关闭重开，不继续堆补丁式 commit。
+## 7. Runtime 必须符合 Schema
 
-## 4. 职责边界
+后端 / SSE / Tool / Report / Evaluation 输出的数据，必须符合 schema。
+不符合就报 contract violation，不能进 store / reducer / UI 主链路。
 
-- CloudBase Function：Auth、数据库访问、模型调用、工具调用、Agent Run 编排。
-- service：前端 API 请求。
-- store：业务状态。
-- mapper / reducer：数据归一和状态合并。
-- ViewModel：UI 展示模型。
-- component：展示 ViewModel 和触发交互。
-- utils：纯函数工具。
-- scripts：本地工程化脚本。
+## 8. Mapper / Factory 只做边界转换
 
-组件层禁止：
-
-- 直接请求后端。
-- 解析 raw JSON。
-- 清洗 markdown。
-- 拼接业务结论。
-- 判断复杂 provider / fallback / modelErrorType。
-- 维护重复业务状态。
-
-component 只能消费 ViewModel，不得绕过 mapper / ViewModel 直接消费 raw payload。
-
-## 5. 数据链路
-
-业务展示数据分层以 `docs/architecture.md` 为准。
-
-硬性要求：
-
-- component 只能消费 ViewModel。
-- raw 数据只能进入 debug / rawText / 日志 / 调试详情。
-- UI 主视图不能直接消费 raw payload。
-- 同源数据只能标准化一次。
-- 不允许多个组件各自 formatter / parse / clean 同一份数据。
-
-## 5.1 Data Contract Pack
-
-- 字段契约事实源是 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json`。
-- 新增或修改 Run / ModelTrace / Usage / CostEstimate / AgentConclusion / ReportMetadata / EvaluationMetadata 字段前，必须先更新 Contract Pack。
-- 前端可引用类型来自 `contracts/generated/workbench-contract.ts`，人读字段表来自 `contracts/generated/field-registry.md`。
-- 修改字段契约后必须重新执行生成脚本，并确保 generated 文件同步。
-- 不允许绕过 Contract Pack 或 `.github/workflows/contract-pack-check.yml` 的 generated 一致性门禁。
-- 不允许在 architecture / lifecycle 中重复维护字段表；这些文档只能引用 `contracts/`。
-
-## 6. Model / Tool / RAG 终态
-
-长期终态模型调用必须走：
+Mapper 只负责：
 
 ```text
-selectedModelId -> model catalog -> LangChain model layer -> provider client
+Contract DTO / Canonical -> ViewModel
 ```
 
-当前状态：Agent Run 主链路已进入 LangGraph runtime；正式 Tool / Retriever 已进入 LangChain Tool / Retriever 边界；模型调用已进入 `_shared/langchainModelLayer.js`。
+ViewModelFactory 只负责创建 UI-safe ViewModel，并补齐 UI 安全默认值。
+UI-safe 默认值只能在明确的 ViewModelFactory / Mapper 边界处理，不能散落到 store / reducer / component。
 
-要求：
+禁止在 mapper / factory 里做旧字段兼容、兜底修补、summary 反解析。
 
-- 前端只传 `selectedModelId`。
-- 前端不得出现模型 API Key、baseURL、provider 密钥配置。
-- 后端通过 catalog 白名单解析 provider / model / apiKeyEnv。
-- 模型调用、工具定义和 RAG 能力向 LangChain Model / Tool / Retriever 收敛。
-- 旧模型网关调用链不得恢复或扩展成新的长期模型平台。
+## 9. Component 只展示 ViewModel
+
+组件不能读 raw、metadata、payload、legacy 字段。
+组件不能拼装 Run / Tool / Source / Report 模型。
+组件不能补字段。
+
+## 10. 禁止多字段兜底
+
+看到下面这类写法，默认不通过：
+
+```ts
+runId ?? event.run?.id
+sources ?? metadata.sources
+content ?? markdown ?? summary
+toolName ?? toolId ?? name
+reportState ?? metadata.reportState
+sessionId || conversationId
+oldField || newField
+```
+
+## 11. Source / Report 只能有一个事实源
+
+Source 以 canonical source / `run_sources` 为准。
+Report state 以 canonical report record 为准。
+不能从 metadata、message、artifact 反推正式状态。
+
+## 12. RunSnapshot / RunViewModel 必须分开
+
+`RunSnapshot` 表示 canonical runtime / persistence / API boundary。
+`RunViewModel` 表示 UI 展示对象。
+只能 `RunSnapshot -> RunViewModel` 单向转换，不能同名不同义。
 
 禁止：
 
-- 恢复 Groq runtime。
-- 恢复 `modelProvider: 'groq'`。
-- 恢复前端 provider / model 透传链路。
-- 绕过 catalog 或 LangChain model layer 直接调用模型。
-- 恢复旧模型网关为 Agent Run 主模型调用边界或 fallback 旁路。
-- 绕过 LangChain Tool / Retriever 边界新增旧工具链或旧 RAG 链。
-- 在旧 runtime 旁边新增 LangChain wrapper / adapter 旁路。
-- 为兼容旧代码保留 old/new 双轨字段或 fallback 链。
-
-## 7. Mock / Real / Fallback
-
-必须区分：
-
-- Mock：模拟 / 预置验证路径。
-- Real：真实 Provider 模型生成。
-- Fallback：模型不可用、任务不支持或服务异常时的兜底。
-
-要求：
-
-- Fallback 不能伪装成真实模型结果。
-- UI 必须能区分 `conclusionSource`。
-- Run Trace 必须展示 `fallbackReason` / `modelErrorType`。
-- Chat、Run Trace、Report 不得各自解释不同结论来源。
-
-## 8. 状态一致性
-
-关键字段：
-
-```text
-conversationId
-runId
-clientMessageId
-usageId
-selectedModelId
+```ts
+RunSnapshot = RunViewModel
+RunViewModel as RunSnapshot
+RunSnapshot as RunContractSnapshot
+CanonicalRunSnapshot
+RunViewModelStatus as RunStatus
 ```
 
-禁止：
+## 13. CI 通过不等于可以 merge
 
-- 旧请求覆盖当前会话。
-- 旧流写入当前页面。
-- 重复写 assistant message。
-- 重复扣 quota。
-- 切换会话后旧响应落入新会话。
+PR 必须同时满足：
 
-## 9. 配置与部署
+```text
+CI 通过
+Review 通过
+没有超范围修改
+没有字段兜底
+没有 raw 泄漏到组件
+没有 schema/runtime/generated 不一致
+没有无意义 alias / wrapper / 空壳目录
+用户最终确认
+```
 
-影响运行结果的配置必须有明确事实源，不能只存在于脚本硬编码或控制台记忆中。
+## 14. Release PR 只做发布判断
 
-包括：
+Release PR 不能承载修复 commit。
+发现 blocker，单独开 release-blocker Issue，小 PR 修回 stage，再让 release PR 自动更新。
 
-- CloudBase envId
-- HTTP 访问服务 domain / route
-- CloudBase Function runtime / handler / HTTP path
-- 函数环境变量名称
-- Model Provider catalog
-- 数据库 migration / seed
-- smoke test base URL
+## 15. Codex 必须输出 Review Packet
 
-要求：
+每次执行后必须说明：
 
-- 部署脚本只能作为执行器，不能成为云端资源配置的唯一事实源。
-- 路由、环境变量、函数清单、部署域名来自显式参数、配置文件或文档化清单。
-- 不允许脚本静默猜测 envId、domain、route、runtime 或函数类型。
-- 不允许把“函数代码上传成功”描述成“完整部署成功”。
-- 敏感值不能写入仓库。
-- SQL / migration / seed 必须保留仓库文件作为事实源。
+```text
+改了哪些文件
+是否超出 Issue 范围
+是否影响 schema / generated / runtime / mapper / UI
+跑了哪些检查
+是否还有风险
+后置项归属哪个 Issue
+```
 
-## 10. 固定禁止项
+后置项不能只写“后续处理”，必须有明确 Issue 承接。
 
-禁止：
+## 16. 同一职责一次性交付
 
-- 未按 Issue 或 prompt 授权自动 commit、push、创建 / 更新 PR；自动 merge；push main。
-- 绕过用户最终 merge 决策。
-- 处理 stash。
-- 全项目格式化。
-- 新增无关依赖。
-- 修改任务范围外文件。
-- 恢复旧 Provider / Groq / Supabase / Vercel runtime。
-- 新旧链路并存。
-- UI 主视图消费 raw payload。
-- 未经要求修改 README / docs / package.json / pnpm-lock.yaml。
-- 未经确认把云端控制台配置写死到脚本里。
-- 部署脚本静默猜测 envId、domain、HTTP route 或函数类型。
-- 把代码上传成功等同于完整部署成功。
-- 修改部署脚本却不提供 dry-run、真实验证或人工校验步骤。
+同一个对象、同一个职责、同一类代码所有权迁移，必须作为一个完整交付包处理。
 
-合并 PR 前，Codex 必须确认 CI 和 PR Template Check 已通过，并确认用户已经完成 ChatGPT Review / 用户 Review。Codex 不得自动 merge，不得绕过用户最终 merge 决策。
+不能拆成：
 
-## 11. 输出要求
+```text
+先建目录
+后迁类型
+再清 alias
+再补 PR body
+再补检查
+```
 
-每次执行后必须输出：
+只有职责不同、依赖不同、风险明显不同，才允许拆 Issue。
 
-1. 修改文件列表
-2. `git diff --stat`
-3. `pnpm lint` 结果，如涉及代码
-4. `pnpm build` 结果，如涉及代码
-5. 是否新增依赖
-6. 是否修改 runtime
-7. 是否修改 `pnpm-lock.yaml`
-8. 是否存在旧链路残留
-9. 是否存在多轨实现
-10. 手动验证步骤
+例如：
 
-如果涉及部署 / 云端配置 / 数据库变更，还必须输出：
+```text
+类型与目录迁移 = 一个交付包
+Factory 创建边界 = 一个交付包
+EventBoundary = 一个交付包
+Reducer 状态拆分 = 一个交付包
+Presentation UIModel = 一个交付包
+```
 
-11. 是否涉及 CloudBase 路由 / domain
-12. 是否涉及函数环境变量
-13. 是否涉及 migration / seed
-14. 是否需要人工控制台操作
-15. 部署后验证命令
-16. 已自动化内容和仍需人工确认内容
+## 最终红线
+
+```text
+能跑不等于通过。
+不符合 Issue / Contract / Mapper / ViewModel / CI / Review 规则，一律不通过。
+```
