@@ -1,10 +1,5 @@
 import type { AgentConclusion, ModelTrace } from '../../../../contracts/generated/workbench-contract';
 import type { RunSource } from '../../../types/rag';
-import {
-  mapCanonicalRunChartData,
-  mapCanonicalRunDataSource,
-  mapCanonicalRunPlan,
-} from './runViewModelFieldMappers';
 import type {
   CanonicalRunViewModelInput,
   DemoSeedRunAdapterInput,
@@ -229,6 +224,7 @@ export const RunViewModelFactory = {
     const createdAt = optionalString(run.createdAt) ?? new Date().toISOString();
     const updatedAt = optionalString(run.updatedAt) ?? createdAt;
 
+    // #113/#114/#115: generated RunSnapshot still types these sub-objects as Record<string, unknown>.
     return createRunViewModel({
       id,
       sessionId,
@@ -238,12 +234,12 @@ export const RunViewModelFactory = {
       status: mapRunStatus(run.status),
       intent: run.intent ?? 'unknown',
       prompt: run.prompt ?? '',
-      plan: mapCanonicalRunPlan(run.plan) ?? null,
-      dataSource: mapCanonicalRunDataSource(run.dataSource) ?? null,
+      plan: null,
+      dataSource: null,
       steps: input.steps ?? [],
       toolInvocations: input.toolInvocations ?? [],
       sources: input.sources ?? [],
-      chartData: mapCanonicalRunChartData(run.chartData) ?? null,
+      chartData: null,
       conclusion: getTrimmedString(input.conclusion) ?? agentConclusion?.plainText ?? '',
       conclusionSource: input.conclusionSource ?? modelTrace?.conclusionSource ?? 'none',
       agentConclusion: agentConclusion ?? null,
