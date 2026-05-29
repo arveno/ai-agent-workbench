@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { createLocalRunFailedEvent, createLocalRunStoppedEvent } from '../../domain/run/boundary';
 import { streamAgentRunAnalysis } from '../../services/agentRunStreamApi';
 import type { UiSlice, WorkbenchStore } from '../../types/workbench';
 import { createAgentPendingRunStartedEvent } from '../../utils/agentRunMapping';
@@ -132,12 +133,10 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       conversationId,
     });
     let hasFailed = false;
+    let activeRunId = runId;
 
     if (state.currentRun?.mode === 'agent' && state.currentRun.status === 'running') {
-      get().applyRunEvent({
-        type: 'run_stopped',
-        runId: state.currentRun.id,
-      });
+      get().applyRunEvent(createLocalRunStoppedEvent(state.currentRun.id));
     }
 
     try {
@@ -199,8 +198,12 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
               ? {
                   ...event,
                   errorMessage: withDemoFallbackHint(event.errorMessage),
-                }
+              }
               : event;
+
+          if (normalizedEvent.type === 'run_started') {
+            activeRunId = normalizedEvent.runId;
+          }
 
           get().applyRunEvent(normalizedEvent);
 
@@ -261,10 +264,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         const activeRun = get().currentRun;
 
         if (activeRun?.mode === 'agent' && activeRun.status === 'running') {
-          get().applyRunEvent({
-            type: 'run_stopped',
-            runId: activeRun.id,
-          });
+          get().applyRunEvent(createLocalRunStoppedEvent(activeRun.id));
         }
 
         set({
@@ -278,14 +278,9 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         return;
       }
 
-      const activeRunId = get().currentRun?.id ?? pendingRunEvent.run.id;
       const errorMessage = withDemoFallbackHint(getAgentRunErrorMessage(error));
 
-      get().applyRunEvent({
-        type: 'run_failed',
-        runId: activeRunId,
-        errorMessage,
-      });
+      get().applyRunEvent(createLocalRunFailedEvent({ runId: activeRunId, errorMessage }));
 
       set({
         agentRunStatus: 'error',

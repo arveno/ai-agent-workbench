@@ -5,8 +5,8 @@ import type {
   DemoConversationTemplateRecord,
   ConversationVisibility,
 } from './persistence';
+import type { RunEvent } from '../domain/run/boundary';
 import type { RunViewModel } from '../domain/run/view-model';
-import type { RunEvent } from './run';
 import type { ModelProviderId } from '../utils/modelCatalogMetadata';
 
 export type SessionId = string;
@@ -23,7 +23,7 @@ export type {
 
 export type {
   RunEvent,
-} from './run';
+} from '../domain/run/boundary';
 
 export type { RunSource, RunSourceType } from './rag';
 

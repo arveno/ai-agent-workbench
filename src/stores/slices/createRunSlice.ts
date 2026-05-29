@@ -14,7 +14,7 @@ import type {
   WorkbenchStore,
 } from '../../types/workbench';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
-import { runEventsRecordToRunEvents, runPersistenceRecordsToViewModel } from '../../utils/runPersistenceMapper';
+import { runEventRecordsToNormalizedRunEvents, runPersistenceRecordsToViewModel } from '../../utils/runPersistenceMapper';
 import { applyRunEventToViewModel } from '../../utils/runReducer';
 import { getSessionLatestRun, initialWorkbenchState, persistWorkbenchSessions, upsertRunIntoSessions } from './shared';
 import { useAuthStore } from '../authStore';
@@ -522,7 +522,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       tools: latestRunResult.data.toolInvocations,
       sources: latestRunResult.data.sources,
     });
-    const runEvents = runEventsRecordToRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
+    const runEvents = runEventRecordsToNormalizedRunEvents(latestRunResult.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((state) => {
       const activeSession = state.sessions.find((session) => session.id === conversationId);
@@ -679,7 +679,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runEvents = runEventsRecordToRunEvents(result.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
+    const runEvents = runEventRecordsToNormalizedRunEvents(result.data.events).slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
     set((currentState) => {
       const currentActiveSession = currentState.sessions.find((session) => session.id === conversationId);

@@ -1,1 +1,32 @@
-// Reserved for #124 RunEventBoundary implementation, no runtime behavior here.
+export {
+  createLocalRunFailedEvent,
+  createLocalRunStoppedEvent,
+  normalizeRunEvent,
+  RunEventBoundary,
+} from './runEventBoundary';
+export type {
+  NormalizedRunEvent,
+  RunChartReadyEvent,
+  RunCompletedEvent,
+  RunConclusionCompletedEvent,
+  RunConclusionDeltaEvent,
+  RunEvent,
+  RunEventBoundaryContext,
+  RunEventBoundaryInput,
+  RunEventBoundarySource,
+  RunEventIdentity,
+  RunEventType,
+  RunFailedEvent,
+  RunRagSourcesReadyEvent,
+  RunReportPendingEvent,
+  RunReusedEvent,
+  RunStartedEvent,
+  RunStartedPayload,
+  RunStepCompletedEvent,
+  RunStepFailedEvent,
+  RunStepStartedEvent,
+  RunStoppedEvent,
+  RunToolCompletedEvent,
+  RunToolFailedEvent,
+  RunToolStartedEvent,
+} from './types';

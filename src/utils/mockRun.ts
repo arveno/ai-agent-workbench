@@ -1,16 +1,17 @@
-import type {
-  RunChartReadyEvent,
-  RunCompletedEvent,
-  RunConclusionCompletedEvent,
-  RunEvent,
-  RunReportPendingEvent,
-  RunStartedEvent,
-  RunStepCompletedEvent,
-  RunStepStartedEvent,
-  RunStoppedEvent,
-  RunToolCompletedEvent,
-  RunToolStartedEvent,
-} from '@/types/run';
+import {
+  createLocalRunStoppedEvent,
+  type RunChartReadyEvent,
+  type RunCompletedEvent,
+  type RunConclusionCompletedEvent,
+  type RunEvent,
+  type RunReportPendingEvent,
+  type RunStartedEvent,
+  type RunStepCompletedEvent,
+  type RunStepStartedEvent,
+  type RunStoppedEvent,
+  type RunToolCompletedEvent,
+  type RunToolStartedEvent,
+} from '@/domain/run/boundary';
 import type {
   RunViewModel,
   RunViewModelChartData,
@@ -211,10 +212,7 @@ export function createMockRunCompletedEvent(runId: string, elapsedMs?: number): 
 }
 
 export function createMockRunStoppedEvent(runId: string): RunStoppedEvent {
-  return {
-    type: 'run_stopped',
-    runId,
-  };
+  return createLocalRunStoppedEvent(runId);
 }
 
 export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS): RunViewModelToolInvocation {
