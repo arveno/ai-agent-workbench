@@ -287,7 +287,7 @@ function settleInterruptedRun(run: RunViewModel): RunViewModel {
   };
 }
 
-function normalizeRunViewModel(rawValue: unknown, sessionId: string): RunViewModel | null {
+function normalizeRunViewModel(rawValue: unknown, conversationId: string): RunViewModel | null {
   if (!isRecord(rawValue)) {
     return null;
   }
@@ -299,7 +299,7 @@ function normalizeRunViewModel(rawValue: unknown, sessionId: string): RunViewMod
 
   if (
     typeof run.id !== 'string' ||
-    (run.sessionId !== undefined && typeof run.sessionId !== 'string') ||
+    (run.conversationId !== undefined && typeof run.conversationId !== 'string') ||
     (run.displayRunId !== undefined && typeof run.displayRunId !== 'string') ||
     !isRunMode(run.mode) ||
     !isRunStatus(run.status) ||
@@ -321,7 +321,7 @@ function normalizeRunViewModel(rawValue: unknown, sessionId: string): RunViewMod
 
   const restoredRun: RestoredRunAdapterInput = {
     id: run.id,
-    sessionId,
+    conversationId,
     clientRunId: typeof run.clientRunId === 'string' ? run.clientRunId : undefined,
     displayRunId: typeof run.displayRunId === 'string' ? run.displayRunId : undefined,
     mode: run.mode,
@@ -352,7 +352,7 @@ function normalizeRunViewModel(rawValue: unknown, sessionId: string): RunViewMod
   );
 }
 
-function normalizeRunsById(rawValue: unknown, sessionId: string): Record<string, RunViewModel> | null {
+function normalizeRunsById(rawValue: unknown, conversationId: string): Record<string, RunViewModel> | null {
   if (!isRecord(rawValue)) {
     return null;
   }
@@ -360,7 +360,7 @@ function normalizeRunsById(rawValue: unknown, sessionId: string): Record<string,
   const runsById: Record<string, RunViewModel> = {};
 
   for (const [runId, rawRun] of Object.entries(rawValue)) {
-    const normalizedRun = normalizeRunViewModel(rawRun, sessionId);
+    const normalizedRun = normalizeRunViewModel(rawRun, conversationId);
 
     if (!normalizedRun || normalizedRun.id !== runId) {
       return null;

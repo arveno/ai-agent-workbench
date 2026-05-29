@@ -76,7 +76,7 @@ function createMockModelTrace(): RunViewModelTrace {
 export function createMockRunViewModel(params: {
   runId: string;
   prompt: string;
-  sessionId: string;
+  conversationId: string;
   timestamp?: string;
 }): RunViewModel {
   const timestamp = params.timestamp ?? new Date().toISOString();
@@ -88,7 +88,7 @@ export function createMockRunViewModel(params: {
   return RunViewModelFactory.fromMockRun({
     runId: params.runId,
     prompt: params.prompt,
-    sessionId: params.sessionId,
+    conversationId: params.conversationId,
     plan: {
       intent: 'data_analysis',
       shouldUseDataAnalysis: true,
@@ -113,12 +113,12 @@ export function createMockRunViewModel(params: {
 export function createMockRunStartedEvent(params: {
   runId: string;
   prompt: string;
-  sessionId: string;
+  conversationId: string;
 }): RunStartedEvent {
   return {
     type: 'run_started',
     runId: params.runId,
-    conversationId: params.sessionId,
+    conversationId: params.conversationId,
     run: createMockRunViewModel(params),
   };
 }

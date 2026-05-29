@@ -296,7 +296,7 @@ export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewMo
 
   return RunViewModelFactory.fromCanonicalRun({
     run,
-    sessionId: record.conversation_id,
+    conversationId: record.conversation_id,
     conclusion: agentConclusion.plainText,
     agentConclusion: agentConclusion.plainText ? agentConclusion : null,
     modelTrace,
@@ -336,7 +336,7 @@ export function runPersistenceRecordsToViewModel(params: {
 
   return RunViewModelFactory.fromRestoredRunAdapter({
     id: runIdentity.id,
-    sessionId: params.run.conversation_id,
+    conversationId: params.run.conversation_id,
     clientRunId: runIdentity.clientRunId,
     displayRunId: runIdentity.displayRunId,
     mode: viewModel.mode,

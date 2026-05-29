@@ -455,15 +455,15 @@ function updateTool(
 
 export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
-    const sessionId = event.conversationId?.trim();
+    const conversationId = event.conversationId?.trim();
 
-    if (!sessionId) {
+    if (!conversationId) {
       return currentRun;
     }
 
     const runViewModel = RunViewModelFactory.fromRunStartedInput({
       id: event.runId ?? event.run.id,
-      sessionId,
+      conversationId,
       clientRunId: event.clientRunId ?? event.run.clientRunId,
       displayRunId: event.run.displayRunId,
       mode: event.run.mode,

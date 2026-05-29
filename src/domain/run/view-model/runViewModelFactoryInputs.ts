@@ -19,7 +19,7 @@ export type RunViewModelFactoryStatusInput = RunViewModelStatus | RunSnapshot['s
 
 export interface CanonicalRunViewModelInput {
   run: RunSnapshot;
-  sessionId: string;
+  conversationId: string;
   displayRunId?: string | null;
   steps?: RunViewModelStep[];
   toolInvocations?: RunViewModelToolInvocation[];
@@ -32,7 +32,7 @@ export interface CanonicalRunViewModelInput {
 
 export interface RunStartedViewModelInput {
   id: string;
-  sessionId: string;
+  conversationId: string;
   mode: RunViewModelMode;
   status: RunViewModelFactoryStatusInput;
   intent?: RunViewModelIntent | null;
@@ -61,14 +61,14 @@ export interface RunStartedViewModelInput {
 export interface PendingAgentRunInput {
   runId: string;
   prompt: string;
-  sessionId: string;
+  conversationId: string;
   timestamp?: string;
 }
 
 export interface MockRunInput {
   runId: string;
   prompt: string;
-  sessionId: string;
+  conversationId: string;
   plan: RunViewModelPlan;
   dataSource: RunViewModelDataSource;
   steps: RunViewModelStep[];
@@ -79,7 +79,7 @@ export interface MockRunInput {
 
 export interface DemoSeedRunAdapterInput {
   id: string;
-  sessionId: string;
+  conversationId: string;
   fallbackPrompt: string;
   fallbackCreatedAt: string;
   fallbackUpdatedAt: string;
@@ -110,7 +110,7 @@ export interface DemoSeedRunAdapterInput {
 
 export interface RestoredRunAdapterInput {
   id: string;
-  sessionId: string;
+  conversationId: string;
   mode: RunViewModelMode;
   status: RunViewModelStatus;
   intent: RunViewModelIntent;

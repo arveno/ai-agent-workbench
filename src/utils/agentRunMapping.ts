@@ -4,7 +4,7 @@ import type { RunStartedEvent } from '@/types/run';
 export function createAgentPendingRunStartedEvent(params: {
   runId: string;
   prompt: string;
-  sessionId: string;
+  conversationId: string;
 }): RunStartedEvent {
   const timestamp = new Date().toISOString();
 
@@ -12,12 +12,12 @@ export function createAgentPendingRunStartedEvent(params: {
     type: 'run_started',
     runId: params.runId,
     clientRunId: params.runId,
-    conversationId: params.sessionId,
+    conversationId: params.conversationId,
     timestamp,
     run: RunViewModelFactory.fromPendingAgentRun({
       runId: params.runId,
       prompt: params.prompt,
-      sessionId: params.sessionId,
+      conversationId: params.conversationId,
       timestamp,
     }),
   };

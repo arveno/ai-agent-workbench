@@ -119,7 +119,7 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
     }));
 }
 
-function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunViewModel | null {
+function createDemoRun(template: DemoConversationTemplateRecord, conversationId: string): RunViewModel | null {
   const rawRun = template.seed_runs[0] as unknown as DemoSeedRunAdapterInput | undefined;
 
   if (!rawRun?.id) {
@@ -129,7 +129,7 @@ function createDemoRun(template: DemoConversationTemplateRecord, sessionId: stri
   return RunViewModelFactory.fromDemoSeedAdapter({
     ...rawRun,
     id: rawRun.id,
-    sessionId,
+    conversationId,
     fallbackPrompt: template.title,
     fallbackCreatedAt: template.created_at,
     fallbackUpdatedAt: template.updated_at,

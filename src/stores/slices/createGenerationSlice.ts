@@ -275,7 +275,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       const runStartedEvent = createMockRunStartedEvent({
         runId,
         prompt: trimmedPrompt,
-        sessionId: snapshot.currentSessionId,
+        conversationId: snapshot.currentSessionId,
       });
       get().applyRunEvent(runStartedEvent);
     }

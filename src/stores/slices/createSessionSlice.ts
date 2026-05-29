@@ -155,7 +155,7 @@ function getRecoveredMockStepDescription(stepId: string, promptSummary: string):
   return '恢复本轮 Mock Run 的最终回复。';
 }
 
-function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunViewModel {
+function createCompletedMockRun(seed: MockRunSeed, conversationId: string): RunViewModel {
   const createdAt = toIso(seed.createdAt);
   const updatedAt = toIso(seed.updatedAt);
   const promptSummary = summarizeMockPrompt(seed.prompt || seed.conclusion);
@@ -165,7 +165,7 @@ function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunViewMo
   const startedRun = createMockRunViewModel({
     runId: seed.runId,
     prompt: seed.prompt || promptSummary,
-    sessionId,
+    conversationId,
   });
   const stepElapsedById: Partial<Record<keyof typeof MOCK_RUN_STEP_IDS, number>> = {
     understandPrompt: 160,

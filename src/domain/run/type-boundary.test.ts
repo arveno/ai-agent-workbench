@@ -19,11 +19,13 @@ type HasKey<T, K extends PropertyKey> = K extends keyof T ? true : false;
 
 export type RunTypeBoundaryAssertions = [
   Assert<IsEqual<HasKey<RunSnapshot, 'sessionId'>, false>>,
+  Assert<IsEqual<RunSnapshot['conversationId'], string>>,
   Assert<IsEqual<HasKey<RunSnapshot, 'displayRunId'>, false>>,
   Assert<IsEqual<HasKey<RunSnapshot, 'steps'>, false>>,
   Assert<IsEqual<HasKey<RunSnapshot, 'toolInvocations'>, false>>,
   Assert<IsEqual<HasKey<RunSnapshot, 'sources'>, false>>,
-  Assert<IsEqual<RunViewModel['sessionId'], string>>,
+  Assert<IsEqual<HasKey<RunViewModel, 'sessionId'>, false>>,
+  Assert<IsEqual<RunViewModel['conversationId'], string>>,
   Assert<IsEqual<RunViewModel['displayRunId'], string>>,
   Assert<IsEqual<RunViewModel['status'], RunViewModelStatus>>,
   Assert<IsEqual<RunViewModel['steps'], RunViewModelStep[]>>,

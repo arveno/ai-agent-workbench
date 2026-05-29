@@ -666,7 +666,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       sources: result.data.sources,
     });
 
-    if (runViewModel.sessionId !== conversationId) {
+    if (runViewModel.conversationId !== conversationId) {
       const message = '这条 Run 不属于当前会话。';
       set({
         isLatestRunLoading: false,
@@ -790,7 +790,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     });
 
     set((state) => {
-      const conversationId = runViewModel.sessionId;
+      const conversationId = runViewModel.conversationId;
 
       if (!conversationId || !state.currentRun || state.currentRun.id !== runId) {
         return {

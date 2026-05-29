@@ -122,7 +122,7 @@ export interface RunViewModelPlan {
 export interface RunViewModel {
   id: string;
   clientRunId?: string;
-  sessionId: string;
+  conversationId: string;
   displayRunId: string;
   mode: RunViewModelMode;
   status: RunViewModelStatus;

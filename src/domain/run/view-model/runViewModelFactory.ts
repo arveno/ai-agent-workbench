@@ -28,7 +28,7 @@ import type {
 interface RunViewModelCreateInput {
   id: string;
   clientRunId: string | null;
-  sessionId: string;
+  conversationId: string;
   displayRunId: string;
   mode: RunViewModelMode;
   status: RunViewModelStatus;
@@ -135,7 +135,7 @@ function createRunViewModel(input: RunViewModelCreateInput): RunViewModel {
   return {
     id: input.id,
     ...(input.clientRunId ? { clientRunId: input.clientRunId } : {}),
-    sessionId: input.sessionId,
+    conversationId: input.conversationId,
     displayRunId: input.displayRunId,
     mode: input.mode,
     status: input.status,
@@ -220,14 +220,14 @@ export const RunViewModelFactory = {
     const agentConclusion = input.agentConclusion ?? run.agentConclusion;
     const modelTrace = input.modelTrace ?? run.modelTrace;
     const id = requireString(run.id, 'id');
-    const sessionId = requireString(input.sessionId, 'sessionId');
+    const conversationId = requireString(input.conversationId, 'conversationId');
     const createdAt = optionalString(run.createdAt) ?? new Date().toISOString();
     const updatedAt = optionalString(run.updatedAt) ?? createdAt;
 
     // #113/#114/#115: generated RunSnapshot still types these sub-objects as Record<string, unknown>.
     return createRunViewModel({
       id,
-      sessionId,
+      conversationId,
       clientRunId: optionalString(run.clientRunId) ?? null,
       displayRunId: optionalString(input.displayRunId) ?? id,
       mode: run.mode,
@@ -256,13 +256,13 @@ export const RunViewModelFactory = {
 
   fromRunStartedInput(input: RunStartedViewModelInput): RunViewModel {
     const id = requireString(input.id, 'id');
-    const sessionId = requireString(input.sessionId, 'sessionId');
+    const conversationId = requireString(input.conversationId, 'conversationId');
     const createdAt = optionalString(input.createdAt) ?? optionalString(input.updatedAt) ?? new Date().toISOString();
     const updatedAt = optionalString(input.updatedAt) ?? createdAt;
 
     return createRunViewModel({
       id,
-      sessionId,
+      conversationId,
       clientRunId: optionalString(input.clientRunId) ?? null,
       displayRunId: optionalString(input.displayRunId) ?? id,
       mode: input.mode,
@@ -296,7 +296,7 @@ export const RunViewModelFactory = {
     return createRunViewModel({
       id,
       clientRunId: id,
-      sessionId: requireString(input.sessionId, 'sessionId'),
+      conversationId: requireString(input.conversationId, 'conversationId'),
       displayRunId: id,
       mode: 'agent',
       status: 'running',
@@ -333,7 +333,7 @@ export const RunViewModelFactory = {
     return createRunViewModel({
       id,
       clientRunId: null,
-      sessionId: requireString(input.sessionId, 'sessionId'),
+      conversationId: requireString(input.conversationId, 'conversationId'),
       displayRunId: id,
       mode: 'mock',
       status: 'running',
@@ -366,7 +366,7 @@ export const RunViewModelFactory = {
 
     return createRunViewModel({
       id,
-      sessionId: requireString(input.sessionId, 'sessionId'),
+      conversationId: requireString(input.conversationId, 'conversationId'),
       clientRunId: optionalString(input.clientRunId) ?? null,
       displayRunId: optionalString(input.displayRunId) ?? id,
       mode: input.mode ?? 'mock',
@@ -398,7 +398,7 @@ export const RunViewModelFactory = {
 
     return createRunViewModel({
       id,
-      sessionId: requireString(input.sessionId, 'sessionId'),
+      conversationId: requireString(input.conversationId, 'conversationId'),
       clientRunId: optionalString(input.clientRunId) ?? null,
       displayRunId: optionalString(input.displayRunId) ?? id,
       mode: input.mode,
