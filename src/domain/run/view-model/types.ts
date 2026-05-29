@@ -101,7 +101,7 @@ export interface RunViewModelChartData {
   summary?: string;
 }
 
-export interface RunViewModelDataSourceSnapshot {
+export interface RunViewModelDataSource {
   provider: 'mock' | 'cloudbase_mysql';
   name: string;
   typeLabel: string;
@@ -109,7 +109,7 @@ export interface RunViewModelDataSourceSnapshot {
   tableCount?: number;
 }
 
-export interface RunViewModelPlanSnapshot {
+export interface RunViewModelPlan {
   intent: RunViewModelIntent;
   shouldUseDataAnalysis: boolean;
   reason?: string;
@@ -122,17 +122,17 @@ export interface RunViewModelPlanSnapshot {
 export interface RunViewModel {
   id: string;
   clientRunId?: string;
-  sessionId?: string;
-  displayRunId?: string;
+  conversationId: string;
+  displayRunId: string;
   mode: RunViewModelMode;
   status: RunViewModelStatus;
   intent: RunViewModelIntent;
   prompt: string;
-  plan?: RunViewModelPlanSnapshot;
-  dataSource?: RunViewModelDataSourceSnapshot;
+  plan?: RunViewModelPlan;
+  dataSource?: RunViewModelDataSource;
   steps: RunViewModelStep[];
   toolInvocations: RunViewModelToolInvocation[];
-  sources?: RunSource[];
+  sources: RunSource[];
   chartData?: RunViewModelChartData;
   conclusion: string;
   conclusionSource: RunViewModelConclusionSource;

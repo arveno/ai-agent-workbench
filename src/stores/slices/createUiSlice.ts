@@ -122,14 +122,14 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
     const state = get();
     const requestId = createAgentRunRequestId();
-    const sessionId = state.currentSessionId;
+    const conversationId = state.currentSessionId;
     const runId = createRunId('agent_run');
     const abortController = new AbortController();
     const previousAbortController = state.activeAgentRunAbortController;
     const pendingRunEvent = createAgentPendingRunStartedEvent({
       runId,
       prompt,
-      sessionId,
+      conversationId,
     });
     let hasFailed = false;
 
@@ -148,10 +148,10 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       });
 
       if (userMessage && get().isPersistentMode) {
-        await get().persistMessageToConversation(sessionId, userMessage);
+        await get().persistMessageToConversation(conversationId, userMessage);
       }
 
-      if (get().currentSessionId !== sessionId) {
+      if (get().currentSessionId !== conversationId) {
         return;
       }
 
@@ -182,7 +182,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
       await streamAgentRunAnalysis({
         prompt,
-        conversationId: sessionId,
+        conversationId,
         selectedModelId: state.selectedModelId,
         clientRunId: runId,
         accessToken,
@@ -190,7 +190,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         onEvent: (event) => {
           const current = get();
 
-          if (current.activeAgentRunRequestId !== requestId || current.currentSessionId !== sessionId) {
+          if (current.activeAgentRunRequestId !== requestId || current.currentSessionId !== conversationId) {
             return;
           }
 
@@ -227,7 +227,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         },
       });
 
-      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
+      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== conversationId) {
         return;
       }
 
@@ -242,7 +242,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         });
 
         if (get().isPersistentMode) {
-          await get().loadPersistentMessagesForSession(sessionId);
+          await get().loadPersistentMessagesForSession(conversationId);
         }
 
         return;
@@ -253,7 +253,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         activeAgentRunAbortController: null,
       });
     } catch (error) {
-      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
+      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== conversationId) {
         return;
       }
 

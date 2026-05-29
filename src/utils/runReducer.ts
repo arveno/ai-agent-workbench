@@ -9,6 +9,7 @@ import type {
   RunViewModelToolInvocation,
   RunViewModelTrace,
 } from '@/domain/run/view-model';
+import { RunViewModelFactory } from '@/domain/run/view-model';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -454,15 +455,48 @@ function updateTool(
 
 export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
-    const updatedAt = event.run.updatedAt || nowIso();
+    const conversationId = event.conversationId?.trim();
+
+    if (!conversationId) {
+      return currentRun;
+    }
+
+    const runViewModel = RunViewModelFactory.fromRunStartedInput({
+      id: event.runId ?? event.run.id,
+      conversationId,
+      clientRunId: event.clientRunId ?? event.run.clientRunId,
+      displayRunId: event.run.displayRunId,
+      mode: event.run.mode,
+      status: event.run.status ?? 'running',
+      intent: event.run.intent,
+      prompt: event.run.prompt,
+      plan: event.run.plan,
+      dataSource: event.run.dataSource,
+      steps: event.run.steps,
+      toolInvocations: event.run.toolInvocations,
+      sources: event.run.sources,
+      chartData: event.run.chartData,
+      conclusion: event.run.conclusion,
+      conclusionSource: event.run.conclusionSource,
+      agentConclusion: event.run.agentConclusion,
+      modelTrace: event.run.modelTrace,
+      reportState: event.run.reportState,
+      createdAt: event.run.createdAt ?? event.timestamp,
+      updatedAt: event.run.updatedAt ?? event.timestamp,
+      startedAt: event.run.startedAt,
+      completedAt: event.run.completedAt,
+      elapsedMs: event.run.elapsedMs,
+      errorMessage: event.run.errorMessage,
+    });
+    const updatedAt = runViewModel.updatedAt;
     const agentConclusion = normalizeAgentConclusion(
-      event.run.conclusion,
-      event.run.agentConclusion,
+      runViewModel.conclusion,
+      runViewModel.agentConclusion,
     );
 
     return {
-      ...event.run,
-      status: event.run.status === 'idle' ? 'pending' : event.run.status,
+      ...runViewModel,
+      status: runViewModel.status === 'idle' ? 'pending' : runViewModel.status,
       conclusion: agentConclusion.plainText,
       agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
       updatedAt,

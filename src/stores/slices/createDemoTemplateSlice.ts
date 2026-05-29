@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
-import type { RunViewModel } from '../../domain/run/view-model';
+import type { DemoSeedRunAdapterInput, RunViewModel } from '../../domain/run/view-model';
+import { RunViewModelFactory } from '../../domain/run/view-model';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
 import type { DemoTemplateSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
@@ -118,37 +119,21 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
     }));
 }
 
-function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunViewModel | null {
-  const rawRun = template.seed_runs[0] as Partial<RunViewModel> | undefined;
+function createDemoRun(template: DemoConversationTemplateRecord, conversationId: string): RunViewModel | null {
+  const rawRun = template.seed_runs[0] as unknown as DemoSeedRunAdapterInput | undefined;
 
   if (!rawRun?.id) {
     return null;
   }
 
-  return {
+  return RunViewModelFactory.fromDemoSeedAdapter({
+    ...rawRun,
     id: rawRun.id,
-    sessionId,
-    mode: rawRun.mode ?? 'mock',
-    status: rawRun.status ?? 'success',
-    intent: rawRun.intent ?? 'unknown',
-    prompt: rawRun.prompt ?? template.title,
-    plan: rawRun.plan,
-    dataSource: rawRun.dataSource,
-    steps: rawRun.steps ?? [],
-    toolInvocations: rawRun.toolInvocations ?? [],
-    sources: rawRun.sources,
-    chartData: rawRun.chartData,
-    conclusion: rawRun.conclusion ?? '',
-    conclusionSource: rawRun.modelTrace?.conclusionSource ?? 'none',
-    agentConclusion: rawRun.agentConclusion,
-    reportState: rawRun.reportState ?? 'skipped',
-    createdAt: rawRun.createdAt ?? template.created_at,
-    updatedAt: rawRun.updatedAt ?? template.updated_at,
-    startedAt: rawRun.startedAt,
-    completedAt: rawRun.completedAt,
-    elapsedMs: rawRun.elapsedMs,
-    errorMessage: rawRun.errorMessage,
-  };
+    conversationId,
+    fallbackPrompt: template.title,
+    fallbackCreatedAt: template.created_at,
+    fallbackUpdatedAt: template.updated_at,
+  });
 }
 
 function createReadonlyDemoSessionFromTemplate(template: DemoConversationTemplateRecord): WorkbenchSession {

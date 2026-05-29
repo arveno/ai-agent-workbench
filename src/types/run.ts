@@ -1,22 +1,54 @@
 import type { RunSource } from './rag';
 import type {
-  RunViewModel,
   RunViewModelAgentConclusion,
   RunViewModelChartData,
   RunViewModelConclusionSource,
+  RunViewModelDataSource,
+  RunViewModelIntent,
+  RunViewModelMode,
+  RunViewModelPlan,
+  RunViewModelStatus,
   RunViewModelReportState,
+  RunViewModelStep,
   RunViewModelToolInvocation,
   RunViewModelTrace,
 } from '../domain/run/view-model';
+
+export interface RunStartedPayload {
+  id: string;
+  clientRunId?: string | null;
+  displayRunId?: string;
+  mode: RunViewModelMode;
+  status?: RunViewModelStatus | 'completed' | 'failed';
+  intent?: RunViewModelIntent;
+  prompt?: string;
+  plan?: RunViewModelPlan;
+  dataSource?: RunViewModelDataSource;
+  steps?: RunViewModelStep[];
+  toolInvocations?: RunViewModelToolInvocation[];
+  sources?: RunSource[];
+  chartData?: RunViewModelChartData;
+  conclusion?: string;
+  conclusionSource?: RunViewModelConclusionSource;
+  agentConclusion?: RunViewModelAgentConclusion;
+  modelTrace?: RunViewModelTrace;
+  reportState?: RunViewModelReportState;
+  createdAt?: string;
+  updatedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  elapsedMs?: number;
+  errorMessage?: string;
+}
 
 export interface RunStartedEvent {
   type: 'run_started';
   runId?: string;
   usageId?: string | null;
   clientRunId?: string | null;
-  conversationId?: string | null;
+  conversationId: string;
   timestamp?: string;
-  run: RunViewModel;
+  run: RunStartedPayload;
 }
 
 export interface RunReusedEvent {

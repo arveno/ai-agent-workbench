@@ -9,19 +9,19 @@ import type {
   RunEvent,
 } from '@/types/run';
 import type {
+  CostEstimate,
+  ModelTrace,
+  ModelUsage,
+  RunSnapshot,
+} from '../../contracts/generated/workbench-contract';
+import type {
   RunViewModel,
   RunViewModelAgentConclusion,
-  RunViewModelChartData,
   RunViewModelConclusionSource,
-  RunViewModelDataSourceSnapshot,
   RunViewModelIntent,
-  RunViewModelCostEstimate,
-  RunViewModelTrace,
-  RunViewModelUsage,
-  RunViewModelPlanSnapshot,
   RunViewModelReportState,
-  RunViewModelStatus,
 } from '@/domain/run/view-model';
+import { RunViewModelFactory } from '@/domain/run/view-model';
 import { applyRunEventToViewModel, normalizeAgentConclusion } from './runReducer';
 import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
 
@@ -52,14 +52,6 @@ function isRunEvent(value: unknown): value is RunEvent {
   return isRecord(value) && typeof value.type === 'string' && RUN_EVENT_TYPES.has(value.type as RunEvent['type']);
 }
 
-function mapRunStatus(status: AgentRunRecord['status']): RunViewModelStatus {
-  if (status === 'completed') return 'success';
-  if (status === 'failed') return 'error';
-  if (status === 'stopped') return 'stopped';
-  if (status === 'pending') return 'pending';
-  return 'running';
-}
-
 function mapIntent(value: string | null): RunViewModelIntent {
   if (
     value === 'capability_intro' ||
@@ -83,14 +75,6 @@ function mapConclusionSource(value: string | null): RunViewModelConclusionSource
 }
 
 function mapReportState(value: string | null): RunViewModelReportState {
-  if (value === 'not_applicable') {
-    return 'hidden';
-  }
-
-  if (value === 'available') {
-    return 'pending';
-  }
-
   if (
     value === 'hidden' ||
     value === 'pending' ||
@@ -125,7 +109,23 @@ function getNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function createUnavailableModelUsage(reason = 'model_not_invoked'): RunViewModelUsage {
+function mapUsageSource(value: unknown): ModelUsage['usageSource'] {
+  if (value === 'provider' || value === 'unavailable' || value === 'estimated') {
+    return value;
+  }
+
+  return 'none';
+}
+
+function mapPricingSource(value: unknown): CostEstimate['pricingSource'] {
+  if (value === 'catalog' || value === 'unavailable') {
+    return value;
+  }
+
+  return 'none';
+}
+
+function createUnavailableModelUsage(reason = 'model_not_invoked'): ModelUsage {
   return {
     promptTokens: null,
     completionTokens: null,
@@ -136,7 +136,7 @@ function createUnavailableModelUsage(reason = 'model_not_invoked'): RunViewModel
   };
 }
 
-function createUnavailableCostEstimate(reason = 'model_not_invoked'): RunViewModelCostEstimate {
+function createUnavailableCostEstimate(reason = 'model_not_invoked'): CostEstimate {
   return {
     estimatedCost: null,
     currency: null,
@@ -147,11 +147,11 @@ function createUnavailableCostEstimate(reason = 'model_not_invoked'): RunViewMod
   };
 }
 
-function mapTraceConclusionSource(value: unknown): RunViewModelConclusionSource {
+function mapTraceConclusionSource(value: unknown): ModelTrace['conclusionSource'] {
   return mapConclusionSource(getNullableString(value));
 }
 
-function asModelUsage(value: unknown): RunViewModelUsage | null {
+function asModelUsage(value: unknown): ModelUsage | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -161,12 +161,12 @@ function asModelUsage(value: unknown): RunViewModelUsage | null {
     completionTokens: getNullableNumber(value.completionTokens),
     totalTokens: getNullableNumber(value.totalTokens),
     usageAvailable: value.usageAvailable === true,
-    usageSource: getNullableString(value.usageSource),
+    usageSource: mapUsageSource(value.usageSource),
     usageUnavailableReason: getNullableString(value.usageUnavailableReason),
   };
 }
 
-function asCostEstimate(value: unknown): RunViewModelCostEstimate | null {
+function asCostEstimate(value: unknown): CostEstimate | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -176,12 +176,12 @@ function asCostEstimate(value: unknown): RunViewModelCostEstimate | null {
     currency: getNullableString(value.currency),
     pricingUnit: getNullableString(value.pricingUnit),
     isEstimated: value.isEstimated === true,
-    pricingSource: getNullableString(value.pricingSource),
+    pricingSource: mapPricingSource(value.pricingSource),
     costUnavailableReason: getNullableString(value.costUnavailableReason),
   };
 }
 
-function asModelTrace(value: unknown): RunViewModelTrace | undefined {
+function asModelTrace(value: unknown): ModelTrace | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -201,20 +201,12 @@ function asModelTrace(value: unknown): RunViewModelTrace | undefined {
   };
 }
 
-function getRunModelTrace(record: AgentRunRecord): RunViewModelTrace | undefined {
+function getRunModelTrace(record: AgentRunRecord): ModelTrace | undefined {
   return asModelTrace(record.metadata.modelTrace);
 }
 
-function asPlan(value: Record<string, unknown>): RunViewModelPlanSnapshot | undefined {
-  return Object.keys(value).length > 0 ? (value as unknown as RunViewModelPlanSnapshot) : undefined;
-}
-
-function asDataSource(value: Record<string, unknown>): RunViewModelDataSourceSnapshot | undefined {
-  return Object.keys(value).length > 0 ? (value as unknown as RunViewModelDataSourceSnapshot) : undefined;
-}
-
-function asChartData(value: Record<string, unknown>): RunViewModelChartData | undefined {
-  return Object.keys(value).length > 0 ? (value as unknown as RunViewModelChartData) : undefined;
+function asCanonicalObject(value: Record<string, unknown>): Record<string, unknown> | undefined {
+  return Object.keys(value).length > 0 ? value : undefined;
 }
 
 function eventRecordToRunEvent(record: RunEventRecord): RunEvent | null {
@@ -261,31 +253,25 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   };
 }
 
-export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewModel {
-  const runIdentity = getAgentRunRecordIdentity(record);
-  const modelTrace = getRunModelTrace(record);
-  const conclusionSource = modelTrace?.conclusionSource ?? 'none';
-  const agentConclusion = normalizeAgentConclusion(
-    record.conclusion ?? '',
-    record.metadata.agentConclusion as RunViewModelAgentConclusion | undefined,
-  );
-
+function agentRunRecordToCanonicalRun(
+  record: AgentRunRecord,
+  agentConclusion: RunViewModelAgentConclusion | null,
+  modelTrace: ModelTrace | undefined,
+): RunSnapshot {
   return {
-    ...runIdentity,
-    sessionId: record.conversation_id,
+    id: record.id,
+    conversationId: record.conversation_id,
+    clientRunId: record.client_run_id,
+    usageId: record.usage_id,
     mode: record.mode,
-    status: mapRunStatus(record.status),
+    status: record.status,
     intent: mapIntent(record.intent),
     prompt: record.prompt ?? '',
-    plan: asPlan(record.plan),
-    dataSource: asDataSource(record.data_source_snapshot),
-    steps: [],
-    toolInvocations: [],
-    chartData: asChartData(record.chart_data),
-    conclusion: agentConclusion.plainText,
-    conclusionSource,
-    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    modelTrace,
+    plan: asCanonicalObject(record.plan),
+    dataSource: asCanonicalObject(record.data_source_snapshot),
+    chartData: asCanonicalObject(record.chart_data),
+    modelTrace: modelTrace ?? null,
+    agentConclusion,
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,
     updatedAt: record.completed_at ?? record.started_at,
@@ -294,6 +280,27 @@ export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewMo
     elapsedMs: record.elapsed_ms ?? undefined,
     errorMessage: record.error_message ?? undefined,
   };
+}
+
+export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewModel {
+  const modelTrace = getRunModelTrace(record);
+  const agentConclusion = normalizeAgentConclusion(
+    record.conclusion ?? '',
+    record.metadata.agentConclusion,
+  );
+  const run = agentRunRecordToCanonicalRun(
+    record,
+    agentConclusion.plainText ? agentConclusion : null,
+    modelTrace,
+  );
+
+  return RunViewModelFactory.fromCanonicalRun({
+    run,
+    conversationId: record.conversation_id,
+    conclusion: agentConclusion.plainText,
+    agentConclusion: agentConclusion.plainText ? agentConclusion : null,
+    modelTrace,
+  });
 }
 
 export function runEventsRecordToRunEvents(records: RunEventRecord[]): RunEvent[] {
@@ -327,16 +334,31 @@ export function runPersistenceRecordsToViewModel(params: {
   const runIdentity = getAgentRunRecordIdentity(params.run);
   const modelTrace = viewModel.modelTrace ?? getRunModelTrace(params.run);
 
-  return {
-    ...viewModel,
-    ...runIdentity,
+  return RunViewModelFactory.fromRestoredRunAdapter({
+    id: runIdentity.id,
+    conversationId: params.run.conversation_id,
+    clientRunId: runIdentity.clientRunId,
+    displayRunId: runIdentity.displayRunId,
+    mode: viewModel.mode,
+    status: viewModel.status,
+    intent: viewModel.intent,
+    prompt: viewModel.prompt,
+    plan: viewModel.plan,
+    dataSource: viewModel.dataSource,
+    steps: viewModel.steps,
+    chartData: viewModel.chartData,
+    createdAt: viewModel.createdAt,
+    updatedAt: viewModel.updatedAt,
+    startedAt: viewModel.startedAt,
+    completedAt: viewModel.completedAt,
+    elapsedMs: viewModel.elapsedMs,
+    errorMessage: viewModel.errorMessage,
     conclusion: agentConclusion.plainText,
     conclusionSource: modelTrace?.conclusionSource ?? 'none',
-    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
+    agentConclusion: agentConclusion.plainText ? agentConclusion : null,
     modelTrace,
-    sessionId: params.run.conversation_id,
     toolInvocations: persistedTools.length > 0 ? persistedTools : viewModel.toolInvocations,
     sources: persistedSources,
     reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : viewModel.reportState,
-  };
+  });
 }

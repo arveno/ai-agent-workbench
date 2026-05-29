@@ -7,10 +7,10 @@ export type {
   RunViewModelConclusionSource,
   RunViewModelConclusionSection,
   RunViewModelCostEstimate,
-  RunViewModelDataSourceSnapshot,
+  RunViewModelDataSource,
   RunViewModelIntent,
   RunViewModelMode,
-  RunViewModelPlanSnapshot,
+  RunViewModelPlan,
   RunViewModelReportState,
   RunViewModelStatus,
   RunViewModelStep,
@@ -21,3 +21,13 @@ export type {
   RunViewModelUsage,
   RunViewModelUsageCounts,
 } from './types';
+
+export { RunViewModelFactory } from './runViewModelFactory';
+export type {
+  CanonicalRunViewModelInput,
+  DemoSeedRunAdapterInput,
+  MockRunInput,
+  PendingAgentRunInput,
+  RestoredRunAdapterInput,
+  RunStartedViewModelInput,
+} from './runViewModelFactoryInputs';
