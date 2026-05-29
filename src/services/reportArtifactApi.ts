@@ -5,7 +5,7 @@ import type {
   ReportArtifactListResult,
   WorkbenchPersistenceResponse,
 } from '@/types/persistence';
-import type { RunReportState } from '@/types/run';
+import type { RunViewModelReportState } from '@/domain/run/view-model';
 import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 import {
@@ -84,8 +84,8 @@ export async function createRunReportArtifact(
 export async function updateRunReportState(
   conversationId: string,
   runId: string,
-  reportState: Extract<RunReportState, 'generated' | 'skipped' | 'failed'>,
-): Promise<WorkbenchPersistenceResponse<{ runId: string; reportState: RunReportState }>> {
+  reportState: Extract<RunViewModelReportState, 'generated' | 'skipped' | 'failed'>,
+): Promise<WorkbenchPersistenceResponse<{ runId: string; reportState: RunViewModelReportState }>> {
   try {
     const cloudBaseToken = await ensureCloudBaseAccessToken();
     const response = await requestCloudBasePrivateApi(
@@ -104,7 +104,7 @@ export async function updateRunReportState(
       },
     );
 
-    return await readPersistenceResponse<{ runId: string; reportState: RunReportState }>(
+    return await readPersistenceResponse<{ runId: string; reportState: RunViewModelReportState }>(
       response,
       '更新报告状态失败。',
     );

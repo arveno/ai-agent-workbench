@@ -1,9 +1,9 @@
 import type {
-  RunConclusionSource,
-  RunModelCostEstimate,
-  RunModelTrace,
-  RunModelUsage,
-} from '@/types/run';
+  RunViewModelConclusionSource,
+  RunViewModelCostEstimate,
+  RunViewModelTrace,
+  RunViewModelUsage,
+} from '@/domain/run/view-model';
 import { getConclusionSourceLabel, getFallbackReasonLabel, getModelErrorTypeLabel } from './observabilityLabels';
 
 export interface ModelTraceViewModel {
@@ -51,7 +51,7 @@ function formatNumber(value: number | null | undefined, suffix = ''): string {
   return typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '未返回';
 }
 
-function getSelectedModelLabel(modelTrace: RunModelTrace): string {
+function getSelectedModelLabel(modelTrace: RunViewModelTrace): string {
   if (modelTrace.selectedModelId === 'mock-agent' || modelTrace.conclusionSource === 'mock') {
     return modelTrace.selectedModelId || 'mock-agent';
   }
@@ -59,7 +59,7 @@ function getSelectedModelLabel(modelTrace: RunModelTrace): string {
   return formatText(modelTrace.selectedModelId);
 }
 
-function getProviderLabel(modelTrace: RunModelTrace): string {
+function getProviderLabel(modelTrace: RunViewModelTrace): string {
   if (modelTrace.selectedModelId === 'mock-agent' || modelTrace.conclusionSource === 'mock') {
     return modelTrace.provider || 'mock';
   }
@@ -67,7 +67,7 @@ function getProviderLabel(modelTrace: RunModelTrace): string {
   return formatText(modelTrace.provider);
 }
 
-function getModelLabel(modelTrace: RunModelTrace): string {
+function getModelLabel(modelTrace: RunViewModelTrace): string {
   if (modelTrace.selectedModelId === 'mock-agent' || modelTrace.conclusionSource === 'mock') {
     return modelTrace.model || '本地模拟';
   }
@@ -88,7 +88,7 @@ function getReasonLabel(
   return labels[normalizedReason] ?? getFallbackReasonLabel(normalizedReason);
 }
 
-function getUsageUnavailableReasonLabel(usage: RunModelUsage | null | undefined): string {
+function getUsageUnavailableReasonLabel(usage: RunViewModelUsage | null | undefined): string {
   if (!usage || usage.usageAvailable) {
     return '-';
   }
@@ -96,7 +96,7 @@ function getUsageUnavailableReasonLabel(usage: RunModelUsage | null | undefined)
   return getReasonLabel(usage.usageUnavailableReason, USAGE_UNAVAILABLE_REASON_LABELS);
 }
 
-function getUsageStatus(modelTrace: RunModelTrace): string {
+function getUsageStatus(modelTrace: RunViewModelTrace): string {
   const usage = modelTrace.usage;
 
   if (usage?.usageAvailable) {
@@ -114,7 +114,7 @@ function getUsageStatus(modelTrace: RunModelTrace): string {
   return '模型服务未返回用量数据';
 }
 
-function getUsageSourceLabel(modelTrace: RunModelTrace): string {
+function getUsageSourceLabel(modelTrace: RunViewModelTrace): string {
   if (modelTrace.usage?.usageSource) {
     return modelTrace.usage.usageSource;
   }
@@ -122,11 +122,11 @@ function getUsageSourceLabel(modelTrace: RunModelTrace): string {
   return '-';
 }
 
-function hasEstimatedCost(costEstimate: RunModelCostEstimate | null | undefined): boolean {
+function hasEstimatedCost(costEstimate: RunViewModelCostEstimate | null | undefined): boolean {
   return typeof costEstimate?.estimatedCost === 'number' && Number.isFinite(costEstimate.estimatedCost);
 }
 
-function formatEstimatedCost(costEstimate: RunModelCostEstimate | null | undefined): string {
+function formatEstimatedCost(costEstimate: RunViewModelCostEstimate | null | undefined): string {
   const estimatedCost = costEstimate?.estimatedCost;
 
   if (typeof estimatedCost !== 'number' || !Number.isFinite(estimatedCost)) {
@@ -136,7 +136,7 @@ function formatEstimatedCost(costEstimate: RunModelCostEstimate | null | undefin
   return costEstimate?.currency ? `${costEstimate.currency} ${estimatedCost}` : `${estimatedCost}`;
 }
 
-function getCostUnavailableReasonLabel(costEstimate: RunModelCostEstimate | null | undefined): string {
+function getCostUnavailableReasonLabel(costEstimate: RunViewModelCostEstimate | null | undefined): string {
   if (!costEstimate || hasEstimatedCost(costEstimate)) {
     return '-';
   }
@@ -144,7 +144,7 @@ function getCostUnavailableReasonLabel(costEstimate: RunModelCostEstimate | null
   return getReasonLabel(costEstimate.costUnavailableReason, COST_UNAVAILABLE_REASON_LABELS);
 }
 
-function getCostEstimateStatus(costEstimate: RunModelCostEstimate | null | undefined): string {
+function getCostEstimateStatus(costEstimate: RunViewModelCostEstimate | null | undefined): string {
   if (!costEstimate) {
     return '费用估算未返回';
   }
@@ -157,7 +157,7 @@ function getCostEstimateStatus(costEstimate: RunModelCostEstimate | null | undef
   return unavailableReason === '-' ? 'isEstimated=false，费用估算不可用' : `isEstimated=false，${unavailableReason}`;
 }
 
-function getFallbackLabel(reason: string | null | undefined, conclusionSource: RunConclusionSource): string {
+function getFallbackLabel(reason: string | null | undefined, conclusionSource: RunViewModelConclusionSource): string {
   if (conclusionSource !== 'fallback' && !reason) {
     return '-';
   }
@@ -165,7 +165,7 @@ function getFallbackLabel(reason: string | null | undefined, conclusionSource: R
   return getFallbackReasonLabel(reason);
 }
 
-export function createModelTraceViewModel(modelTrace: RunModelTrace | undefined): ModelTraceViewModel | null {
+export function createModelTraceViewModel(modelTrace: RunViewModelTrace | undefined): ModelTraceViewModel | null {
   if (!modelTrace) {
     return null;
   }

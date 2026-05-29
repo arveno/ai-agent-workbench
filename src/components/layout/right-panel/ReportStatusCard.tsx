@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunReportState } from '../../../types/run';
+import type { RunViewModelReportState } from '../../../domain/run/view-model';
 import {
   getReportStatusDescription,
   getReportStatusLabel,
@@ -12,7 +12,7 @@ import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
-function getReportStateClass(reportState: RunReportState): string {
+function getReportStateClass(reportState: RunViewModelReportState): string {
   const tone = getReportStatusTone(reportState);
 
   if (tone === 'active') {

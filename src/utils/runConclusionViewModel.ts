@@ -1,4 +1,8 @@
-import type { AgentConclusionSection, RunConclusionSource, RunSnapshot } from '@/types/run';
+import type {
+  RunViewModel,
+  RunViewModelConclusionSection,
+  RunViewModelConclusionSource,
+} from '@/domain/run/view-model';
 
 export interface ConclusionSectionView {
   title: string;
@@ -10,7 +14,7 @@ export interface ConclusionViewModel {
   plainText: string;
   compactSections: ConclusionSectionView[];
   compactMarkdownText: string;
-  source: RunConclusionSource;
+  source: RunViewModelConclusionSource;
   notice: string | null;
 }
 
@@ -22,7 +26,7 @@ function normalizeText(value: string | null | undefined): string {
   return typeof value === 'string' ? value.replace(/\\n/g, '\n').trim() : '';
 }
 
-function normalizeSection(section: AgentConclusionSection): ConclusionSectionView | null {
+function normalizeSection(section: RunViewModelConclusionSection): ConclusionSectionView | null {
   const title = normalizeText(section.title);
   const content = normalizeText(section.plainText) || normalizeText(section.markdownText);
 
@@ -36,7 +40,7 @@ function normalizeSection(section: AgentConclusionSection): ConclusionSectionVie
   };
 }
 
-function getCompactSections(sections: AgentConclusionSection[] | undefined): ConclusionSectionView[] {
+function getCompactSections(sections: RunViewModelConclusionSection[] | undefined): ConclusionSectionView[] {
   const normalizedSections = (sections ?? [])
     .map((section) => normalizeSection(section))
     .filter((section): section is ConclusionSectionView => section !== null);
@@ -75,7 +79,7 @@ function createMarkdownFromSections(sections: ConclusionSectionView[]): string {
   return sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n');
 }
 
-export function createConclusionViewModel(run: RunSnapshot): ConclusionViewModel {
+export function createConclusionViewModel(run: RunViewModel): ConclusionViewModel {
   const conclusion = run.agentConclusion;
   const fullMarkdownText = normalizeText(conclusion?.markdownText) || normalizeText(run.conclusion);
   const plainText = normalizeText(conclusion?.plainText) || normalizeText(run.conclusion);

@@ -4,19 +4,18 @@ import {
   fetchLatestRunBundleForConversation,
   fetchRunBundle,
 } from '../../services/runPersistenceApi';
+import type { RunViewModel, RunViewModelReportState } from '../../domain/run/view-model';
 import type { ReportArtifactRecord } from '../../types/persistence';
 import type {
   RunEvent,
-  RunReportState,
   RunSlice,
-  RunSnapshot,
   WorkbenchMessage,
   WorkbenchSession,
   WorkbenchStore,
 } from '../../types/workbench';
 import { reportArtifactToMessage } from '../../utils/reportArtifactMapper';
-import { runEventsRecordToRunEvents, runPersistenceRecordsToSnapshot } from '../../utils/runPersistenceMapper';
-import { applyRunEventToSnapshot } from '../../utils/runReducer';
+import { runEventsRecordToRunEvents, runPersistenceRecordsToViewModel } from '../../utils/runPersistenceMapper';
+import { applyRunEventToViewModel } from '../../utils/runReducer';
 import { getSessionLatestRun, initialWorkbenchState, persistWorkbenchSessions, upsertRunIntoSessions } from './shared';
 import { useAuthStore } from '../authStore';
 
@@ -47,7 +46,7 @@ function getReportArtifactRunId(report: ReportArtifactRecord): string | null {
   return report.runId.trim() || null;
 }
 
-function getReportArtifactState(report: ReportArtifactRecord): RunReportState | null {
+function getReportArtifactState(report: ReportArtifactRecord): RunViewModelReportState | null {
   const reportState = getMetadataString(report.metadata, 'reportState');
 
   if (reportState === 'skipped' || reportState === 'generated' || reportState === 'failed') {
@@ -63,7 +62,7 @@ function hasReportMessageForRun(messages: WorkbenchMessage[], runId: string): bo
   );
 }
 
-function withGeneratedReportState(run: RunSnapshot): RunSnapshot {
+function withGeneratedReportState(run: RunViewModel): RunViewModel {
   if (run.reportState === 'generated') {
     return run;
   }
@@ -74,7 +73,7 @@ function withGeneratedReportState(run: RunSnapshot): RunSnapshot {
   };
 }
 
-function withSkippedReportState(run: RunSnapshot): RunSnapshot {
+function withSkippedReportState(run: RunViewModel): RunViewModel {
   if (run.reportState === 'generated' || run.reportState === 'skipped') {
     return run;
   }
@@ -85,11 +84,11 @@ function withSkippedReportState(run: RunSnapshot): RunSnapshot {
   };
 }
 
-function withReportStateFromSessionMessages(run: RunSnapshot, session: WorkbenchSession): RunSnapshot {
+function withReportStateFromSessionMessages(run: RunViewModel, session: WorkbenchSession): RunViewModel {
   return hasReportMessageForRun(session.messages, run.id) ? withGeneratedReportState(run) : run;
 }
 
-function getReportActionState(reportState: RunReportState): WorkbenchStore['reportActionState'] {
+function getReportActionState(reportState: RunViewModelReportState): WorkbenchStore['reportActionState'] {
   if (
     reportState === 'pending' ||
     reportState === 'generating' ||
@@ -102,11 +101,11 @@ function getReportActionState(reportState: RunReportState): WorkbenchStore['repo
   return 'skipped';
 }
 
-function getReportRunId(run: RunSnapshot | null): string | null {
+function getReportRunId(run: RunViewModel | null): string | null {
   return run && run.reportState !== 'hidden' ? run.id : null;
 }
 
-function isReportDecisionState(reportState: RunReportState): boolean {
+function isReportDecisionState(reportState: RunViewModelReportState): boolean {
   return reportState === 'generated' || reportState === 'skipped' || reportState === 'failed';
 }
 
@@ -229,7 +228,7 @@ function upsertReportArtifactsIntoSessions(
   });
 }
 
-function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId: string): Record<string, unknown> {
+function createReportArtifactMetadata(run: RunViewModel | null | undefined, runId: string): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
     source: 'agent-run',
     runId,
@@ -242,14 +241,14 @@ function createReportArtifactMetadata(run: RunSnapshot | null | undefined, runId
 function cacheRunInSession(
   sessions: WorkbenchStore['sessions'],
   conversationId: string,
-  run: RunSnapshot,
+  run: RunViewModel,
 ): WorkbenchStore['sessions'] {
   return sessions.map((session) => {
     if (session.id !== conversationId) {
       return session;
     }
 
-    const runWithSession: RunSnapshot = {
+    const runWithSession: RunViewModel = {
       ...run,
       sessionId: run.sessionId ?? conversationId,
     };
@@ -265,7 +264,7 @@ function cacheRunInSession(
   });
 }
 
-function getRunUpdatedAt(run: RunSnapshot | null | undefined): number {
+function getRunUpdatedAt(run: RunViewModel | null | undefined): number {
   if (!run) {
     return 0;
   }
@@ -274,12 +273,12 @@ function getRunUpdatedAt(run: RunSnapshot | null | undefined): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function getLatestRunByUpdatedAt(session: WorkbenchStore['sessions'][number] | undefined): RunSnapshot | null {
+function getLatestRunByUpdatedAt(session: WorkbenchStore['sessions'][number] | undefined): RunViewModel | null {
   if (!session) {
     return null;
   }
 
-  return Object.values(session.runsById).reduce<RunSnapshot | null>((latestRun, run) => {
+  return Object.values(session.runsById).reduce<RunViewModel | null>((latestRun, run) => {
     return getRunUpdatedAt(run) >= getRunUpdatedAt(latestRun) ? run : latestRun;
   }, null);
 }
@@ -303,7 +302,7 @@ function setSessionLatestRunId(
   );
 }
 
-function getRunStartedPendingRunId(event: RunEvent, run: RunSnapshot): string | null {
+function getRunStartedPendingRunId(event: RunEvent, run: RunViewModel): string | null {
   if (event.type !== 'run_started' || run.mode !== 'agent') {
     return null;
   }
@@ -330,7 +329,7 @@ function migratePendingRunIdInSessions(
   sessions: WorkbenchStore['sessions'],
   conversationId: string,
   pendingRunId: string | null,
-  canonicalRun: RunSnapshot,
+  canonicalRun: RunViewModel,
 ): WorkbenchStore['sessions'] {
   if (!pendingRunId || pendingRunId === canonicalRun.id) {
     return sessions;
@@ -376,7 +375,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
   isRagSourcesLoading: false,
   ragSourcesError: null,
 
-  setCurrentRun: (run: RunSnapshot | null) => {
+  setCurrentRun: (run: RunViewModel | null) => {
     set((state) => {
       if (!run) {
         return {
@@ -385,7 +384,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         };
       }
 
-      const runWithSession: RunSnapshot = {
+      const runWithSession: RunViewModel = {
         ...run,
         sessionId: run.sessionId ?? state.currentSessionId,
       };
@@ -419,7 +418,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
 
   applyRunEvent: (event: RunEvent) => {
     set((state) => {
-      const nextRun = applyRunEventToSnapshot(state.currentRun, event);
+      const nextRun = applyRunEventToViewModel(state.currentRun, event);
       const nextLog = [...state.runEventLog, event].slice(-MAX_RUN_EVENT_LOG_LENGTH);
 
       if (!nextRun) {
@@ -439,7 +438,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
               reportState: state.currentRun.reportState,
             }
           : nextRun;
-      const runWithSession: RunSnapshot = {
+      const runWithSession: RunViewModel = {
         ...protectedRun,
         sessionId: protectedRun.sessionId ?? state.currentSessionId,
       };
@@ -529,7 +528,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runSnapshot = runPersistenceRecordsToSnapshot({
+    const runViewModel = runPersistenceRecordsToViewModel({
       run: runRecord,
       events: latestRunResult.data.events,
       tools: latestRunResult.data.toolInvocations,
@@ -539,20 +538,20 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
 
     set((state) => {
       const activeSession = state.sessions.find((session) => session.id === conversationId);
-      const syncedRunSnapshot = activeSession
-        ? withReportStateFromSessionMessages(runSnapshot, activeSession)
-        : runSnapshot;
-      const sessionsWithCloudRun = upsertRunIntoSessions(state.sessions, conversationId, syncedRunSnapshot);
+      const syncedRunViewModel = activeSession
+        ? withReportStateFromSessionMessages(runViewModel, activeSession)
+        : runViewModel;
+      const sessionsWithCloudRun = upsertRunIntoSessions(state.sessions, conversationId, syncedRunViewModel);
       const latestRun = getLatestRunByUpdatedAt(
         sessionsWithCloudRun.find((session) => session.id === conversationId),
-      ) ?? syncedRunSnapshot;
+      ) ?? syncedRunViewModel;
       const nextSessions = setSessionLatestRunId(sessionsWithCloudRun, conversationId, latestRun.id);
 
       return {
         sessions: nextSessions,
         currentRun: latestRun,
         selectedRunId: latestRun.id,
-        runEventLog: latestRun.id === syncedRunSnapshot.id ? runEvents : [],
+        runEventLog: latestRun.id === syncedRunViewModel.id ? runEvents : [],
         isLatestRunLoading: false,
         isRunEventsLoading: false,
         isRagSourcesLoading: false,
@@ -676,14 +675,14 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runSnapshot = runPersistenceRecordsToSnapshot({
+    const runViewModel = runPersistenceRecordsToViewModel({
       run: result.data.run,
       events: result.data.events,
       tools: result.data.toolInvocations,
       sources: result.data.sources,
     });
 
-    if (runSnapshot.sessionId && runSnapshot.sessionId !== conversationId) {
+    if (runViewModel.sessionId && runViewModel.sessionId !== conversationId) {
       const message = '这条 Run 不属于当前会话。';
       set({
         isLatestRunLoading: false,
@@ -701,8 +700,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     set((currentState) => {
       const currentActiveSession = currentState.sessions.find((session) => session.id === conversationId);
       const syncedRun = currentActiveSession
-        ? withReportStateFromSessionMessages(runSnapshot, currentActiveSession)
-        : runSnapshot;
+        ? withReportStateFromSessionMessages(runViewModel, currentActiveSession)
+        : runViewModel;
 
       return {
         sessions: cacheRunInSession(currentState.sessions, conversationId, syncedRun),
@@ -799,7 +798,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       return;
     }
 
-    const runSnapshot = runPersistenceRecordsToSnapshot({
+    const runViewModel = runPersistenceRecordsToViewModel({
       run: result.data.run,
       events: result.data.events,
       tools: result.data.toolInvocations,
@@ -807,7 +806,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     });
 
     set((state) => {
-      const conversationId = runSnapshot.sessionId ?? state.currentSessionId;
+      const conversationId = runViewModel.sessionId ?? state.currentSessionId;
 
       if (!conversationId || !state.currentRun || state.currentRun.id !== runId) {
         return {
@@ -816,12 +815,12 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         };
       }
 
-      const nextSessions = cacheRunInSession(state.sessions, conversationId, runSnapshot);
+      const nextSessions = cacheRunInSession(state.sessions, conversationId, runViewModel);
 
       return {
         sessions: nextSessions,
-        currentRun: runSnapshot,
-        selectedRunId: runSnapshot.id,
+        currentRun: runViewModel,
+        selectedRunId: runViewModel.id,
         isRagSourcesLoading: false,
         ragSourcesError: null,
       };

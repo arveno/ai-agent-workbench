@@ -1,7 +1,8 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
+import type { RunViewModel } from '../../domain/run/view-model';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
-import type { DemoTemplateSlice, RunSnapshot, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
+import type { DemoTemplateSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
 import { useAuthStore } from '../authStore';
 import {
@@ -117,8 +118,8 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
     }));
 }
 
-function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunSnapshot | null {
-  const rawRun = template.seed_runs[0] as Partial<RunSnapshot> | undefined;
+function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunViewModel | null {
+  const rawRun = template.seed_runs[0] as Partial<RunViewModel> | undefined;
 
   if (!rawRun?.id) {
     return null;

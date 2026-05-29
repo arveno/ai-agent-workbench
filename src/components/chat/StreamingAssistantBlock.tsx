@@ -1,10 +1,10 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunViewModel } from '../../domain/run/view-model';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { MessageBubble } from './MessageBubble';
 
 interface StreamingAssistantBlockProps {
-  run: RunSnapshot;
+  run: RunViewModel;
 }
 
 export function StreamingAssistantBlock({ run }: StreamingAssistantBlockProps) {

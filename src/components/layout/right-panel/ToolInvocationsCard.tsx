@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunToolStatus } from '../../../types/run';
+import type { RunViewModelToolStatus } from '../../../domain/run/view-model';
 import { formatToolInvocationForInspector } from '../../../utils/toolInvocationFormat';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
@@ -7,7 +7,7 @@ import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Separator } from '../../ui/separator';
 
-function getToolStatusClass(status: RunToolStatus): string {
+function getToolStatusClass(status: RunViewModelToolStatus): string {
   if (status === 'success') {
     return 'status-badge-success';
   }
