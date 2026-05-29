@@ -9,6 +9,7 @@ import type {
   RunViewModelToolInvocation,
   RunViewModelTrace,
 } from '@/domain/run/view-model';
+import { RunViewModelFactory } from '@/domain/run/view-model';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -454,15 +455,21 @@ function updateTool(
 
 export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
-    const updatedAt = event.run.updatedAt || nowIso();
+    const runViewModel = RunViewModelFactory.fromRunStartedPayload(event.run, {
+      runId: event.runId,
+      clientRunId: event.clientRunId,
+      conversationId: event.conversationId,
+      timestamp: event.timestamp,
+    });
+    const updatedAt = runViewModel.updatedAt;
     const agentConclusion = normalizeAgentConclusion(
-      event.run.conclusion,
-      event.run.agentConclusion,
+      runViewModel.conclusion,
+      runViewModel.agentConclusion,
     );
 
     return {
-      ...event.run,
-      status: event.run.status === 'idle' ? 'pending' : event.run.status,
+      ...runViewModel,
+      status: runViewModel.status === 'idle' ? 'pending' : runViewModel.status,
       conclusion: agentConclusion.plainText,
       agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
       updatedAt,

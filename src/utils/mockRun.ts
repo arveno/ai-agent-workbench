@@ -12,10 +12,13 @@ import type {
   RunToolStartedEvent,
 } from '@/types/run';
 import type {
+  RunViewModel,
   RunViewModelChartData,
+  RunViewModelStep,
   RunViewModelToolInvocation,
   RunViewModelTrace,
 } from '@/domain/run/view-model';
+import { RunViewModelFactory } from '@/domain/run/view-model';
 import { createMockRagSources } from './ragSources';
 
 export const MOCK_RUN_STEP_IDS = {
@@ -70,51 +73,51 @@ function createMockModelTrace(): RunViewModelTrace {
   };
 }
 
+export function createMockRunViewModel(params: {
+  runId: string;
+  prompt: string;
+  sessionId: string;
+  timestamp?: string;
+}): RunViewModel {
+  const timestamp = params.timestamp ?? new Date().toISOString();
+  const steps: RunViewModelStep[] = MOCK_RUN_STEPS.map((step) => ({
+    ...step,
+    status: 'pending',
+  }));
+
+  return RunViewModelFactory.fromMockRun({
+    runId: params.runId,
+    prompt: params.prompt,
+    sessionId: params.sessionId,
+    plan: {
+      intent: 'data_analysis',
+      shouldUseDataAnalysis: true,
+      reason: '公开演示模式（Mock）使用本地模拟数据生成分析流程',
+      metric: 'avg_score',
+      groupBy: 'grade',
+    },
+    dataSource: {
+      provider: 'mock',
+      name: 'Mock 教学数据源',
+      typeLabel: '本地模拟数据',
+      schema: 'public',
+      tableCount: 3,
+    },
+    steps,
+    sources: createMockRagSources(),
+    modelTrace: createMockModelTrace(),
+    timestamp,
+  });
+}
+
 export function createMockRunStartedEvent(params: {
   runId: string;
   prompt: string;
-  sessionId?: string;
+  sessionId: string;
 }): RunStartedEvent {
-  const timestamp = new Date().toISOString();
-
   return {
     type: 'run_started',
-    run: {
-      id: params.runId,
-      displayRunId: params.runId,
-      sessionId: params.sessionId,
-      mode: 'mock',
-      status: 'running',
-      intent: 'data_analysis',
-      prompt: params.prompt,
-      plan: {
-        intent: 'data_analysis',
-        shouldUseDataAnalysis: true,
-        reason: '公开演示模式（Mock）使用本地模拟数据生成分析流程',
-        metric: 'avg_score',
-        groupBy: 'grade',
-      },
-      dataSource: {
-        provider: 'mock',
-        name: 'Mock 教学数据源',
-        typeLabel: '本地模拟数据',
-        schema: 'public',
-        tableCount: 3,
-      },
-      steps: MOCK_RUN_STEPS.map((step) => ({
-        ...step,
-        status: 'pending',
-      })),
-      toolInvocations: [],
-      sources: createMockRagSources(),
-      conclusion: '',
-      conclusionSource: 'mock',
-      modelTrace: createMockModelTrace(),
-      reportState: 'hidden',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      startedAt: timestamp,
-    },
+    run: createMockRunViewModel(params),
   };
 }
 

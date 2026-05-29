@@ -61,7 +61,11 @@ export function createMockRagSources(): RunSource[] {
 }
 
 export function getRunRagSources(run: RunViewModel | null): RunSource[] {
-  return run?.sources ?? [];
+  if (!run) {
+    return [];
+  }
+
+  return run.sources;
 }
 
 export function formatSourceScore(score?: number): string {

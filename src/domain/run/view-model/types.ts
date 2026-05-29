@@ -122,8 +122,8 @@ export interface RunViewModelPlanSnapshot {
 export interface RunViewModel {
   id: string;
   clientRunId?: string;
-  sessionId?: string;
-  displayRunId?: string;
+  sessionId: string;
+  displayRunId: string;
   mode: RunViewModelMode;
   status: RunViewModelStatus;
   intent: RunViewModelIntent;
@@ -132,7 +132,7 @@ export interface RunViewModel {
   dataSource?: RunViewModelDataSourceSnapshot;
   steps: RunViewModelStep[];
   toolInvocations: RunViewModelToolInvocation[];
-  sources?: RunSource[];
+  sources: RunSource[];
   chartData?: RunViewModelChartData;
   conclusion: string;
   conclusionSource: RunViewModelConclusionSource;

@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand';
 import {
   MOCK_RUN_STEP_IDS,
   createMockChartData,
-  createMockRunStartedEvent,
+  createMockRunViewModel,
   createMockToolInvocation,
 } from '../../utils/mockRun';
 import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
@@ -162,11 +162,11 @@ function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunViewMo
   const conclusion =
     seed.conclusion || `历史 Mock Run 未记录完整助手回复，已根据本轮问题恢复执行轨迹：${promptSummary}`;
   const hasCompletedReply = Boolean(seed.conclusion || seed.hasReport);
-  const startedRun = createMockRunStartedEvent({
+  const startedRun = createMockRunViewModel({
     runId: seed.runId,
     prompt: seed.prompt || promptSummary,
     sessionId,
-  }).run;
+  });
   const stepElapsedById: Partial<Record<keyof typeof MOCK_RUN_STEP_IDS, number>> = {
     understandPrompt: 160,
     knowledgeSearch: 260,

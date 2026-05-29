@@ -4,10 +4,17 @@ import type {
   RunViewModelAgentConclusion,
   RunViewModelChartData,
   RunViewModelConclusionSource,
+  RunViewModelStatus,
   RunViewModelReportState,
   RunViewModelToolInvocation,
   RunViewModelTrace,
 } from '../domain/run/view-model';
+
+export type RunStartedPayload = Partial<RunViewModel> & {
+  id: string;
+  conversationId?: string | null;
+  status?: RunViewModelStatus | 'completed' | 'failed';
+};
 
 export interface RunStartedEvent {
   type: 'run_started';
@@ -16,7 +23,7 @@ export interface RunStartedEvent {
   clientRunId?: string | null;
   conversationId?: string | null;
   timestamp?: string;
-  run: RunViewModel;
+  run: RunStartedPayload;
 }
 
 export interface RunReusedEvent {

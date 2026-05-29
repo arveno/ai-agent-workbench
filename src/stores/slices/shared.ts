@@ -7,6 +7,7 @@ import type {
   WorkbenchSession,
 } from '../../types/workbench';
 import type { RunViewModel } from '../../domain/run/view-model';
+import { RunViewModelFactory } from '../../domain/run/view-model';
 import { isModelProviderId as isKnownModelProviderId } from '../../utils/modelCatalogMetadata';
 import { createSessionTitle } from '../../utils/sessionTitle';
 import { readSessionStorageJson, writeSessionStorageJson } from '../../utils/sessionStorage';
@@ -107,6 +108,7 @@ function isRunIntent(value: unknown): value is RunViewModel['intent'] {
   return (
     value === 'capability_intro' ||
     value === 'data_analysis' ||
+    value === 'knowledge_qa' ||
     value === 'unsupported' ||
     value === 'unknown'
   );
@@ -117,7 +119,14 @@ function isRunConclusionSource(value: unknown): value is RunViewModel['conclusio
 }
 
 function isRunReportState(value: unknown): value is RunViewModel['reportState'] {
-  return value === 'hidden' || value === 'pending' || value === 'generated' || value === 'skipped';
+  return (
+    value === 'hidden' ||
+    value === 'pending' ||
+    value === 'generating' ||
+    value === 'generated' ||
+    value === 'skipped' ||
+    value === 'failed'
+  );
 }
 
 function settleInterruptedRun(run: RunViewModel): RunViewModel {
@@ -152,7 +161,7 @@ function settleInterruptedRun(run: RunViewModel): RunViewModel {
   };
 }
 
-function normalizeRunViewModel(rawValue: unknown): RunViewModel | null {
+function normalizeRunViewModel(rawValue: unknown, sessionId: string): RunViewModel | null {
   if (!isRecord(rawValue)) {
     return null;
   }
@@ -162,6 +171,7 @@ function normalizeRunViewModel(rawValue: unknown): RunViewModel | null {
   if (
     typeof run.id !== 'string' ||
     (run.sessionId !== undefined && typeof run.sessionId !== 'string') ||
+    (run.displayRunId !== undefined && typeof run.displayRunId !== 'string') ||
     !isRunMode(run.mode) ||
     !isRunStatus(run.status) ||
     !isRunIntent(run.intent) ||
@@ -175,6 +185,7 @@ function normalizeRunViewModel(rawValue: unknown): RunViewModel | null {
         isRunStepStatus(step.status),
     ) ||
     !Array.isArray(run.toolInvocations) ||
+    (run.sources !== undefined && !Array.isArray(run.sources)) ||
     !run.toolInvocations.every(
       (tool) =>
         isRecord(tool) &&
@@ -193,10 +204,16 @@ function normalizeRunViewModel(rawValue: unknown): RunViewModel | null {
     return null;
   }
 
-  return settleInterruptedRun(run as RunViewModel);
+  return settleInterruptedRun(
+    RunViewModelFactory.fromPersistenceRestore({
+      run: run as Partial<RunViewModel> & { id: string },
+      sessionId,
+      sources: run.sources,
+    }),
+  );
 }
 
-function normalizeRunsById(rawValue: unknown): Record<string, RunViewModel> | null {
+function normalizeRunsById(rawValue: unknown, sessionId: string): Record<string, RunViewModel> | null {
   if (!isRecord(rawValue)) {
     return null;
   }
@@ -204,7 +221,7 @@ function normalizeRunsById(rawValue: unknown): Record<string, RunViewModel> | nu
   const runsById: Record<string, RunViewModel> = {};
 
   for (const [runId, rawRun] of Object.entries(rawValue)) {
-    const normalizedRun = normalizeRunViewModel(rawRun);
+    const normalizedRun = normalizeRunViewModel(rawRun, sessionId);
 
     if (!normalizedRun || normalizedRun.id !== runId) {
       return null;
@@ -238,19 +255,15 @@ export function upsertRunIntoSessions(
     }
 
     didUpdate = true;
-    const runWithSession: RunViewModel = {
-      ...run,
-      sessionId: run.sessionId ?? currentSessionId,
-    };
 
     return {
       ...session,
       updatedAt: timestamp,
       runsById: {
         ...session.runsById,
-        [runWithSession.id]: runWithSession,
+        [run.id]: run,
       },
-      latestRunId: runWithSession.id,
+      latestRunId: run.id,
     };
   });
 
@@ -299,14 +312,17 @@ function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
 
   const session = rawValue as Partial<WorkbenchSession>;
 
-  const runsById = normalizeRunsById(session.runsById);
-
   if (
     typeof session.id !== 'string' ||
     typeof session.title !== 'string' ||
-    !runsById ||
     (session.latestRunId !== undefined && typeof session.latestRunId !== 'string')
   ) {
+    return null;
+  }
+
+  const runsById = normalizeRunsById(session.runsById, session.id);
+
+  if (!runsById) {
     return null;
   }
 

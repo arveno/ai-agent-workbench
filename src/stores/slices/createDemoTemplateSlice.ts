@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
 import type { RunViewModel } from '../../domain/run/view-model';
+import { RunViewModelFactory } from '../../domain/run/view-model';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
 import type { DemoTemplateSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { demoConversationCopyToSession } from '../../utils/demoTemplateMapper';
@@ -125,30 +126,16 @@ function createDemoRun(template: DemoConversationTemplateRecord, sessionId: stri
     return null;
   }
 
-  return {
-    id: rawRun.id,
+  return RunViewModelFactory.fromDemoSeed({
+    run: {
+      ...rawRun,
+      id: rawRun.id,
+    },
     sessionId,
-    mode: rawRun.mode ?? 'mock',
-    status: rawRun.status ?? 'success',
-    intent: rawRun.intent ?? 'unknown',
-    prompt: rawRun.prompt ?? template.title,
-    plan: rawRun.plan,
-    dataSource: rawRun.dataSource,
-    steps: rawRun.steps ?? [],
-    toolInvocations: rawRun.toolInvocations ?? [],
-    sources: rawRun.sources,
-    chartData: rawRun.chartData,
-    conclusion: rawRun.conclusion ?? '',
-    conclusionSource: rawRun.modelTrace?.conclusionSource ?? 'none',
-    agentConclusion: rawRun.agentConclusion,
-    reportState: rawRun.reportState ?? 'skipped',
-    createdAt: rawRun.createdAt ?? template.created_at,
-    updatedAt: rawRun.updatedAt ?? template.updated_at,
-    startedAt: rawRun.startedAt,
-    completedAt: rawRun.completedAt,
-    elapsedMs: rawRun.elapsedMs,
-    errorMessage: rawRun.errorMessage,
-  };
+    fallbackPrompt: template.title,
+    createdAt: template.created_at,
+    updatedAt: template.updated_at,
+  });
 }
 
 function createReadonlyDemoSessionFromTemplate(template: DemoConversationTemplateRecord): WorkbenchSession {

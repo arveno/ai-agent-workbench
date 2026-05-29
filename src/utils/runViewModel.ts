@@ -76,7 +76,7 @@ export function getRunDisplayId(run: Pick<RunViewModel, 'id' | 'displayRunId'> |
     return '-';
   }
 
-  return run.displayRunId?.trim() || run.id;
+  return run.displayRunId.trim();
 }
 
 export function isRunEventForRun(

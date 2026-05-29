@@ -248,11 +248,7 @@ function cacheRunInSession(
       return session;
     }
 
-    const runWithSession: RunViewModel = {
-      ...run,
-      sessionId: run.sessionId ?? conversationId,
-    };
-    const syncedRun = withReportStateFromSessionMessages(runWithSession, session);
+    const syncedRun = withReportStateFromSessionMessages(run, session);
 
     return {
       ...session,
@@ -384,12 +380,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
         };
       }
 
-      const runWithSession: RunViewModel = {
-        ...run,
-        sessionId: run.sessionId ?? state.currentSessionId,
-      };
       const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
-      const syncedRun = activeSession ? withReportStateFromSessionMessages(runWithSession, activeSession) : runWithSession;
+      const syncedRun = activeSession ? withReportStateFromSessionMessages(run, activeSession) : run;
       const nextSessions = upsertRunIntoSessions(state.sessions, state.currentSessionId, syncedRun);
 
       if (!state.isPersistentMode) {
@@ -438,12 +430,8 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
               reportState: state.currentRun.reportState,
             }
           : nextRun;
-      const runWithSession: RunViewModel = {
-        ...protectedRun,
-        sessionId: protectedRun.sessionId ?? state.currentSessionId,
-      };
       const activeSession = state.sessions.find((session) => session.id === state.currentSessionId);
-      const syncedRun = activeSession ? withReportStateFromSessionMessages(runWithSession, activeSession) : runWithSession;
+      const syncedRun = activeSession ? withReportStateFromSessionMessages(protectedRun, activeSession) : protectedRun;
       const pendingRunId = getRunStartedPendingRunId(event, syncedRun);
       const nextSessions = migratePendingRunIdInSessions(
         upsertRunIntoSessions(state.sessions, state.currentSessionId, syncedRun),
@@ -590,11 +578,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     }
 
     if (cachedRun) {
-      const runWithSession = {
-        ...cachedRun,
-        sessionId: cachedRun.sessionId ?? conversationId,
-      };
-      const syncedRun = withReportStateFromSessionMessages(runWithSession, activeSession);
+      const syncedRun = withReportStateFromSessionMessages(cachedRun, activeSession);
       const nextSessions = cacheRunInSession(state.sessions, conversationId, syncedRun);
 
       if (!state.isPersistentMode) {
@@ -682,7 +666,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
       sources: result.data.sources,
     });
 
-    if (runViewModel.sessionId && runViewModel.sessionId !== conversationId) {
+    if (runViewModel.sessionId !== conversationId) {
       const message = '这条 Run 不属于当前会话。';
       set({
         isLatestRunLoading: false,
@@ -806,7 +790,7 @@ export const createRunSlice: StateCreator<WorkbenchStore, [], [], RunSlice> = (s
     });
 
     set((state) => {
-      const conversationId = runViewModel.sessionId ?? state.currentSessionId;
+      const conversationId = runViewModel.sessionId;
 
       if (!conversationId || !state.currentRun || state.currentRun.id !== runId) {
         return {

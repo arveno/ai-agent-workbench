@@ -21,3 +21,5 @@ export type {
   RunViewModelUsage,
   RunViewModelUsageCounts,
 } from './types';
+
+export { RunViewModelFactory } from './runViewModelFactory';
