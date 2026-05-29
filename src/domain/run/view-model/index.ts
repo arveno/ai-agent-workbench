@@ -30,5 +30,4 @@ export type {
   PendingAgentRunInput,
   RestoredRunAdapterInput,
   RunStartedViewModelInput,
-  RunViewModelCreateInput,
 } from './runViewModelFactoryInputs';

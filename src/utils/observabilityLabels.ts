@@ -126,7 +126,9 @@ export function getConclusionSourceLabel(source: RunViewModelConclusionSource): 
   return '未生成';
 }
 
-export function getReportStatusLabel(reportState: RunViewModelReportState): string {
+export function getReportStatusLabel(
+  reportState: RunViewModelReportState,
+): string {
   if (reportState === 'pending') return '可生成';
   if (reportState === 'generating') return '生成中';
   if (reportState === 'generated') return '已生成';

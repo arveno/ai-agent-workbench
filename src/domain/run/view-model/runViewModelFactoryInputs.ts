@@ -17,34 +17,6 @@ import type {
 
 export type RunViewModelFactoryStatusInput = RunViewModelStatus | RunSnapshot['status'];
 
-export interface RunViewModelCreateInput {
-  id: string;
-  sessionId: string;
-  mode: RunViewModelMode;
-  status: RunViewModelFactoryStatusInput;
-  intent: RunViewModelIntent;
-  prompt: string;
-  clientRunId?: string | null;
-  displayRunId?: string | null;
-  plan?: RunViewModelPlan;
-  dataSource?: RunViewModelDataSource;
-  steps?: RunViewModelStep[];
-  toolInvocations?: RunViewModelToolInvocation[];
-  sources?: RunSource[];
-  chartData?: RunViewModelChartData;
-  conclusion?: string | null;
-  conclusionSource?: RunViewModelConclusionSource | null;
-  agentConclusion?: AgentConclusion | RunViewModelAgentConclusion | null;
-  modelTrace?: ModelTrace | RunViewModelTrace | null;
-  reportState?: RunViewModelReportState | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  elapsedMs?: number | null;
-  errorMessage?: string | null;
-}
-
 export interface CanonicalRunViewModelInput {
   run: RunSnapshot;
   sessionId: string;

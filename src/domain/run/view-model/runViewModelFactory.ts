@@ -1,4 +1,5 @@
 import type { AgentConclusion, ModelTrace } from '../../../../contracts/generated/workbench-contract';
+import type { RunSource } from '../../../types/rag';
 import {
   mapCanonicalRunChartData,
   mapCanonicalRunDataSource,
@@ -11,17 +12,51 @@ import type {
   PendingAgentRunInput,
   RestoredRunAdapterInput,
   RunStartedViewModelInput,
-  RunViewModelCreateInput,
   RunViewModelFactoryStatusInput,
 } from './runViewModelFactoryInputs';
 import type {
   RunViewModel,
   RunViewModelAgentConclusion,
+  RunViewModelChartData,
+  RunViewModelConclusionSource,
   RunViewModelDataSource,
+  RunViewModelIntent,
+  RunViewModelMode,
+  RunViewModelPlan,
+  RunViewModelReportState,
   RunViewModelStatus,
   RunViewModelStep,
+  RunViewModelToolInvocation,
   RunViewModelTrace,
 } from './types';
+
+interface RunViewModelCreateInput {
+  id: string;
+  clientRunId: string | null;
+  sessionId: string;
+  displayRunId: string;
+  mode: RunViewModelMode;
+  status: RunViewModelStatus;
+  intent: RunViewModelIntent;
+  prompt: string;
+  plan: RunViewModelPlan | null;
+  dataSource: RunViewModelDataSource | null;
+  steps: RunViewModelStep[];
+  toolInvocations: RunViewModelToolInvocation[];
+  sources: RunSource[];
+  chartData: RunViewModelChartData | null;
+  conclusion: string;
+  conclusionSource: RunViewModelConclusionSource;
+  agentConclusion: AgentConclusion | RunViewModelAgentConclusion | null;
+  modelTrace: ModelTrace | RunViewModelTrace | null;
+  reportState: RunViewModelReportState;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  elapsedMs: number | null;
+  errorMessage: string | null;
+}
 
 function getTrimmedString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -93,8 +128,42 @@ function copyModelTrace(value: ModelTrace | RunViewModelTrace | null | undefined
   };
 }
 
-function copyArray<T extends object>(value: T[] | undefined): T[] {
-  return value ? value.map((item) => ({ ...item })) : [];
+function copyArray<T extends object>(value: T[]): T[] {
+  return value.map((item) => ({ ...item }));
+}
+
+function createRunViewModel(input: RunViewModelCreateInput): RunViewModel {
+  const modelTrace = copyModelTrace(input.modelTrace);
+  const agentConclusion = copyAgentConclusion(input.agentConclusion);
+  const elapsedMs = getElapsedMs(input.elapsedMs);
+
+  return {
+    id: input.id,
+    ...(input.clientRunId ? { clientRunId: input.clientRunId } : {}),
+    sessionId: input.sessionId,
+    displayRunId: input.displayRunId,
+    mode: input.mode,
+    status: input.status,
+    intent: input.intent,
+    prompt: input.prompt,
+    ...(input.plan ? { plan: input.plan } : {}),
+    ...(input.dataSource ? { dataSource: input.dataSource } : {}),
+    steps: copyArray(input.steps),
+    toolInvocations: copyArray(input.toolInvocations),
+    sources: copyArray(input.sources),
+    ...(input.chartData ? { chartData: input.chartData } : {}),
+    conclusion: input.conclusion,
+    conclusionSource: input.conclusionSource,
+    ...(agentConclusion ? { agentConclusion } : {}),
+    ...(modelTrace ? { modelTrace } : {}),
+    reportState: input.reportState,
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt,
+    ...(input.startedAt ? { startedAt: input.startedAt } : {}),
+    ...(input.completedAt ? { completedAt: input.completedAt } : {}),
+    ...(elapsedMs !== undefined ? { elapsedMs } : {}),
+    ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+  };
 }
 
 function createCloudBaseAgentDataSource(): RunViewModelDataSource {
@@ -151,119 +220,88 @@ function createPendingAgentSteps(timestamp: string): RunViewModelStep[] {
 }
 
 export const RunViewModelFactory = {
-  create(input: RunViewModelCreateInput): RunViewModel {
-    const timestamp = new Date().toISOString();
-    const id = requireString(input.id, 'id');
-    const sessionId = requireString(input.sessionId, 'sessionId');
-    const createdAt = optionalString(input.createdAt) ?? timestamp;
-    const updatedAt = optionalString(input.updatedAt) ?? createdAt;
-    const modelTrace = copyModelTrace(input.modelTrace);
-    const agentConclusion = copyAgentConclusion(input.agentConclusion);
-    const conclusion = getTrimmedString(input.conclusion) ?? agentConclusion?.plainText ?? '';
-    const conclusionSource = input.conclusionSource ?? modelTrace?.conclusionSource ?? 'none';
-    const elapsedMs = getElapsedMs(input.elapsedMs);
-
-    return {
-      id,
-      ...(optionalString(input.clientRunId) ? { clientRunId: optionalString(input.clientRunId) } : {}),
-      sessionId,
-      displayRunId: optionalString(input.displayRunId) ?? id,
-      mode: input.mode,
-      status: mapRunStatus(input.status),
-      intent: input.intent,
-      prompt: input.prompt,
-      ...(input.plan ? { plan: input.plan } : {}),
-      ...(input.dataSource ? { dataSource: input.dataSource } : {}),
-      steps: copyArray(input.steps),
-      toolInvocations: copyArray(input.toolInvocations),
-      sources: copyArray(input.sources),
-      ...(input.chartData ? { chartData: input.chartData } : {}),
-      conclusion,
-      conclusionSource,
-      ...(agentConclusion ? { agentConclusion } : {}),
-      ...(modelTrace ? { modelTrace } : {}),
-      reportState: input.reportState ?? 'hidden',
-      createdAt,
-      updatedAt,
-      ...(optionalString(input.startedAt) ? { startedAt: optionalString(input.startedAt) } : {}),
-      ...(optionalString(input.completedAt) ? { completedAt: optionalString(input.completedAt) } : {}),
-      ...(elapsedMs !== undefined ? { elapsedMs } : {}),
-      ...(optionalString(input.errorMessage) ? { errorMessage: optionalString(input.errorMessage) } : {}),
-    };
-  },
-
   fromCanonicalRun(input: CanonicalRunViewModelInput): RunViewModel {
     const run = input.run;
     const agentConclusion = input.agentConclusion ?? run.agentConclusion;
     const modelTrace = input.modelTrace ?? run.modelTrace;
+    const id = requireString(run.id, 'id');
+    const sessionId = requireString(input.sessionId, 'sessionId');
+    const createdAt = optionalString(run.createdAt) ?? new Date().toISOString();
+    const updatedAt = optionalString(run.updatedAt) ?? createdAt;
 
-    return this.create({
-      id: run.id,
-      sessionId: input.sessionId,
-      clientRunId: run.clientRunId,
-      displayRunId: input.displayRunId,
+    return createRunViewModel({
+      id,
+      sessionId,
+      clientRunId: optionalString(run.clientRunId) ?? null,
+      displayRunId: optionalString(input.displayRunId) ?? id,
       mode: run.mode,
-      status: run.status,
+      status: mapRunStatus(run.status),
       intent: run.intent ?? 'unknown',
       prompt: run.prompt ?? '',
-      plan: mapCanonicalRunPlan(run.plan),
-      dataSource: mapCanonicalRunDataSource(run.dataSource),
-      chartData: mapCanonicalRunChartData(run.chartData),
-      conclusion: input.conclusion,
-      conclusionSource: input.conclusionSource,
-      agentConclusion,
-      modelTrace,
-      reportState: run.reportState,
-      createdAt: run.createdAt,
-      updatedAt: run.updatedAt,
-      startedAt: run.startedAt,
-      completedAt: run.completedAt,
-      elapsedMs: run.elapsedMs,
-      errorMessage: run.errorMessage,
-      steps: input.steps,
-      toolInvocations: input.toolInvocations,
-      sources: input.sources,
+      plan: mapCanonicalRunPlan(run.plan) ?? null,
+      dataSource: mapCanonicalRunDataSource(run.dataSource) ?? null,
+      steps: input.steps ?? [],
+      toolInvocations: input.toolInvocations ?? [],
+      sources: input.sources ?? [],
+      chartData: mapCanonicalRunChartData(run.chartData) ?? null,
+      conclusion: getTrimmedString(input.conclusion) ?? agentConclusion?.plainText ?? '',
+      conclusionSource: input.conclusionSource ?? modelTrace?.conclusionSource ?? 'none',
+      agentConclusion: agentConclusion ?? null,
+      modelTrace: modelTrace ?? null,
+      reportState: run.reportState ?? 'hidden',
+      createdAt,
+      updatedAt,
+      startedAt: optionalString(run.startedAt) ?? null,
+      completedAt: optionalString(run.completedAt) ?? null,
+      elapsedMs: run.elapsedMs ?? null,
+      errorMessage: optionalString(run.errorMessage) ?? null,
     });
   },
 
   fromRunStartedInput(input: RunStartedViewModelInput): RunViewModel {
-    return this.create({
-      id: input.id,
-      sessionId: input.sessionId,
-      clientRunId: input.clientRunId,
-      displayRunId: input.displayRunId,
+    const id = requireString(input.id, 'id');
+    const sessionId = requireString(input.sessionId, 'sessionId');
+    const createdAt = optionalString(input.createdAt) ?? optionalString(input.updatedAt) ?? new Date().toISOString();
+    const updatedAt = optionalString(input.updatedAt) ?? createdAt;
+
+    return createRunViewModel({
+      id,
+      sessionId,
+      clientRunId: optionalString(input.clientRunId) ?? null,
+      displayRunId: optionalString(input.displayRunId) ?? id,
       mode: input.mode,
-      status: input.status,
+      status: mapRunStatus(input.status),
       intent: input.intent ?? 'unknown',
       prompt: input.prompt ?? '',
-      plan: input.plan,
-      dataSource: input.dataSource,
-      steps: input.steps,
-      toolInvocations: input.toolInvocations,
-      sources: input.sources,
-      chartData: input.chartData,
-      conclusion: input.conclusion,
-      conclusionSource: input.conclusionSource,
-      agentConclusion: input.agentConclusion,
-      modelTrace: input.modelTrace,
-      reportState: input.reportState,
-      createdAt: input.createdAt,
-      updatedAt: input.updatedAt,
-      startedAt: input.startedAt,
-      completedAt: input.completedAt,
-      elapsedMs: input.elapsedMs,
-      errorMessage: input.errorMessage,
+      plan: input.plan ?? null,
+      dataSource: input.dataSource ?? null,
+      steps: input.steps ?? [],
+      toolInvocations: input.toolInvocations ?? [],
+      sources: input.sources ?? [],
+      chartData: input.chartData ?? null,
+      conclusion: getTrimmedString(input.conclusion) ?? input.agentConclusion?.plainText ?? '',
+      conclusionSource: input.conclusionSource ?? input.modelTrace?.conclusionSource ?? 'none',
+      agentConclusion: input.agentConclusion ?? null,
+      modelTrace: input.modelTrace ?? null,
+      reportState: input.reportState ?? 'hidden',
+      createdAt,
+      updatedAt,
+      startedAt: optionalString(input.startedAt) ?? null,
+      completedAt: optionalString(input.completedAt) ?? null,
+      elapsedMs: input.elapsedMs ?? null,
+      errorMessage: optionalString(input.errorMessage) ?? null,
     });
   },
 
   fromPendingAgentRun(input: PendingAgentRunInput): RunViewModel {
     const timestamp = input.timestamp ?? new Date().toISOString();
+    const id = requireString(input.runId, 'runId');
 
-    return this.create({
-      id: input.runId,
-      clientRunId: input.runId,
-      sessionId: input.sessionId,
-      displayRunId: input.runId,
+    return createRunViewModel({
+      id,
+      clientRunId: id,
+      sessionId: requireString(input.sessionId, 'sessionId'),
+      displayRunId: id,
       mode: 'agent',
       status: 'running',
       intent: 'unknown',
@@ -275,22 +313,32 @@ export const RunViewModelFactory = {
       },
       dataSource: createCloudBaseAgentDataSource(),
       steps: createPendingAgentSteps(timestamp),
+      toolInvocations: [],
+      sources: [],
+      chartData: null,
       conclusion: '',
       conclusionSource: 'none',
+      agentConclusion: null,
+      modelTrace: null,
       reportState: 'hidden',
       createdAt: timestamp,
       updatedAt: timestamp,
       startedAt: timestamp,
+      completedAt: null,
+      elapsedMs: null,
+      errorMessage: null,
     });
   },
 
   fromMockRun(input: MockRunInput): RunViewModel {
     const timestamp = input.timestamp ?? new Date().toISOString();
+    const id = requireString(input.runId, 'runId');
 
-    return this.create({
-      id: input.runId,
-      sessionId: input.sessionId,
-      displayRunId: input.runId,
+    return createRunViewModel({
+      id,
+      clientRunId: null,
+      sessionId: requireString(input.sessionId, 'sessionId'),
+      displayRunId: id,
       mode: 'mock',
       status: 'running',
       intent: 'data_analysis',
@@ -298,48 +346,86 @@ export const RunViewModelFactory = {
       plan: input.plan,
       dataSource: input.dataSource,
       steps: input.steps,
-      sources: input.sources,
+      toolInvocations: [],
+      sources: input.sources ?? [],
+      chartData: null,
       conclusion: '',
       conclusionSource: 'mock',
-      modelTrace: input.modelTrace,
+      agentConclusion: null,
+      modelTrace: input.modelTrace ?? null,
       reportState: 'hidden',
       createdAt: timestamp,
       updatedAt: timestamp,
       startedAt: timestamp,
+      completedAt: null,
+      elapsedMs: null,
+      errorMessage: null,
     });
   },
 
   fromDemoSeedAdapter(input: DemoSeedRunAdapterInput): RunViewModel {
-    return this.create({
-      id: input.id,
-      sessionId: input.sessionId,
-      clientRunId: input.clientRunId,
-      displayRunId: input.displayRunId,
+    const id = requireString(input.id, 'id');
+    const createdAt = optionalString(input.createdAt) ?? input.fallbackCreatedAt;
+    const updatedAt = optionalString(input.updatedAt) ?? input.fallbackUpdatedAt;
+
+    return createRunViewModel({
+      id,
+      sessionId: requireString(input.sessionId, 'sessionId'),
+      clientRunId: optionalString(input.clientRunId) ?? null,
+      displayRunId: optionalString(input.displayRunId) ?? id,
       mode: input.mode ?? 'mock',
-      status: input.status ?? 'success',
+      status: mapRunStatus(input.status ?? 'success'),
       intent: input.intent ?? 'unknown',
       prompt: input.prompt ?? input.fallbackPrompt,
-      plan: input.plan,
-      dataSource: input.dataSource,
-      steps: input.steps,
-      toolInvocations: input.toolInvocations,
-      sources: input.sources,
-      chartData: input.chartData,
-      conclusion: input.conclusion,
-      conclusionSource: input.conclusionSource ?? input.modelTrace?.conclusionSource,
-      agentConclusion: input.agentConclusion,
-      modelTrace: input.modelTrace,
+      plan: input.plan ?? null,
+      dataSource: input.dataSource ?? null,
+      steps: input.steps ?? [],
+      toolInvocations: input.toolInvocations ?? [],
+      sources: input.sources ?? [],
+      chartData: input.chartData ?? null,
+      conclusion: getTrimmedString(input.conclusion) ?? input.agentConclusion?.plainText ?? '',
+      conclusionSource: input.conclusionSource ?? input.modelTrace?.conclusionSource ?? 'none',
+      agentConclusion: input.agentConclusion ?? null,
+      modelTrace: input.modelTrace ?? null,
       reportState: input.reportState ?? 'skipped',
-      createdAt: input.createdAt ?? input.fallbackCreatedAt,
-      updatedAt: input.updatedAt ?? input.fallbackUpdatedAt,
-      startedAt: input.startedAt,
-      completedAt: input.completedAt,
-      elapsedMs: input.elapsedMs,
-      errorMessage: input.errorMessage,
+      createdAt,
+      updatedAt,
+      startedAt: optionalString(input.startedAt) ?? null,
+      completedAt: optionalString(input.completedAt) ?? null,
+      elapsedMs: input.elapsedMs ?? null,
+      errorMessage: optionalString(input.errorMessage) ?? null,
     });
   },
 
   fromRestoredRunAdapter(input: RestoredRunAdapterInput): RunViewModel {
-    return this.create(input);
+    const id = requireString(input.id, 'id');
+
+    return createRunViewModel({
+      id,
+      sessionId: requireString(input.sessionId, 'sessionId'),
+      clientRunId: optionalString(input.clientRunId) ?? null,
+      displayRunId: optionalString(input.displayRunId) ?? id,
+      mode: input.mode,
+      status: input.status,
+      intent: input.intent,
+      prompt: input.prompt,
+      plan: input.plan ?? null,
+      dataSource: input.dataSource ?? null,
+      steps: input.steps ?? [],
+      toolInvocations: input.toolInvocations ?? [],
+      sources: input.sources ?? [],
+      chartData: input.chartData ?? null,
+      conclusion: input.conclusion,
+      conclusionSource: input.conclusionSource,
+      agentConclusion: input.agentConclusion ?? null,
+      modelTrace: input.modelTrace ?? null,
+      reportState: input.reportState,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt,
+      startedAt: optionalString(input.startedAt) ?? null,
+      completedAt: optionalString(input.completedAt) ?? null,
+      elapsedMs: input.elapsedMs ?? null,
+      errorMessage: optionalString(input.errorMessage) ?? null,
+    });
   },
 };

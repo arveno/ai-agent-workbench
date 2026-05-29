@@ -8,7 +8,7 @@ type IsEqual<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B
   ? true
   : false;
 
-const factoryRun = RunViewModelFactory.create({
+const factoryRun = RunViewModelFactory.fromRunStartedInput({
   id: 'run_factory_test',
   sessionId: 'session_factory_test',
   mode: 'agent',
@@ -31,7 +31,7 @@ export type RunViewModelFactoryAssertions = [
 ];
 
 // @ts-expect-error sessionId is required and cannot be inferred from conversationId.
-RunViewModelFactory.create({
+RunViewModelFactory.fromRunStartedInput({
   id: 'run_missing_session',
   mode: 'agent',
   status: 'running',
