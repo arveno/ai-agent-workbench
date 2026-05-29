@@ -10,6 +10,10 @@ export function createAgentPendingRunStartedEvent(params: {
 
   return {
     type: 'run_started',
+    runId: params.runId,
+    clientRunId: params.runId,
+    conversationId: params.sessionId,
+    timestamp,
     run: RunViewModelFactory.fromPendingAgentRun({
       runId: params.runId,
       prompt: params.prompt,

@@ -4,7 +4,7 @@ import type {
 import type {
   RunViewModel,
   RunViewModelConclusionSource,
-  RunViewModelDataSourceSnapshot,
+  RunViewModelDataSource,
   RunViewModelIntent,
   RunViewModelMode,
   RunViewModelStatus,
@@ -164,7 +164,7 @@ function getDataSourceSubtitle(run: Pick<RunViewModel, 'mode'>): string {
   return run.mode === 'mock' ? '本地演示数据' : '服务端受控数据源';
 }
 
-function getDataSourceScope(source: RunViewModelDataSourceSnapshot | undefined): string {
+function getDataSourceScope(source: RunViewModelDataSource | undefined): string {
   if (typeof source?.tableCount === 'number' && source.tableCount > 0) {
     return `${source.tableCount} 个受控数据对象`;
   }

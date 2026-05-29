@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { copyDemoConversationTemplate as copyDemoConversationTemplateApi, fetchDemoConversations } from '../../services/demoTemplateApi';
-import type { RunViewModel } from '../../domain/run/view-model';
+import type { DemoSeedRunAdapterInput, RunViewModel } from '../../domain/run/view-model';
 import { RunViewModelFactory } from '../../domain/run/view-model';
 import type { DemoConversationTemplateRecord, DemoSeedMessage } from '../../types/persistence';
 import type { DemoTemplateSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
@@ -120,21 +120,19 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
 }
 
 function createDemoRun(template: DemoConversationTemplateRecord, sessionId: string): RunViewModel | null {
-  const rawRun = template.seed_runs[0] as Partial<RunViewModel> | undefined;
+  const rawRun = template.seed_runs[0] as unknown as DemoSeedRunAdapterInput | undefined;
 
   if (!rawRun?.id) {
     return null;
   }
 
-  return RunViewModelFactory.fromDemoSeed({
-    run: {
-      ...rawRun,
-      id: rawRun.id,
-    },
+  return RunViewModelFactory.fromDemoSeedAdapter({
+    ...rawRun,
+    id: rawRun.id,
     sessionId,
     fallbackPrompt: template.title,
-    createdAt: template.created_at,
-    updatedAt: template.updated_at,
+    fallbackCreatedAt: template.created_at,
+    fallbackUpdatedAt: template.updated_at,
   });
 }
 

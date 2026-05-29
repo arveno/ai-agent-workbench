@@ -117,6 +117,8 @@ export function createMockRunStartedEvent(params: {
 }): RunStartedEvent {
   return {
     type: 'run_started',
+    runId: params.runId,
+    conversationId: params.sessionId,
     run: createMockRunViewModel(params),
   };
 }

@@ -75,14 +75,6 @@ function mapConclusionSource(value: string | null): RunViewModelConclusionSource
 }
 
 function mapReportState(value: string | null): RunViewModelReportState {
-  if (value === 'not_applicable') {
-    return 'hidden';
-  }
-
-  if (value === 'available') {
-    return 'pending';
-  }
-
   if (
     value === 'hidden' ||
     value === 'pending' ||
@@ -294,7 +286,7 @@ export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewMo
   const modelTrace = getRunModelTrace(record);
   const agentConclusion = normalizeAgentConclusion(
     record.conclusion ?? '',
-    record.metadata.agentConclusion as RunViewModelAgentConclusion | undefined,
+    record.metadata.agentConclusion,
   );
   const run = agentRunRecordToCanonicalRun(
     record,
@@ -302,7 +294,9 @@ export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewMo
     modelTrace,
   );
 
-  return RunViewModelFactory.fromCanonicalRun(run, {
+  return RunViewModelFactory.fromCanonicalRun({
+    run,
+    sessionId: record.conversation_id,
     conclusion: agentConclusion.plainText,
     agentConclusion: agentConclusion.plainText ? agentConclusion : null,
     modelTrace,
@@ -340,14 +334,25 @@ export function runPersistenceRecordsToViewModel(params: {
   const runIdentity = getAgentRunRecordIdentity(params.run);
   const modelTrace = viewModel.modelTrace ?? getRunModelTrace(params.run);
 
-  return RunViewModelFactory.fromPersistenceRestore({
-    run: {
-      ...viewModel,
-      ...runIdentity,
-    },
+  return RunViewModelFactory.fromRestoredRunAdapter({
+    id: runIdentity.id,
     sessionId: params.run.conversation_id,
     clientRunId: runIdentity.clientRunId,
     displayRunId: runIdentity.displayRunId,
+    mode: viewModel.mode,
+    status: viewModel.status,
+    intent: viewModel.intent,
+    prompt: viewModel.prompt,
+    plan: viewModel.plan,
+    dataSource: viewModel.dataSource,
+    steps: viewModel.steps,
+    chartData: viewModel.chartData,
+    createdAt: viewModel.createdAt,
+    updatedAt: viewModel.updatedAt,
+    startedAt: viewModel.startedAt,
+    completedAt: viewModel.completedAt,
+    elapsedMs: viewModel.elapsedMs,
+    errorMessage: viewModel.errorMessage,
     conclusion: agentConclusion.plainText,
     conclusionSource: modelTrace?.conclusionSource ?? 'none',
     agentConclusion: agentConclusion.plainText ? agentConclusion : null,

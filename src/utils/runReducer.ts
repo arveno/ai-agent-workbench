@@ -455,11 +455,38 @@ function updateTool(
 
 export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
-    const runViewModel = RunViewModelFactory.fromRunStartedPayload(event.run, {
-      runId: event.runId,
-      clientRunId: event.clientRunId,
-      conversationId: event.conversationId,
-      timestamp: event.timestamp,
+    const sessionId = event.conversationId?.trim();
+
+    if (!sessionId) {
+      return currentRun;
+    }
+
+    const runViewModel = RunViewModelFactory.fromRunStartedInput({
+      id: event.runId ?? event.run.id,
+      sessionId,
+      clientRunId: event.clientRunId ?? event.run.clientRunId,
+      displayRunId: event.run.displayRunId,
+      mode: event.run.mode,
+      status: event.run.status ?? 'running',
+      intent: event.run.intent,
+      prompt: event.run.prompt,
+      plan: event.run.plan,
+      dataSource: event.run.dataSource,
+      steps: event.run.steps,
+      toolInvocations: event.run.toolInvocations,
+      sources: event.run.sources,
+      chartData: event.run.chartData,
+      conclusion: event.run.conclusion,
+      conclusionSource: event.run.conclusionSource,
+      agentConclusion: event.run.agentConclusion,
+      modelTrace: event.run.modelTrace,
+      reportState: event.run.reportState,
+      createdAt: event.run.createdAt ?? event.timestamp,
+      updatedAt: event.run.updatedAt ?? event.timestamp,
+      startedAt: event.run.startedAt,
+      completedAt: event.run.completedAt,
+      elapsedMs: event.run.elapsedMs,
+      errorMessage: event.run.errorMessage,
     });
     const updatedAt = runViewModel.updatedAt;
     const agentConclusion = normalizeAgentConclusion(
