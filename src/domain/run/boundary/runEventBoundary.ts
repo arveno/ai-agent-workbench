@@ -19,6 +19,16 @@ import type {
   RunStoppedEvent,
 } from './types';
 
+type RunEventInputShape = 'envelope' | 'flat';
+
+interface RunEventPayloadSource {
+  shape: RunEventInputShape;
+  type: RunEventType;
+  event: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  context: RunEventBoundaryContext;
+}
+
 const RUN_EVENT_TYPES: RunEventType[] = [
   'run_started',
   'run_reused',
@@ -46,6 +56,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return isRecord(value) ? value : null;
+}
+
+function hasOwnField(record: Record<string, unknown>, fieldName: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, fieldName);
 }
 
 function readString(value: unknown): string | null {
@@ -175,25 +189,23 @@ function readContextString(context: RunEventBoundaryContext, key: 'runId' | 'con
 }
 
 function readEventString(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
+  source: RunEventPayloadSource,
   key: 'runId' | 'conversationId' | 'timestamp',
 ): string | null {
-  const eventValue = readString(record[key]);
+  const eventValue = readString(source.event[key]);
 
   if (eventValue) {
     return eventValue;
   }
 
-  return readContextString(context, key);
+  return readContextString(source.context, key);
 }
 
 function readClientRunId(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
+  source: RunEventPayloadSource,
   runRecord?: Record<string, unknown> | null,
 ): string | undefined {
-  const eventClientRunId = readString(record.clientRunId);
+  const eventClientRunId = readString(source.event.clientRunId);
 
   if (eventClientRunId) {
     return eventClientRunId;
@@ -205,14 +217,14 @@ function readClientRunId(
     return runClientRunId;
   }
 
-  return readContextString(context, 'clientRunId') ?? undefined;
+  return readContextString(source.context, 'clientRunId') ?? undefined;
 }
 
 function resolveRunStartedRunId(params: {
   eventRunId: string | null;
   payloadRunId: string | null;
   clientRunId: string | undefined;
-  source?: RunEventBoundaryContext['source'];
+  source: RunEventPayloadSource;
 }): string | null {
   if (params.eventRunId) {
     return params.eventRunId;
@@ -222,7 +234,7 @@ function resolveRunStartedRunId(params: {
     return null;
   }
 
-  if (params.source === 'local') {
+  if (params.source.context.source === 'local') {
     return params.payloadRunId;
   }
 
@@ -233,19 +245,16 @@ function resolveRunStartedRunId(params: {
   return null;
 }
 
-function createIdentity(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): RunEventIdentity | null {
-  const runId = readEventString(record, context, 'runId');
+function createIdentity(source: RunEventPayloadSource): RunEventIdentity | null {
+  const runId = readEventString(source, 'runId');
 
   if (!runId) {
     return null;
   }
 
-  const conversationId = readEventString(record, context, 'conversationId');
-  const timestamp = readEventString(record, context, 'timestamp');
-  const clientRunId = readClientRunId(record, context);
+  const conversationId = readEventString(source, 'conversationId');
+  const timestamp = readEventString(source, 'timestamp');
+  const clientRunId = readClientRunId(source);
 
   return {
     runId,
@@ -255,16 +264,169 @@ function createIdentity(
   };
 }
 
-function readPayload(record: Record<string, unknown>): Record<string, unknown> | null {
-  return readRecord(record.payload);
+function readPayloadRecord(source: RunEventPayloadSource, payloadKey: string): Record<string, unknown> | null {
+  return readRecord(source.payload[payloadKey]);
 }
 
-function readPayloadRecord(
+function createRunEventSource(
   record: Record<string, unknown>,
-  payloadKey: string,
-): Record<string, unknown> | null {
-  const payload = readPayload(record);
-  return payload ? readRecord(payload[payloadKey]) : null;
+  type: RunEventType,
+  context: RunEventBoundaryContext,
+): RunEventPayloadSource | null {
+  if (hasOwnField(record, 'payload')) {
+    const payload = readRecord(record.payload);
+
+    if (!payload) {
+      return null;
+    }
+
+    return {
+      shape: 'envelope',
+      type,
+      event: record,
+      payload,
+      context,
+    };
+  }
+
+  const payload = createFlatPayload(type, record);
+
+  if (!payload) {
+    return null;
+  }
+
+  return {
+    shape: 'flat',
+    type,
+    event: record,
+    payload,
+    context,
+  };
+}
+
+function createFlatPayload(type: RunEventType, record: Record<string, unknown>): Record<string, unknown> | null {
+  // #103 deletion condition:
+  // Current flat runtime event support is a centralized compatibility adapter until runtime output
+  // moves to the unified SSE envelope. Flat compatibility must stay inside RunEventBoundary and
+  // must not leak into service, store, reducer, or component code. After #103 switches runtime
+  // output to unified envelope, this adapter should be narrowed or removed.
+  if (type === 'run_started') {
+    const run = readRecord(record.run);
+    return run ? { run } : null;
+  }
+
+  if (type === 'run_reused') {
+    return {
+      duplicate: record.duplicate,
+      reused: record.reused,
+      reason: record.reason,
+      status: record.status,
+      reusedRun: record.reusedRun,
+      existingRun: record.existingRun,
+    };
+  }
+
+  if (type === 'step_started') {
+    return {
+      step: {
+        stepId: record.stepId,
+        title: record.title,
+        description: record.description,
+        startedAt: record.startedAt,
+      },
+    };
+  }
+
+  if (type === 'step_completed') {
+    return {
+      stepDelta: {
+        stepId: record.stepId,
+        completedAt: record.completedAt,
+        elapsedMs: record.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'step_failed') {
+    return {
+      stepDelta: {
+        stepId: record.stepId,
+        errorMessage: record.errorMessage,
+        completedAt: record.completedAt,
+        elapsedMs: record.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'tool_started') {
+    const toolInvocation = readRecord(record.tool);
+    return toolInvocation ? { toolInvocation } : null;
+  }
+
+  if (type === 'tool_completed') {
+    return {
+      toolDelta: {
+        toolId: record.toolId,
+        outputSummary: record.outputSummary,
+        completedAt: record.completedAt,
+        elapsedMs: record.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'tool_failed') {
+    return {
+      toolDelta: {
+        toolId: record.toolId,
+        errorMessage: record.errorMessage,
+        completedAt: record.completedAt,
+        elapsedMs: record.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'chart_ready') {
+    return { chartData: record.chartData };
+  }
+
+  if (type === 'conclusion_delta') {
+    return { delta: record.delta };
+  }
+
+  if (type === 'conclusion_completed') {
+    return {
+      conclusion: record.conclusion,
+      agentConclusion: record.agentConclusion,
+      modelTrace: record.modelTrace,
+    };
+  }
+
+  if (type === 'rag_sources_ready') {
+    return { sources: record.sources };
+  }
+
+  if (type === 'report_pending') {
+    return { metadata: readRecord(record.metadata) ?? {} };
+  }
+
+  if (type === 'run_completed') {
+    return {
+      completedAt: record.completedAt,
+      elapsedMs: record.elapsedMs,
+      modelTrace: record.modelTrace,
+      metadata: record.metadata,
+    };
+  }
+
+  if (type === 'run_failed') {
+    return {
+      errorMessage: record.errorMessage,
+      modelTrace: record.modelTrace,
+      metadata: record.metadata,
+    };
+  }
+
+  return {};
 }
 
 function readStartedPayload(
@@ -314,35 +476,30 @@ function readStartedPayload(
   };
 }
 
-function normalizeRunStarted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): RunStartedEvent | null {
-  const payloadRunRecord = readPayloadRecord(record, 'run');
-  const flatRunRecord = readRecord(record.run);
-  const runRecord = payloadRunRecord ?? flatRunRecord;
+function normalizeRunStarted(source: RunEventPayloadSource): RunStartedEvent | null {
+  const runRecord = readPayloadRecord(source, 'run');
 
   if (!runRecord) {
     return null;
   }
 
-  const clientRunId = readClientRunId(record, context, runRecord);
-  const eventRunId = readEventString(record, context, 'runId');
+  const clientRunId = readClientRunId(source, runRecord);
+  const eventRunId = readEventString(source, 'runId');
   const payloadRunId = readString(runRecord.id);
   const runId = resolveRunStartedRunId({
     eventRunId,
     payloadRunId,
     clientRunId,
-    source: context.source,
+    source,
   });
-  const conversationId = readEventString(record, context, 'conversationId') ?? readString(runRecord.conversationId);
+  const conversationId = readEventString(source, 'conversationId') ?? readString(runRecord.conversationId);
 
   if (!runId || !conversationId) {
     return null;
   }
 
   const run = readStartedPayload(runRecord, runId, clientRunId);
-  const timestamp = readEventString(record, context, 'timestamp');
+  const timestamp = readEventString(source, 'timestamp');
 
   if (!run) {
     return null;
@@ -358,20 +515,15 @@ function normalizeRunStarted(
   };
 }
 
-function normalizeRunReused(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const sourceRecord = payload ?? record;
-  const reusedRecord = readRecord(sourceRecord.reusedRun) ?? readRecord(sourceRecord.existingRun);
+function normalizeRunReused(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const reusedRecord = readRecord(source.payload.reusedRun) ?? readRecord(source.payload.existingRun);
 
   if (!identity) {
     return null;
   }
 
-  const status = mapRunStatus(sourceRecord.status);
+  const status = mapRunStatus(source.payload.status);
   const existingStatus = reusedRecord ? mapRunStatus(reusedRecord.status) : undefined;
   const conclusionSource = reusedRecord ? readConclusionSource(reusedRecord.conclusionSource) : undefined;
   const reportState = reusedRecord ? readReportState(reusedRecord.reportState) : undefined;
@@ -380,9 +532,9 @@ function normalizeRunReused(
   return {
     type: 'run_reused',
     ...identity,
-    ...(sourceRecord.duplicate === true ? { duplicate: true } : {}),
-    ...(sourceRecord.reused === true ? { reused: true } : {}),
-    ...(readString(sourceRecord.reason) ? { reason: readString(sourceRecord.reason) as string } : {}),
+    ...(source.payload.duplicate === true ? { duplicate: true } : {}),
+    ...(source.payload.reused === true ? { reused: true } : {}),
+    ...(readString(source.payload.reason) ? { reason: readString(source.payload.reason) as string } : {}),
     ...(status ? { status } : {}),
     ...(reusedRecord
       ? {
@@ -398,15 +550,13 @@ function normalizeRunReused(
   };
 }
 
-function normalizeStepStarted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const step = readPayloadRecord(record, 'step') ?? record;
-  const stepId = readString(step.stepId);
-  const title = readString(step.title);
-  const startedAt = readString(step.startedAt);
+function normalizeStepStarted(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const step = readPayloadRecord(source, 'step');
+  const stepId = step ? readString(step.stepId) : null;
+  const title = step ? readString(step.title) : null;
+  const startedAt = step ? readString(step.startedAt) : null;
+  const description = step ? readString(step.description) : null;
 
   if (!identity || !stepId || !title || !startedAt) {
     return null;
@@ -417,20 +567,17 @@ function normalizeStepStarted(
     ...identity,
     stepId,
     title,
-    ...(readString(step.description) ? { description: readString(step.description) as string } : {}),
+    ...(description ? { description } : {}),
     startedAt,
   };
 }
 
-function normalizeStepCompleted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const step = readPayloadRecord(record, 'stepDelta') ?? record;
-  const stepId = readString(step.stepId);
-  const completedAt = readString(step.completedAt);
-  const elapsedMs = readNumber(step.elapsedMs);
+function normalizeStepCompleted(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const step = readPayloadRecord(source, 'stepDelta');
+  const stepId = step ? readString(step.stepId) : null;
+  const completedAt = step ? readString(step.completedAt) : null;
+  const elapsedMs = step ? readNumber(step.elapsedMs) : undefined;
 
   if (!identity || !stepId || !completedAt) {
     return null;
@@ -445,16 +592,13 @@ function normalizeStepCompleted(
   };
 }
 
-function normalizeStepFailed(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const step = readPayloadRecord(record, 'stepDelta') ?? record;
-  const stepId = readString(step.stepId);
-  const errorMessage = readString(step.errorMessage);
-  const completedAt = readString(step.completedAt);
-  const elapsedMs = readNumber(step.elapsedMs);
+function normalizeStepFailed(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const step = readPayloadRecord(source, 'stepDelta');
+  const stepId = step ? readString(step.stepId) : null;
+  const errorMessage = step ? readString(step.errorMessage) : null;
+  const completedAt = step ? readString(step.completedAt) : null;
+  const elapsedMs = step ? readNumber(step.elapsedMs) : undefined;
 
   if (!identity || !stepId || !errorMessage || !completedAt) {
     return null;
@@ -470,12 +614,9 @@ function normalizeStepFailed(
   };
 }
 
-function normalizeToolStarted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const tool = readPayloadRecord(record, 'toolInvocation') ?? readRecord(record.tool);
+function normalizeToolStarted(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const tool = readPayloadRecord(source, 'toolInvocation');
 
   if (!identity || !tool) {
     return null;
@@ -494,16 +635,13 @@ function normalizeToolStarted(
   };
 }
 
-function normalizeToolCompleted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const tool = readPayloadRecord(record, 'toolDelta') ?? record;
-  const toolId = readString(tool.toolId);
-  const outputSummary = readString(tool.outputSummary);
-  const completedAt = readString(tool.completedAt);
-  const elapsedMs = readNumber(tool.elapsedMs);
+function normalizeToolCompleted(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const tool = readPayloadRecord(source, 'toolDelta');
+  const toolId = tool ? readString(tool.toolId) : null;
+  const outputSummary = tool ? readString(tool.outputSummary) : null;
+  const completedAt = tool ? readString(tool.completedAt) : null;
+  const elapsedMs = tool ? readNumber(tool.elapsedMs) : undefined;
 
   if (!identity || !toolId || !outputSummary || !completedAt) {
     return null;
@@ -519,16 +657,13 @@ function normalizeToolCompleted(
   };
 }
 
-function normalizeToolFailed(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const tool = readPayloadRecord(record, 'toolDelta') ?? record;
-  const toolId = readString(tool.toolId);
-  const errorMessage = readString(tool.errorMessage);
-  const completedAt = readString(tool.completedAt);
-  const elapsedMs = readNumber(tool.elapsedMs);
+function normalizeToolFailed(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const tool = readPayloadRecord(source, 'toolDelta');
+  const toolId = tool ? readString(tool.toolId) : null;
+  const errorMessage = tool ? readString(tool.errorMessage) : null;
+  const completedAt = tool ? readString(tool.completedAt) : null;
+  const elapsedMs = tool ? readNumber(tool.elapsedMs) : undefined;
 
   if (!identity || !toolId || !errorMessage || !completedAt) {
     return null;
@@ -544,13 +679,9 @@ function normalizeToolFailed(
   };
 }
 
-function normalizeChartReady(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const chartData = payload ? payload.chartData : record.chartData;
+function normalizeChartReady(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const chartData = source.payload.chartData;
 
   if (!identity || !chartData) {
     return null;
@@ -563,13 +694,9 @@ function normalizeChartReady(
   };
 }
 
-function normalizeConclusionDelta(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const delta = readString(payload ? payload.delta : record.delta);
+function normalizeConclusionDelta(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const delta = readString(source.payload.delta);
 
   if (!identity || delta === null) {
     return null;
@@ -582,14 +709,9 @@ function normalizeConclusionDelta(
   };
 }
 
-function normalizeConclusionCompleted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const sourceRecord = payload ?? record;
-  const conclusion = readString(sourceRecord.conclusion);
+function normalizeConclusionCompleted(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const conclusion = readString(source.payload.conclusion);
 
   if (!identity || conclusion === null) {
     return null;
@@ -599,18 +721,14 @@ function normalizeConclusionCompleted(
     type: 'conclusion_completed',
     ...identity,
     conclusion,
-    ...(sourceRecord.agentConclusion ? { agentConclusion: sourceRecord.agentConclusion as RunStartedPayload['agentConclusion'] } : {}),
-    ...(sourceRecord.modelTrace ? { modelTrace: sourceRecord.modelTrace as RunStartedPayload['modelTrace'] } : {}),
+    ...(source.payload.agentConclusion ? { agentConclusion: source.payload.agentConclusion as RunStartedPayload['agentConclusion'] } : {}),
+    ...(source.payload.modelTrace ? { modelTrace: source.payload.modelTrace as RunStartedPayload['modelTrace'] } : {}),
   };
 }
 
-function normalizeRagSourcesReady(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const sources = payload ? payload.sources : record.sources;
+function normalizeRagSourcesReady(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
+  const sources = source.payload.sources;
 
   if (!identity || !Array.isArray(sources)) {
     return null;
@@ -623,11 +741,8 @@ function normalizeRagSourcesReady(
   };
 }
 
-function normalizeReportPending(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): NormalizedRunEvent | null {
-  const identity = createIdentity(record, context);
+function normalizeReportPending(source: RunEventPayloadSource): NormalizedRunEvent | null {
+  const identity = createIdentity(source);
 
   if (!identity) {
     return null;
@@ -639,15 +754,10 @@ function normalizeReportPending(
   };
 }
 
-function normalizeRunCompleted(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): RunCompletedEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const sourceRecord = payload ?? record;
-  const completedAt = readString(sourceRecord.completedAt);
-  const elapsedMs = readNumber(sourceRecord.elapsedMs);
+function normalizeRunCompleted(source: RunEventPayloadSource): RunCompletedEvent | null {
+  const identity = createIdentity(source);
+  const completedAt = readString(source.payload.completedAt);
+  const elapsedMs = readNumber(source.payload.elapsedMs);
 
   if (!identity || !completedAt) {
     return null;
@@ -658,18 +768,13 @@ function normalizeRunCompleted(
     ...identity,
     completedAt,
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
-    ...(sourceRecord.modelTrace ? { modelTrace: sourceRecord.modelTrace as RunStartedPayload['modelTrace'] } : {}),
+    ...(source.payload.modelTrace ? { modelTrace: source.payload.modelTrace as RunStartedPayload['modelTrace'] } : {}),
   };
 }
 
-function normalizeRunFailed(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): RunFailedEvent | null {
-  const identity = createIdentity(record, context);
-  const payload = readPayload(record);
-  const sourceRecord = payload ?? record;
-  const errorMessage = readString(sourceRecord.errorMessage);
+function normalizeRunFailed(source: RunEventPayloadSource): RunFailedEvent | null {
+  const identity = createIdentity(source);
+  const errorMessage = readString(source.payload.errorMessage);
 
   if (!identity || !errorMessage) {
     return null;
@@ -679,19 +784,16 @@ function normalizeRunFailed(
     type: 'run_failed',
     ...identity,
     errorMessage,
-    ...(sourceRecord.modelTrace ? { modelTrace: sourceRecord.modelTrace as RunStartedPayload['modelTrace'] } : {}),
+    ...(source.payload.modelTrace ? { modelTrace: source.payload.modelTrace as RunStartedPayload['modelTrace'] } : {}),
   };
 }
 
-function normalizeRunStopped(
-  record: Record<string, unknown>,
-  context: RunEventBoundaryContext,
-): RunStoppedEvent | null {
-  if (context.source !== 'local') {
+function normalizeRunStopped(source: RunEventPayloadSource): RunStoppedEvent | null {
+  if (source.context.source !== 'local') {
     return null;
   }
 
-  const identity = createIdentity(record, context);
+  const identity = createIdentity(source);
 
   if (!identity) {
     return null;
@@ -720,23 +822,29 @@ export function normalizeRunEvent(
     return null;
   }
 
-  if (type === 'run_started') return normalizeRunStarted(record, context);
-  if (type === 'run_reused') return normalizeRunReused(record, context);
-  if (type === 'step_started') return normalizeStepStarted(record, context);
-  if (type === 'step_completed') return normalizeStepCompleted(record, context);
-  if (type === 'step_failed') return normalizeStepFailed(record, context);
-  if (type === 'tool_started') return normalizeToolStarted(record, context);
-  if (type === 'tool_completed') return normalizeToolCompleted(record, context);
-  if (type === 'tool_failed') return normalizeToolFailed(record, context);
-  if (type === 'chart_ready') return normalizeChartReady(record, context);
-  if (type === 'conclusion_delta') return normalizeConclusionDelta(record, context);
-  if (type === 'conclusion_completed') return normalizeConclusionCompleted(record, context);
-  if (type === 'rag_sources_ready') return normalizeRagSourcesReady(record, context);
-  if (type === 'report_pending') return normalizeReportPending(record, context);
-  if (type === 'run_completed') return normalizeRunCompleted(record, context);
-  if (type === 'run_failed') return normalizeRunFailed(record, context);
+  const source = createRunEventSource(record, type, context);
 
-  return normalizeRunStopped(record, context);
+  if (!source) {
+    return null;
+  }
+
+  if (source.type === 'run_started') return normalizeRunStarted(source);
+  if (source.type === 'run_reused') return normalizeRunReused(source);
+  if (source.type === 'step_started') return normalizeStepStarted(source);
+  if (source.type === 'step_completed') return normalizeStepCompleted(source);
+  if (source.type === 'step_failed') return normalizeStepFailed(source);
+  if (source.type === 'tool_started') return normalizeToolStarted(source);
+  if (source.type === 'tool_completed') return normalizeToolCompleted(source);
+  if (source.type === 'tool_failed') return normalizeToolFailed(source);
+  if (source.type === 'chart_ready') return normalizeChartReady(source);
+  if (source.type === 'conclusion_delta') return normalizeConclusionDelta(source);
+  if (source.type === 'conclusion_completed') return normalizeConclusionCompleted(source);
+  if (source.type === 'rag_sources_ready') return normalizeRagSourcesReady(source);
+  if (source.type === 'report_pending') return normalizeReportPending(source);
+  if (source.type === 'run_completed') return normalizeRunCompleted(source);
+  if (source.type === 'run_failed') return normalizeRunFailed(source);
+
+  return normalizeRunStopped(source);
 }
 
 export function createLocalRunStoppedEvent(runId: string): RunStoppedEvent {
