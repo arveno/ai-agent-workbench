@@ -1,12 +1,12 @@
-import type { RunViewModel } from '../../domain/run/view-model';
+import type { RunErrorBlockModel } from '../../utils/runPresentationModel';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 
 interface RunErrorBlockProps {
-  run: RunViewModel;
+  model: RunErrorBlockModel;
 }
 
-export function RunErrorBlock({ run }: RunErrorBlockProps) {
+export function RunErrorBlock({ model }: RunErrorBlockProps) {
   return (
     <Card size="sm" className="run-state-card run-error-card">
       <CardContent className="run-state-card-content">
@@ -15,7 +15,7 @@ export function RunErrorBlock({ run }: RunErrorBlockProps) {
         </Badge>
         <div className="run-state-card-copy">
           <h3>本轮执行失败</h3>
-          <p>{run.errorMessage || 'Agent Run 执行失败，请检查数据源或模型配置。'}</p>
+          <p>{model.message}</p>
         </div>
       </CardContent>
     </Card>

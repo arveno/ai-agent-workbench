@@ -182,16 +182,16 @@ export function ChatBlockRenderer(props: ChatBlockRendererProps) {
       );
       break;
     case 'streaming_assistant':
-      content = <StreamingAssistantBlock run={props.block.run} />;
+      content = <StreamingAssistantBlock model={props.block.model} />;
       break;
     case 'report_confirm':
-      content = <ConfirmActionCard run={props.block.run} />;
+      content = <ConfirmActionCard model={props.block.model} />;
       break;
     case 'run_error':
-      content = <RunErrorBlock run={props.block.run} />;
+      content = <RunErrorBlock model={props.block.model} />;
       break;
     case 'run_stopped':
-      content = <RunStoppedBlock run={props.block.run} />;
+      content = <RunStoppedBlock model={props.block.model} />;
       break;
     default:
       content = assertNever(props.block);

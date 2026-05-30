@@ -1,60 +1,53 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import { createRunDataSourceViewModel, getRunStatusLabel, getRunStatusTone } from '../../../utils/runViewModel';
+import { createRunDataSourcePanelModel } from '../../../utils/runPresentationModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
-function shouldShowDataSource(runIntent: string, toolCount: number): boolean {
-  return runIntent === 'data_analysis' || toolCount > 0;
-}
-
 export function DataSourceCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
+  const panelModel = createRunDataSourcePanelModel(currentRun);
 
-  if (!currentRun) {
+  if (!panelModel.hasRun) {
     return (
       <Card size="sm" className="right-card right-section">
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.database} size={16} />
-            <span>数据源使用</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>当前 Run 是否访问受控数据上下文</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
-            <strong>尚未访问数据源</strong>
-            数据源是 Agent 可用的服务端上下文，不是聊天输入框；发送数据分析类请求后这里会展示使用情况。
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  const hasDataSourceAccess = shouldShowDataSource(currentRun.intent, currentRun.toolInvocations.length);
-
-  if (!hasDataSourceAccess) {
+  if (panelModel.state === 'empty') {
     return (
       <Card size="sm" className="right-card right-section">
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.database} size={16} />
-            <span>数据源使用</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>本轮是否访问数据源</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
-            <strong>{currentRun.status === 'running' ? '等待数据源决策' : '本次未访问数据源'}</strong>
-            {currentRun.status === 'running' ? 'Planner 正在判断是否需要进入数据分析流程。' : '该请求没有使用服务端数据源上下文。'}
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         </CardContent>
       </Card>
     );
   }
-
-  const dataSourceView = createRunDataSourceViewModel(currentRun);
 
   return (
     <Card size="sm" className="right-card right-section">
@@ -62,12 +55,12 @@ export function DataSourceCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.database} size={16} />
-            <span>数据源使用</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>{dataSourceView.description}</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </div>
-        <Badge variant="outline" className={`run-status-badge run-status-badge-${getRunStatusTone(currentRun.status)}`}>
-          {getRunStatusLabel(currentRun.status)}
+        <Badge variant="outline" className={`run-status-badge run-status-badge-${panelModel.statusTone}`}>
+          {panelModel.statusLabel}
         </Badge>
       </CardHeader>
 
@@ -78,13 +71,13 @@ export function DataSourceCard() {
               <AppIcon icon={icons.database} size={14} />
             </span>
             <div>
-              <div className="datasource-name">{dataSourceView.name}</div>
-              <div className="datasource-subtitle">{dataSourceView.subtitle}</div>
+              <div className="datasource-name">{panelModel.name}</div>
+              <div className="datasource-subtitle">{panelModel.subtitle}</div>
             </div>
           </div>
 
           <div className="datasource-meta-grid">
-            {dataSourceView.metaItems.map((item) => (
+            {panelModel.metaItems.map((item) => (
               <div key={item.label}>
                 <div className="datasource-meta-label">{item.label}</div>
                 <div className="datasource-meta-value">{item.value}</div>

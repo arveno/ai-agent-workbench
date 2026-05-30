@@ -1,5 +1,5 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import { createRagSourcesView } from '../../../utils/ragSourcesViewModel';
+import { createRunSourcesPanelModel } from '../../../utils/runPresentationModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
@@ -11,14 +11,11 @@ export function RagSourcesCard() {
   const isRagSourcesLoading = useWorkbenchStore((state) => state.isRagSourcesLoading);
   const ragSourcesError = useWorkbenchStore((state) => state.ragSourcesError);
   const loadRagRetrievals = useWorkbenchStore((state) => state.loadRagRetrievals);
-  const view = createRagSourcesView({
+  const panelModel = createRunSourcesPanelModel({
     run: currentRun,
     isLoading: isRagSourcesLoading,
     errorMessage: ragSourcesError,
   });
-  const isMockRun = currentRun?.mode === 'mock';
-  const panelTitle = isMockRun ? '模拟来源' : view.title;
-  const panelDescription = isMockRun ? 'Mock RAG 来源，用于模拟模式验证。' : view.description;
 
   if (!currentRun) {
     return (
@@ -26,14 +23,14 @@ export function RagSourcesCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.search} size={16} />
-            <span>{panelTitle}</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>{panelDescription}</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
-            <strong>{view.emptyTitle}</strong>
-            {view.emptyDescription}
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         </CardContent>
       </Card>
@@ -46,56 +43,56 @@ export function RagSourcesCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.search} size={16} />
-            <span>{panelTitle}</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>{panelDescription}</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </div>
-        {view.sourceCount > 0 ? (
+        {panelModel.countLabel ? (
           <Badge variant="outline" className="right-card-count-badge">
-            {view.sourceCountLabel}
+            {panelModel.countLabel}
           </Badge>
         ) : null}
       </CardHeader>
 
       <CardContent className="right-card-content">
-        {view.isLoading ? (
+        {panelModel.state === 'loading' ? (
           <div className="right-panel-empty-state">
-            <strong>{view.loadingMessage}</strong>
-            正在恢复检索日志和来源片段。
+            <strong>{panelModel.loadingTitle}</strong>
+            {panelModel.loadingDescription}
           </div>
         ) : null}
 
-        {!view.isLoading && view.errorMessage ? (
+        {panelModel.state === 'error' ? (
           <div className="right-panel-empty-state">
-            <strong>RAG 来源加载失败</strong>
-            {view.errorMessage}
-            {view.canRetry ? (
+            <strong>{panelModel.errorTitle}</strong>
+            {panelModel.errorMessage}
+            {panelModel.canRetry ? (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  if (currentRun) {
-                    void loadRagRetrievals(currentRun.id);
+                  if (panelModel.actionRunId) {
+                    void loadRagRetrievals(panelModel.actionRunId);
                   }
                 }}
               >
-                {view.retryLabel}
+                {panelModel.retryLabel}
               </Button>
             ) : null}
           </div>
         ) : null}
 
-        {!view.isLoading && !view.errorMessage && view.isEmpty ? (
+        {panelModel.state === 'empty' ? (
           <div className="right-panel-empty-state">
-            <strong>{view.emptyTitle}</strong>
-            {view.emptyDescription}
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         ) : null}
 
-        {!view.isLoading && !view.errorMessage && !view.isEmpty ? (
+        {panelModel.state === 'ready' ? (
           <div className="rag-source-list">
-            {view.items.map((source) => (
+            {panelModel.items.map((source) => (
               <article key={source.id} className="rag-source-item">
                 <div className="rag-source-header">
                   <Badge variant="outline" className="rag-source-citation">
@@ -112,7 +109,7 @@ export function RagSourcesCard() {
                 </div>
 
                 <div className="rag-source-chunk-title">
-                  来源：{isMockRun ? source.sourceName.replaceAll('公开演示', '模拟') : source.sourceName}
+                  来源：{source.sourceName}
                 </div>
                 <p className="rag-source-preview">{source.snippet}</p>
 
