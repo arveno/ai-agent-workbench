@@ -9,6 +9,8 @@ import type { RunEvent } from '../domain/run/boundary';
 import type { RunViewModel } from '../domain/run/view-model';
 import type { ModelProviderId } from '../utils/modelCatalogMetadata';
 
+// Workbench store/session state keeps UI-safe RunViewModel only.
+// Canonical RunSnapshot stays at contract, runtime, persistence, and mapper boundaries.
 export type SessionId = string;
 
 export type {

@@ -1,1 +1,2 @@
-// Reserved for direct generated RunSnapshot imports, no runtime behavior here.
+// Intentionally no RunSnapshot re-export here.
+// Import canonical contract types from contracts/generated/workbench-contract.
