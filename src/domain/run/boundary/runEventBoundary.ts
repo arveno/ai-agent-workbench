@@ -1,5 +1,6 @@
 import type { RunSource } from '../../../types/rag';
-import { RunViewModelFactory, normalizeAgentConclusion } from '../view-model';
+import { normalizeAgentConclusion } from '../view-model/runConclusionMapper.ts';
+import { RunViewModelFactory } from '../view-model/runViewModelFactory.ts';
 import type {
   RunViewModelConclusionSource,
   RunViewModelIntent,
