@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import { createLocalRunStoppedEvent, normalizeRunEvent } from './runEventBoundary.ts';
 
 describe('RunEventBoundary', () => {
-  it('normalizes runtime flat run_started into a normalized event', () => {
+  it('rejects runtime flat run_started after runtime envelope cutover', () => {
     const event = normalizeRunEvent(
       {
         type: 'run_started',
@@ -25,6 +25,29 @@ describe('RunEventBoundary', () => {
       { source: 'runtime' },
     );
 
+    assert.equal(event, null);
+  });
+
+  it('keeps flat run_started compatibility limited to persistence source', () => {
+    const event = normalizeRunEvent(
+      {
+        type: 'run_started',
+        runId: 'run_canonical',
+        clientRunId: 'run_pending',
+        conversationId: 'conversation_1',
+        timestamp: '2026-05-29T00:00:00.000Z',
+        run: {
+          id: 'run_pending',
+          clientRunId: 'run_pending',
+          displayRunId: 'RUN-1',
+          mode: 'agent',
+          status: 'running',
+          prompt: 'flat restored run',
+        },
+      },
+      { source: 'persistence' },
+    );
+
     assert.equal(event?.type, 'run_started');
     assert.equal(event.runId, 'run_canonical');
     assert.equal(event.clientRunId, 'run_pending');
@@ -33,29 +56,45 @@ describe('RunEventBoundary', () => {
     assert.equal(event.run.displayRunId, 'RUN-1');
   });
 
-  it('normalizes future envelope run_started into the same event shape', () => {
+  it('normalizes runtime envelope run_started canonical RunSnapshot into a ViewModel payload', () => {
+    const canonicalRun = {
+      id: 'run_envelope',
+      conversationId: 'conversation_1',
+      clientRunId: 'run_pending',
+      mode: 'agent',
+      status: 'completed',
+      prompt: 'envelope run',
+      modelTrace: null,
+      reportState: 'hidden',
+      createdAt: '2026-05-29T00:00:00.000Z',
+      updatedAt: '2026-05-29T00:00:00.000Z',
+    };
     const event = normalizeRunEvent({
       type: 'run_started',
       runId: 'run_envelope',
       conversationId: 'conversation_1',
       timestamp: '2026-05-29T00:00:00.000Z',
       payload: {
-        run: {
-          id: 'run_envelope',
-          displayRunId: 'RUN-2',
-          mode: 'agent',
-          status: 'completed',
-          prompt: 'envelope run',
-        },
+        run: canonicalRun,
       },
-    });
+    }, { source: 'runtime' });
 
     assert.equal(event?.type, 'run_started');
     assert.equal(event.runId, 'run_envelope');
     assert.equal(event.conversationId, 'conversation_1');
     assert.equal(event.run.id, 'run_envelope');
+    assert.equal(event.run.conversationId, 'conversation_1');
     assert.equal(event.run.status, 'success');
-    assert.equal(event.run.displayRunId, 'RUN-2');
+    assert.equal(event.run.displayRunId, 'run_envelope');
+    assert.deepEqual(event.run.steps, []);
+    assert.deepEqual(event.run.toolInvocations, []);
+    assert.deepEqual(event.run.sources, []);
+    assert.equal(Object.hasOwn(event.run, 'chartData'), false);
+    assert.equal(Object.hasOwn(canonicalRun, 'steps'), false);
+    assert.equal(Object.hasOwn(canonicalRun, 'toolInvocations'), false);
+    assert.equal(Object.hasOwn(canonicalRun, 'sources'), false);
+    assert.equal(Object.hasOwn(canonicalRun, 'displayRunId'), false);
+    assert.equal(Object.hasOwn(canonicalRun, 'sessionId'), false);
   });
 
   it('uses persistence context to supply event-level identity', () => {
@@ -91,6 +130,28 @@ describe('RunEventBoundary', () => {
         conversationId: 'conversation_1',
         payload: null,
       }),
+      null,
+    );
+    assert.equal(
+      normalizeRunEvent(
+        {
+          type: 'run_started',
+          conversationId: 'conversation_1',
+          payload: {
+            run: {
+              id: 'run_payload_only',
+              conversationId: 'conversation_1',
+              mode: 'agent',
+              status: 'running',
+              modelTrace: null,
+              reportState: 'hidden',
+              createdAt: '2026-05-29T00:00:00.000Z',
+              updatedAt: '2026-05-29T00:00:00.000Z',
+            },
+          },
+        },
+        { source: 'runtime' },
+      ),
       null,
     );
   });
@@ -147,25 +208,29 @@ describe('RunEventBoundary', () => {
     const event = normalizeRunEvent({
       type: 'run_started',
       runId: 'run_canonical',
-      clientRunId: 'run_pending',
       conversationId: 'conversation_1',
+      timestamp: '2026-05-29T00:00:00.000Z',
       payload: {
         run: {
-          id: 'run_pending',
+          id: 'run_canonical',
+          conversationId: 'conversation_1',
           clientRunId: 'run_pending',
-          displayRunId: 'display_run',
           mode: 'agent',
           status: 'running',
           prompt: 'identity test',
+          modelTrace: null,
+          reportState: 'hidden',
+          createdAt: '2026-05-29T00:00:00.000Z',
+          updatedAt: '2026-05-29T00:00:00.000Z',
         },
       },
-    });
+    }, { source: 'runtime' });
 
     assert.equal(event?.type, 'run_started');
     assert.equal(event.runId, 'run_canonical');
     assert.equal(event.clientRunId, 'run_pending');
     assert.equal(event.run.id, 'run_canonical');
     assert.equal(event.run.clientRunId, 'run_pending');
-    assert.equal(event.run.displayRunId, 'display_run');
+    assert.equal(event.run.displayRunId, 'run_canonical');
   });
 });

@@ -635,6 +635,7 @@ const SSE_EVENT_SCHEMA_CASES = [
 ];
 
 const SSE_EVENT_ENVELOPE_FIELDS = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
+const CHART_DATA_FIELD = 'chartData';
 const SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS = [
   'run',
   'step',
@@ -705,6 +706,22 @@ function testRunSnapshotStatusContract(validate) {
       [fieldName]: value,
     });
   }
+
+  const runWithoutChartData = createRunSnapshotFixture('running');
+  assert.equal(Object.hasOwn(runWithoutChartData, 'chartData'), false);
+  validate.assertInvalid('objects/run-snapshot.schema.json', {
+    ...createRunSnapshotFixture('running'),
+    [CHART_DATA_FIELD]: null,
+  });
+  validate.assertValid('objects/run-snapshot.schema.json', {
+    ...createRunSnapshotFixture('running'),
+    chartData: {
+      title: '教学质量趋势',
+      chartType: 'bar',
+      labels: ['一班'],
+      series: [{ name: '平均分', values: [88] }],
+    },
+  });
 }
 
 function testRunSseEventContracts(validate) {
@@ -724,7 +741,15 @@ function testRunSseEventContracts(validate) {
   const runStartedConstraints = validate.getSchema('events/run-started-event.schema.json').allOf[1];
   assert.equal(runStartedConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
   assert.equal(Object.hasOwn(runStartedConstraints.properties.payload.properties.run, 'properties'), false);
-  assertRunStartedEventIdentity(createRunStartedEventFixture());
+  const runStartedEvent = createRunStartedEventFixture();
+  assertRunStartedEventIdentity(runStartedEvent);
+  assert.deepEqual(Object.keys(runStartedEvent).toSorted(), SSE_EVENT_ENVELOPE_FIELDS.toSorted());
+  assert.equal(Object.hasOwn(runStartedEvent.payload.run, 'chartData'), false);
+  assert.equal(Object.hasOwn(runStartedEvent.payload.run, 'sessionId'), false);
+  assert.equal(Object.hasOwn(runStartedEvent.payload.run, 'displayRunId'), false);
+  assert.equal(Object.hasOwn(runStartedEvent.payload.run, 'steps'), false);
+  assert.equal(Object.hasOwn(runStartedEvent.payload.run, 'toolInvocations'), false);
+  assert.equal(Object.hasOwn(runStartedEvent.payload.run, 'sources'), false);
   validate.assertInvalid('events/run-started-event.schema.json', {
     ...createRunStartedEventFixture(),
     run: createRunSnapshotFixture('running'),
@@ -736,6 +761,26 @@ function testRunSseEventContracts(validate) {
         ...createRunSnapshotFixture('running'),
         steps: [],
       },
+    },
+  });
+  validate.assertValid('events/run-started-event.schema.json', {
+    ...createRunStartedEventFixture(),
+    payload: {
+      run: {
+        ...createRunSnapshotFixture('running'),
+        chartData: {
+          title: '教学质量趋势',
+          chartType: 'bar',
+          labels: ['一班'],
+          series: [{ name: '平均分', values: [88] }],
+        },
+      },
+    },
+  });
+  validate.assertInvalid('events/chart-ready-event.schema.json', {
+    ...createChartReadyEventFixture(),
+    payload: {
+      [CHART_DATA_FIELD]: null,
     },
   });
 
