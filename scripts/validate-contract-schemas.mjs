@@ -26,6 +26,54 @@ function toSchemaRelativePath(filePath) {
   return path.relative(schemaDir, filePath).split(path.sep).join('/');
 }
 
+function getRootSchemaFields(schema) {
+  return ['type', 'properties', 'required', 'additionalProperties'].filter((field) => schema[field] !== undefined);
+}
+
+function isEventSchemaPath(relativePath) {
+  return relativePath.startsWith('events/') && relativePath.endsWith('.schema.json');
+}
+
+function isEnvelopeSchema(relativePath) {
+  return relativePath === 'events/run-sse-event-envelope.schema.json';
+}
+
+function validateCommonMetadata(schema, file) {
+  for (const field of ['$schema', '$id', 'title']) {
+    if (schema[field] === undefined) {
+      throw new Error(`${file} is missing ${field}.`);
+    }
+  }
+}
+
+function validateStrictObjectRoot(schema, file) {
+  for (const field of ['type', 'properties', 'required']) {
+    if (schema[field] === undefined) {
+      throw new Error(`${file} is missing ${field}.`);
+    }
+  }
+
+  if (schema.type !== 'object') {
+    throw new Error(`${file} must define a root object schema.`);
+  }
+
+  if (schema.additionalProperties !== false) {
+    throw new Error(`${file} must set additionalProperties: false.`);
+  }
+}
+
+function validateEventSchemaRoot(schema, file) {
+  if (!Array.isArray(schema.allOf) || schema.allOf.length === 0) {
+    throw new Error(`${file} must define allOf for event schema composition.`);
+  }
+
+  const rootSchemaFields = getRootSchemaFields(schema);
+
+  if (rootSchemaFields.length > 0) {
+    validateStrictObjectRoot(schema, file);
+  }
+}
+
 const schemaFiles = (await listSchemaFiles(schemaDir)).sort((a, b) =>
   toSchemaRelativePath(a).localeCompare(toSchemaRelativePath(b)),
 );
@@ -42,19 +90,14 @@ const schemas = [];
 for (const file of schemaFiles) {
   const schema = JSON.parse(await readFile(file, 'utf8'));
   const schemaRelativePath = toSchemaRelativePath(file);
+  const displayPath = path.relative(rootDir, file);
 
-  for (const field of ['$schema', '$id', 'title', 'type', 'properties', 'required']) {
-    if (schema[field] === undefined) {
-      throw new Error(`${path.relative(rootDir, file)} is missing ${field}.`);
-    }
-  }
+  validateCommonMetadata(schema, displayPath);
 
-  if (schema.type !== 'object') {
-    throw new Error(`${path.relative(rootDir, file)} must define a root object schema.`);
-  }
-
-  if (schema.additionalProperties !== false) {
-    throw new Error(`${path.relative(rootDir, file)} must set additionalProperties: false.`);
+  if (isEventSchemaPath(schemaRelativePath) && !isEnvelopeSchema(schemaRelativePath)) {
+    validateEventSchemaRoot(schema, displayPath);
+  } else {
+    validateStrictObjectRoot(schema, displayPath);
   }
 
   schemas.push({ file: schemaRelativePath, schema });

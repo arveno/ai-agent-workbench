@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -136,7 +136,22 @@ function renderRegistry(registry) {
   return lines.join('\n');
 }
 
+async function assertSchemaReferencesExist(registry) {
+  for (const [name, reference] of Object.entries(registry.schemaObjectReferences ?? {})) {
+    if (typeof reference.schema !== 'string' || !reference.schema.trim()) {
+      throw new Error(`schemaObjectReferences.${name}.schema must be a non-empty path.`);
+    }
+
+    try {
+      await access(path.join(rootDir, reference.schema));
+    } catch {
+      throw new Error(`schemaObjectReferences.${name}.schema references missing file: ${reference.schema}`);
+    }
+  }
+}
+
 const registry = parseSimpleYaml(await readFile(registryPath, 'utf8'));
+await assertSchemaReferencesExist(registry);
 await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, renderRegistry(registry));
 console.log(`Generated ${path.relative(rootDir, outputPath)}`);
