@@ -5,10 +5,8 @@ import type {
 } from '@/domain/run/view-model';
 import { RunViewModelFactory } from '@/domain/run/view-model';
 import { reduceRunChartData } from './runChartState';
-import {
-  normalizeAgentConclusion,
-  reduceRunConclusionState,
-} from './runConclusionState';
+import { normalizeAgentConclusion } from './runConclusionMapper';
+import { reduceRunConclusionState } from './runConclusionState';
 import { reduceRunReportState } from './runReportState';
 import { reduceRunSources } from './runSourcesState';
 import {
@@ -173,7 +171,23 @@ export function applyRunEventToViewModel(currentRun: RunViewModel | null, event:
   }
 
   if (event.type === 'conclusion_delta' || event.type === 'conclusion_completed') {
-    return withUpdatedAt(reduceRunConclusionState(currentRun, event));
+    if (event.type === 'conclusion_delta') {
+      return withUpdatedAt(reduceRunConclusionState(currentRun, event));
+    }
+
+    const agentConclusion = normalizeAgentConclusion(
+      event.conclusion,
+      event.agentConclusion,
+    );
+
+    return withUpdatedAt(
+      reduceRunConclusionState(currentRun, {
+        type: 'conclusion_completed',
+        conclusion: agentConclusion.plainText,
+        agentConclusion,
+        modelTrace: event.modelTrace,
+      }),
+    );
   }
 
   if (event.type === 'rag_sources_ready') {

@@ -21,7 +21,7 @@ import type {
 } from '@/domain/run/view-model';
 import { RunViewModelFactory } from '@/domain/run/view-model';
 import { applyRunEventToViewModel } from './runEventReducer';
-import { normalizeAgentConclusion } from './runConclusionState';
+import { normalizeAgentConclusion } from './runConclusionMapper';
 import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

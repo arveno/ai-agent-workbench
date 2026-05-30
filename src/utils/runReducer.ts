@@ -1,2 +1,2 @@
 export { applyRunEventToViewModel } from './runEventReducer';
-export { normalizeAgentConclusion } from './runConclusionState';
+export { normalizeAgentConclusion } from './runConclusionMapper';
