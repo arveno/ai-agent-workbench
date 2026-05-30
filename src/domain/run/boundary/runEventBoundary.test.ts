@@ -1,8 +1,122 @@
 /// <reference types="node" />
 
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import Ajv2020 from 'ajv/dist/2020.js';
+import type { RunSnapshot } from '../../../../contracts/generated/workbench-contract';
+import { demoConversationTemplates } from '../../../mocks/demoConversations.ts';
 import { createLocalRunStoppedEvent, normalizeRunEvent } from './runEventBoundary.ts';
+
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../');
+const schemaDir = path.join(rootDir, 'contracts/schemas');
+
+const CANONICAL_RUN_SNAPSHOT_UI_ONLY_FIELDS = [
+  'displayRunId',
+  'steps',
+  'toolInvocations',
+  'sources',
+  'sessionId',
+  'conclusionSource',
+] as const;
+
+function listSchemaFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      return listSchemaFiles(entryPath);
+    }
+
+    return entry.name.endsWith('.schema.json') ? [entryPath] : [];
+  });
+}
+
+function toSchemaRelativePath(filePath: string): string {
+  return path.relative(schemaDir, filePath).split(path.sep).join('/');
+}
+
+function createSchemaValidators() {
+  const ajv = new Ajv2020({
+    allErrors: true,
+    allowUnionTypes: true,
+    strict: true,
+    validateSchema: true,
+  });
+  const schemasByFile = new Map<string, Record<string, unknown>>();
+
+  const schemaFiles = listSchemaFiles(schemaDir).sort((a, b) =>
+    toSchemaRelativePath(a).localeCompare(toSchemaRelativePath(b)),
+  );
+
+  for (const file of schemaFiles) {
+    const schema = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    schemasByFile.set(toSchemaRelativePath(file), schema);
+    ajv.addSchema(schema);
+  }
+
+  return {
+    assertValid(file: string, data: unknown) {
+      const schema = schemasByFile.get(file);
+      assert.ok(schema, `Missing schema fixture: ${file}`);
+
+      const validate = ajv.compile(schema);
+      const isValid = validate(data);
+
+      if (!isValid) {
+        throw new Error(`${file} validation failed: ${ajv.errorsText(validate.errors, { separator: '\n' })}`);
+      }
+    },
+    assertInvalid(file: string, data: unknown) {
+      const schema = schemasByFile.get(file);
+      assert.ok(schema, `Missing schema fixture: ${file}`);
+
+      const validate = ajv.compile(schema);
+      assert.equal(validate(data), false, `${file} should reject invalid fixture`);
+    },
+  };
+}
+
+function createRunStartedEnvelope(run: RunSnapshot) {
+  return {
+    type: 'run_started',
+    runId: run.id,
+    conversationId: run.conversationId,
+    timestamp: run.createdAt,
+    payload: {
+      run,
+    },
+  };
+}
+
+function getDemoSeedRunCases(): Array<{ templateId: string; run: RunSnapshot }> {
+  return demoConversationTemplates.flatMap((template) =>
+    template.seed_runs.map((run) => ({
+      templateId: template.id,
+      run,
+    })),
+  );
+}
+
+function getFirstDemoSeedRun(): RunSnapshot {
+  const [firstCase] = getDemoSeedRunCases();
+  assert.ok(firstCase, 'demo seed run fixtures must not be empty');
+  return firstCase.run;
+}
+
+function assertCanonicalRunSnapshotHasNoUiOnlyFields(run: RunSnapshot): void {
+  const record = run as unknown as Record<string, unknown>;
+
+  for (const fieldName of CANONICAL_RUN_SNAPSHOT_UI_ONLY_FIELDS) {
+    assert.equal(Object.hasOwn(record, fieldName), false, `${fieldName} must not exist on canonical RunSnapshot seed`);
+  }
+
+  assert.notEqual(record.chartData, null, 'chartData must be omitted when empty, not set to null');
+}
+
+const schemaValidator = createSchemaValidators();
 
 describe('RunEventBoundary', () => {
   it('rejects runtime flat run_started after runtime envelope cutover', () => {
@@ -95,6 +209,80 @@ describe('RunEventBoundary', () => {
     assert.equal(Object.hasOwn(canonicalRun, 'sources'), false);
     assert.equal(Object.hasOwn(canonicalRun, 'displayRunId'), false);
     assert.equal(Object.hasOwn(canonicalRun, 'sessionId'), false);
+  });
+
+  it('validates actual demo seed runs as canonical RunSnapshot fixtures', () => {
+    const demoSeedRuns = getDemoSeedRunCases();
+
+    assert.ok(demoSeedRuns.length > 0, 'demo seed run fixtures must not be empty');
+
+    for (const { templateId, run } of demoSeedRuns) {
+      assert.equal(run.conversationId, `demo_${templateId}`);
+      assertCanonicalRunSnapshotHasNoUiOnlyFields(run);
+      schemaValidator.assertValid('objects/run-snapshot.schema.json', run);
+      schemaValidator.assertValid('events/run-started-event.schema.json', createRunStartedEnvelope(run));
+    }
+  });
+
+  it('maps actual demo seed run_started envelopes into RunViewModel payloads', () => {
+    for (const { run } of getDemoSeedRunCases()) {
+      const event = normalizeRunEvent(createRunStartedEnvelope(run), { source: 'runtime' });
+
+      assert.equal(event?.type, 'run_started');
+      assert.equal(event.runId, run.id);
+      assert.equal(event.conversationId, run.conversationId);
+      assert.equal(event.run.id, run.id);
+      assert.equal(event.run.conversationId, run.conversationId);
+      assert.equal(event.run.displayRunId, run.id);
+      assert.deepEqual(event.run.steps, []);
+      assert.deepEqual(event.run.toolInvocations, []);
+      assert.deepEqual(event.run.sources, []);
+      assert.equal(Array.isArray(event.run.steps), true);
+      assert.equal(Array.isArray(event.run.toolInvocations), true);
+      assert.equal(Array.isArray(event.run.sources), true);
+      assertCanonicalRunSnapshotHasNoUiOnlyFields(run);
+
+      if (Object.hasOwn(run, 'chartData')) {
+        assert.deepEqual(event.run.chartData, run.chartData);
+      } else {
+        assert.equal(Object.hasOwn(event.run, 'chartData'), false);
+      }
+    }
+  });
+
+  it('rejects UI-only fields on canonical RunSnapshot schema', () => {
+    const run = getFirstDemoSeedRun();
+    const invalidFields: Array<[string, unknown]> = [
+      ['displayRunId', run.id],
+      ['steps', []],
+      ['toolInvocations', []],
+      ['sources', []],
+      ['sessionId', run.conversationId],
+      ['conclusionSource', 'fallback'],
+      ['chartData', null],
+    ];
+
+    for (const [fieldName, value] of invalidFields) {
+      schemaValidator.assertInvalid('objects/run-snapshot.schema.json', {
+        ...run,
+        [fieldName]: value,
+      });
+    }
+  });
+
+  it('normalizes canonical persistence run_started records into RunViewModel payloads', () => {
+    const run = getFirstDemoSeedRun();
+    const event = normalizeRunEvent(createRunStartedEnvelope(run), { source: 'persistence' });
+
+    assert.equal(event?.type, 'run_started');
+    assert.equal(event.runId, run.id);
+    assert.equal(event.conversationId, run.conversationId);
+    assert.equal(event.run.id, run.id);
+    assert.equal(event.run.conversationId, run.conversationId);
+    assert.equal(event.run.displayRunId, run.id);
+    assert.deepEqual(event.run.steps, []);
+    assert.deepEqual(event.run.toolInvocations, []);
+    assert.deepEqual(event.run.sources, []);
   });
 
   it('uses persistence context to supply event-level identity', () => {

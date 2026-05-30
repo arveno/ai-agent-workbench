@@ -1,3 +1,4 @@
+import type { RunSnapshot } from '../../contracts/generated/workbench-contract';
 import type { RunSource } from './rag';
 
 export type JsonObject = Record<string, unknown>;
@@ -99,7 +100,7 @@ export interface DemoConversationTemplateRecord {
   category: DemoTemplateCategory;
   visibility: DemoTemplateVisibility;
   seed_messages: DemoSeedMessage[];
-  seed_runs: JsonObject[];
+  seed_runs: RunSnapshot[];
   seed_reports: JsonObject[];
   sort_order: number;
   is_enabled: boolean;
