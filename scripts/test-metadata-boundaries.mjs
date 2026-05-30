@@ -150,6 +150,9 @@ async function createSchemaValidators() {
   }
 
   return {
+    getSchemaFiles() {
+      return [...schemasByFile.keys()].sort((left, right) => left.localeCompare(right));
+    },
     getSchema(file) {
       const schema = schemasByFile.get(file);
       assert.ok(schema, `Missing schema fixture: ${file}`);
@@ -634,6 +637,8 @@ const SSE_EVENT_SCHEMA_CASES = [
   ['events/run-failed-event.schema.json', 'run_failed', createRunFailedEventFixture],
 ];
 
+const SSE_EVENT_ENVELOPE_SCHEMA_FILE = 'events/run-sse-event-envelope.schema.json';
+const SSE_EVENT_ENVELOPE_REF = 'run-sse-event-envelope.schema.json';
 const SSE_EVENT_ENVELOPE_FIELDS = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
 const CHART_DATA_FIELD = 'chartData';
 const SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS = [
@@ -658,29 +663,63 @@ const SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS = [
   'elapsedMs',
 ];
 
-function assertSseEventSchemaConvention(validate, file, eventType) {
-  const eventSchema = validate.getSchema(file);
-  const envelopeRef = eventSchema.allOf?.[0];
-  const eventConstraints = eventSchema.allOf?.[1];
+function getSseEventSchemaFiles(validate) {
+  return validate.getSchemaFiles().filter((file) =>
+    file.startsWith('events/') &&
+    file.endsWith('.schema.json') &&
+    file !== SSE_EVENT_ENVELOPE_SCHEMA_FILE,
+  );
+}
 
-  assert.equal(envelopeRef?.$ref, 'run-sse-event-envelope.schema.json');
-  assert.equal(eventConstraints?.properties?.type?.const, eventType);
-  assert.deepEqual(eventSchema.required.toSorted(), SSE_EVENT_ENVELOPE_FIELDS.toSorted());
-  assert.deepEqual(Object.keys(eventSchema.properties).sort(), SSE_EVENT_ENVELOPE_FIELDS.toSorted());
-  assert.equal(eventConstraints.required.includes('payload'), true);
-  assert.equal(eventConstraints.properties.payload.type, 'object');
-  assert.equal(eventConstraints.properties.payload.additionalProperties, false);
+function assertEnvelopeShellConvention(eventSchema, file) {
+  if (eventSchema.properties === undefined) {
+    return;
+  }
 
-  for (const fieldName of SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS) {
-    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
+  assert.deepEqual(
+    Object.keys(eventSchema.properties).sort(),
+    SSE_EVENT_ENVELOPE_FIELDS.toSorted(),
+    `${file} root properties must contain only SSE envelope fields`,
+  );
+
+  if (eventSchema.required !== undefined) {
+    assert.deepEqual(
+      eventSchema.required.toSorted(),
+      SSE_EVENT_ENVELOPE_FIELDS.toSorted(),
+      `${file} root required must contain only SSE envelope fields`,
+    );
   }
 
   for (const fieldName of SSE_EVENT_ENVELOPE_FIELDS) {
     assert.deepEqual(Object.keys(eventSchema.properties[fieldName]), ['$ref']);
     assert.equal(
       eventSchema.properties[fieldName].$ref,
-      `run-sse-event-envelope.schema.json#/properties/${fieldName}`,
+      `${SSE_EVENT_ENVELOPE_REF}#/properties/${fieldName}`,
     );
+  }
+
+  for (const fieldName of SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS) {
+    assert.equal(Object.hasOwn(eventSchema.properties, fieldName), false);
+  }
+}
+
+function assertSseEventSchemaConvention(validate, file) {
+  const eventSchema = validate.getSchema(file);
+  const envelopeRef = eventSchema.allOf?.[0];
+  const eventConstraints = eventSchema.allOf?.[1];
+  const eventType = eventConstraints?.properties?.type?.const;
+  const payload = eventConstraints?.properties?.payload;
+
+  assert.ok(Array.isArray(eventSchema.allOf), `${file} must define allOf`);
+  assert.equal(envelopeRef?.$ref, SSE_EVENT_ENVELOPE_REF);
+  assert.equal(typeof eventType, 'string', `${file} must constrain event type with type.const`);
+  assert.equal(eventConstraints?.required?.includes('payload'), true);
+  assert.equal(payload?.type, 'object');
+  assert.equal(payload?.additionalProperties, false);
+  assertEnvelopeShellConvention(eventSchema, file);
+
+  for (const fieldName of SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS) {
+    assert.equal(Object.hasOwn(eventSchema, fieldName), false);
   }
 }
 
@@ -725,8 +764,23 @@ function testRunSnapshotStatusContract(validate) {
 }
 
 function testRunSseEventContracts(validate) {
+  const discoveredEventSchemaFiles = getSseEventSchemaFiles(validate);
+  const fixtureEventSchemaFiles = SSE_EVENT_SCHEMA_CASES.map(([file]) => file).sort((left, right) =>
+    left.localeCompare(right),
+  );
+
+  for (const file of discoveredEventSchemaFiles) {
+    assertSseEventSchemaConvention(validate, file);
+  }
+
+  assert.deepEqual(
+    discoveredEventSchemaFiles,
+    fixtureEventSchemaFiles,
+    'SSE event fixture cases must cover every discovered event schema',
+  );
+
   for (const [file, eventType, createFixture] of SSE_EVENT_SCHEMA_CASES) {
-    assertSseEventSchemaConvention(validate, file, eventType);
+    assert.equal(validate.getSchema(file).allOf[1].properties.type.const, eventType);
     validate.assertValid(file, createFixture());
     validate.assertInvalid(file, {
       ...createFixture(),

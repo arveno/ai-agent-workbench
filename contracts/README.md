@@ -4,7 +4,7 @@
 
 ## 事实源
 
-- `contracts/schemas/*.schema.json`：机器可读对象契约，用于 schema validation 和生成前端可引用类型。
+- `contracts/schemas/**/*.schema.json`：机器可读契约树，按 `objects/`、`events/` 和后续 `api/` 分层，用于 schema validation 和生成前端可引用类型。
 - `contracts/field-registry.yml`：人读字段说明、历史字段总账和高风险字段备注；不作为机器校验主链路。
 - `contracts/generated/workbench-contract.ts`：由 schema 生成的 TypeScript 类型。
 - `contracts/generated/field-registry.md`：由字段总账生成的人读字段表。
@@ -13,7 +13,7 @@
 
 新增或修改业务字段时，必须先更新 `field-registry.yml` 和对应 schema，再更新后端输出、前端 type、mapper 和 ViewModel。组件层只能消费 ViewModel，不得绕过 mapper 读取 raw payload 或旧字段 fallback。
 
-新增 schema 对象必须能在 `field-registry.yml` 的人读说明层面被发现；字段细节不得复制成第二事实源，必须以对应 `contracts/schemas/*.schema.json` 为准。
+新增 schema 对象必须能在 `field-registry.yml` 的人读说明层面被发现；字段细节不得复制成第二事实源，必须以对应 `contracts/schemas/**/*.schema.json` 为准。
 
 职责边界：
 
