@@ -1,4 +1,5 @@
 import type { RunSource } from '../../../types/rag';
+import { normalizeAgentConclusion } from '../view-model';
 import type {
   RunViewModelConclusionSource,
   RunViewModelIntent,
@@ -448,6 +449,11 @@ function readStartedPayload(
   const conclusionSource = readConclusionSource(sourceRecord.conclusionSource);
   const reportState = readReportState(sourceRecord.reportState);
 
+  const agentConclusion = normalizeAgentConclusion(
+    conclusion ?? '',
+    sourceRecord.agentConclusion,
+  );
+
   return {
     id: runId,
     ...(clientRunId ? { clientRunId } : {}),
@@ -462,9 +468,9 @@ function readStartedPayload(
     ...(Array.isArray(sourceRecord.toolInvocations) ? { toolInvocations: sourceRecord.toolInvocations as RunStartedPayload['toolInvocations'] } : {}),
     ...(Array.isArray(sourceRecord.sources) ? { sources: sourceRecord.sources as RunSource[] } : {}),
     ...(sourceRecord.chartData ? { chartData: sourceRecord.chartData as NonNullable<RunStartedPayload['chartData']> } : {}),
-    ...(conclusion ? { conclusion } : {}),
+    ...(agentConclusion.plainText ? { conclusion: agentConclusion.plainText } : {}),
     ...(conclusionSource ? { conclusionSource } : {}),
-    ...(sourceRecord.agentConclusion ? { agentConclusion: sourceRecord.agentConclusion as RunStartedPayload['agentConclusion'] } : {}),
+    ...(agentConclusion.plainText ? { agentConclusion } : {}),
     ...(sourceRecord.modelTrace ? { modelTrace: sourceRecord.modelTrace as RunStartedPayload['modelTrace'] } : {}),
     ...(reportState ? { reportState } : {}),
     ...(readString(sourceRecord.createdAt) ? { createdAt: readString(sourceRecord.createdAt) as string } : {}),
@@ -717,11 +723,16 @@ function normalizeConclusionCompleted(source: RunEventPayloadSource): Normalized
     return null;
   }
 
+  const agentConclusion = normalizeAgentConclusion(
+    conclusion,
+    source.payload.agentConclusion,
+  );
+
   return {
     type: 'conclusion_completed',
     ...identity,
-    conclusion,
-    ...(source.payload.agentConclusion ? { agentConclusion: source.payload.agentConclusion as RunStartedPayload['agentConclusion'] } : {}),
+    conclusion: agentConclusion.plainText,
+    agentConclusion,
     ...(source.payload.modelTrace ? { modelTrace: source.payload.modelTrace as RunStartedPayload['modelTrace'] } : {}),
   };
 }
