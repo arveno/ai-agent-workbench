@@ -9,6 +9,7 @@ import Ajv2020 from 'ajv/dist/2020.js';
 const require = createRequire(import.meta.url);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schemaDir = path.join(rootDir, 'contracts/schemas');
+const typescript = require('typescript');
 
 async function listSchemaFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -45,12 +46,31 @@ function requireCommonJsFile(filePath, stubs = {}) {
   return loadedModule.exports;
 }
 
+function requireTypeScriptFile(filePath) {
+  const source = readFileSync(filePath, 'utf8');
+  const { outputText } = typescript.transpileModule(source, {
+    compilerOptions: {
+      esModuleInterop: true,
+      module: typescript.ModuleKind.CommonJS,
+      target: typescript.ScriptTarget.ES2022,
+      verbatimModuleSyntax: false,
+    },
+    fileName: filePath,
+  });
+  const loadedModule = new Module(filePath);
+  loadedModule.filename = filePath;
+  loadedModule.paths = Module._nodeModulePaths(path.dirname(filePath));
+  loadedModule._compile(outputText, filePath);
+  return loadedModule.exports;
+}
+
 const reportBoundary = require(path.join(rootDir, 'tencent/functions/workbench-reports/metadata-boundary.js'));
 const evaluationBoundary = require(path.join(rootDir, 'tencent/functions/workbench-evaluations/metadata-boundary.js'));
 const modelLayer = requireCommonJsFile(
   path.join(rootDir, 'tencent/functions/_shared/langchainModelLayer.js'),
   { '@langchain/openai': { ChatOpenAI: class ChatOpenAI {} } },
 );
+const demoConversations = requireTypeScriptFile(path.join(rootDir, 'src/mocks/demoConversations.ts'));
 
 const RUN_ID = '123e4567-e89b-12d3-a456-426614174000';
 const REQUEST_RUN_ID = '223e4567-e89b-12d3-a456-426614174000';
@@ -100,6 +120,39 @@ const RUN_SOURCE = {
   preview: '与问题相关的知识库内容。',
   sourceType: 'knowledge',
   createdAt: CREATED_AT,
+};
+
+const RUN_PLAN = {
+  intent: 'data_analysis',
+  shouldUseDataAnalysis: true,
+  metric: 'warning_count',
+  groupBy: 'subject',
+  timeRangeLabel: '2026-05',
+  comparison: 'none',
+  reason: '用户在请求教学质量相关的数据分析。',
+};
+
+const RUN_DATA_SOURCE = {
+  provider: 'cloudbase_mysql',
+  name: 'CloudBase MySQL / teaching_metrics',
+  typeLabel: 'CloudBase MySQL',
+  schema: 'public_demo',
+  tableName: 'teaching_metrics',
+  tableCount: 1,
+};
+
+const RUN_CHART_DATA = {
+  title: '教学质量趋势',
+  chartType: 'bar',
+  config: {
+    xField: 'dimension',
+    yField: 'value',
+    metric: 'warning_count',
+    groupBy: 'subject',
+  },
+  labels: ['一班'],
+  series: [{ name: '平均分', values: [88] }],
+  summary: '已生成 1 个数据点，图表类型为 bar。',
 };
 
 const MALICIOUS_MODEL_TRACE = {
@@ -550,12 +603,7 @@ function createToolFailedEventFixture() {
 
 function createChartReadyEventFixture() {
   return createEventEnvelope('chart_ready', {
-    chartData: {
-      title: '教学质量趋势',
-      chartType: 'bar',
-      labels: ['一班'],
-      series: [{ name: '平均分', values: [88] }],
-    },
+    chartData: RUN_CHART_DATA,
   });
 }
 
@@ -723,6 +771,82 @@ function assertSseEventSchemaConvention(validate, file) {
   }
 }
 
+function testRunSnapshotCoreObjectSchemas(validate) {
+  const runSnapshotSchema = validate.getSchema('objects/run-snapshot.schema.json');
+  assert.equal(runSnapshotSchema.properties.plan.$ref, 'run-plan.schema.json');
+  assert.equal(runSnapshotSchema.properties.dataSource.$ref, 'run-data-source.schema.json');
+  assert.equal(runSnapshotSchema.properties.chartData.$ref, 'run-chart-data.schema.json');
+
+  validate.assertValid('objects/run-plan.schema.json', RUN_PLAN);
+  validate.assertInvalid('objects/run-plan.schema.json', {
+    ...RUN_PLAN,
+    steps: [],
+  });
+
+  validate.assertValid('objects/run-data-source.schema.json', RUN_DATA_SOURCE);
+  validate.assertInvalid('objects/run-data-source.schema.json', {
+    ...RUN_DATA_SOURCE,
+    provider: 'unknown',
+  });
+
+  validate.assertValid('objects/run-chart-data.schema.json', RUN_CHART_DATA);
+  validate.assertInvalid('objects/run-chart-data.schema.json', {
+    ...RUN_CHART_DATA,
+    config: {
+      ...RUN_CHART_DATA.config,
+      unknown: true,
+    },
+  });
+
+  validate.assertValid('objects/run-snapshot.schema.json', {
+    ...createRunSnapshotFixture('completed'),
+    plan: RUN_PLAN,
+    dataSource: RUN_DATA_SOURCE,
+    chartData: RUN_CHART_DATA,
+  });
+  validate.assertInvalid('objects/run-snapshot.schema.json', {
+    ...createRunSnapshotFixture('completed'),
+    plan: {
+      ...RUN_PLAN,
+      unknown: true,
+    },
+  });
+  validate.assertInvalid('objects/run-snapshot.schema.json', {
+    ...createRunSnapshotFixture('completed'),
+    dataSource: {
+      ...RUN_DATA_SOURCE,
+      unknown: true,
+    },
+  });
+  validate.assertInvalid('objects/run-snapshot.schema.json', {
+    ...createRunSnapshotFixture('completed'),
+    chartData: null,
+  });
+}
+
+function testDemoSeedRunSnapshotContracts(validate) {
+  const templates = demoConversations.demoConversationTemplates;
+  let seedRunCount = 0;
+  let chartDataSeedCount = 0;
+
+  assert.equal(Array.isArray(templates), true);
+
+  for (const template of templates) {
+    for (const seedRun of template.seed_runs ?? []) {
+      seedRunCount += 1;
+      validate.assertValid('objects/run-snapshot.schema.json', seedRun);
+
+      if (Object.hasOwn(seedRun, CHART_DATA_FIELD)) {
+        chartDataSeedCount += 1;
+        validate.assertValid('objects/run-chart-data.schema.json', seedRun.chartData);
+      }
+    }
+  }
+
+  assert.ok(seedRunCount > 0, 'demo seed must include RunSnapshot records');
+  assert.ok(chartDataSeedCount > 0, 'demo seed must cover chartData RunSnapshot records');
+}
+
 function testRunSnapshotStatusContract(validate) {
   for (const status of ['pending', 'running', 'completed', 'failed', 'stopped']) {
     validate.assertValid('objects/run-snapshot.schema.json', createRunSnapshotFixture(status));
@@ -754,12 +878,7 @@ function testRunSnapshotStatusContract(validate) {
   });
   validate.assertValid('objects/run-snapshot.schema.json', {
     ...createRunSnapshotFixture('running'),
-    chartData: {
-      title: '教学质量趋势',
-      chartType: 'bar',
-      labels: ['一班'],
-      series: [{ name: '平均分', values: [88] }],
-    },
+    chartData: RUN_CHART_DATA,
   });
 }
 
@@ -795,6 +914,11 @@ function testRunSseEventContracts(validate) {
   const runStartedConstraints = validate.getSchema('events/run-started-event.schema.json').allOf[1];
   assert.equal(runStartedConstraints.properties.payload.properties.run.$ref, '../objects/run-snapshot.schema.json');
   assert.equal(Object.hasOwn(runStartedConstraints.properties.payload.properties.run, 'properties'), false);
+  const chartReadyConstraints = validate.getSchema('events/chart-ready-event.schema.json').allOf[1];
+  assert.equal(
+    chartReadyConstraints.properties.payload.properties.chartData.$ref,
+    '../objects/run-chart-data.schema.json',
+  );
   const runStartedEvent = createRunStartedEventFixture();
   assertRunStartedEventIdentity(runStartedEvent);
   assert.deepEqual(Object.keys(runStartedEvent).toSorted(), SSE_EVENT_ENVELOPE_FIELDS.toSorted());
@@ -822,12 +946,7 @@ function testRunSseEventContracts(validate) {
     payload: {
       run: {
         ...createRunSnapshotFixture('running'),
-        chartData: {
-          title: '教学质量趋势',
-          chartType: 'bar',
-          labels: ['一班'],
-          series: [{ name: '平均分', values: [88] }],
-        },
+        chartData: RUN_CHART_DATA,
       },
     },
   });
@@ -888,6 +1007,8 @@ testEvaluationCreateMetadata(validate);
 testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
+testRunSnapshotCoreObjectSchemas(validate);
+testDemoSeedRunSnapshotContracts(validate);
 testRunSnapshotStatusContract(validate);
 testRunSseEventContracts(validate);
 

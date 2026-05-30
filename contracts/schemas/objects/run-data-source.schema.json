@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-data-source.schema.json",
+  "title": "RunDataSource",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["provider", "name", "typeLabel", "schema"],
+  "properties": {
+    "provider": {
+      "type": "string",
+      "enum": ["cloudbase_mysql"],
+      "description": "runtime 当前使用的 canonical 数据源 provider。"
+    },
+    "name": {
+      "type": "string",
+      "description": "数据源快照名称。"
+    },
+    "typeLabel": {
+      "type": "string",
+      "description": "数据源类型的用户可读标签。"
+    },
+    "schema": {
+      "type": "string",
+      "description": "数据源 schema 或知识库表集合标签。"
+    },
+    "tableCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "数据源中参与当前 Run 的表数量。"
+    },
+    "tableName": {
+      "type": "string",
+      "description": "runtime 当前绑定的表名或表集合标签。"
+    }
+  }
+}

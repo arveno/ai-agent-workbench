@@ -233,17 +233,17 @@ objects:
         source: "Agent Run request"
         description: "当前 Run 捕获的用户输入。"
       plan:
-        type: "object"
+        type: "RunPlan"
         required: "no"
         source: "Agent Run planner"
         description: "runtime plan 快照；plan 细节不是 UI ViewModel 契约。"
       dataSource:
-        type: "object"
+        type: "RunDataSource"
         required: "no"
         source: "Agent Run runtime"
         description: "runtime 数据源快照。"
       chartData:
-        type: "object"
+        type: "RunChartData"
         required: "no"
         source: "Agent Run runtime"
         description: "当前 Run 产出的 canonical 图表 payload。"
@@ -388,6 +388,24 @@ schemaObjectReferences:
     owner: "Source Lineage mapper"
     schema: "contracts/schemas/objects/run-source.schema.json"
     summary: "Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunPlan:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Run"
+    owner: "Agent Run planner"
+    schema: "contracts/schemas/objects/run-plan.schema.json"
+    summary: "RunSnapshot.plan canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunDataSource:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run runtime"
+    schema: "contracts/schemas/objects/run-data-source.schema.json"
+    summary: "RunSnapshot.dataSource canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunChartData:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Run"
+    owner: "Agent Run runtime"
+    schema: "contracts/schemas/objects/run-chart-data.schema.json"
+    summary: "RunSnapshot.chartData 与 chart_ready.payload.chartData 共用的 canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
   RunSseEventEnvelope:
     lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
     coreObject: "Event"
