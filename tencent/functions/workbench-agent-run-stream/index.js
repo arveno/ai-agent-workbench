@@ -423,24 +423,26 @@ function releaseIdempotencyGuard(key) {
 }
 
 function createRunReusePayload(context, existingRun, reason) {
+  const reusedRun = existingRun ? {
+    id: existingRun.id,
+    status: existingRun.status,
+    conclusionSource: existingRun.conclusionSource,
+    reportState: existingRun.reportState,
+    completedAt: existingRun.completedAt,
+  } : null;
+
   return {
     type: 'run_reused',
-    runId: existingRun?.id || null,
-    usageId: existingRun?.usageId || null,
-    clientRunId: context.clientRunId,
-    conversationId: existingRun?.conversationId || context.conversationId,
+    runId: existingRun?.id ?? context.runId,
+    conversationId: existingRun?.conversationId ?? context.conversationId,
     timestamp: new Date().toISOString(),
-    duplicate: true,
-    reused: true,
-    reason,
-    status: existingRun?.status || 'running',
-    existingRun: existingRun ? {
-      id: existingRun.id,
-      status: existingRun.status,
-      conclusionSource: existingRun.conclusionSource,
-      reportState: existingRun.reportState,
-      completedAt: existingRun.completedAt,
-    } : null,
+    payload: {
+      duplicate: true,
+      reused: true,
+      reason,
+      status: existingRun?.status ?? 'running',
+      reusedRun,
+    },
   };
 }
 
@@ -962,15 +964,141 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
 }
 
 function createRunEvent(type, context, extra = {}) {
+  const timestamp = new Date().toISOString();
+
   return {
     type,
     runId: context.runId,
-    usageId: context.usageId,
-    clientRunId: context.clientRunId,
     conversationId: context.conversationId,
-    timestamp: new Date().toISOString(),
-    ...extra,
+    timestamp,
+    payload: createRunEventPayload(type, extra),
   };
+}
+
+function createRunEventPayload(type, extra = {}) {
+  if (type === 'run_started') {
+    return {
+      run: extra.run,
+    };
+  }
+
+  if (type === 'step_started') {
+    return {
+      step: {
+        stepId: extra.stepId,
+        title: extra.title,
+        description: extra.description,
+        startedAt: extra.startedAt,
+        ...(extra.metadata ? { metadata: extra.metadata } : {}),
+      },
+    };
+  }
+
+  if (type === 'step_completed') {
+    return {
+      stepDelta: {
+        stepId: extra.stepId,
+        completedAt: extra.completedAt,
+        ...(typeof extra.elapsedMs === 'number' ? { elapsedMs: extra.elapsedMs } : {}),
+        ...(extra.plannerSource ? { plannerSource: extra.plannerSource } : {}),
+        ...(Object.prototype.hasOwnProperty.call(extra, 'fallbackReason') ? { fallbackReason: extra.fallbackReason ?? null } : {}),
+        ...(extra.metadata ? { metadata: extra.metadata } : {}),
+      },
+    };
+  }
+
+  if (type === 'step_failed') {
+    return {
+      stepDelta: {
+        stepId: extra.stepId,
+        errorMessage: extra.errorMessage,
+        completedAt: extra.completedAt,
+        elapsedMs: extra.elapsedMs,
+        fallbackReason: extra.fallbackReason,
+      },
+    };
+  }
+
+  if (type === 'tool_started') {
+    return {
+      toolInvocation: extra.toolInvocation,
+    };
+  }
+
+  if (type === 'tool_completed') {
+    return {
+      toolDelta: {
+        toolId: extra.toolId,
+        outputSummary: extra.outputSummary,
+        completedAt: extra.completedAt,
+        elapsedMs: extra.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'tool_failed') {
+    return {
+      toolDelta: {
+        toolId: extra.toolId,
+        errorMessage: extra.errorMessage,
+        fallbackReason: extra.fallbackReason,
+        completedAt: extra.completedAt,
+        elapsedMs: extra.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'chart_ready') {
+    return {
+      chartData: extra.chartData,
+    };
+  }
+
+  if (type === 'conclusion_delta') {
+    return {
+      delta: extra.delta,
+    };
+  }
+
+  if (type === 'conclusion_completed') {
+    return {
+      conclusion: extra.conclusion,
+      agentConclusion: extra.agentConclusion,
+      modelTrace: extra.modelTrace,
+    };
+  }
+
+  if (type === 'rag_sources_ready') {
+    return {
+      sources: Array.isArray(extra.sources) ? extra.sources : [],
+    };
+  }
+
+  if (type === 'report_pending') {
+    return {
+      metadata: isRecord(extra.metadata) ? extra.metadata : {},
+    };
+  }
+
+  if (type === 'run_completed') {
+    return {
+      completedAt: extra.completedAt,
+      elapsedMs: extra.elapsedMs,
+      assistantMessageId: extra.assistantMessageId,
+      metadata: isRecord(extra.metadata) ? extra.metadata : {},
+      modelTrace: extra.modelTrace,
+    };
+  }
+
+  if (type === 'run_failed') {
+    return {
+      errorMessage: extra.errorMessage,
+      metadata: isRecord(extra.metadata) ? extra.metadata : {},
+      modelTrace: extra.modelTrace,
+    };
+  }
+
+  return {};
 }
 
 function nowIso() {
@@ -1014,15 +1142,23 @@ function planToRunSnapshot(plan) {
 }
 
 function createRunSnapshot(context, options = {}) {
-  const createdAt = context.createdAt || nowIso();
-  const plan = options.plan || context.plan;
-  const intent = plan?.intent || context.intent || 'unknown';
-  const modelTrace = options.modelTrace || context.modelTrace || null;
-
-  return {
+  const createdAt = context.createdAt ?? nowIso();
+  const plan = options.plan ?? context.plan;
+  const intent = plan?.intent ?? context.intent ?? 'unknown';
+  const modelTrace = options.modelTrace ?? context.modelTrace ?? null;
+  const chartData = Object.prototype.hasOwnProperty.call(options, 'chartData')
+    ? options.chartData
+    : context.chartData;
+  const agentConclusion = Object.prototype.hasOwnProperty.call(options, 'agentConclusion')
+    ? options.agentConclusion
+    : context.agentConclusion;
+  const snapshot = {
     id: context.runId,
+    conversationId: context.conversationId,
+    ...(context.clientRunId ? { clientRunId: context.clientRunId } : {}),
+    ...(context.usageId ? { usageId: context.usageId } : {}),
     mode: 'agent',
-    status: options.status || 'running',
+    status: options.status ?? 'running',
     intent,
     prompt: context.prompt,
     plan: plan ? planToRunSnapshot(plan) : {
@@ -1030,19 +1166,23 @@ function createRunSnapshot(context, options = {}) {
       shouldUseDataAnalysis: false,
       reason: '正在判断任务类型',
     },
-    dataSource: context.dataSourceSnapshot || getDataSourceSnapshot(),
-    steps: options.steps || context.steps || [],
-    toolInvocations: options.toolInvocations || context.toolInvocations || [],
-    chartData: options.chartData || context.chartData,
-    conclusion: options.conclusion || context.conclusion || '',
-    conclusionSource: modelTrace?.conclusionSource || 'none',
-    agentConclusion: options.agentConclusion || context.agentConclusion,
+    dataSource: context.dataSourceSnapshot ?? getDataSourceSnapshot(),
     modelTrace,
-    reportState: options.reportState || context.reportState || 'hidden',
+    ...(agentConclusion ? { agentConclusion } : {}),
+    reportState: options.reportState ?? context.reportState ?? 'hidden',
     createdAt,
     updatedAt: nowIso(),
     startedAt: createdAt,
+    ...(options.completedAt ? { completedAt: options.completedAt } : {}),
+    ...(typeof options.elapsedMs === 'number' ? { elapsedMs: options.elapsedMs } : {}),
+    ...(options.errorMessage ? { errorMessage: options.errorMessage } : {}),
   };
+
+  if (isRecord(chartData)) {
+    snapshot.chartData = chartData;
+  }
+
+  return snapshot;
 }
 
 function createRunStep(id, title, status, description) {
@@ -3066,7 +3206,7 @@ function writeSseEvent(res, event) {
   }
 
   res.write(`data: ${JSON.stringify(event)}\n\n`);
-  debugLog('[workbench-agent-run-stream] event', event.type, event.runId ?? event.run?.id);
+  debugLog('[workbench-agent-run-stream] event', event.type, event.runId);
   return true;
 }
 
@@ -3160,7 +3300,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
     res,
     disconnect,
     createRunEvent('tool_started', context, {
-      tool: createToolEventTool({
+      toolInvocation: createToolEventTool({
         runtimeToolId: params.runtimeToolId,
         toolName: params.toolName,
         displayName: params.displayName,
@@ -4045,7 +4185,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     plan: null,
     planSnapshot: {},
     dataSourceSnapshot: getDataSourceSnapshot(provider),
-    chartData: null,
+    chartData: undefined,
     conclusion: '',
     conclusionSource: 'none',
     agentConclusion: null,
@@ -4133,17 +4273,9 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         context,
         res,
         disconnect,
-        {
-          type: 'run_started',
-          runId: context.runId,
+        createRunEvent('run_started', context, {
           run: createRunSnapshot(context),
-          usageId: context.usageId,
-          clientRunId: context.clientRunId,
-          conversationId: context.conversationId,
-          metadata: {
-            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
-          },
-        },
+        }),
       );
 
       const conclusion = await runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect);

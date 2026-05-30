@@ -1,5 +1,6 @@
 import type { RunSource } from '../../../types/rag';
-import { normalizeAgentConclusion } from '../view-model';
+import { normalizeAgentConclusion } from '../view-model/runConclusionMapper.ts';
+import { RunViewModelFactory } from '../view-model/runViewModelFactory.ts';
 import type {
   RunViewModelConclusionSource,
   RunViewModelIntent,
@@ -231,6 +232,10 @@ function resolveRunStartedRunId(params: {
     return params.eventRunId;
   }
 
+  if (params.source.context.source === 'runtime') {
+    return null;
+  }
+
   if (!params.payloadRunId) {
     return null;
   }
@@ -290,6 +295,10 @@ function createRunEventSource(
     };
   }
 
+  if (context.source === 'runtime') {
+    return null;
+  }
+
   const payload = createFlatPayload(type, record);
 
   if (!payload) {
@@ -306,11 +315,8 @@ function createRunEventSource(
 }
 
 function createFlatPayload(type: RunEventType, record: Record<string, unknown>): Record<string, unknown> | null {
-  // #103 deletion condition:
-  // Current flat runtime event support is a centralized compatibility adapter until runtime output
-  // moves to the unified SSE envelope. Flat compatibility must stay inside RunEventBoundary and
-  // must not leak into service, store, reducer, or component code. After #103 switches runtime
-  // output to unified envelope, this adapter should be narrowed or removed.
+  // Flat compatibility is limited to persistence/local boundaries for restored or local events.
+  // Runtime SSE must send the unified envelope and is rejected before this adapter is called.
   if (type === 'run_started') {
     const run = readRecord(record.run);
     return run ? { run } : null;
@@ -434,6 +440,7 @@ function readStartedPayload(
   sourceRecord: Record<string, unknown>,
   runId: string,
   clientRunId: string | undefined,
+  conversationId: string,
 ): RunStartedPayload | null {
   const mode = readRunMode(sourceRecord.mode);
 
@@ -441,45 +448,51 @@ function readStartedPayload(
     return null;
   }
 
-  const displayRunId = readString(sourceRecord.displayRunId) ?? runId;
-  const status = mapRunStatus(sourceRecord.status);
+  const displayRunId = readString(sourceRecord.displayRunId);
+  const status = mapRunStatus(sourceRecord.status) ?? 'running';
   const intent = readRunIntent(sourceRecord.intent);
   const prompt = readString(sourceRecord.prompt);
   const conclusion = readString(sourceRecord.conclusion);
   const conclusionSource = readConclusionSource(sourceRecord.conclusionSource);
   const reportState = readReportState(sourceRecord.reportState);
+  const chartData = readRecord(sourceRecord.chartData);
 
   const agentConclusion = normalizeAgentConclusion(
     conclusion ?? '',
     sourceRecord.agentConclusion,
   );
 
-  return {
-    id: runId,
-    ...(clientRunId ? { clientRunId } : {}),
-    displayRunId,
-    mode,
-    ...(status ? { status } : {}),
-    ...(intent ? { intent } : {}),
-    ...(prompt ? { prompt } : {}),
-    ...(sourceRecord.plan ? { plan: sourceRecord.plan as RunStartedPayload['plan'] } : {}),
-    ...(sourceRecord.dataSource ? { dataSource: sourceRecord.dataSource as RunStartedPayload['dataSource'] } : {}),
-    ...(Array.isArray(sourceRecord.steps) ? { steps: sourceRecord.steps as RunStartedPayload['steps'] } : {}),
-    ...(Array.isArray(sourceRecord.toolInvocations) ? { toolInvocations: sourceRecord.toolInvocations as RunStartedPayload['toolInvocations'] } : {}),
-    ...(Array.isArray(sourceRecord.sources) ? { sources: sourceRecord.sources as RunSource[] } : {}),
-    ...(sourceRecord.chartData ? { chartData: sourceRecord.chartData as NonNullable<RunStartedPayload['chartData']> } : {}),
-    ...(agentConclusion.plainText ? { conclusion: agentConclusion.plainText } : {}),
-    ...(conclusionSource ? { conclusionSource } : {}),
-    ...(agentConclusion.plainText ? { agentConclusion } : {}),
-    ...(sourceRecord.modelTrace ? { modelTrace: sourceRecord.modelTrace as RunStartedPayload['modelTrace'] } : {}),
-    ...(reportState ? { reportState } : {}),
-    ...(readString(sourceRecord.createdAt) ? { createdAt: readString(sourceRecord.createdAt) as string } : {}),
-    ...(readString(sourceRecord.updatedAt) ? { updatedAt: readString(sourceRecord.updatedAt) as string } : {}),
-    ...(readString(sourceRecord.startedAt) ? { startedAt: readString(sourceRecord.startedAt) as string } : {}),
-    ...(readString(sourceRecord.completedAt) ? { completedAt: readString(sourceRecord.completedAt) as string } : {}),
-    ...(readNumber(sourceRecord.elapsedMs) !== undefined ? { elapsedMs: readNumber(sourceRecord.elapsedMs) } : {}),
-    ...(readString(sourceRecord.errorMessage) ? { errorMessage: readString(sourceRecord.errorMessage) as string } : {}),
-  };
+  try {
+    return RunViewModelFactory.fromRunStartedInput({
+      id: runId,
+      conversationId,
+      ...(clientRunId ? { clientRunId } : {}),
+      ...(displayRunId ? { displayRunId } : {}),
+      mode,
+      status,
+      ...(intent ? { intent } : {}),
+      ...(prompt ? { prompt } : {}),
+      ...(sourceRecord.plan ? { plan: sourceRecord.plan as RunStartedPayload['plan'] } : {}),
+      ...(sourceRecord.dataSource ? { dataSource: sourceRecord.dataSource as RunStartedPayload['dataSource'] } : {}),
+      ...(Array.isArray(sourceRecord.steps) ? { steps: sourceRecord.steps as RunStartedPayload['steps'] } : {}),
+      ...(Array.isArray(sourceRecord.toolInvocations) ? { toolInvocations: sourceRecord.toolInvocations as RunStartedPayload['toolInvocations'] } : {}),
+      ...(Array.isArray(sourceRecord.sources) ? { sources: sourceRecord.sources as RunSource[] } : {}),
+      ...(chartData ? { chartData: chartData as unknown as NonNullable<RunStartedPayload['chartData']> } : {}),
+      ...(agentConclusion.plainText ? { conclusion: agentConclusion.plainText } : {}),
+      ...(conclusionSource ? { conclusionSource } : {}),
+      ...(agentConclusion.plainText ? { agentConclusion } : {}),
+      ...(sourceRecord.modelTrace ? { modelTrace: sourceRecord.modelTrace as RunStartedPayload['modelTrace'] } : {}),
+      ...(reportState ? { reportState } : {}),
+      ...(readString(sourceRecord.createdAt) ? { createdAt: readString(sourceRecord.createdAt) as string } : {}),
+      ...(readString(sourceRecord.updatedAt) ? { updatedAt: readString(sourceRecord.updatedAt) as string } : {}),
+      ...(readString(sourceRecord.startedAt) ? { startedAt: readString(sourceRecord.startedAt) as string } : {}),
+      ...(readString(sourceRecord.completedAt) ? { completedAt: readString(sourceRecord.completedAt) as string } : {}),
+      ...(readNumber(sourceRecord.elapsedMs) !== undefined ? { elapsedMs: readNumber(sourceRecord.elapsedMs) } : {}),
+      ...(readString(sourceRecord.errorMessage) ? { errorMessage: readString(sourceRecord.errorMessage) as string } : {}),
+    });
+  } catch {
+    return null;
+  }
 }
 
 function normalizeRunStarted(source: RunEventPayloadSource): RunStartedEvent | null {
@@ -504,7 +517,7 @@ function normalizeRunStarted(source: RunEventPayloadSource): RunStartedEvent | n
     return null;
   }
 
-  const run = readStartedPayload(runRecord, runId, clientRunId);
+  const run = readStartedPayload(runRecord, runId, clientRunId, conversationId);
   const timestamp = readEventString(source, 'timestamp');
 
   if (!run) {
@@ -523,7 +536,11 @@ function normalizeRunStarted(source: RunEventPayloadSource): RunStartedEvent | n
 
 function normalizeRunReused(source: RunEventPayloadSource): NormalizedRunEvent | null {
   const identity = createIdentity(source);
-  const reusedRecord = readRecord(source.payload.reusedRun) ?? readRecord(source.payload.existingRun);
+  let reusedRecord = readRecord(source.payload.reusedRun);
+
+  if (!reusedRecord && source.shape === 'flat') {
+    reusedRecord = readRecord(source.payload.existingRun);
+  }
 
   if (!identity) {
     return null;
