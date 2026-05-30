@@ -1,6 +1,6 @@
 import type {
   RunEvent,
-} from '@/types/run';
+} from '@/domain/run/boundary';
 import type {
   RunViewModel,
   RunViewModelConclusionSource,
@@ -290,20 +290,12 @@ export function getToolFailureLabel(invocation: RunViewModelToolInvocation): str
   return outputSummary || getFallbackReasonLabel('tool_failed');
 }
 
-function mapBackendRunStatus(status: string | null | undefined): RunViewModelStatus {
-  if (status === 'completed' || status === 'success') return 'success';
-  if (status === 'failed' || status === 'error') return 'error';
-  if (status === 'stopped') return 'stopped';
-  if (status === 'pending') return 'pending';
-  return 'running';
-}
-
 export function getRunReuseNotice(event: Extract<RunEvent, { type: 'run_reused' }> | null): string | null {
   if (!event) {
     return null;
   }
 
-  const statusLabel = getRunStatusLabel(mapBackendRunStatus(event.status));
+  const statusLabel = getRunStatusLabel(event.status ?? 'running');
 
   if (event.reason === 'duplicate_in_flight') {
     return `检测到重复请求，已复用进行中的 Run（${statusLabel}）。`;

@@ -1,6 +1,6 @@
 import type {
   RunEvent,
-} from '@/types/run';
+} from '@/domain/run/boundary';
 import type {
   RunViewModel,
   RunViewModelConclusionSource,

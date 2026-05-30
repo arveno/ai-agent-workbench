@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { createLocalRunStoppedEvent } from '../../domain/run/boundary';
 import type { RunViewModel, RunViewModelReportState } from '../../domain/run/view-model';
 import type {
   GenerationSlice,
@@ -636,10 +637,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     agentAbortController?.abort();
 
     if (shouldStopAgentRun) {
-      get().applyRunEvent({
-        type: 'run_stopped',
-        runId: currentRun.id,
-      });
+      get().applyRunEvent(createLocalRunStoppedEvent(currentRun.id));
     }
 
     if (partialAgentConclusion && currentRun) {

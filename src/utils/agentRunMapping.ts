@@ -1,5 +1,5 @@
 import { RunViewModelFactory } from '@/domain/run/view-model';
-import type { RunStartedEvent } from '@/types/run';
+import type { RunStartedEvent } from '@/domain/run/boundary';
 
 export function createAgentPendingRunStartedEvent(params: {
   runId: string;

@@ -1,6 +1,6 @@
 import type {
-  RunEvent,
-} from '@/types/run';
+  NormalizedRunEvent,
+} from '@/domain/run/boundary';
 import type {
   RunViewModel,
   RunViewModelAgentConclusion,
@@ -17,6 +17,19 @@ function nowIso(): string {
 
 function isRunIdMatched(currentRun: RunViewModel | null, runId: string): currentRun is RunViewModel {
   return Boolean(currentRun && currentRun.id === runId);
+}
+
+function isRunReusedEventForCurrentRun(
+  currentRun: RunViewModel,
+  event: Extract<NormalizedRunEvent, { type: 'run_reused' }>,
+): boolean {
+  const clientRunId = event.clientRunId?.trim();
+
+  if (clientRunId && currentRun.id === clientRunId) {
+    return true;
+  }
+
+  return currentRun.id === event.runId;
 }
 
 function withUpdatedAt(run: RunViewModel, updatedAt = nowIso()): RunViewModel {
@@ -38,26 +51,6 @@ function withModelTrace(run: RunViewModel, modelTrace?: RunViewModelTrace): RunV
       ...modelTrace,
     },
   };
-}
-
-function mapReusedRunStatus(status: string | null | undefined): RunViewModel['status'] {
-  if (status === 'completed' || status === 'success') {
-    return 'success';
-  }
-
-  if (status === 'failed' || status === 'error') {
-    return 'error';
-  }
-
-  if (status === 'stopped') {
-    return 'stopped';
-  }
-
-  if (status === 'pending') {
-    return 'pending';
-  }
-
-  return 'running';
 }
 
 const CONCLUSION_SECTION_FIELDS: Array<{ title: string; keys: string[] }> = [
@@ -453,7 +446,7 @@ function updateTool(
   return toolInvocations.map((tool) => (tool.id === toolId ? updater(tool) : tool));
 }
 
-export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: RunEvent): RunViewModel | null {
+export function applyRunEventToViewModel(currentRun: RunViewModel | null, event: NormalizedRunEvent): RunViewModel | null {
   if (event.type === 'run_started') {
     const conversationId = event.conversationId?.trim();
 
@@ -462,9 +455,9 @@ export function applyRunEventToViewModel(currentRun: RunViewModel | null, event:
     }
 
     const runViewModel = RunViewModelFactory.fromRunStartedInput({
-      id: event.runId ?? event.run.id,
+      id: event.runId,
       conversationId,
-      clientRunId: event.clientRunId ?? event.run.clientRunId,
+      clientRunId: event.clientRunId,
       displayRunId: event.run.displayRunId,
       mode: event.run.mode,
       status: event.run.status ?? 'running',
@@ -508,16 +501,14 @@ export function applyRunEventToViewModel(currentRun: RunViewModel | null, event:
       return currentRun;
     }
 
-    const reusedRunId = event.clientRunId?.trim() || event.runId;
-
-    if (reusedRunId && currentRun.id !== reusedRunId) {
+    if (!isRunReusedEventForCurrentRun(currentRun, event)) {
       return currentRun;
     }
 
     return withUpdatedAt(
       {
         ...currentRun,
-        status: mapReusedRunStatus(event.status),
+        status: event.status ?? 'running',
         completedAt: event.existingRun?.completedAt ?? currentRun.completedAt,
       },
       event.timestamp ?? nowIso(),

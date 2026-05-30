@@ -5,9 +5,7 @@ import type {
   ToolInvocationRecord,
 } from '@/types/persistence';
 import type { RunSource, RunSourceType } from '@/types/rag';
-import type {
-  RunEvent,
-} from '@/types/run';
+import { normalizeRunEvent, type NormalizedRunEvent } from '@/domain/run/boundary';
 import type {
   CostEstimate,
   ModelTrace,
@@ -25,31 +23,8 @@ import { RunViewModelFactory } from '@/domain/run/view-model';
 import { applyRunEventToViewModel, normalizeAgentConclusion } from './runReducer';
 import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
 
-const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
-  'run_started',
-  'run_reused',
-  'step_started',
-  'step_completed',
-  'step_failed',
-  'tool_started',
-  'tool_completed',
-  'tool_failed',
-  'chart_ready',
-  'conclusion_delta',
-  'conclusion_completed',
-  'rag_sources_ready',
-  'report_pending',
-  'run_completed',
-  'run_failed',
-  'run_stopped',
-]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isRunEvent(value: unknown): value is RunEvent {
-  return isRecord(value) && typeof value.type === 'string' && RUN_EVENT_TYPES.has(value.type as RunEvent['type']);
 }
 
 function mapIntent(value: string | null): RunViewModelIntent {
@@ -209,8 +184,13 @@ function asCanonicalObject(value: Record<string, unknown>): Record<string, unkno
   return Object.keys(value).length > 0 ? value : undefined;
 }
 
-function eventRecordToRunEvent(record: RunEventRecord): RunEvent | null {
-  return isRunEvent(record.payload) ? record.payload : null;
+function runEventRecordToNormalizedRunEvent(record: RunEventRecord): NormalizedRunEvent | null {
+  return normalizeRunEvent(record.payload, {
+    source: 'persistence',
+    runId: record.run_id,
+    conversationId: record.conversation_id,
+    timestamp: record.created_at,
+  });
 }
 
 function toOptionalString(value: string | null): string | undefined {
@@ -303,12 +283,12 @@ export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewMo
   });
 }
 
-export function runEventsRecordToRunEvents(records: RunEventRecord[]): RunEvent[] {
+export function runEventRecordsToNormalizedRunEvents(records: RunEventRecord[]): NormalizedRunEvent[] {
   return records
     .slice()
     .sort((left, right) => left.seq - right.seq)
-    .map((record) => eventRecordToRunEvent(record))
-    .filter((event): event is RunEvent => event !== null);
+    .map((record) => runEventRecordToNormalizedRunEvent(record))
+    .filter((event): event is NormalizedRunEvent => event !== null);
 }
 
 export function runPersistenceRecordsToViewModel(params: {
@@ -317,7 +297,7 @@ export function runPersistenceRecordsToViewModel(params: {
   tools: ToolInvocationRecord[];
   sources: RunSourceRecord[];
 }): RunViewModel {
-  const runEvents = runEventsRecordToRunEvents(params.events);
+  const runEvents = runEventRecordsToNormalizedRunEvents(params.events);
   const eventViewModel = runEvents.reduce<RunViewModel | null>(
     (viewModel, event) => applyRunEventToViewModel(viewModel, event),
     null,
