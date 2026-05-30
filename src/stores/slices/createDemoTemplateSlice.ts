@@ -106,6 +106,18 @@ function getSeedMessageRunId(message: DemoSeedMessage): string | undefined {
   return typeof runId === 'string' && runId.trim() ? runId : undefined;
 }
 
+function toDemoSeedPlan(value: unknown): DemoSeedRunAdapterInput['plan'] {
+  return value as DemoSeedRunAdapterInput['plan'];
+}
+
+function toDemoSeedDataSource(value: unknown): DemoSeedRunAdapterInput['dataSource'] {
+  return value as DemoSeedRunAdapterInput['dataSource'];
+}
+
+function toDemoSeedChartData(value: unknown): DemoSeedRunAdapterInput['chartData'] {
+  return value as DemoSeedRunAdapterInput['chartData'];
+}
+
 function createDemoMessages(template: DemoConversationTemplateRecord, createdAt: number): WorkbenchMessage[] {
   return template.seed_messages
     .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -120,16 +132,32 @@ function createDemoMessages(template: DemoConversationTemplateRecord, createdAt:
 }
 
 function createDemoRun(template: DemoConversationTemplateRecord, conversationId: string): RunViewModel | null {
-  const rawRun = template.seed_runs[0] as unknown as DemoSeedRunAdapterInput | undefined;
+  const seedRun = template.seed_runs[0];
 
-  if (!rawRun?.id) {
+  if (!seedRun?.id) {
     return null;
   }
 
   return RunViewModelFactory.fromDemoSeedAdapter({
-    ...rawRun,
-    id: rawRun.id,
+    id: seedRun.id,
     conversationId,
+    ...(seedRun.clientRunId ? { clientRunId: seedRun.clientRunId } : {}),
+    mode: seedRun.mode,
+    status: seedRun.status,
+    ...(seedRun.intent ? { intent: seedRun.intent } : {}),
+    ...(seedRun.prompt ? { prompt: seedRun.prompt } : {}),
+    ...(seedRun.plan ? { plan: toDemoSeedPlan(seedRun.plan) } : {}),
+    ...(seedRun.dataSource ? { dataSource: toDemoSeedDataSource(seedRun.dataSource) } : {}),
+    ...(seedRun.chartData ? { chartData: toDemoSeedChartData(seedRun.chartData) } : {}),
+    ...(seedRun.agentConclusion ? { agentConclusion: seedRun.agentConclusion } : {}),
+    ...(seedRun.modelTrace ? { modelTrace: seedRun.modelTrace } : {}),
+    reportState: seedRun.reportState,
+    ...(seedRun.createdAt ? { createdAt: seedRun.createdAt } : {}),
+    ...(seedRun.updatedAt ? { updatedAt: seedRun.updatedAt } : {}),
+    ...(seedRun.startedAt ? { startedAt: seedRun.startedAt } : {}),
+    ...(seedRun.completedAt ? { completedAt: seedRun.completedAt } : {}),
+    ...(typeof seedRun.elapsedMs === 'number' ? { elapsedMs: seedRun.elapsedMs } : {}),
+    ...(seedRun.errorMessage ? { errorMessage: seedRun.errorMessage } : {}),
     fallbackPrompt: template.title,
     fallbackCreatedAt: template.created_at,
     fallbackUpdatedAt: template.updated_at,
