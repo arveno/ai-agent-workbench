@@ -1,3 +1,6 @@
+// Compatibility barrel for normalized run event boundary types only.
+// Canonical RunSnapshot must be imported from contracts/generated/workbench-contract.
+// UI-safe RunViewModel must be imported from domain/run/view-model.
 export type {
   NormalizedRunEvent,
   RunChartReadyEvent,

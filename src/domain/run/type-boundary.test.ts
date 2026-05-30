@@ -16,8 +16,10 @@ type IsEqual<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B
   : false;
 
 type HasKey<T, K extends PropertyKey> = K extends keyof T ? true : false;
+type IsNotEqual<A, B> = IsEqual<A, B> extends true ? false : true;
 
 export type RunTypeBoundaryAssertions = [
+  Assert<IsNotEqual<RunSnapshot, RunViewModel>>,
   Assert<IsEqual<HasKey<RunSnapshot, 'sessionId'>, false>>,
   Assert<IsEqual<RunSnapshot['conversationId'], string>>,
   Assert<IsEqual<HasKey<RunSnapshot, 'displayRunId'>, false>>,

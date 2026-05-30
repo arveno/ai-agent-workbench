@@ -106,7 +106,7 @@ function getFirstDemoSeedRun(): RunSnapshot {
   return firstCase.run;
 }
 
-function assertCanonicalRunSnapshotHasNoUiOnlyFields(run: RunSnapshot): void {
+function assertRunSnapshotHasNoUiOnlyFields(run: RunSnapshot): void {
   const record = run as unknown as Record<string, unknown>;
 
   for (const fieldName of CANONICAL_RUN_SNAPSHOT_UI_ONLY_FIELDS) {
@@ -218,7 +218,7 @@ describe('RunEventBoundary', () => {
 
     for (const { templateId, run } of demoSeedRuns) {
       assert.equal(run.conversationId, `demo_${templateId}`);
-      assertCanonicalRunSnapshotHasNoUiOnlyFields(run);
+      assertRunSnapshotHasNoUiOnlyFields(run);
       schemaValidator.assertValid('objects/run-snapshot.schema.json', run);
       schemaValidator.assertValid('events/run-started-event.schema.json', createRunStartedEnvelope(run));
     }
@@ -240,7 +240,7 @@ describe('RunEventBoundary', () => {
       assert.equal(Array.isArray(event.run.steps), true);
       assert.equal(Array.isArray(event.run.toolInvocations), true);
       assert.equal(Array.isArray(event.run.sources), true);
-      assertCanonicalRunSnapshotHasNoUiOnlyFields(run);
+      assertRunSnapshotHasNoUiOnlyFields(run);
 
       if (Object.hasOwn(run, 'chartData')) {
         assert.deepEqual(event.run.chartData, run.chartData);
