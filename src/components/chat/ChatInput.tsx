@@ -5,6 +5,7 @@ import { useAuthSessionView, useAuthStore } from '../../stores/authStore';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
 import type { ModelProviderId } from '../../types/workbench';
 import { getModelProviderMetadata, MODEL_PROVIDER_IDS } from '../../utils/modelCatalogMetadata';
+import { createChatInputRunModel } from '../../utils/runPresentationModel';
 import { AppIcon } from '../common/AppIcon';
 import { icons } from '../common/iconMap';
 import { Button } from '../ui/button';
@@ -67,15 +68,17 @@ export function ChatInput() {
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const agentRunStatus = useWorkbenchStore((state) => state.agentRunStatus);
+  const runInputModel = createChatInputRunModel({
+    run: currentRun,
+    selectedModelId,
+    generationStatus,
+    agentRunStatus,
+  });
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const isReadOnlySession = currentSession?.isReadOnly === true || currentSession?.visibility === 'demo';
   const activeChatMode: ChatModeProviderId = selectedModelId;
   const isMockMode = activeChatMode === 'mock-agent';
-  const isMockGenerating = selectedModelId === 'mock-agent' && generationStatus === 'streaming';
-  const isAgentRunning =
-    selectedModelId !== 'mock-agent' &&
-    (agentRunStatus === 'running' || (currentRun?.mode === 'agent' && currentRun.status === 'running'));
-  const isGenerating = isMockGenerating || isAgentRunning;
+  const isGenerating = runInputModel.isGenerating;
   const trimmedValue = chatDraft.trim();
   const isEmpty = trimmedValue.length === 0;
   const sendDisabled = isEmpty || isReadOnlySession;
