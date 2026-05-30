@@ -23,6 +23,7 @@ export type {
 } from './types';
 
 export { RunViewModelFactory } from './runViewModelFactory';
+export { normalizeAgentConclusion } from './runConclusionMapper';
 export type {
   CanonicalRunViewModelInput,
   DemoSeedRunAdapterInput,

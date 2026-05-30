@@ -1,7 +1,7 @@
 import type {
   RunViewModelAgentConclusion,
   RunViewModelConclusionSection,
-} from '@/domain/run/view-model';
+} from './types';
 
 const CONCLUSION_SECTION_FIELDS: Array<{ title: string; keys: string[] }> = [
   { title: '关键发现', keys: ['keyFindings', 'key_findings', 'findings'] },

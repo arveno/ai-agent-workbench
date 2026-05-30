@@ -5,7 +5,6 @@ import type {
 } from '@/domain/run/view-model';
 import { RunViewModelFactory } from '@/domain/run/view-model';
 import { reduceRunChartData } from './runChartState';
-import { normalizeAgentConclusion } from './runConclusionMapper';
 import { reduceRunConclusionState } from './runConclusionState';
 import { reduceRunReportState } from './runReportState';
 import { reduceRunSources } from './runSourcesState';
@@ -98,16 +97,10 @@ function applyRunStartedEvent(
     errorMessage: event.run.errorMessage,
   });
   const updatedAt = runViewModel.updatedAt;
-  const agentConclusion = normalizeAgentConclusion(
-    runViewModel.conclusion,
-    runViewModel.agentConclusion,
-  );
 
   return {
     ...runViewModel,
     status: runViewModel.status === 'idle' ? 'pending' : runViewModel.status,
-    conclusion: agentConclusion.plainText,
-    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
     updatedAt,
   };
 }
@@ -175,19 +168,7 @@ export function applyRunEventToViewModel(currentRun: RunViewModel | null, event:
       return withUpdatedAt(reduceRunConclusionState(currentRun, event));
     }
 
-    const agentConclusion = normalizeAgentConclusion(
-      event.conclusion,
-      event.agentConclusion,
-    );
-
-    return withUpdatedAt(
-      reduceRunConclusionState(currentRun, {
-        type: 'conclusion_completed',
-        conclusion: agentConclusion.plainText,
-        agentConclusion,
-        modelTrace: event.modelTrace,
-      }),
-    );
+    return withUpdatedAt(reduceRunConclusionState(currentRun, event));
   }
 
   if (event.type === 'rag_sources_ready') {
