@@ -41,9 +41,7 @@
           "description": "chart_ready 事件业务数据。",
           "properties": {
             "chartData": {
-              "type": "object",
-              "additionalProperties": true,
-              "description": "runtime 产出的 canonical chart payload，仅在有图表数据时出现。"
+              "$ref": "../objects/run-chart-data.schema.json"
             }
           }
         }

@@ -112,9 +112,9 @@ runtime 与 persistence 边界上的 canonical RunSnapshot。UI-only sessionId�
 | `status` | pending \| running \| completed \| failed \| stopped | yes | agent_runs.status / Agent Run runtime | runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。 |
 | `intent` | capability_intro \| data_analysis \| knowledge_qa \| unsupported \| unknown | no | Agent Run planner | Agent Run planner 已识别的意图。 |
 | `prompt` | string | no | Agent Run request | 当前 Run 捕获的用户输入。 |
-| `plan` | object | no | Agent Run planner | runtime plan 快照；plan 细节不是 UI ViewModel 契约。 |
-| `dataSource` | object | no | Agent Run runtime | runtime 数据源快照。 |
-| `chartData` | object | no | Agent Run runtime | 当前 Run 产出的 canonical 图表 payload。 |
+| `plan` | RunPlan | no | Agent Run planner | runtime plan 快照；plan 细节不是 UI ViewModel 契约。 |
+| `dataSource` | RunDataSource | no | Agent Run runtime | runtime 数据源快照。 |
+| `chartData` | RunChartData | no | Agent Run runtime | 当前 Run 产出的 canonical 图表 payload。 |
 | `agentConclusion` | AgentConclusion \| null | no | Agent Run runtime | 当前 Run 的 canonical 结论信封。 |
 | `modelTrace` | ModelTrace \| null | yes | agent_runs.metadata.modelTrace | 当前 Run 的 canonical model trace。 |
 | `reportState` | hidden \| pending \| generating \| generated \| skipped \| failed | yes | Agent Run runtime / report_artifacts | 绑定在当前 Run 上的 canonical report 可用性与生成状态。 |
@@ -169,6 +169,9 @@ This section is only for human discoverability. Field-level machine contracts li
 | `ReportArtifact` | `contracts/schemas/objects/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `EvaluationResult` | `contracts/schemas/objects/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `RunSource` | `contracts/schemas/objects/run-source.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Source | Source Lineage mapper | Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `RunPlan` | `contracts/schemas/objects/run-plan.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Run | Agent Run planner | RunSnapshot.plan canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `RunDataSource` | `contracts/schemas/objects/run-data-source.schema.json` | 10 Execution / Streaming, 14 Persistence / Lineage | Run | Agent Run runtime | RunSnapshot.dataSource canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `RunChartData` | `contracts/schemas/objects/run-chart-data.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Run | Agent Run runtime | RunSnapshot.chartData 与 chart_ready.payload.chartData 共用的 canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `RunSseEventEnvelope` | `contracts/schemas/events/run-sse-event-envelope.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Event | Agent Run SSE boundary | SSE event 公共 envelope schema，只定义 type / runId / conversationId / timestamp / payload 外壳，不定义具体业务字段。 |
 | `RunStartedEvent` | `contracts/schemas/events/run-started-event.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Event, Run | Agent Run SSE boundary | run_started SSE boundary schema 使用统一 envelope，payload.run 通过 $ref 引用 canonical RunSnapshot，不重复定义 RunSnapshot 字段。 |
 | `RunReusedEvent` | `contracts/schemas/events/run-reused-event.schema.json` | 10 Execution / Streaming, 11 Observability / Trace | Event, Run | Agent Run SSE boundary | run_reused SSE boundary schema 使用统一 envelope，payload 承载幂等复用状态和复用 Run 轻量快照。 |

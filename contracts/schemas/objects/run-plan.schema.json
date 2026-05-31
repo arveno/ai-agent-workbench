@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-plan.schema.json",
+  "title": "RunPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent", "shouldUseDataAnalysis", "reason"],
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": ["capability_intro", "data_analysis", "knowledge_qa", "unsupported", "unknown"],
+      "description": "Agent Run planner 识别出的 canonical intent。"
+    },
+    "shouldUseDataAnalysis": {
+      "type": "boolean",
+      "description": "当前 Run 是否需要执行受控数据分析工具。"
+    },
+    "metric": {
+      "type": "string",
+      "description": "Planner 选择的分析指标。"
+    },
+    "groupBy": {
+      "type": "string",
+      "description": "Planner 选择的聚合维度。"
+    },
+    "timeRangeLabel": {
+      "type": "string",
+      "description": "Planner 输出的用户可读时间范围标签。"
+    },
+    "comparison": {
+      "type": "string",
+      "enum": ["none", "previous_month"],
+      "description": "Planner 输出的稳定对比模式。"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Planner 对 intent 和工具选择的说明。"
+    }
+  }
+}

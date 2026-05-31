@@ -180,8 +180,8 @@ function getRunModelTrace(record: AgentRunRecord): ModelTrace | undefined {
   return asModelTrace(record.metadata.modelTrace);
 }
 
-function asCanonicalObject(value: Record<string, unknown>): Record<string, unknown> | undefined {
-  return Object.keys(value).length > 0 ? value : undefined;
+function asCanonicalObject<T extends object>(value: Record<string, unknown>): T | undefined {
+  return Object.keys(value).length > 0 ? (value as T) : undefined;
 }
 
 function runEventRecordToNormalizedRunEvent(record: RunEventRecord): NormalizedRunEvent | null {
@@ -247,9 +247,9 @@ function agentRunRecordToCanonicalRun(
     status: record.status,
     intent: mapIntent(record.intent),
     prompt: record.prompt ?? '',
-    plan: asCanonicalObject(record.plan),
-    dataSource: asCanonicalObject(record.data_source_snapshot),
-    chartData: asCanonicalObject(record.chart_data),
+    plan: asCanonicalObject<NonNullable<RunSnapshot['plan']>>(record.plan),
+    dataSource: asCanonicalObject<NonNullable<RunSnapshot['dataSource']>>(record.data_source_snapshot),
+    chartData: asCanonicalObject<NonNullable<RunSnapshot['chartData']>>(record.chart_data),
     modelTrace: modelTrace ?? null,
     agentConclusion,
     reportState: mapReportState(record.report_state),

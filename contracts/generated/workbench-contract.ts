@@ -13,12 +13,7 @@ export type ChartReadyEvent = RunSseEventEnvelope & {
    * chart_ready 事件业务数据。
    */
   payload: {
-    /**
-     * runtime 产出的 canonical chart payload，仅在有图表数据时出现。
-     */
-    chartData: {
-      [k: string]: unknown;
-    };
+    chartData: RunChartData;
   };
 } & {
   /**
@@ -727,6 +722,9 @@ export interface WorkbenchContract {
   modelTrace: ModelTrace;
   reportArtifact: ReportArtifact;
   reportMetadata: ReportMetadata;
+  runChartData: RunChartData;
+  runDataSource: RunDataSource;
+  runPlan: RunPlan;
   runSnapshot: RunSnapshot;
   runSource: RunSource;
 }
@@ -754,6 +752,58 @@ export interface RunSseEventEnvelope {
  */
 export interface RunSseEventPayload {
   [k: string]: unknown;
+}
+export interface RunChartData {
+  /**
+   * 图表标题。
+   */
+  title: string;
+  /**
+   * canonical 图表类型。runtime 当前输出 bar，demo seed 还覆盖 line。
+   */
+  chartType: 'bar' | 'line';
+  /**
+   * runtime 图表渲染配置快照。
+   */
+  config?: {
+    /**
+     * 图表 x 轴字段。
+     */
+    xField?: string;
+    /**
+     * 图表 y 轴字段。
+     */
+    yField?: string;
+    /**
+     * 图表对应的指标。
+     */
+    metric?: string;
+    /**
+     * 图表对应的聚合维度。
+     */
+    groupBy?: string;
+  };
+  /**
+   * 图表横轴或维度标签。
+   */
+  labels: string[];
+  /**
+   * 图表系列。
+   */
+  series: {
+    /**
+     * 系列名称。
+     */
+    name: string;
+    /**
+     * 系列数值。
+     */
+    values: number[];
+  }[];
+  /**
+   * 图表数据摘要。
+   */
+  summary?: string;
 }
 export interface AgentConclusion {
   /**
@@ -1009,24 +1059,9 @@ export interface RunSnapshot {
    * 当前 Run 捕获的用户输入。
    */
   prompt?: string;
-  /**
-   * runtime plan 快照；plan 细节不是 UI ViewModel 契约。
-   */
-  plan?: {
-    [k: string]: unknown;
-  };
-  /**
-   * runtime 数据源快照。
-   */
-  dataSource?: {
-    [k: string]: unknown;
-  };
-  /**
-   * 当前 Run 产出的 canonical 图表 payload。
-   */
-  chartData?: {
-    [k: string]: unknown;
-  };
+  plan?: RunPlan;
+  dataSource?: RunDataSource;
+  chartData?: RunChartData;
   /**
    * 当前 Run 的 canonical model trace。
    */
@@ -1063,6 +1098,62 @@ export interface RunSnapshot {
    * Run 失败时可展示的安全错误信息。
    */
   errorMessage?: string;
+}
+export interface RunPlan {
+  /**
+   * Agent Run planner 识别出的 canonical intent。
+   */
+  intent: 'capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown';
+  /**
+   * 当前 Run 是否需要执行受控数据分析工具。
+   */
+  shouldUseDataAnalysis: boolean;
+  /**
+   * Planner 选择的分析指标。
+   */
+  metric?: string;
+  /**
+   * Planner 选择的聚合维度。
+   */
+  groupBy?: string;
+  /**
+   * Planner 输出的用户可读时间范围标签。
+   */
+  timeRangeLabel?: string;
+  /**
+   * Planner 输出的稳定对比模式。
+   */
+  comparison?: 'none' | 'previous_month';
+  /**
+   * Planner 对 intent 和工具选择的说明。
+   */
+  reason: string;
+}
+export interface RunDataSource {
+  /**
+   * runtime 当前使用的 canonical 数据源 provider。
+   */
+  provider: 'cloudbase_mysql';
+  /**
+   * 数据源快照名称。
+   */
+  name: string;
+  /**
+   * 数据源类型的用户可读标签。
+   */
+  typeLabel: string;
+  /**
+   * 数据源 schema 或知识库表集合标签。
+   */
+  schema: string;
+  /**
+   * 数据源中参与当前 Run 的表数量。
+   */
+  tableCount?: number;
+  /**
+   * runtime 当前绑定的表名或表集合标签。
+   */
+  tableName?: string;
 }
 export interface EvaluationMetadata {
   /**
