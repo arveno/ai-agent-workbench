@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/report-generate-request.schema.json",
+  "title": "ReportGenerateRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["conversationId", "runId", "contentMarkdown"],
+  "properties": {
+    "conversationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Conversation that owns the report."
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical runId that owns the report."
+    },
+    "title": {
+      "type": "string",
+      "description": "Report title. Backend defaults to 分析报告 when omitted."
+    },
+    "contentMarkdown": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Report markdown content."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "generated", "archived"],
+      "description": "Report artifact status. Backend defaults to generated when omitted."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string" },
+        "runId": { "type": "string" },
+        "reportState": { "type": "string" },
+        "toolNames": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "description": "Request metadata allowlist accepted by workbench-reports. Server-owned modelTrace and source snapshots are not accepted from the request."
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/conversation-update-request.schema.json",
+  "title": "ConversationUpdateRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Optional body conversation ID; query id is also accepted by the current HTTP route."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The only conversation field currently updated by PATCH /api/workbench/conversations."
+    }
+  }
+}

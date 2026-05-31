@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/conversation-create-request.schema.json",
+  "title": "ConversationCreateRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Conversation title. Backend defaults to 新会话 when omitted or blank."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Optional conversation summary."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["mock", "agent", "mixed"],
+      "description": "Conversation mode. Backend defaults to mock when omitted."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Conversation metadata."
+    }
+  }
+}

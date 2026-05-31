@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/message-create-request.schema.json",
+  "title": "MessageCreateRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["conversationId", "role", "content"],
+  "properties": {
+    "conversationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target conversation ID."
+    },
+    "role": {
+      "type": "string",
+      "enum": ["user", "assistant", "system"],
+      "description": "Message role."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["text", "tool_summary", "report", "error", "system_notice"],
+      "description": "Message kind. Backend defaults to text when omitted."
+    },
+    "content": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Message content."
+    },
+    "runId": {
+      "type": ["string", "null"],
+      "description": "Optional canonical runId associated with the message."
+    },
+    "clientMessageId": {
+      "type": ["string", "null"],
+      "description": "Optional client idempotency ID."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "streaming", "completed", "failed"],
+      "description": "Message status. Backend defaults to completed when omitted."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Message metadata."
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/report-status-update-response.schema.json",
+  "title": "ReportStatusUpdateResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "reportState"],
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "reportState": {
+          "type": "string",
+          "enum": ["hidden", "pending", "generating", "generated", "skipped", "failed"]
+        }
+      }
+    }
+  }
+}

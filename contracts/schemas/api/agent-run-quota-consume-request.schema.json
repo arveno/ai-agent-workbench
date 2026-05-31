@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/agent-run-quota-consume-request.schema.json",
+  "title": "AgentRunQuotaConsumeRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "runId"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "const": "consume",
+      "description": "Quota action."
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical Agent Run ID."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Usage metadata accepted by the current quota endpoint."
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/message-record.schema.json",
+  "title": "MessageRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conversation_id",
+    "user_id",
+    "role",
+    "kind",
+    "content",
+    "run_id",
+    "client_message_id",
+    "status",
+    "created_at",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Workbench message ID."
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "Owning conversation ID."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Owner Workbench user ID."
+    },
+    "role": {
+      "type": "string",
+      "enum": ["user", "assistant", "system"],
+      "description": "Message role."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["text", "tool_summary", "report", "error", "system_notice"],
+      "description": "Message kind."
+    },
+    "content": {
+      "type": "string",
+      "description": "Message content."
+    },
+    "run_id": {
+      "type": ["string", "null"],
+      "description": "Associated canonical runId when present."
+    },
+    "client_message_id": {
+      "type": ["string", "null"],
+      "description": "Client idempotency ID when present."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "streaming", "completed", "failed"],
+      "description": "Message persistence status."
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Message creation time."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Message metadata owned by the message API boundary."
+    }
+  }
+}

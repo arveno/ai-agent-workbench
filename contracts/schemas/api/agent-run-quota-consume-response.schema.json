@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/agent-run-quota-consume-response.schema.json",
+  "title": "AgentRunQuotaConsumeResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usageId", "quota"],
+      "properties": {
+        "usageId": {
+          "type": "string"
+        },
+        "quota": {
+          "$ref": "agent-run-quota-response.schema.json"
+        }
+      }
+    }
+  }
+}

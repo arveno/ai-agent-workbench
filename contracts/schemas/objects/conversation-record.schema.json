@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/conversation-record.schema.json",
+  "title": "ConversationRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "user_id",
+    "title",
+    "summary",
+    "mode",
+    "status",
+    "visibility",
+    "source_template_id",
+    "latest_run_id",
+    "message_count",
+    "created_at",
+    "updated_at",
+    "archived_at",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Workbench conversation ID."
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Owner Workbench user ID."
+    },
+    "title": {
+      "type": "string",
+      "description": "Conversation title."
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "Optional conversation summary."
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["mock", "agent", "mixed"],
+      "description": "Conversation execution mode."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "running", "completed", "failed", "archived"],
+      "description": "Conversation lifecycle status."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["private", "demo", "system"],
+      "description": "Conversation visibility boundary."
+    },
+    "source_template_id": {
+      "type": ["string", "null"],
+      "description": "Source demo template ID when copied from a template."
+    },
+    "latest_run_id": {
+      "type": ["string", "null"],
+      "description": "Latest canonical runId associated with the conversation."
+    },
+    "message_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Persisted message count."
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Conversation creation time."
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "Conversation update time."
+    },
+    "archived_at": {
+      "type": ["string", "null"],
+      "description": "Conversation archive time."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Conversation metadata owned by the conversation API boundary."
+    }
+  }
+}
