@@ -166,6 +166,9 @@ This section is only for human discoverability. Field-level machine contracts li
 
 | Object | Schema | Lifecycle node | Core object | Owner | Summary |
 | --- | --- | --- | --- | --- | --- |
+| `AgentRunRecord` | `contracts/schemas/objects/agent-run-record.schema.json` | 10 Execution / Streaming, 14 Persistence / Lineage | Run | Agent Run persistence boundary | agent_runs persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
+| `AgentRunMetadata` | `contracts/schemas/objects/agent-run-metadata.schema.json` | 10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage | Run | Agent Run runtime / persistence boundary | agent_runs.metadata canonical persistence metadata schema；modelTrace 与 agentConclusion 保持嵌套对象，不在 metadata 顶层展开模型字段。 |
+| `RunEventRecord` | `contracts/schemas/objects/run-event-record.schema.json` | 10 Execution / Streaming, 14 Persistence / Lineage | Event | Agent Run event persistence boundary | run_events persistence read record schema；payload 使用统一 SSE envelope，具体事件 payload 继续由 events/* schema 约束。 |
 | `ReportArtifact` | `contracts/schemas/objects/report-artifact.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Report | workbench-reports / mapper | Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `EvaluationResult` | `contracts/schemas/objects/evaluation-result.schema.json` | 15 Evaluation / Quality Gate | Evaluation | workbench-evaluations / mapper | Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |
 | `RunSource` | `contracts/schemas/objects/run-source.schema.json` | 13 Artifact / Source / Report, 14 Persistence / Lineage | Source | Source Lineage mapper | Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。 |

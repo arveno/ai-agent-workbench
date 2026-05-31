@@ -155,6 +155,28 @@ const RUN_CHART_DATA = {
   summary: '已生成 1 个数据点，图表类型为 bar。',
 };
 
+const LANGSMITH_TRACE = {
+  provider: 'langsmith',
+  status: 'completed',
+  reason: null,
+  projectName: 'ai-agent-workbench',
+  traceId: 'trace-1',
+  runId: 'langsmith-run-1',
+  runName: 'workbench_agent_run',
+  startedAt: CREATED_AT,
+  completedAt: UPDATED_AT,
+  errorType: null,
+  errorMessage: null,
+  timeoutMs: null,
+  externalReference: {
+    workbenchRunId: RUN_ID,
+    conversationId: 'conversation-1',
+    clientRunId: 'client-run-1',
+    selectedModelId: MODEL_TRACE.selectedModelId,
+    langGraphThreadId: `agent-run:${RUN_ID}`,
+  },
+};
+
 const MALICIOUS_MODEL_TRACE = {
   ...MODEL_TRACE,
   selectedModelId: 'request-model',
@@ -667,6 +689,72 @@ function assertRunStartedEventIdentity(event) {
   assert.equal(event.conversationId, event.payload.run.conversationId);
 }
 
+function assertRunEventRecordIdentity(record) {
+  assert.equal(record.event_type, record.payload.type);
+  assert.equal(record.run_id, record.payload.runId);
+  assert.equal(record.conversation_id, record.payload.conversationId);
+}
+
+function createAgentRunMetadataFixture(overrides = {}) {
+  return {
+    source: 'cloudbase-agent-run-real',
+    runtime: 'langgraph-agent-run-v1',
+    langGraphThreadId: `agent-run:${RUN_ID}`,
+    langGraphCheckpointId: null,
+    langSmithTraceId: LANGSMITH_TRACE.traceId,
+    langSmithRunId: LANGSMITH_TRACE.runId,
+    langSmithTraceStatus: LANGSMITH_TRACE.status,
+    langSmithProjectName: LANGSMITH_TRACE.projectName,
+    langSmithTrace: LANGSMITH_TRACE,
+    clientRunId: 'client-run-1',
+    clientRunIdMissing: false,
+    dataProvider: RUN_DATA_SOURCE.provider,
+    modelTrace: MODEL_TRACE,
+    agentConclusion: AGENT_CONCLUSION,
+    assistantMessageId: 'message-1',
+    ...overrides,
+  };
+}
+
+function createAgentRunRecordFixture(overrides = {}) {
+  return {
+    id: RUN_ID,
+    conversation_id: 'conversation-1',
+    user_id: 'user-1',
+    usage_id: 'usage-1',
+    client_run_id: 'client-run-1',
+    mode: 'agent',
+    status: 'completed',
+    intent: RUN_PLAN.intent,
+    prompt: '分析本月教学质量数据，找出异常指标',
+    plan: RUN_PLAN,
+    data_source_snapshot: RUN_DATA_SOURCE,
+    chart_data: RUN_CHART_DATA,
+    conclusion: AGENT_CONCLUSION.plainText,
+    report_state: 'generated',
+    started_at: CREATED_AT,
+    completed_at: UPDATED_AT,
+    elapsed_ms: 123,
+    error_message: null,
+    metadata: createAgentRunMetadataFixture(),
+    ...overrides,
+  };
+}
+
+function createRunEventRecordFixture(event = createRunStartedEventFixture(), overrides = {}) {
+  return {
+    id: 'event-1',
+    run_id: event.runId,
+    conversation_id: event.conversationId,
+    user_id: 'user-1',
+    seq: 1,
+    event_type: event.type,
+    payload: event,
+    created_at: event.timestamp,
+    ...overrides,
+  };
+}
+
 const SSE_EVENT_SCHEMA_CASES = [
   ['events/run-started-event.schema.json', 'run_started', createRunStartedEventFixture],
   ['events/run-reused-event.schema.json', 'run_reused', createRunReusedEventFixture],
@@ -689,6 +777,7 @@ const SSE_EVENT_ENVELOPE_SCHEMA_FILE = 'events/run-sse-event-envelope.schema.jso
 const SSE_EVENT_ENVELOPE_REF = 'run-sse-event-envelope.schema.json';
 const SSE_EVENT_ENVELOPE_FIELDS = ['type', 'runId', 'conversationId', 'timestamp', 'payload'];
 const CHART_DATA_FIELD = 'chartData';
+const PERSISTENCE_EMPTY_OBJECT_REF = '#/$defs/EmptyObject';
 const SSE_EVENT_TOP_LEVEL_BUSINESS_FIELDS = [
   'run',
   'step',
@@ -822,6 +911,156 @@ function testRunSnapshotCoreObjectSchemas(validate) {
     ...createRunSnapshotFixture('completed'),
     chartData: null,
   });
+}
+
+function testAgentRunPersistenceContracts(validate) {
+  const agentRunRecordSchema = validate.getSchema('objects/agent-run-record.schema.json');
+  assert.ok(agentRunRecordSchema.properties.plan.anyOf.some((entry) => entry.$ref === 'run-plan.schema.json'));
+  assert.ok(agentRunRecordSchema.properties.plan.anyOf.some((entry) => entry.$ref === PERSISTENCE_EMPTY_OBJECT_REF));
+  assert.equal(agentRunRecordSchema.properties.data_source_snapshot.$ref, 'run-data-source.schema.json');
+  assert.ok(agentRunRecordSchema.properties.chart_data.anyOf.some((entry) => entry.$ref === 'run-chart-data.schema.json'));
+  assert.ok(agentRunRecordSchema.properties.chart_data.anyOf.some((entry) => entry.$ref === PERSISTENCE_EMPTY_OBJECT_REF));
+  assert.equal(agentRunRecordSchema.properties.metadata.$ref, 'agent-run-metadata.schema.json');
+
+  validate.assertValid('objects/agent-run-metadata.schema.json', createAgentRunMetadataFixture());
+  validate.assertValid(
+    'objects/agent-run-metadata.schema.json',
+    createAgentRunMetadataFixture({
+      modelTrace: null,
+      agentConclusion: null,
+      assistantMessageId: null,
+      errorCode: 'quota_consume_failed',
+      errorMessage: 'Agent Run quota consume failed.',
+    }),
+  );
+
+  for (const fieldName of FORBIDDEN_METADATA_FIELDS) {
+    validate.assertInvalid('objects/agent-run-metadata.schema.json', {
+      ...createAgentRunMetadataFixture(),
+      [fieldName]: 'must-not-leak-at-top-level',
+    });
+  }
+
+  validate.assertValid('objects/agent-run-record.schema.json', createAgentRunRecordFixture());
+  validate.assertValid(
+    'objects/agent-run-record.schema.json',
+    createAgentRunRecordFixture({
+      usage_id: null,
+      client_run_id: null,
+      status: 'pending',
+      intent: 'unknown',
+      plan: {},
+      chart_data: {},
+      conclusion: null,
+      report_state: 'hidden',
+      completed_at: null,
+      elapsed_ms: null,
+      metadata: createAgentRunMetadataFixture({
+        clientRunId: null,
+        clientRunIdMissing: true,
+        modelTrace: null,
+        agentConclusion: null,
+        assistantMessageId: null,
+      }),
+    }),
+  );
+  validate.assertInvalid('objects/agent-run-record.schema.json', createAgentRunRecordFixture({ plan: null }));
+  validate.assertInvalid('objects/agent-run-record.schema.json', createAgentRunRecordFixture({
+    plan: {
+      ...RUN_PLAN,
+      steps: [],
+    },
+  }));
+  validate.assertInvalid('objects/agent-run-record.schema.json', createAgentRunRecordFixture({
+    data_source_snapshot: {
+      ...RUN_DATA_SOURCE,
+      provider: 'unknown',
+    },
+  }));
+  validate.assertInvalid('objects/agent-run-record.schema.json', createAgentRunRecordFixture({
+    chart_data: {
+      ...RUN_CHART_DATA,
+      config: {
+        ...RUN_CHART_DATA.config,
+        unknown: true,
+      },
+    },
+  }));
+  validate.assertInvalid('objects/agent-run-record.schema.json', createAgentRunRecordFixture({ chart_data: null }));
+  validate.assertInvalid('objects/agent-run-record.schema.json', createAgentRunRecordFixture({
+    metadata: createAgentRunMetadataFixture({
+      provider: 'must-not-leak-at-top-level',
+    }),
+  }));
+}
+
+function testRunEventPersistenceContracts(validate) {
+  const runEventRecordSchema = validate.getSchema('objects/run-event-record.schema.json');
+  assert.equal(runEventRecordSchema.properties.run_id.type, 'string');
+  assert.equal(runEventRecordSchema.properties.conversation_id.type, 'string');
+  assert.equal(runEventRecordSchema.properties.seq.minimum, 1);
+  assert.equal(runEventRecordSchema.properties.payload.$ref, '../events/run-sse-event-envelope.schema.json');
+
+  const runStartedEvent = createRunStartedEventFixture();
+  const runStartedRecord = createRunEventRecordFixture(runStartedEvent);
+  validate.assertValid('objects/run-event-record.schema.json', runStartedRecord);
+  validate.assertValid('events/run-started-event.schema.json', runStartedRecord.payload);
+  assertRunEventRecordIdentity(runStartedRecord);
+
+  const chartReadyEvent = createChartReadyEventFixture();
+  const chartReadyRecord = createRunEventRecordFixture(chartReadyEvent, {
+    id: 'event-chart-ready',
+    seq: 2,
+  });
+  validate.assertValid('objects/run-event-record.schema.json', chartReadyRecord);
+  validate.assertValid('events/chart-ready-event.schema.json', chartReadyRecord.payload);
+  assertRunEventRecordIdentity(chartReadyRecord);
+
+  validate.assertInvalid('objects/run-event-record.schema.json', {
+    ...runStartedRecord,
+    seq: 0,
+  });
+  validate.assertInvalid('objects/run-event-record.schema.json', {
+    ...runStartedRecord,
+    payload: {
+      type: 'run_started',
+      run: createRunSnapshotFixture('running'),
+    },
+  });
+  validate.assertInvalid('objects/run-event-record.schema.json', {
+    ...runStartedRecord,
+    payload: {
+      ...runStartedEvent,
+      run: createRunSnapshotFixture('running'),
+    },
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', {
+    ...runStartedEvent,
+    payload: {
+      run: {
+        ...createRunSnapshotFixture('running'),
+        steps: [],
+      },
+    },
+  });
+  assert.throws(() =>
+    assertRunEventRecordIdentity({
+      ...runStartedRecord,
+      event_type: 'chart_ready',
+    }),
+  );
+  assert.throws(() =>
+    assertRunEventRecordIdentity({
+      ...runStartedRecord,
+      run_id: 'run-mismatch',
+    }),
+  );
+  assert.throws(() =>
+    assertRunEventRecordIdentity({
+      ...runStartedRecord,
+      conversation_id: 'conversation-mismatch',
+    }),
+  );
 }
 
 function testDemoSeedRunSnapshotContracts(validate) {
@@ -1008,6 +1247,8 @@ testEvaluationPersistedRead(validate);
 testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotCoreObjectSchemas(validate);
+testAgentRunPersistenceContracts(validate);
+testRunEventPersistenceContracts(validate);
 testDemoSeedRunSnapshotContracts(validate);
 testRunSnapshotStatusContract(validate);
 testRunSseEventContracts(validate);
