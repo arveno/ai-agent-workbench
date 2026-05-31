@@ -664,6 +664,24 @@ schemaObjectReferences:
     owner: "workbench-quota HTTP API"
     schema: "contracts/schemas/api/agent-run-quota-finish-response.schema.json"
     summary: "POST /api/workbench/quota action=finish response schema；usage 通过 $ref 引用 AgentRunUsageRecord。"
+  DemoSeedMessage:
+    lifecycleNode: "02 Conversation / Message, 17 Fixture / Demo / Mock"
+    coreObject: "Message"
+    owner: "Demo conversation fixture"
+    schema: "contracts/schemas/objects/demo-seed-message.schema.json"
+    summary: "Demo seed message object；metadata 只允许明确 runId 关联，不承载 runtimeRunId、sessionId 或 UI-only 字段。"
+  DemoSeedReport:
+    lifecycleNode: "13 Artifact / Source / Report, 17 Fixture / Demo / Mock"
+    coreObject: "Report"
+    owner: "Demo conversation fixture"
+    schema: "contracts/schemas/objects/demo-seed-report.schema.json"
+    summary: "Demo seed report fixture object；通过 $ref 引用 ReportArtifact，不复制 report 字段细节。"
+  DemoConversationTemplate:
+    lifecycleNode: "02 Conversation / Message, 10 Execution / Streaming, 17 Fixture / Demo / Mock"
+    coreObject: "Conversation, Run"
+    owner: "Demo conversation fixture"
+    schema: "contracts/schemas/objects/demo-conversation-template.schema.json"
+    summary: "Demo conversation template fixture object；seed_runs.items 通过 $ref 引用 canonical RunSnapshot。"
   RunSource:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Source"

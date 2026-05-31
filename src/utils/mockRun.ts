@@ -105,7 +105,10 @@ export function createMockRunViewModel(params: {
       tableCount: 3,
     },
     steps,
-    sources: createMockRagSources(),
+    sources: createMockRagSources({
+      runId: params.runId,
+      conversationId: params.conversationId,
+    }),
     modelTrace: createMockModelTrace(),
     timestamp,
   });

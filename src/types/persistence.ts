@@ -1,4 +1,8 @@
-import type { RunSnapshot } from '../../contracts/generated/workbench-contract';
+import type {
+  DemoConversationTemplate,
+  DemoSeedMessage as ContractDemoSeedMessage,
+  DemoSeedReport,
+} from '../../contracts/generated/workbench-contract';
 import type { RunSource } from './rag';
 
 export type JsonObject = Record<string, unknown>;
@@ -85,29 +89,9 @@ export interface DemoTaskTemplateRecord {
   metadata: JsonObject;
 }
 
-export interface DemoSeedMessage {
-  role: MessageRole;
-  kind?: MessageKind;
-  content: string;
-  status?: MessageStatus;
-  metadata?: JsonObject;
-}
-
-export interface DemoConversationTemplateRecord {
-  id: string;
-  title: string;
-  description: string;
-  category: DemoTemplateCategory;
-  visibility: DemoTemplateVisibility;
-  seed_messages: DemoSeedMessage[];
-  seed_runs: RunSnapshot[];
-  seed_reports: JsonObject[];
-  sort_order: number;
-  is_enabled: boolean;
-  created_at: string;
-  updated_at: string;
-  metadata: JsonObject;
-}
+export type DemoSeedMessage = ContractDemoSeedMessage;
+export type { DemoSeedReport };
+export type DemoConversationTemplateRecord = DemoConversationTemplate;
 
 export interface ConversationListResult {
   conversations: ConversationRecord[];

@@ -46,7 +46,7 @@ function requireCommonJsFile(filePath, stubs = {}) {
   return loadedModule.exports;
 }
 
-function requireTypeScriptFile(filePath) {
+function requireTypeScriptFile(filePath, stubs = {}) {
   const source = readFileSync(filePath, 'utf8');
   const { outputText } = typescript.transpileModule(source, {
     compilerOptions: {
@@ -60,6 +60,13 @@ function requireTypeScriptFile(filePath) {
   const loadedModule = new Module(filePath);
   loadedModule.filename = filePath;
   loadedModule.paths = Module._nodeModulePaths(path.dirname(filePath));
+  loadedModule.require = (request) => {
+    if (Object.hasOwn(stubs, request)) {
+      return stubs[request];
+    }
+
+    return Module.prototype.require.call(loadedModule, request);
+  };
   loadedModule._compile(outputText, filePath);
   return loadedModule.exports;
 }
@@ -71,6 +78,41 @@ const modelLayer = requireCommonJsFile(
   { '@langchain/openai': { ChatOpenAI: class ChatOpenAI {} } },
 );
 const demoConversations = requireTypeScriptFile(path.join(rootDir, 'src/mocks/demoConversations.ts'));
+const ragSources = requireTypeScriptFile(path.join(rootDir, 'src/utils/ragSources.ts'));
+const mockRun = requireTypeScriptFile(
+  path.join(rootDir, 'src/utils/mockRun.ts'),
+  {
+    '@/domain/run/boundary': {
+      createLocalRunStoppedEvent: (runId) => ({
+        type: 'run_stopped',
+        runId,
+      }),
+    },
+    '@/domain/run/view-model': {
+      RunViewModelFactory: {
+        fromMockRun: (params) => ({
+          id: params.runId,
+          conversationId: params.conversationId,
+          displayRunId: params.runId,
+          mode: 'mock',
+          status: 'running',
+          intent: 'data_analysis',
+          prompt: params.prompt,
+          plan: params.plan,
+          dataSource: params.dataSource,
+          steps: params.steps,
+          toolInvocations: [],
+          sources: params.sources,
+          modelTrace: params.modelTrace,
+          reportState: 'hidden',
+          createdAt: params.timestamp,
+          updatedAt: params.timestamp,
+        }),
+      },
+    },
+    './ragSources': ragSources,
+  },
+);
 
 const RUN_ID = '123e4567-e89b-12d3-a456-426614174000';
 const REQUEST_RUN_ID = '223e4567-e89b-12d3-a456-426614174000';
@@ -289,6 +331,16 @@ const USAGE_METADATA_FORMAL_STATE_FORBIDDEN_FIELDS = [
   'artifactStatus',
   'evaluationStatus',
   'report',
+];
+
+const DEMO_SEED_RUN_UI_ONLY_FIELDS = [
+  'sessionId',
+  'displayRunId',
+  'steps',
+  'toolInvocations',
+  'sources',
+  'runSources',
+  'ragSources',
 ];
 
 const API_SCHEMA_FILES = [
@@ -1102,6 +1154,13 @@ function createReportArtifactFixture(overrides = {}) {
     sourceCount: 1,
     sourceLineage: 'run_sources',
     sourceNoSourceReason: null,
+    ...overrides,
+  };
+}
+
+function createDemoSeedReportFixture(overrides = {}) {
+  return {
+    artifact: createReportArtifactFixture(),
     ...overrides,
   };
 }
@@ -2190,27 +2249,123 @@ function testHttpApiBoundaryContracts(validate) {
   });
 }
 
-function testDemoSeedRunSnapshotContracts(validate) {
+function testDemoFixtureContracts(validate) {
   const templates = demoConversations.demoConversationTemplates;
   let seedRunCount = 0;
   let chartDataSeedCount = 0;
+  let seedMessageCount = 0;
 
   assert.equal(Array.isArray(templates), true);
+  const demoTemplateSchema = validate.getSchema('objects/demo-conversation-template.schema.json');
+  const demoSeedMessageSchema = validate.getSchema('objects/demo-seed-message.schema.json');
+  const demoSeedReportSchema = validate.getSchema('objects/demo-seed-report.schema.json');
+
+  assert.equal(demoTemplateSchema.properties.seed_runs.items.$ref, 'run-snapshot.schema.json');
+  assert.equal(demoTemplateSchema.properties.seed_messages.items.$ref, 'demo-seed-message.schema.json');
+  assert.equal(demoTemplateSchema.properties.seed_reports.items.$ref, 'demo-seed-report.schema.json');
+  assert.equal(demoSeedMessageSchema.properties.metadata.additionalProperties, false);
+  assert.equal(demoSeedReportSchema.properties.artifact.$ref, 'report-artifact.schema.json');
 
   for (const template of templates) {
+    validate.assertValid('objects/demo-conversation-template.schema.json', template);
+
+    for (const seedMessage of template.seed_messages ?? []) {
+      seedMessageCount += 1;
+      validate.assertValid('objects/demo-seed-message.schema.json', seedMessage);
+    }
+
     for (const seedRun of template.seed_runs ?? []) {
       seedRunCount += 1;
       validate.assertValid('objects/run-snapshot.schema.json', seedRun);
+
+      for (const field of DEMO_SEED_RUN_UI_ONLY_FIELDS) {
+        assert.equal(Object.hasOwn(seedRun, field), false, `${field} must not exist on demo seed RunSnapshot`);
+      }
 
       if (Object.hasOwn(seedRun, CHART_DATA_FIELD)) {
         chartDataSeedCount += 1;
         validate.assertValid('objects/run-chart-data.schema.json', seedRun.chartData);
       }
     }
+
+    for (const seedReport of template.seed_reports ?? []) {
+      validate.assertValid('objects/demo-seed-report.schema.json', seedReport);
+    }
   }
 
   assert.ok(seedRunCount > 0, 'demo seed must include RunSnapshot records');
+  assert.ok(seedMessageCount > 0, 'demo seed must include seed messages');
   assert.ok(chartDataSeedCount > 0, 'demo seed must cover chartData RunSnapshot records');
+
+  const templateWithUiOnlyRun = JSON.parse(JSON.stringify(templates[0]));
+  templateWithUiOnlyRun.seed_runs = [
+    {
+      ...templateWithUiOnlyRun.seed_runs[0],
+      displayRunId: 'RUN-demo',
+    },
+  ];
+  validate.assertInvalid('objects/demo-conversation-template.schema.json', templateWithUiOnlyRun);
+
+  for (const field of ['runtimeRunId', 'sessionId', 'run_id']) {
+    validate.assertInvalid('objects/demo-seed-message.schema.json', {
+      role: 'assistant',
+      kind: 'text',
+      content: 'demo message',
+      status: 'completed',
+      metadata: {
+        runId: RUN_ID,
+        [field]: 'legacy-run',
+      },
+    });
+  }
+
+  validate.assertValid('objects/demo-seed-report.schema.json', createDemoSeedReportFixture());
+  validate.assertInvalid('objects/demo-seed-report.schema.json', {
+    ...createDemoSeedReportFixture(),
+    reportState: 'generated',
+  });
+  validate.assertInvalid('objects/demo-seed-report.schema.json', {
+    artifact: {
+      ...createReportArtifactFixture(),
+      displayRunId: 'RUN-demo',
+    },
+  });
+}
+
+function testMockFixtureClassification(validate) {
+  const mockRunViewModel = mockRun.createMockRunViewModel({
+    runId: RUN_ID,
+    prompt: 'mock prompt',
+    conversationId: 'conversation-1',
+    timestamp: CREATED_AT,
+  });
+
+  assert.equal(Object.hasOwn(mockRunViewModel, 'displayRunId'), true);
+  assert.equal(Object.hasOwn(mockRunViewModel, 'steps'), true);
+  assert.equal(Object.hasOwn(mockRunViewModel, 'toolInvocations'), true);
+  assert.equal(Object.hasOwn(mockRunViewModel, 'sources'), true);
+  validate.assertInvalid('objects/run-snapshot.schema.json', mockRunViewModel);
+
+  const mockStartedEvent = mockRun.createMockRunStartedEvent({
+    runId: RUN_ID,
+    prompt: 'mock prompt',
+    conversationId: 'conversation-1',
+  });
+  validate.assertInvalid('events/run-started-event.schema.json', mockStartedEvent);
+  assert.equal(Object.hasOwn(mockStartedEvent, 'payload'), false);
+  assert.equal(Object.hasOwn(mockStartedEvent, 'timestamp'), false);
+
+  const mockSources = ragSources.createMockRagSources({
+    runId: RUN_ID,
+    conversationId: 'conversation-1',
+  });
+  assert.equal(mockSources.length > 0, true);
+
+  for (const source of mockSources) {
+    assert.equal(source.runId, RUN_ID);
+    assert.equal(source.conversationId, 'conversation-1');
+    validate.assertValid('objects/run-source.schema.json', source);
+  }
 }
 
 function testRunSnapshotStatusContract(validate) {
@@ -2229,6 +2384,8 @@ function testRunSnapshotStatusContract(validate) {
     ['steps', []],
     ['toolInvocations', []],
     ['sources', []],
+    ['runSources', []],
+    ['ragSources', []],
   ]) {
     validate.assertInvalid('objects/run-snapshot.schema.json', {
       ...createRunSnapshotFixture('completed'),
@@ -2380,7 +2537,8 @@ testRunEventPersistenceContracts(validate);
 testToolInvocationPersistenceContracts(validate);
 testSourceRetrievalPersistenceContracts(validate);
 testHttpApiBoundaryContracts(validate);
-testDemoSeedRunSnapshotContracts(validate);
+testDemoFixtureContracts(validate);
+testMockFixtureClassification(validate);
 testRunSnapshotStatusContract(validate);
 testRunSseEventContracts(validate);
 

@@ -797,6 +797,9 @@ export interface WorkbenchContract {
   agentRunUsageMetadata: AgentRunUsageMetadata;
   agentRunUsageRecord: AgentRunUsageRecord;
   conversationRecord: ConversationRecord;
+  demoConversationTemplate: DemoConversationTemplate;
+  demoSeedMessage: DemoSeedMessage;
+  demoSeedReport: DemoSeedReport;
   evaluationCase: EvaluationCase;
   evaluationMetadata: EvaluationMetadata;
   evaluationResult: EvaluationResult;
@@ -2571,6 +2574,107 @@ export interface AgentRunQuotaRecord {
    * agent_run_quota.updated_at。
    */
   updated_at: string;
+}
+export interface DemoConversationTemplate {
+  /**
+   * Demo conversation template ID.
+   */
+  id: string;
+  /**
+   * Demo conversation template title.
+   */
+  title: string;
+  /**
+   * Demo conversation template description.
+   */
+  description: string;
+  /**
+   * Demo conversation template category.
+   */
+  category: 'intro' | 'analysis' | 'report' | 'rag' | 'long_context' | 'fallback';
+  /**
+   * Demo conversation template visibility.
+   */
+  visibility: 'demo' | 'system';
+  /**
+   * Demo seed messages.
+   */
+  seed_messages: DemoSeedMessage[];
+  /**
+   * Canonical RunSnapshot seed records.
+   */
+  seed_runs: RunSnapshot[];
+  /**
+   * Demo seed report fixtures.
+   */
+  seed_reports: DemoSeedReport[];
+  /**
+   * Stable display order for demo templates.
+   */
+  sort_order: number;
+  /**
+   * Whether the demo template is enabled.
+   */
+  is_enabled: boolean;
+  /**
+   * Demo template creation time.
+   */
+  created_at: string;
+  /**
+   * Demo template update time.
+   */
+  updated_at: string;
+  /**
+   * Demo template metadata owned by fixture/demo boundaries.
+   */
+  metadata: {
+    /**
+     * Stable demo template key.
+     */
+    templateKey: string;
+    /**
+     * Short summary of the demo capability showcased by the template.
+     */
+    showcaseValue: string;
+    /**
+     * Demo template tags.
+     */
+    tags: string[];
+    /**
+     * Demo template source phase.
+     */
+    phase: 'phase4_demo_conversation';
+  };
+}
+export interface DemoSeedMessage {
+  /**
+   * Demo seed message role.
+   */
+  role: 'user' | 'assistant' | 'system';
+  /**
+   * Demo seed message kind.
+   */
+  kind: 'text' | 'tool_summary' | 'report' | 'error' | 'system_notice';
+  /**
+   * Demo seed message content.
+   */
+  content: string;
+  /**
+   * Demo seed message status.
+   */
+  status: 'pending' | 'streaming' | 'completed' | 'failed';
+  /**
+   * Demo seed message metadata. Run association uses runId only; runtimeRunId and sessionId are not allowed.
+   */
+  metadata: {
+    /**
+     * Associated canonical runId for the demo seed message.
+     */
+    runId: string;
+  };
+}
+export interface DemoSeedReport {
+  artifact: ReportArtifact;
 }
 export interface RetrievalLogMetadata {
   /**

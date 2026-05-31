@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/demo-conversation-template.schema.json",
+  "title": "DemoConversationTemplate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "description",
+    "category",
+    "visibility",
+    "seed_messages",
+    "seed_runs",
+    "seed_reports",
+    "sort_order",
+    "is_enabled",
+    "created_at",
+    "updated_at",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Demo conversation template ID."
+    },
+    "title": {
+      "type": "string",
+      "description": "Demo conversation template title."
+    },
+    "description": {
+      "type": "string",
+      "description": "Demo conversation template description."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["intro", "analysis", "report", "rag", "long_context", "fallback"],
+      "description": "Demo conversation template category."
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["demo", "system"],
+      "description": "Demo conversation template visibility."
+    },
+    "seed_messages": {
+      "type": "array",
+      "items": {
+        "$ref": "demo-seed-message.schema.json"
+      },
+      "description": "Demo seed messages."
+    },
+    "seed_runs": {
+      "type": "array",
+      "items": {
+        "$ref": "run-snapshot.schema.json"
+      },
+      "description": "Canonical RunSnapshot seed records."
+    },
+    "seed_reports": {
+      "type": "array",
+      "items": {
+        "$ref": "demo-seed-report.schema.json"
+      },
+      "description": "Demo seed report fixtures."
+    },
+    "sort_order": {
+      "type": "integer",
+      "description": "Stable display order for demo templates."
+    },
+    "is_enabled": {
+      "type": "boolean",
+      "description": "Whether the demo template is enabled."
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Demo template creation time."
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "Demo template update time."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["templateKey", "showcaseValue", "tags", "phase"],
+      "properties": {
+        "templateKey": {
+          "type": "string",
+          "description": "Stable demo template key."
+        },
+        "showcaseValue": {
+          "type": "string",
+          "description": "Short summary of the demo capability showcased by the template."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Demo template tags."
+        },
+        "phase": {
+          "type": "string",
+          "const": "phase4_demo_conversation",
+          "description": "Demo template source phase."
+        }
+      },
+      "description": "Demo template metadata owned by fixture/demo boundaries."
+    }
+  }
+}
