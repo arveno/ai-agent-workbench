@@ -400,6 +400,30 @@ schemaObjectReferences:
     owner: "Agent Run tool persistence boundary"
     schema: "contracts/schemas/objects/tool-invocation-metadata.schema.json"
     summary: "tool_invocations.metadata schema；只承载工具 runtime/observability metadata，不承载 Run / Source / Report 正式状态。"
+  RunSourceRecord:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Source"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/run-source-record.schema.json"
+    summary: "run_sources persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunSourceMetadata:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Source"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/run-source-metadata.schema.json"
+    summary: "run_sources.metadata schema；只承载检索 provider/source 快照 metadata，不承载 Run / Source / Report / Evaluation 正式状态。"
+  RetrievalLogRecord:
+    lifecycleNode: "09 Tool Governance / Data Access, 13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Retrieval"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/retrieval-log-record.schema.json"
+    summary: "retrieval_logs persistence read/write record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RetrievalLogMetadata:
+    lifecycleNode: "09 Tool Governance / Data Access, 13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Retrieval"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/retrieval-log-metadata.schema.json"
+    summary: "retrieval_logs.metadata schema；只承载检索策略与统计 metadata，不承载正式 source 列表或 UI sources。"
   ReportArtifact:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"

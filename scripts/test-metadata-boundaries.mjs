@@ -260,6 +260,22 @@ const TOOL_INVOCATION_METADATA_FORBIDDEN_FIELDS = [
   'report',
 ];
 
+const SOURCE_LINEAGE_METADATA_FORBIDDEN_FIELDS = [
+  'runStatus',
+  'toolInvocation',
+  'toolInvocations',
+  'reportState',
+  'reportStatus',
+  'artifactStatus',
+  'evaluationStatus',
+  'sourceState',
+  'sources',
+  'sourceList',
+  'runSources',
+  'ragSources',
+  'report',
+];
+
 async function createSchemaValidators() {
   const ajv = new Ajv2020({
     allErrors: true,
@@ -749,6 +765,12 @@ function assertRunEventRecordIdentity(record) {
   assert.equal(record.conversation_id, record.payload.conversationId);
 }
 
+function assertRunSourceRetrievalLogRelation(sourceRecord, retrievalLogRecord) {
+  assert.equal(sourceRecord.retrieval_log_id, retrievalLogRecord.id);
+  assert.equal(sourceRecord.run_id, retrievalLogRecord.run_id);
+  assert.equal(sourceRecord.conversation_id, retrievalLogRecord.conversation_id);
+}
+
 function createAgentRunMetadataFixture(overrides = {}) {
   return {
     source: 'cloudbase-agent-run-real',
@@ -846,6 +868,73 @@ function createToolInvocationRecordFixture(overrides = {}) {
     elapsed_ms: 123,
     error: null,
     metadata: createToolInvocationMetadataFixture(),
+    ...overrides,
+  };
+}
+
+function createRunSourceMetadataFixture(overrides = {}) {
+  return {
+    provider: 'knowledge_search',
+    retrieverProvider: 'langchain_retriever',
+    sourceName: 'CloudBase MySQL 知识库',
+    documentTitle: '教学质量知识库',
+    chunkTitle: '异常指标说明',
+    category: '教学指标',
+    rawScore: 18,
+    updatedAt: UPDATED_AT,
+    ...overrides,
+  };
+}
+
+function createRunSourceRecordFixture(overrides = {}) {
+  return {
+    id: 'run-source-1',
+    run_id: RUN_ID,
+    conversation_id: 'conversation-1',
+    user_id: 'user-1',
+    tool_invocation_id: 'tool-invocation-knowledge-search',
+    retrieval_log_id: 'retrieval-log-1',
+    document_id: 'knowledge-document-1',
+    chunk_id: 'knowledge-chunk-1',
+    citation_label: '[S1]',
+    source_order: 1,
+    title: '教学质量知识库',
+    preview: '异常指标用于提示需要关注的教学质量波动。',
+    score: 0.9,
+    source_type: 'knowledge',
+    used_in_answer: true,
+    no_source_reason: null,
+    created_at: CREATED_AT,
+    metadata: createRunSourceMetadataFixture(),
+    ...overrides,
+  };
+}
+
+function createRetrievalLogMetadataFixture(overrides = {}) {
+  return {
+    source: 'cloudbase-agent-run-real',
+    provider: 'knowledge_search',
+    retrieverProvider: 'langchain_retriever',
+    topK: 5,
+    terms: ['异常指标', '教学质量'],
+    totalMatches: 2,
+    matchedChunkCount: 1,
+    ...overrides,
+  };
+}
+
+function createRetrievalLogRecordFixture(overrides = {}) {
+  return {
+    id: 'retrieval-log-1',
+    run_id: RUN_ID,
+    conversation_id: 'conversation-1',
+    user_id: 'user-1',
+    tool_invocation_id: 'tool-invocation-knowledge-search',
+    query: '异常指标是什么',
+    provider: 'knowledge_search',
+    matched_chunk_count: 1,
+    created_at: CREATED_AT,
+    metadata: createRetrievalLogMetadataFixture(),
     ...overrides,
   };
 }
@@ -1248,6 +1337,154 @@ function testToolInvocationPersistenceContracts(validate) {
   }));
 }
 
+function testSourceRetrievalPersistenceContracts(validate) {
+  const runSourceRecordSchema = validate.getSchema('objects/run-source-record.schema.json');
+  const retrievalLogRecordSchema = validate.getSchema('objects/retrieval-log-record.schema.json');
+  const canonicalRunSourceSchema = validate.getSchema('objects/run-source.schema.json');
+
+  assert.equal(runSourceRecordSchema.properties.metadata.$ref, 'run-source-metadata.schema.json');
+  assert.equal(retrievalLogRecordSchema.properties.metadata.$ref, 'retrieval-log-metadata.schema.json');
+  assert.equal(runSourceRecordSchema.properties.run_id.type, 'string');
+  assert.equal(Object.hasOwn(runSourceRecordSchema.properties, 'runId'), false);
+  assert.equal(canonicalRunSourceSchema.properties.runId.type, 'string');
+  assert.equal(Object.hasOwn(canonicalRunSourceSchema.properties, 'run_id'), false);
+  assert.equal(retrievalLogRecordSchema.properties.matched_chunk_count.minimum, 0);
+  assert.equal(Object.hasOwn(retrievalLogRecordSchema.properties, 'result_count'), false);
+  assert.equal(Object.hasOwn(retrievalLogRecordSchema.properties, 'top_k'), false);
+  assert.equal(Object.hasOwn(retrievalLogRecordSchema.properties, 'no_source_reason'), false);
+
+  validate.assertValid('objects/run-source-metadata.schema.json', createRunSourceMetadataFixture());
+  validate.assertValid('objects/run-source-metadata.schema.json', createRunSourceMetadataFixture({
+    documentTitle: null,
+    chunkTitle: null,
+    category: null,
+    rawScore: null,
+    updatedAt: null,
+  }));
+  validate.assertValid('objects/retrieval-log-metadata.schema.json', createRetrievalLogMetadataFixture());
+  validate.assertValid('objects/retrieval-log-metadata.schema.json', createRetrievalLogMetadataFixture({
+    topK: null,
+    totalMatches: 0,
+    matchedChunkCount: 0,
+    terms: [],
+  }));
+
+  for (const fieldName of SOURCE_LINEAGE_METADATA_FORBIDDEN_FIELDS) {
+    validate.assertInvalid('objects/run-source-metadata.schema.json', {
+      ...createRunSourceMetadataFixture(),
+      [fieldName]: 'must-not-carry-formal-state',
+    });
+    validate.assertInvalid('objects/retrieval-log-metadata.schema.json', {
+      ...createRetrievalLogMetadataFixture(),
+      [fieldName]: 'must-not-carry-formal-state',
+    });
+  }
+
+  const retrievalLogRecord = createRetrievalLogRecordFixture();
+  const runSourceRecord = createRunSourceRecordFixture({
+    retrieval_log_id: retrievalLogRecord.id,
+  });
+  validate.assertValid('objects/retrieval-log-record.schema.json', retrievalLogRecord);
+  validate.assertValid('objects/run-source-record.schema.json', runSourceRecord);
+  assertRunSourceRetrievalLogRelation(runSourceRecord, retrievalLogRecord);
+
+  validate.assertValid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    id: 'run-source-no-source',
+    tool_invocation_id: null,
+    retrieval_log_id: null,
+    document_id: null,
+    chunk_id: null,
+    citation_label: null,
+    title: '无匹配来源',
+    preview: '本次检索未命中可引用来源。',
+    score: null,
+    used_in_answer: false,
+    no_source_reason: 'no_relevant_chunk',
+    metadata: createRunSourceMetadataFixture({
+      documentTitle: null,
+      chunkTitle: null,
+      category: null,
+      rawScore: null,
+      updatedAt: null,
+    }),
+  }));
+  validate.assertValid('objects/retrieval-log-record.schema.json', createRetrievalLogRecordFixture({
+    id: 'retrieval-log-no-result',
+    matched_chunk_count: 0,
+    metadata: createRetrievalLogMetadataFixture({
+      totalMatches: 0,
+      matchedChunkCount: 0,
+      terms: [],
+    }),
+  }));
+
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    source_type: 'ui_source',
+  }));
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    score: '0.9',
+  }));
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    score: -1,
+  }));
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    metadata: {
+      ...createRunSourceMetadataFixture(),
+      reportState: 'generated',
+    },
+  }));
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    sources: [],
+  }));
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    used_in_answer: 1,
+  }));
+  validate.assertInvalid('objects/retrieval-log-record.schema.json', createRetrievalLogRecordFixture({
+    matched_chunk_count: -1,
+  }));
+  validate.assertInvalid('objects/retrieval-log-record.schema.json', createRetrievalLogRecordFixture({
+    metadata: createRetrievalLogMetadataFixture({
+      topK: -1,
+    }),
+  }));
+  validate.assertInvalid('objects/retrieval-log-record.schema.json', createRetrievalLogRecordFixture({
+    metadata: createRetrievalLogMetadataFixture({
+      matchedChunkCount: -1,
+    }),
+  }));
+  validate.assertInvalid('objects/retrieval-log-record.schema.json', createRetrievalLogRecordFixture({
+    metadata: {
+      ...createRetrievalLogMetadataFixture(),
+      sources: [RUN_SOURCE],
+    },
+  }));
+
+  for (const requiredField of ['id', 'run_id', 'conversation_id', 'title', 'preview']) {
+    const invalidRecord = createRunSourceRecordFixture();
+    delete invalidRecord[requiredField];
+    validate.assertInvalid('objects/run-source-record.schema.json', invalidRecord);
+  }
+
+  assert.throws(() =>
+    assertRunSourceRetrievalLogRelation({
+      ...runSourceRecord,
+      retrieval_log_id: 'retrieval-log-mismatch',
+    }, retrievalLogRecord),
+  );
+  assert.throws(() =>
+    assertRunSourceRetrievalLogRelation({
+      ...runSourceRecord,
+      run_id: 'run-mismatch',
+    }, retrievalLogRecord),
+  );
+  assert.throws(() =>
+    assertRunSourceRetrievalLogRelation({
+      ...runSourceRecord,
+      conversation_id: 'conversation-mismatch',
+    }, retrievalLogRecord),
+  );
+}
+
 function testDemoSeedRunSnapshotContracts(validate) {
   const templates = demoConversations.demoConversationTemplates;
   let seedRunCount = 0;
@@ -1435,6 +1672,7 @@ testRunSnapshotCoreObjectSchemas(validate);
 testAgentRunPersistenceContracts(validate);
 testRunEventPersistenceContracts(validate);
 testToolInvocationPersistenceContracts(validate);
+testSourceRetrievalPersistenceContracts(validate);
 testDemoSeedRunSnapshotContracts(validate);
 testRunSnapshotStatusContract(validate);
 testRunSseEventContracts(validate);

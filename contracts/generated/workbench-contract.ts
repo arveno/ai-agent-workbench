@@ -724,11 +724,15 @@ export interface WorkbenchContract {
   modelTrace: ModelTrace;
   reportArtifact: ReportArtifact;
   reportMetadata: ReportMetadata;
+  retrievalLogMetadata: RetrievalLogMetadata;
+  retrievalLogRecord: RetrievalLogRecord;
   runChartData: RunChartData;
   runDataSource: RunDataSource;
   runEventRecord: RunEventRecord;
   runPlan: RunPlan;
   runSnapshot: RunSnapshot;
+  runSourceMetadata: RunSourceMetadata;
+  runSourceRecord: RunSourceRecord;
   runSource: RunSource;
   toolInvocationMetadata: ToolInvocationMetadata;
   toolInvocationRecord: ToolInvocationRecord;
@@ -1524,6 +1528,75 @@ export interface ReportMetadata {
    */
   langSmithTraceId?: string | null;
 }
+export interface RetrievalLogMetadata {
+  /**
+   * retrieval_logs.metadata 的服务端写入来源；不表示 Source lineage 正式状态。
+   */
+  source: 'cloudbase-agent-run-real';
+  /**
+   * 检索 provider。
+   */
+  provider: 'knowledge_search';
+  /**
+   * 产生 retrieval log 的 retriever runtime。
+   */
+  retrieverProvider: 'langchain_retriever';
+  /**
+   * 本次检索请求的 topK；runtime 未提供时为 null。
+   */
+  topK: number | null;
+  /**
+   * 检索词快照。
+   */
+  terms: string[];
+  /**
+   * retriever 查询到的总匹配数。
+   */
+  totalMatches: number;
+  /**
+   * 本次实际返回并写入 source lineage 的 chunk 数量。
+   */
+  matchedChunkCount: number;
+}
+export interface RetrievalLogRecord {
+  /**
+   * retrieval_logs.id，Retrieval Log persistence 主键。
+   */
+  id: string;
+  /**
+   * 绑定 DB agent_runs.id。
+   */
+  run_id: string;
+  /**
+   * 绑定当前 conversation。
+   */
+  conversation_id: string;
+  /**
+   * Workbench 业务用户边界。
+   */
+  user_id: string;
+  /**
+   * 触发本次 retrieval 的 tool_invocations.id；兼容无工具来源时可为空。
+   */
+  tool_invocation_id: string | null;
+  /**
+   * 本次 knowledge_search 检索 query。
+   */
+  query: string;
+  /**
+   * retrieval provider。
+   */
+  provider: 'knowledge_search';
+  /**
+   * 本次命中的 chunk 数量。
+   */
+  matched_chunk_count: number;
+  /**
+   * retrieval_logs.created_at。
+   */
+  created_at: string;
+  metadata: RetrievalLogMetadata;
+}
 export interface RunEventRecord {
   /**
    * run_events.id。
@@ -1569,6 +1642,111 @@ export interface RunEventRecord {
    * run_events.created_at。
    */
   created_at: string;
+}
+export interface RunSourceMetadata {
+  /**
+   * run_sources.metadata 的检索 provider；正式 source 类型仍以 run_sources.source_type 为准。
+   */
+  provider: 'knowledge_search';
+  /**
+   * 产生该 source 的 retriever runtime。
+   */
+  retrieverProvider: 'langchain_retriever';
+  /**
+   * 知识源名称快照。
+   */
+  sourceName: string;
+  /**
+   * 知识库文档标题快照。
+   */
+  documentTitle: string | null;
+  /**
+   * 知识库 chunk 标题快照。
+   */
+  chunkTitle: string | null;
+  /**
+   * 知识库文档分类快照。
+   */
+  category: string | null;
+  /**
+   * retriever 原始匹配分数。
+   */
+  rawScore: number | null;
+  /**
+   * 知识文档或 chunk 更新时间快照。
+   */
+  updatedAt: string | null;
+}
+export interface RunSourceRecord {
+  /**
+   * run_sources.id，Run Source persistence 主键。
+   */
+  id: string;
+  /**
+   * 绑定 DB agent_runs.id。
+   */
+  run_id: string;
+  /**
+   * 绑定当前 conversation。
+   */
+  conversation_id: string;
+  /**
+   * Workbench 业务用户边界。
+   */
+  user_id: string;
+  /**
+   * 产生该 source 的 tool_invocations.id；兼容无工具来源时可为空。
+   */
+  tool_invocation_id: string | null;
+  /**
+   * 该 source 关联的 retrieval_logs.id；非检索来源可为空。
+   */
+  retrieval_log_id: string | null;
+  /**
+   * 知识库文档快照 ID。
+   */
+  document_id: string | null;
+  /**
+   * 知识库 chunk 快照 ID。
+   */
+  chunk_id: string | null;
+  /**
+   * 仅用于展示的 citation label，不作为主关系。
+   */
+  citation_label: string | null;
+  /**
+   * Run 内 source 稳定排序。
+   */
+  source_order: number;
+  /**
+   * source 标题快照。
+   */
+  title: string;
+  /**
+   * source 内容预览文本。
+   */
+  preview: string;
+  /**
+   * retriever 返回的相关性分数。
+   */
+  score: number | null;
+  /**
+   * persistence source 类型。
+   */
+  source_type: 'knowledge' | 'tool' | 'report' | 'manual';
+  /**
+   * 该 source 是否被最终回答引用；read boundary 已归一为 boolean。
+   */
+  used_in_answer: boolean;
+  /**
+   * 无 source 或未命中时的明确原因。
+   */
+  no_source_reason: string | null;
+  /**
+   * run_sources.created_at。
+   */
+  created_at: string;
+  metadata: RunSourceMetadata;
 }
 export interface ToolInvocationMetadata {
   /**

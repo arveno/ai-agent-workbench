@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/retrieval-log-record.schema.json",
+  "title": "RetrievalLogRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "run_id",
+    "conversation_id",
+    "user_id",
+    "tool_invocation_id",
+    "query",
+    "provider",
+    "matched_chunk_count",
+    "created_at",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "retrieval_logs.id，Retrieval Log persistence 主键。"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "绑定 DB agent_runs.id。"
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "绑定当前 conversation。"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Workbench 业务用户边界。"
+    },
+    "tool_invocation_id": {
+      "type": ["string", "null"],
+      "description": "触发本次 retrieval 的 tool_invocations.id；兼容无工具来源时可为空。"
+    },
+    "query": {
+      "type": "string",
+      "description": "本次 knowledge_search 检索 query。"
+    },
+    "provider": {
+      "type": "string",
+      "const": "knowledge_search",
+      "description": "retrieval provider。"
+    },
+    "matched_chunk_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "本次命中的 chunk 数量。"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "retrieval_logs.created_at。"
+    },
+    "metadata": {
+      "$ref": "retrieval-log-metadata.schema.json"
+    }
+  }
+}

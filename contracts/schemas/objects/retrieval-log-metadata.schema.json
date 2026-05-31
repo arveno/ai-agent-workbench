@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/retrieval-log-metadata.schema.json",
+  "title": "RetrievalLogMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source",
+    "provider",
+    "retrieverProvider",
+    "topK",
+    "terms",
+    "totalMatches",
+    "matchedChunkCount"
+  ],
+  "properties": {
+    "source": {
+      "type": "string",
+      "const": "cloudbase-agent-run-real",
+      "description": "retrieval_logs.metadata 的服务端写入来源；不表示 Source lineage 正式状态。"
+    },
+    "provider": {
+      "type": "string",
+      "const": "knowledge_search",
+      "description": "检索 provider。"
+    },
+    "retrieverProvider": {
+      "type": "string",
+      "const": "langchain_retriever",
+      "description": "产生 retrieval log 的 retriever runtime。"
+    },
+    "topK": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "本次检索请求的 topK；runtime 未提供时为 null。"
+    },
+    "terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "检索词快照。"
+    },
+    "totalMatches": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "retriever 查询到的总匹配数。"
+    },
+    "matchedChunkCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "本次实际返回并写入 source lineage 的 chunk 数量。"
+    }
+  }
+}
