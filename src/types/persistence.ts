@@ -189,6 +189,8 @@ export interface ToolInvocationRecord {
   metadata: JsonObject;
 }
 
+export type RunSourceRecordSourceType = 'knowledge' | 'tool' | 'report' | 'manual';
+
 export interface RunSourceRecord {
   id: string;
   run_id: string;
@@ -203,9 +205,22 @@ export interface RunSourceRecord {
   title: string;
   preview: string;
   score: number | null;
-  source_type: string;
+  source_type: RunSourceRecordSourceType;
   used_in_answer: boolean;
   no_source_reason: string | null;
+  created_at: string;
+  metadata: JsonObject;
+}
+
+export interface RetrievalLogRecord {
+  id: string;
+  run_id: string;
+  conversation_id: string;
+  user_id: string;
+  tool_invocation_id: string | null;
+  query: string;
+  provider: 'knowledge_search';
+  matched_chunk_count: number;
   created_at: string;
   metadata: JsonObject;
 }

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-source-record.schema.json",
+  "title": "RunSourceRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "run_id",
+    "conversation_id",
+    "user_id",
+    "tool_invocation_id",
+    "retrieval_log_id",
+    "document_id",
+    "chunk_id",
+    "citation_label",
+    "source_order",
+    "title",
+    "preview",
+    "score",
+    "source_type",
+    "used_in_answer",
+    "no_source_reason",
+    "created_at",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "run_sources.id，Run Source persistence 主键。"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "绑定 DB agent_runs.id。"
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "绑定当前 conversation。"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Workbench 业务用户边界。"
+    },
+    "tool_invocation_id": {
+      "type": ["string", "null"],
+      "description": "产生该 source 的 tool_invocations.id；兼容无工具来源时可为空。"
+    },
+    "retrieval_log_id": {
+      "type": ["string", "null"],
+      "description": "该 source 关联的 retrieval_logs.id；非检索来源可为空。"
+    },
+    "document_id": {
+      "type": ["string", "null"],
+      "description": "知识库文档快照 ID。"
+    },
+    "chunk_id": {
+      "type": ["string", "null"],
+      "description": "知识库 chunk 快照 ID。"
+    },
+    "citation_label": {
+      "type": ["string", "null"],
+      "description": "仅用于展示的 citation label，不作为主关系。"
+    },
+    "source_order": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Run 内 source 稳定排序。"
+    },
+    "title": {
+      "type": "string",
+      "description": "source 标题快照。"
+    },
+    "preview": {
+      "type": "string",
+      "description": "source 内容预览文本。"
+    },
+    "score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "retriever 返回的相关性分数。"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["knowledge", "tool", "report", "manual"],
+      "description": "persistence source 类型。"
+    },
+    "used_in_answer": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer",
+          "enum": [0, 1]
+        }
+      ],
+      "description": "该 source 是否被最终回答引用；runtime write 使用 0/1，normalized read boundary 可为 boolean。"
+    },
+    "no_source_reason": {
+      "type": ["string", "null"],
+      "description": "无 source 或未命中时的明确原因。"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "run_sources.created_at。"
+    },
+    "metadata": {
+      "$ref": "run-source-metadata.schema.json"
+    }
+  }
+}
