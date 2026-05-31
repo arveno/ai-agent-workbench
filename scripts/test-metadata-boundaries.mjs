@@ -1386,6 +1386,15 @@ function testSourceRetrievalPersistenceContracts(validate) {
   });
   validate.assertValid('objects/retrieval-log-record.schema.json', retrievalLogRecord);
   validate.assertValid('objects/run-source-record.schema.json', runSourceRecord);
+  validate.assertValid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    used_in_answer: true,
+  }));
+  validate.assertValid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    used_in_answer: 1,
+  }));
+  validate.assertValid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    used_in_answer: 0,
+  }));
   assertRunSourceRetrievalLogRelation(runSourceRecord, retrievalLogRecord);
 
   validate.assertValid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
@@ -1437,7 +1446,10 @@ function testSourceRetrievalPersistenceContracts(validate) {
     sources: [],
   }));
   validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
-    used_in_answer: 1,
+    used_in_answer: 2,
+  }));
+  validate.assertInvalid('objects/run-source-record.schema.json', createRunSourceRecordFixture({
+    used_in_answer: '1',
   }));
   validate.assertInvalid('objects/retrieval-log-record.schema.json', createRetrievalLogRecordFixture({
     matched_chunk_count: -1,

@@ -1735,9 +1735,9 @@ export interface RunSourceRecord {
    */
   source_type: 'knowledge' | 'tool' | 'report' | 'manual';
   /**
-   * 该 source 是否被最终回答引用；read boundary 已归一为 boolean。
+   * 该 source 是否被最终回答引用；runtime write 使用 0/1，normalized read boundary 可为 boolean。
    */
-  used_in_answer: boolean;
+  used_in_answer: boolean | (0 | 1);
   /**
    * 无 source 或未命中时的明确原因。
    */

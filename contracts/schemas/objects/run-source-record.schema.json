@@ -85,8 +85,16 @@
       "description": "persistence source 类型。"
     },
     "used_in_answer": {
-      "type": "boolean",
-      "description": "该 source 是否被最终回答引用；read boundary 已归一为 boolean。"
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer",
+          "enum": [0, 1]
+        }
+      ],
+      "description": "该 source 是否被最终回答引用；runtime write 使用 0/1，normalized read boundary 可为 boolean。"
     },
     "no_source_reason": {
       "type": ["string", "null"],
