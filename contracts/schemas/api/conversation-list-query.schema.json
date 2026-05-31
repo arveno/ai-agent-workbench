@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/conversation-list-query.schema.json",
+  "title": "ConversationListQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+    "limit": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      ],
+      "description": "Requested page size."
+    },
+    "cursor": {
+      "type": ["string", "null"],
+      "description": "Pagination cursor based on updated_at."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "running", "completed", "failed", "archived"],
+      "description": "Optional conversation status filter."
+    }
+  }
+}

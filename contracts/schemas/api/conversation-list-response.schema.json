@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/conversation-list-response.schema.json",
+  "title": "ConversationListResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversations", "nextCursor"],
+      "properties": {
+        "conversations": {
+          "type": "array",
+          "items": { "$ref": "../objects/conversation-record.schema.json" }
+        },
+        "nextCursor": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

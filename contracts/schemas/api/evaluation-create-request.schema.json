@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/evaluation-create-request.schema.json",
+  "title": "EvaluationCreateRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "caseId",
+    "runId",
+    "verdict",
+    "actualSummary",
+    "toolSummary",
+    "ragSummary",
+    "reportSummary"
+  ],
+  "properties": {
+    "resource": {
+      "type": "string",
+      "const": "results",
+      "description": "Optional resource selector accepted by POST /api/workbench/evaluations."
+    },
+    "action": {
+      "type": "string",
+      "const": "createResult",
+      "description": "Optional action selector accepted by POST /api/workbench/evaluations."
+    },
+    "caseId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Evaluation case ID."
+    },
+    "conversationId": {
+      "type": ["string", "null"],
+      "description": "Optional conversation ID; when present it must own the run."
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical runId being evaluated."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "unknown"],
+      "description": "Evaluation verdict."
+    },
+    "badCaseReason": {
+      "type": ["string", "null"],
+      "maxLength": 128,
+      "description": "Optional bad-case reason."
+    },
+    "humanNote": {
+      "type": ["string", "null"],
+      "description": "Optional human review note."
+    },
+    "actualSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation actual output summary."
+    },
+    "toolSummary": {
+      "type": "array",
+      "items": {},
+      "description": "Evaluation tool summary."
+    },
+    "ragSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation RAG summary."
+    },
+    "reportSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation report summary."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evaluatorVersion": {
+          "type": "string"
+        }
+      },
+      "description": "Evaluation request metadata allowlist. Server-owned modelTrace and LangSmith fields are not accepted from the request."
+    }
+  }
+}

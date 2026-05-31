@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/message-list-query.schema.json",
+  "title": "MessageListQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["conversationId"],
+  "properties": {
+    "conversationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Conversation whose messages should be listed."
+    },
+    "limit": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      ],
+      "description": "Requested page size."
+    },
+    "before": {
+      "type": ["string", "null"],
+      "description": "Pagination cursor based on created_at."
+    }
+  }
+}

@@ -291,6 +291,41 @@ const USAGE_METADATA_FORMAL_STATE_FORBIDDEN_FIELDS = [
   'report',
 ];
 
+const API_SCHEMA_FILES = [
+  'api/agent-run-quota-consume-request.schema.json',
+  'api/agent-run-quota-consume-response.schema.json',
+  'api/agent-run-quota-finish-request.schema.json',
+  'api/agent-run-quota-finish-response.schema.json',
+  'api/agent-run-quota-response.schema.json',
+  'api/agent-run-quota-status-response.schema.json',
+  'api/agent-run-stream-request.schema.json',
+  'api/conversation-create-request.schema.json',
+  'api/conversation-list-query.schema.json',
+  'api/conversation-list-response.schema.json',
+  'api/conversation-response.schema.json',
+  'api/conversation-update-request.schema.json',
+  'api/evaluation-cases-query.schema.json',
+  'api/evaluation-cases-response.schema.json',
+  'api/evaluation-create-request.schema.json',
+  'api/evaluation-create-response.schema.json',
+  'api/evaluation-list-query.schema.json',
+  'api/evaluation-list-response.schema.json',
+  'api/message-create-request.schema.json',
+  'api/message-list-query.schema.json',
+  'api/message-list-response.schema.json',
+  'api/message-response.schema.json',
+  'api/report-query.schema.json',
+  'api/report-generate-request.schema.json',
+  'api/report-list-response.schema.json',
+  'api/report-response.schema.json',
+  'api/report-status-update-query.schema.json',
+  'api/report-status-update-request.schema.json',
+  'api/report-status-update-response.schema.json',
+  'api/runs-restore-query.schema.json',
+  'api/runs-restore-response.schema.json',
+  'api/workbench-api-error-response.schema.json',
+];
+
 async function createSchemaValidators() {
   const ajv = new Ajv2020({
     allErrors: true,
@@ -1006,6 +1041,129 @@ function createAgentRunQuotaRecordFixture(overrides = {}) {
   };
 }
 
+function createConversationRecordFixture(overrides = {}) {
+  return {
+    id: 'conversation-1',
+    user_id: 'user-1',
+    title: '教学质量分析',
+    summary: '本月教学质量分析会话',
+    mode: 'agent',
+    status: 'active',
+    visibility: 'private',
+    source_template_id: null,
+    latest_run_id: RUN_ID,
+    message_count: 2,
+    created_at: CREATED_AT,
+    updated_at: UPDATED_AT,
+    archived_at: null,
+    metadata: { source: 'contract-fixture' },
+    ...overrides,
+  };
+}
+
+function createMessageRecordFixture(overrides = {}) {
+  return {
+    id: 'message-1',
+    conversation_id: 'conversation-1',
+    user_id: 'user-1',
+    role: 'user',
+    kind: 'text',
+    content: '分析本月教学质量数据',
+    run_id: RUN_ID,
+    client_message_id: 'client-message-1',
+    status: 'completed',
+    created_at: CREATED_AT,
+    metadata: { source: 'contract-fixture' },
+    ...overrides,
+  };
+}
+
+function createReportArtifactFixture(overrides = {}) {
+  return {
+    id: 'report-1',
+    conversation_id: 'conversation-1',
+    runId: RUN_ID,
+    user_id: 'user-1',
+    title: '教学质量分析报告',
+    content_markdown: '# 教学质量分析报告',
+    status: 'generated',
+    version: 1,
+    created_at: CREATED_AT,
+    updated_at: UPDATED_AT,
+    metadata: {
+      runId: RUN_ID,
+      source: 'persisted',
+      reportState: 'generated',
+      toolNames: ['aggregate_table'],
+      modelTrace: MODEL_TRACE,
+      langSmithTraceId: 'trace-report-1',
+    },
+    sources: [RUN_SOURCE],
+    sourceCount: 1,
+    sourceLineage: 'run_sources',
+    sourceNoSourceReason: null,
+    ...overrides,
+  };
+}
+
+function createEvaluationCaseFixture(overrides = {}) {
+  return {
+    id: 'case-1',
+    title: '教学质量分析应答',
+    question: '分析本月教学质量数据',
+    category: 'data_analysis',
+    expectedIntent: 'data_analysis',
+    expectedTools: ['aggregate_table'],
+    expectedRag: { required: false },
+    expectedReport: { required: true },
+    expectedConclusionPoints: ['指出异常指标'],
+    metadata: { source: 'contract-fixture' },
+    sortOrder: 1,
+    ...overrides,
+  };
+}
+
+function createEvaluationResultFixture(overrides = {}) {
+  return {
+    id: 'evaluation-result-1',
+    caseId: 'case-1',
+    conversationId: 'conversation-1',
+    runId: RUN_ID,
+    verdict: 'pass',
+    badCaseReason: null,
+    humanNote: 'Looks correct',
+    actualSummary: { markdownText: 'ok' },
+    modelTrace: MODEL_TRACE,
+    toolSummary: [],
+    ragSummary: { sourceCount: 1 },
+    reportSummary: { reportId: 'report-1' },
+    metadata: {
+      runId: RUN_ID,
+      source: 'workbench-evaluation',
+      resultVersion: 1,
+      modelTrace: MODEL_TRACE,
+      evaluatorVersion: 'rubric-v1',
+      langSmithTraceId: 'trace-eval-1',
+      langSmithEvaluation: { status: 'submitted' },
+    },
+    createdAt: CREATED_AT,
+    updatedAt: UPDATED_AT,
+    ...overrides,
+  };
+}
+
+function createAgentRunQuotaResponseFixture(overrides = {}) {
+  return {
+    quotaType: 'agent_run',
+    quotaLimit: 20,
+    quotaUsed: 1,
+    remaining: 19,
+    periodStart: '2026-05-01 00:00:00.000',
+    periodEnd: '2026-06-01 00:00:00.000',
+    ...overrides,
+  };
+}
+
 const SSE_EVENT_SCHEMA_CASES = [
   ['events/run-started-event.schema.json', 'run_started', createRunStartedEventFixture],
   ['events/run-reused-event.schema.json', 'run_reused', createRunReusedEventFixture],
@@ -1713,6 +1871,325 @@ function testSourceRetrievalPersistenceContracts(validate) {
   );
 }
 
+function testHttpApiBoundaryContracts(validate) {
+  const schemaFiles = validate.getSchemaFiles();
+  const generatedTypes = readFileSync(
+    path.join(rootDir, 'contracts/generated/workbench-contract.ts'),
+    'utf8',
+  );
+
+  for (const file of API_SCHEMA_FILES) {
+    assert.ok(schemaFiles.includes(file), `${file} must be discovered by schema tooling`);
+  }
+
+  for (const interfaceName of [
+    'AgentRunStreamRequest',
+    'RunsRestoreResponse',
+    'ConversationCreateRequest',
+    'ConversationRecord',
+    'MessageCreateRequest',
+    'MessageRecord',
+    'ReportGenerateRequest',
+    'ReportStatusUpdateQuery',
+    'EvaluationCreateRequest',
+    'EvaluationCase',
+    'AgentRunQuotaResponse',
+    'WorkbenchApiErrorResponse',
+  ]) {
+    assert.match(generatedTypes, new RegExp(`export interface ${interfaceName}\\b`));
+  }
+
+  for (const exportName of ['ReportQuery']) {
+    assert.match(generatedTypes, new RegExp(`export (?:interface|type) ${exportName}\\b`));
+  }
+
+  validate.assertValid('api/workbench-api-error-response.schema.json', {
+    ok: false,
+    errorCode: 'validation_error',
+    message: 'Invalid request.',
+  });
+  validate.assertInvalid('api/workbench-api-error-response.schema.json', {
+    ok: true,
+    errorCode: 'validation_error',
+    message: 'Invalid request.',
+  });
+
+  validate.assertValid('api/agent-run-stream-request.schema.json', {
+    conversationId: 'conversation-1',
+    prompt: '分析本月教学质量数据',
+    selectedModelId: MODEL_TRACE.selectedModelId,
+    clientRunId: 'client-run-1',
+    provider: RUN_DATA_SOURCE.provider,
+  });
+  validate.assertValid('api/agent-run-stream-request.schema.json', {
+    conversationId: 'conversation-1',
+  });
+  validate.assertInvalid('api/agent-run-stream-request.schema.json', {
+    prompt: '分析本月教学质量数据',
+    selectedModelId: MODEL_TRACE.selectedModelId,
+  });
+  validate.assertInvalid('api/agent-run-stream-request.schema.json', {
+    conversationId: 'conversation-1',
+    prompt: '分析本月教学质量数据',
+    selectedModelId: 7,
+  });
+  validate.assertInvalid('api/agent-run-stream-request.schema.json', {
+    conversationId: 'conversation-1',
+    prompt: '分析本月教学质量数据',
+    selectedModelId: MODEL_TRACE.selectedModelId,
+    displayRunId: RUN_ID,
+  });
+
+  const runsRestoreSchema = validate.getSchema('api/runs-restore-response.schema.json');
+  assert.equal(runsRestoreSchema.properties.data.properties.run.anyOf[0].$ref, '../objects/agent-run-record.schema.json');
+  assert.equal(runsRestoreSchema.properties.data.properties.events.items.$ref, '../objects/run-event-record.schema.json');
+  assert.equal(
+    runsRestoreSchema.properties.data.properties.toolInvocations.items.$ref,
+    '../objects/tool-invocation-record.schema.json',
+  );
+  assert.equal(runsRestoreSchema.properties.data.properties.sources.items.$ref, '../objects/run-source-record.schema.json');
+  validate.assertValid('api/runs-restore-query.schema.json', { conversationId: 'conversation-1', latest: 1 });
+  validate.assertValid('api/runs-restore-response.schema.json', {
+    ok: true,
+    data: {
+      run: createAgentRunRecordFixture(),
+      events: [createRunEventRecordFixture()],
+      toolInvocations: [createToolInvocationRecordFixture()],
+      sources: [createRunSourceRecordFixture()],
+    },
+  });
+  validate.assertInvalid('api/runs-restore-response.schema.json', {
+    ok: true,
+    data: {
+      run: {
+        ...createAgentRunRecordFixture(),
+        displayRunId: RUN_ID,
+      },
+      events: [createRunEventRecordFixture()],
+      toolInvocations: [createToolInvocationRecordFixture()],
+      sources: [createRunSourceRecordFixture()],
+    },
+  });
+
+  validate.assertValid('api/conversation-create-request.schema.json', {
+    title: '教学质量分析',
+    summary: '本月教学质量分析',
+    mode: 'agent',
+    metadata: { source: 'manual' },
+  });
+  validate.assertInvalid('api/conversation-create-request.schema.json', {
+    title: '教学质量分析',
+    runsById: {},
+  });
+  validate.assertValid('api/conversation-update-request.schema.json', { title: '新标题' });
+  validate.assertInvalid('api/conversation-update-request.schema.json', {
+    title: '新标题',
+    status: 'archived',
+  });
+  validate.assertValid('api/conversation-list-response.schema.json', {
+    ok: true,
+    data: {
+      conversations: [createConversationRecordFixture()],
+      nextCursor: null,
+    },
+  });
+  validate.assertInvalid('api/conversation-list-response.schema.json', {
+    ok: true,
+    data: {
+      conversations: [{ ...createConversationRecordFixture(), latestRunId: RUN_ID }],
+      nextCursor: null,
+    },
+  });
+
+  validate.assertValid('api/message-create-request.schema.json', {
+    conversationId: 'conversation-1',
+    role: 'user',
+    kind: 'text',
+    content: '分析本月教学质量数据',
+    runId: RUN_ID,
+    clientMessageId: 'client-message-1',
+    status: 'completed',
+    metadata: { source: 'manual' },
+  });
+  validate.assertInvalid('api/message-create-request.schema.json', {
+    role: 'user',
+    content: '分析本月教学质量数据',
+  });
+  validate.assertInvalid('api/message-create-request.schema.json', {
+    conversationId: 'conversation-1',
+    role: 'user',
+    content: '分析本月教学质量数据',
+    runViewModel: {},
+  });
+  validate.assertValid('api/message-list-response.schema.json', {
+    ok: true,
+    data: {
+      messages: [createMessageRecordFixture()],
+      nextCursor: null,
+    },
+  });
+  validate.assertInvalid('api/message-list-response.schema.json', {
+    ok: true,
+    data: {
+      messages: [{ ...createMessageRecordFixture(), displayRunId: RUN_ID }],
+      nextCursor: null,
+    },
+  });
+
+  const reportResponseSchema = validate.getSchema('api/report-response.schema.json');
+  assert.equal(reportResponseSchema.properties.data.$ref, '../objects/report-artifact.schema.json');
+  validate.assertValid('api/report-query.schema.json', { id: 'report-1' });
+  validate.assertValid('api/report-query.schema.json', { conversationId: 'conversation-1' });
+  validate.assertInvalid('api/report-query.schema.json', {
+    id: 'report-1',
+    data: createReportArtifactFixture(),
+  });
+  validate.assertInvalid('api/report-query.schema.json', {
+    conversationId: 'conversation-1',
+    response: { ok: true },
+  });
+  validate.assertValid('api/report-generate-request.schema.json', {
+    conversationId: 'conversation-1',
+    runId: RUN_ID,
+    title: '教学质量分析报告',
+    contentMarkdown: '# 教学质量分析报告',
+    status: 'generated',
+    metadata: {
+      source: 'manual',
+      runId: RUN_ID,
+      reportState: 'generated',
+      toolNames: ['aggregate_table'],
+    },
+  });
+  validate.assertInvalid('api/report-generate-request.schema.json', {
+    conversationId: 'conversation-1',
+    runId: RUN_ID,
+    contentMarkdown: '# 教学质量分析报告',
+    metadata: { modelTrace: MODEL_TRACE },
+  });
+  validate.assertInvalid('api/report-generate-request.schema.json', {
+    conversationId: 'conversation-1',
+    runId: RUN_ID,
+    contentMarkdown: '# 教学质量分析报告',
+    metadata: { sources: [RUN_SOURCE] },
+  });
+  validate.assertValid('api/report-response.schema.json', {
+    ok: true,
+    data: createReportArtifactFixture(),
+  });
+  validate.assertValid('api/report-list-response.schema.json', {
+    ok: true,
+    data: {
+      reports: [createReportArtifactFixture()],
+    },
+  });
+  validate.assertValid('api/report-status-update-query.schema.json', {
+    action: 'run-report-state',
+  });
+  validate.assertInvalid('api/report-status-update-query.schema.json', {
+    action: 'generate-report',
+  });
+  validate.assertInvalid('api/report-status-update-query.schema.json', {
+    action: 'run-report-state',
+    data: { runId: RUN_ID, reportState: 'skipped' },
+  });
+  const reportStatusUpdateResponseSchema = validate.getSchema('api/report-status-update-response.schema.json');
+  assert.equal(Object.hasOwn(reportStatusUpdateResponseSchema.properties.data, '$ref'), false);
+  assert.deepEqual(
+    Object.keys(reportStatusUpdateResponseSchema.properties.data.properties).sort(),
+    ['reportState', 'runId'],
+  );
+  validate.assertValid('api/report-status-update-response.schema.json', {
+    ok: true,
+    data: {
+      runId: RUN_ID,
+      reportState: 'skipped',
+    },
+  });
+
+  const evaluationListSchema = validate.getSchema('api/evaluation-list-response.schema.json');
+  assert.equal(evaluationListSchema.properties.data.properties.results.items.$ref, '../objects/evaluation-result.schema.json');
+  validate.assertValid('api/evaluation-create-request.schema.json', {
+    resource: 'results',
+    caseId: 'case-1',
+    conversationId: 'conversation-1',
+    runId: RUN_ID,
+    verdict: 'pass',
+    badCaseReason: null,
+    humanNote: 'Looks correct',
+    actualSummary: { markdownText: 'ok' },
+    toolSummary: [],
+    ragSummary: { sourceCount: 1 },
+    reportSummary: { reportId: 'report-1' },
+    metadata: { evaluatorVersion: 'rubric-v1' },
+  });
+  validate.assertInvalid('api/evaluation-create-request.schema.json', {
+    caseId: 'case-1',
+    runId: RUN_ID,
+    verdict: 'pass',
+    actualSummary: { markdownText: 'ok' },
+    toolSummary: [],
+    ragSummary: { sourceCount: 1 },
+    reportSummary: { reportId: 'report-1' },
+    metadata: { modelTrace: MODEL_TRACE },
+  });
+  validate.assertInvalid('api/evaluation-create-request.schema.json', {
+    caseId: 'case-1',
+    runId: RUN_ID,
+    verdict: 'pass',
+    actualSummary: { markdownText: 'ok' },
+    toolSummary: [],
+    ragSummary: { sourceCount: 1 },
+    reportSummary: { reportId: 'report-1' },
+    rawToolInput: {},
+  });
+  validate.assertValid('api/evaluation-cases-response.schema.json', {
+    ok: true,
+    data: {
+      cases: [createEvaluationCaseFixture()],
+    },
+  });
+  validate.assertValid('api/evaluation-list-response.schema.json', {
+    ok: true,
+    data: {
+      results: [createEvaluationResultFixture()],
+    },
+  });
+  validate.assertValid('api/evaluation-create-response.schema.json', {
+    ok: true,
+    data: {
+      result: createEvaluationResultFixture(),
+    },
+  });
+
+  const quotaStatusSchema = validate.getSchema('api/agent-run-quota-status-response.schema.json');
+  assert.equal(quotaStatusSchema.properties.data.properties.quota.$ref, 'agent-run-quota-response.schema.json');
+  validate.assertValid('api/agent-run-quota-status-response.schema.json', {
+    ok: true,
+    data: {
+      quota: createAgentRunQuotaResponseFixture(),
+    },
+  });
+  validate.assertInvalid('api/agent-run-quota-response.schema.json', {
+    ...createAgentRunQuotaResponseFixture(),
+    quota_type: 'agent_run',
+  });
+  validate.assertInvalid('api/agent-run-quota-response.schema.json', createAgentRunQuotaRecordFixture());
+  validate.assertValid('api/agent-run-quota-consume-response.schema.json', {
+    ok: true,
+    data: {
+      usageId: 'usage-1',
+      quota: createAgentRunQuotaResponseFixture(),
+    },
+  });
+  validate.assertValid('api/agent-run-quota-finish-response.schema.json', {
+    ok: true,
+    data: {
+      usage: createAgentRunUsageRecordFixture({ status: 'completed', finished_at: UPDATED_AT }),
+    },
+  });
+}
+
 function testDemoSeedRunSnapshotContracts(validate) {
   const templates = demoConversations.demoConversationTemplates;
   let seedRunCount = 0;
@@ -1902,6 +2379,7 @@ testQuotaUsagePersistenceContracts(validate);
 testRunEventPersistenceContracts(validate);
 testToolInvocationPersistenceContracts(validate);
 testSourceRetrievalPersistenceContracts(validate);
+testHttpApiBoundaryContracts(validate);
 testDemoSeedRunSnapshotContracts(validate);
 testRunSnapshotStatusContract(validate);
 testRunSseEventContracts(validate);
