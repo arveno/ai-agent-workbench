@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/tool-invocation-metadata.schema.json",
+  "title": "ToolInvocationMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "runtimeToolId", "toolRuntime", "langChainToolName"],
+  "properties": {
+    "source": {
+      "type": "string",
+      "const": "cloudbase-agent-run-real",
+      "description": "tool_invocations.metadata 的服务端写入来源；不表示 Source lineage 正式状态。"
+    },
+    "runtimeToolId": {
+      "$ref": "#/$defs/ToolName"
+    },
+    "toolRuntime": {
+      "type": "string",
+      "const": "langchain_structured_tool",
+      "description": "当前 Tool Invocation 的 runtime 边界。"
+    },
+    "langChainToolName": {
+      "$ref": "#/$defs/ToolName"
+    },
+    "runId": {
+      "type": "string",
+      "description": "完成或失败写入时用于观测对齐的 canonical runId；不替代 tool_invocations.run_id。"
+    },
+    "fallbackReason": {
+      "type": "string",
+      "description": "工具失败时写入的失败分类；正式 Tool 状态仍以 tool_invocations.status 为准。"
+    }
+  },
+  "$defs": {
+    "ToolName": {
+      "type": "string",
+      "enum": ["schema_inspect", "aggregate_table", "chart_render", "knowledge_search"]
+    }
+  }
+}

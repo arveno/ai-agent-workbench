@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/tool-invocation-record.schema.json",
+  "title": "ToolInvocationRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "run_id",
+    "conversation_id",
+    "user_id",
+    "tool_name",
+    "display_name",
+    "status",
+    "input",
+    "input_summary",
+    "output",
+    "output_summary",
+    "started_at",
+    "finished_at",
+    "elapsed_ms",
+    "error",
+    "metadata"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "tool_invocations.id，Tool Invocation persistence 主键。"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "绑定 DB agent_runs.id。"
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "绑定当前 conversation。"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Workbench 业务用户边界。"
+    },
+    "tool_name": {
+      "$ref": "#/$defs/ToolName"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Tool Invocation 展示名称快照。"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["running", "completed", "failed"],
+      "description": "当前 runtime 写入 tool_invocations 的 persistence 状态。"
+    },
+    "input": {
+      "$ref": "#/$defs/ToolInvocationInput"
+    },
+    "input_summary": {
+      "type": ["string", "null"],
+      "description": "Tool input 摘要；read boundary 会把空字符串归一为 null。"
+    },
+    "output": {
+      "$ref": "#/$defs/ToolInvocationOutput"
+    },
+    "output_summary": {
+      "type": ["string", "null"],
+      "description": "Tool output 摘要。"
+    },
+    "started_at": {
+      "type": "string",
+      "description": "Tool Invocation 开始时间。"
+    },
+    "finished_at": {
+      "type": ["string", "null"],
+      "description": "Tool Invocation 完成或失败时间；running 时为 null。"
+    },
+    "elapsed_ms": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Tool Invocation 耗时，单位毫秒；running 时为 null。"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "Tool 失败时的安全错误信息。"
+    },
+    "metadata": {
+      "$ref": "tool-invocation-metadata.schema.json"
+    }
+  },
+  "$defs": {
+    "ToolName": {
+      "type": "string",
+      "enum": ["schema_inspect", "aggregate_table", "chart_render", "knowledge_search"]
+    },
+    "ToolInvocationInput": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Tool input raw JSON object。不同工具输入结构差异较大，本轮只收口 persistence object 边界。"
+    },
+    "ToolInvocationOutput": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Tool output raw JSON object。不同工具输出结构差异较大，本轮只收口 persistence object 边界。"
+    }
+  }
+}

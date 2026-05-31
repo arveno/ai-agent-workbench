@@ -730,6 +730,8 @@ export interface WorkbenchContract {
   runPlan: RunPlan;
   runSnapshot: RunSnapshot;
   runSource: RunSource;
+  toolInvocationMetadata: ToolInvocationMetadata;
+  toolInvocationRecord: ToolInvocationRecord;
 }
 export interface RunSseEventEnvelope {
   /**
@@ -1567,4 +1569,108 @@ export interface RunEventRecord {
    * run_events.created_at。
    */
   created_at: string;
+}
+export interface ToolInvocationMetadata {
+  /**
+   * tool_invocations.metadata 的服务端写入来源；不表示 Source lineage 正式状态。
+   */
+  source: 'cloudbase-agent-run-real';
+  /**
+   * This interface was referenced by `ToolInvocationMetadata`'s JSON-Schema
+   * via the `definition` "ToolName".
+   */
+  runtimeToolId: 'schema_inspect' | 'aggregate_table' | 'chart_render' | 'knowledge_search';
+  /**
+   * 当前 Tool Invocation 的 runtime 边界。
+   */
+  toolRuntime: 'langchain_structured_tool';
+  /**
+   * This interface was referenced by `ToolInvocationMetadata`'s JSON-Schema
+   * via the `definition` "ToolName".
+   */
+  langChainToolName: 'schema_inspect' | 'aggregate_table' | 'chart_render' | 'knowledge_search';
+  /**
+   * 完成或失败写入时用于观测对齐的 canonical runId；不替代 tool_invocations.run_id。
+   */
+  runId?: string;
+  /**
+   * 工具失败时写入的失败分类；正式 Tool 状态仍以 tool_invocations.status 为准。
+   */
+  fallbackReason?: string;
+}
+export interface ToolInvocationRecord {
+  /**
+   * tool_invocations.id，Tool Invocation persistence 主键。
+   */
+  id: string;
+  /**
+   * 绑定 DB agent_runs.id。
+   */
+  run_id: string;
+  /**
+   * 绑定当前 conversation。
+   */
+  conversation_id: string;
+  /**
+   * Workbench 业务用户边界。
+   */
+  user_id: string;
+  /**
+   * This interface was referenced by `ToolInvocationRecord`'s JSON-Schema
+   * via the `definition` "ToolName".
+   */
+  tool_name: 'schema_inspect' | 'aggregate_table' | 'chart_render' | 'knowledge_search';
+  /**
+   * Tool Invocation 展示名称快照。
+   */
+  display_name: string;
+  /**
+   * 当前 runtime 写入 tool_invocations 的 persistence 状态。
+   */
+  status: 'running' | 'completed' | 'failed';
+  input: ToolInvocationInput;
+  /**
+   * Tool input 摘要；read boundary 会把空字符串归一为 null。
+   */
+  input_summary: string | null;
+  output: ToolInvocationOutput;
+  /**
+   * Tool output 摘要。
+   */
+  output_summary: string | null;
+  /**
+   * Tool Invocation 开始时间。
+   */
+  started_at: string;
+  /**
+   * Tool Invocation 完成或失败时间；running 时为 null。
+   */
+  finished_at: string | null;
+  /**
+   * Tool Invocation 耗时，单位毫秒；running 时为 null。
+   */
+  elapsed_ms: number | null;
+  /**
+   * Tool 失败时的安全错误信息。
+   */
+  error: string | null;
+  metadata: ToolInvocationMetadata;
+}
+/**
+ * Tool input raw JSON object。不同工具输入结构差异较大，本轮只收口 persistence object 边界。
+ *
+ * This interface was referenced by `ToolInvocationRecord`'s JSON-Schema
+ * via the `definition` "ToolInvocationInput".
+ */
+export interface ToolInvocationInput {
+  [k: string]: unknown;
+}
+/**
+ * Tool output raw JSON object。不同工具输出结构差异较大，本轮只收口 persistence object 边界。
+ *
+ * This interface was referenced by `ToolInvocationRecord`'s JSON-Schema
+ * via the `definition` "ToolInvocationOutput".
+ */
+export interface ToolInvocationOutput {
+  [k: string]: unknown;
 }
