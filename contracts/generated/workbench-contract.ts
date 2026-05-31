@@ -717,6 +717,8 @@ export interface WorkbenchContract {
   toolFailedEvent: ToolFailedEvent;
   toolStartedEvent: ToolStartedEvent;
   agentConclusion: AgentConclusion;
+  agentRunMetadata: AgentRunMetadata;
+  agentRunRecord: AgentRunRecord;
   evaluationMetadata: EvaluationMetadata;
   evaluationResult: EvaluationResult;
   modelTrace: ModelTrace;
@@ -724,6 +726,7 @@ export interface WorkbenchContract {
   reportMetadata: ReportMetadata;
   runChartData: RunChartData;
   runDataSource: RunDataSource;
+  runEventRecord: RunEventRecord;
   runPlan: RunPlan;
   runSnapshot: RunSnapshot;
   runSource: RunSource;
@@ -1155,6 +1158,186 @@ export interface RunDataSource {
    */
   tableName?: string;
 }
+export interface AgentRunMetadata {
+  /**
+   * agent_runs.metadata 的服务端写入来源。
+   */
+  source: 'cloudbase-agent-run-real';
+  /**
+   * Agent Run runtime 版本，例如 langgraph-agent-run-v1。
+   */
+  runtime: string;
+  /**
+   * LangGraph thread id。
+   */
+  langGraphThreadId: string | null;
+  /**
+   * LangGraph checkpoint id。
+   */
+  langGraphCheckpointId: string | null;
+  /**
+   * LangSmith trace id。
+   */
+  langSmithTraceId: string | null;
+  /**
+   * LangSmith run id。
+   */
+  langSmithRunId: string | null;
+  /**
+   * LangSmith trace 状态。
+   */
+  langSmithTraceStatus: string;
+  /**
+   * LangSmith project 名称。
+   */
+  langSmithProjectName: string;
+  langSmithTrace: LangSmithTrace;
+  /**
+   * 请求幂等 ID。
+   */
+  clientRunId: string | null;
+  /**
+   * 请求是否缺少 clientRunId。
+   */
+  clientRunIdMissing: boolean;
+  /**
+   * Agent Run runtime 当前使用的数据 provider。
+   */
+  dataProvider: 'cloudbase_mysql';
+  /**
+   * 当前 Run 的 canonical model trace；不得在 metadata 顶层展开模型字段。
+   */
+  modelTrace: ModelTrace | null;
+  /**
+   * 当前 Run 的 canonical agent conclusion。
+   */
+  agentConclusion: AgentConclusion | null;
+  /**
+   * Run 完成后写入的 assistant message id。
+   */
+  assistantMessageId?: string | null;
+  /**
+   * Run 启动前失败时写入的错误码。
+   */
+  errorCode?: string | null;
+  /**
+   * Run 失败时写入的安全错误信息。
+   */
+  errorMessage?: string | null;
+}
+/**
+ * This interface was referenced by `AgentRunMetadata`'s JSON-Schema
+ * via the `definition` "LangSmithTrace".
+ */
+export interface LangSmithTrace {
+  provider: 'langsmith';
+  status: string;
+  reason: string | null;
+  projectName: string;
+  traceId: string | null;
+  runId: string | null;
+  runName: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorType: string | null;
+  errorMessage: string | null;
+  timeoutMs: number | null;
+  externalReference: LangSmithExternalReference;
+}
+/**
+ * This interface was referenced by `AgentRunMetadata`'s JSON-Schema
+ * via the `definition` "LangSmithExternalReference".
+ */
+export interface LangSmithExternalReference {
+  workbenchRunId?: string | null;
+  conversationId?: string | null;
+  clientRunId?: string | null;
+  selectedModelId?: string | null;
+  langGraphThreadId?: string | null;
+}
+export interface AgentRunRecord {
+  /**
+   * agent_runs.id，canonical runId。
+   */
+  id: string;
+  /**
+   * agent_runs.conversation_id。
+   */
+  conversation_id: string;
+  /**
+   * agent_runs.user_id。
+   */
+  user_id: string;
+  /**
+   * agent_run_usage.id。
+   */
+  usage_id: string | null;
+  /**
+   * 请求幂等 ID。
+   */
+  client_run_id: string | null;
+  /**
+   * 持久化 Run 执行模式。
+   */
+  mode: 'mock' | 'agent';
+  /**
+   * 持久化 Run 状态。
+   */
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'stopped';
+  /**
+   * planner 识别出的 intent。
+   */
+  intent:
+    | ('capability_intro' | 'data_analysis' | 'knowledge_qa' | 'unsupported' | 'unknown')
+    | null;
+  /**
+   * 用户输入。
+   */
+  prompt: string | null;
+  /**
+   * agent_runs.plan。pending 写入允许空对象，完成态使用 canonical RunPlan。
+   */
+  plan: RunPlan | EmptyObject;
+  data_source_snapshot: RunDataSource;
+  /**
+   * agent_runs.chart_data。无图表时为 DB persistence 空对象，不允许 null。
+   */
+  chart_data: RunChartData | EmptyObject;
+  /**
+   * Run 结论文本。
+   */
+  conclusion: string | null;
+  /**
+   * 持久化 report state。
+   */
+  report_state: ('hidden' | 'pending' | 'generating' | 'generated' | 'skipped' | 'failed') | null;
+  /**
+   * Run 开始时间。
+   */
+  started_at: string;
+  /**
+   * Run 完成时间。
+   */
+  completed_at: string | null;
+  /**
+   * Run 耗时，单位毫秒。
+   */
+  elapsed_ms: number | null;
+  /**
+   * Run 失败时的安全错误信息。
+   */
+  error_message: string | null;
+  metadata: AgentRunMetadata;
+}
+/**
+ * 当前 agent_runs pending/no-chart persistence 状态使用的空对象。
+ *
+ * This interface was referenced by `AgentRunRecord`'s JSON-Schema
+ * via the `definition` "EmptyObject".
+ */
+export interface EmptyObject {
+  [k: string]: unknown;
+}
 export interface EvaluationMetadata {
   /**
    * 该 evaluation result 评估的 canonical runId。
@@ -1338,4 +1521,50 @@ export interface ReportMetadata {
    * 外部 observability ID；不替代 canonical runId。
    */
   langSmithTraceId?: string | null;
+}
+export interface RunEventRecord {
+  /**
+   * run_events.id。
+   */
+  id: string;
+  /**
+   * run_events.run_id。
+   */
+  run_id: string;
+  /**
+   * run_events.conversation_id。
+   */
+  conversation_id: string;
+  /**
+   * run_events.user_id。
+   */
+  user_id: string;
+  /**
+   * Run 内事件序号。
+   */
+  seq: number;
+  /**
+   * 持久化事件类型，应与 payload.type 一致；一致性由 boundary fixture 断言覆盖。
+   */
+  event_type:
+    | 'run_started'
+    | 'run_reused'
+    | 'step_started'
+    | 'step_completed'
+    | 'step_failed'
+    | 'tool_started'
+    | 'tool_completed'
+    | 'tool_failed'
+    | 'chart_ready'
+    | 'conclusion_delta'
+    | 'conclusion_completed'
+    | 'rag_sources_ready'
+    | 'report_pending'
+    | 'run_completed'
+    | 'run_failed';
+  payload: RunSseEventEnvelope;
+  /**
+   * run_events.created_at。
+   */
+  created_at: string;
 }

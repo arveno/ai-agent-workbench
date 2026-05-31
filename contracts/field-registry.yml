@@ -370,6 +370,24 @@ objects:
         source: "LangSmith feedback boundary"
         description: "服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。"
 schemaObjectReferences:
+  AgentRunRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-record.schema.json"
+    summary: "agent_runs persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  AgentRunMetadata:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run runtime / persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-metadata.schema.json"
+    summary: "agent_runs.metadata canonical persistence metadata schema；modelTrace 与 agentConclusion 保持嵌套对象，不在 metadata 顶层展开模型字段。"
+  RunEventRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Event"
+    owner: "Agent Run event persistence boundary"
+    schema: "contracts/schemas/objects/run-event-record.schema.json"
+    summary: "run_events persistence read record schema；payload 使用统一 SSE envelope，具体事件 payload 继续由 events/* schema 约束。"
   ReportArtifact:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"
