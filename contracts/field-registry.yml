@@ -388,6 +388,18 @@ schemaObjectReferences:
     owner: "Agent Run event persistence boundary"
     schema: "contracts/schemas/objects/run-event-record.schema.json"
     summary: "run_events persistence read record schema；payload 使用统一 SSE envelope，具体事件 payload 继续由 events/* schema 约束。"
+  ToolInvocationRecord:
+    lifecycleNode: "09 Tool Governance / Data Access, 10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Tool Invocation"
+    owner: "Agent Run tool persistence boundary"
+    schema: "contracts/schemas/objects/tool-invocation-record.schema.json"
+    summary: "tool_invocations persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  ToolInvocationMetadata:
+    lifecycleNode: "09 Tool Governance / Data Access, 10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Tool Invocation"
+    owner: "Agent Run tool persistence boundary"
+    schema: "contracts/schemas/objects/tool-invocation-metadata.schema.json"
+    summary: "tool_invocations.metadata schema；只承载工具 runtime/observability metadata，不承载 Run / Source / Report 正式状态。"
   ReportArtifact:
     lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
     coreObject: "Report"

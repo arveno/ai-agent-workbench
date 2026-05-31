@@ -177,6 +177,48 @@ const LANGSMITH_TRACE = {
   },
 };
 
+const TOOL_INVOCATION_INPUT = {
+  metric: 'warning_count',
+  groupBy: 'subject',
+  limit: 10,
+  timeRange: { type: 'none' },
+  comparison: 'none',
+};
+
+const TOOL_INVOCATION_OUTPUT = {
+  metric: 'warning_count',
+  groupBy: 'subject',
+  totalRecords: 1,
+  rowCount: 1,
+  averages: {
+    dimension: '未分组',
+    recordCount: 1,
+    avg_score: 88,
+    attendance_rate: 98,
+    homework_completion_rate: 96,
+    warning_count: 1,
+  },
+  summaryByGrade: [],
+  summaryBySubject: [],
+  summaryByMonth: [],
+  rows: [
+    {
+      dimension: '数学',
+      recordCount: 1,
+      avg_score: 88,
+      attendance_rate: 98,
+      homework_completion_rate: 96,
+      warning_count: 1,
+      value: 1,
+    },
+  ],
+  elapsedMs: 12,
+};
+
+const TOOL_INVOCATION_FAILED_OUTPUT = {
+  fallbackReason: 'data_tool_query_failed',
+};
+
 const MALICIOUS_MODEL_TRACE = {
   ...MODEL_TRACE,
   selectedModelId: 'request-model',
@@ -204,6 +246,18 @@ const REPORT_REQUEST_ONLY_FORBIDDEN_FIELDS = [
   'source_lineage',
   'sourceNoSourceReason',
   'source_no_source_reason',
+];
+
+const TOOL_INVOCATION_METADATA_FORBIDDEN_FIELDS = [
+  'runStatus',
+  'reportState',
+  'reportStatus',
+  'artifactStatus',
+  'sourceState',
+  'sources',
+  'runSources',
+  'ragSources',
+  'report',
 ];
 
 async function createSchemaValidators() {
@@ -755,6 +809,47 @@ function createRunEventRecordFixture(event = createRunStartedEventFixture(), ove
   };
 }
 
+function createToolInvocationMetadataFixture(overrides = {}) {
+  const metadata = {
+    source: 'cloudbase-agent-run-real',
+    runtimeToolId: 'aggregate_table',
+    toolRuntime: 'langchain_structured_tool',
+    langChainToolName: 'aggregate_table',
+    runId: RUN_ID,
+    ...overrides,
+  };
+
+  for (const [fieldName, fieldValue] of Object.entries(overrides)) {
+    if (fieldValue === undefined) {
+      delete metadata[fieldName];
+    }
+  }
+
+  return metadata;
+}
+
+function createToolInvocationRecordFixture(overrides = {}) {
+  return {
+    id: 'tool-invocation-1',
+    run_id: RUN_ID,
+    conversation_id: 'conversation-1',
+    user_id: 'user-1',
+    tool_name: 'aggregate_table',
+    display_name: '数据聚合分析',
+    status: 'completed',
+    input: TOOL_INVOCATION_INPUT,
+    input_summary: JSON.stringify(TOOL_INVOCATION_INPUT),
+    output: TOOL_INVOCATION_OUTPUT,
+    output_summary: '读取 1 条记录，返回 1 条聚合结果',
+    started_at: CREATED_AT,
+    finished_at: UPDATED_AT,
+    elapsed_ms: 123,
+    error: null,
+    metadata: createToolInvocationMetadataFixture(),
+    ...overrides,
+  };
+}
+
 const SSE_EVENT_SCHEMA_CASES = [
   ['events/run-started-event.schema.json', 'run_started', createRunStartedEventFixture],
   ['events/run-reused-event.schema.json', 'run_reused', createRunReusedEventFixture],
@@ -1063,6 +1158,96 @@ function testRunEventPersistenceContracts(validate) {
   );
 }
 
+function testToolInvocationPersistenceContracts(validate) {
+  const toolInvocationRecordSchema = validate.getSchema('objects/tool-invocation-record.schema.json');
+  assert.equal(toolInvocationRecordSchema.properties.tool_name.$ref, '#/$defs/ToolName');
+  assert.equal(toolInvocationRecordSchema.properties.metadata.$ref, 'tool-invocation-metadata.schema.json');
+  assert.equal(toolInvocationRecordSchema.properties.output.$ref, '#/$defs/ToolInvocationOutput');
+  assert.equal(Object.hasOwn(toolInvocationRecordSchema.properties, 'tool_id'), false);
+  assert.equal(Object.hasOwn(toolInvocationRecordSchema.properties, 'completed_at'), false);
+
+  validate.assertValid('objects/tool-invocation-metadata.schema.json', createToolInvocationMetadataFixture());
+  validate.assertValid('objects/tool-invocation-metadata.schema.json', createToolInvocationMetadataFixture({
+    runId: undefined,
+  }));
+  validate.assertValid('objects/tool-invocation-metadata.schema.json', createToolInvocationMetadataFixture({
+    fallbackReason: 'data_tool_query_failed',
+  }));
+
+  for (const fieldName of TOOL_INVOCATION_METADATA_FORBIDDEN_FIELDS) {
+    validate.assertInvalid('objects/tool-invocation-metadata.schema.json', {
+      ...createToolInvocationMetadataFixture(),
+      [fieldName]: 'must-not-carry-formal-state',
+    });
+  }
+
+  validate.assertValid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture());
+  validate.assertValid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    id: 'tool-invocation-running',
+    tool_name: 'schema_inspect',
+    display_name: '数据源结构读取',
+    status: 'running',
+    input: { includeColumns: true },
+    input_summary: 'includeColumns=true',
+    output: {},
+    output_summary: null,
+    finished_at: null,
+    elapsed_ms: null,
+    error: null,
+    metadata: createToolInvocationMetadataFixture({
+      runtimeToolId: 'schema_inspect',
+      langChainToolName: 'schema_inspect',
+      runId: undefined,
+    }),
+  }));
+  validate.assertValid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    id: 'tool-invocation-failed',
+    status: 'failed',
+    output: TOOL_INVOCATION_FAILED_OUTPUT,
+    output_summary: 'CloudBase MySQL teaching_metrics query failed.',
+    error: 'CloudBase MySQL teaching_metrics query failed.',
+    metadata: createToolInvocationMetadataFixture({
+      fallbackReason: TOOL_INVOCATION_FAILED_OUTPUT.fallbackReason,
+    }),
+  }));
+
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    status: 'success',
+  }));
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    metadata: createToolInvocationMetadataFixture({
+      reportState: 'generated',
+    }),
+  }));
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    output: null,
+  }));
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    output: [],
+  }));
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    elapsed_ms: -1,
+  }));
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    tool_id: 'aggregate_table',
+  }));
+
+  for (const requiredField of ['id', 'run_id', 'tool_name']) {
+    const invalidRecord = createToolInvocationRecordFixture();
+    delete invalidRecord[requiredField];
+    validate.assertInvalid('objects/tool-invocation-record.schema.json', invalidRecord);
+  }
+
+  validate.assertInvalid('objects/tool-invocation-record.schema.json', createToolInvocationRecordFixture({
+    metadata: {
+      source: 'cloudbase-agent-run-real',
+      toolRuntime: 'langchain_structured_tool',
+      langChainToolName: 'aggregate_table',
+      runId: RUN_ID,
+    },
+  }));
+}
+
 function testDemoSeedRunSnapshotContracts(validate) {
   const templates = demoConversations.demoConversationTemplates;
   let seedRunCount = 0;
@@ -1249,6 +1434,7 @@ testModelLayerPricingSource(validate);
 testRunSnapshotCoreObjectSchemas(validate);
 testAgentRunPersistenceContracts(validate);
 testRunEventPersistenceContracts(validate);
+testToolInvocationPersistenceContracts(validate);
 testDemoSeedRunSnapshotContracts(validate);
 testRunSnapshotStatusContract(validate);
 testRunSseEventContracts(validate);
