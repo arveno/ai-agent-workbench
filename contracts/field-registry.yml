@@ -550,6 +550,12 @@ schemaObjectReferences:
     owner: "workbench-messages HTTP API"
     schema: "contracts/schemas/api/message-list-response.schema.json"
     summary: "Message list HTTP response schema；items 通过 $ref 引用 MessageRecord。"
+  ReportQuery:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-query.schema.json"
+    summary: "GET /api/workbench/reports query schema；覆盖 id 单报表读取与 conversationId 列表查询。"
   ReportGenerateRequest:
     lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
     coreObject: "Report"
@@ -568,6 +574,12 @@ schemaObjectReferences:
     owner: "workbench-reports HTTP API"
     schema: "contracts/schemas/api/report-list-response.schema.json"
     summary: "Report list HTTP response schema；items 通过 $ref 引用 ReportArtifact。"
+  ReportStatusUpdateQuery:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-status-update-query.schema.json"
+    summary: "POST /api/workbench/reports status update action query schema。"
   ReportStatusUpdateRequest:
     lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
     coreObject: "Report"

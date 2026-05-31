@@ -314,9 +314,11 @@ const API_SCHEMA_FILES = [
   'api/message-list-query.schema.json',
   'api/message-list-response.schema.json',
   'api/message-response.schema.json',
+  'api/report-query.schema.json',
   'api/report-generate-request.schema.json',
   'api/report-list-response.schema.json',
   'api/report-response.schema.json',
+  'api/report-status-update-query.schema.json',
   'api/report-status-update-request.schema.json',
   'api/report-status-update-response.schema.json',
   'api/runs-restore-query.schema.json',
@@ -1888,12 +1890,17 @@ function testHttpApiBoundaryContracts(validate) {
     'MessageCreateRequest',
     'MessageRecord',
     'ReportGenerateRequest',
+    'ReportStatusUpdateQuery',
     'EvaluationCreateRequest',
     'EvaluationCase',
     'AgentRunQuotaResponse',
     'WorkbenchApiErrorResponse',
   ]) {
     assert.match(generatedTypes, new RegExp(`export interface ${interfaceName}\\b`));
+  }
+
+  for (const exportName of ['ReportQuery']) {
+    assert.match(generatedTypes, new RegExp(`export (?:interface|type) ${exportName}\\b`));
   }
 
   validate.assertValid('api/workbench-api-error-response.schema.json', {
@@ -2031,6 +2038,16 @@ function testHttpApiBoundaryContracts(validate) {
 
   const reportResponseSchema = validate.getSchema('api/report-response.schema.json');
   assert.equal(reportResponseSchema.properties.data.$ref, '../objects/report-artifact.schema.json');
+  validate.assertValid('api/report-query.schema.json', { id: 'report-1' });
+  validate.assertValid('api/report-query.schema.json', { conversationId: 'conversation-1' });
+  validate.assertInvalid('api/report-query.schema.json', {
+    id: 'report-1',
+    data: createReportArtifactFixture(),
+  });
+  validate.assertInvalid('api/report-query.schema.json', {
+    conversationId: 'conversation-1',
+    response: { ok: true },
+  });
   validate.assertValid('api/report-generate-request.schema.json', {
     conversationId: 'conversation-1',
     runId: RUN_ID,
@@ -2066,6 +2083,22 @@ function testHttpApiBoundaryContracts(validate) {
       reports: [createReportArtifactFixture()],
     },
   });
+  validate.assertValid('api/report-status-update-query.schema.json', {
+    action: 'run-report-state',
+  });
+  validate.assertInvalid('api/report-status-update-query.schema.json', {
+    action: 'generate-report',
+  });
+  validate.assertInvalid('api/report-status-update-query.schema.json', {
+    action: 'run-report-state',
+    data: { runId: RUN_ID, reportState: 'skipped' },
+  });
+  const reportStatusUpdateResponseSchema = validate.getSchema('api/report-status-update-response.schema.json');
+  assert.equal(Object.hasOwn(reportStatusUpdateResponseSchema.properties.data, '$ref'), false);
+  assert.deepEqual(
+    Object.keys(reportStatusUpdateResponseSchema.properties.data.properties).sort(),
+    ['reportState', 'runId'],
+  );
   validate.assertValid('api/report-status-update-response.schema.json', {
     ok: true,
     data: {

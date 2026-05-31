@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/report-status-update-query.schema.json",
+  "title": "ReportStatusUpdateQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "const": "run-report-state",
+      "description": "Action query required by POST /api/workbench/reports?action=run-report-state."
+    }
+  }
+}
