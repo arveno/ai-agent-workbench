@@ -718,7 +718,10 @@ export interface WorkbenchContract {
   toolStartedEvent: ToolStartedEvent;
   agentConclusion: AgentConclusion;
   agentRunMetadata: AgentRunMetadata;
+  agentRunQuotaRecord: AgentRunQuotaRecord;
   agentRunRecord: AgentRunRecord;
+  agentRunUsageMetadata: AgentRunUsageMetadata;
+  agentRunUsageRecord: AgentRunUsageRecord;
   evaluationMetadata: EvaluationMetadata;
   evaluationResult: EvaluationResult;
   modelTrace: ModelTrace;
@@ -1261,6 +1264,53 @@ export interface LangSmithExternalReference {
   selectedModelId?: string | null;
   langGraphThreadId?: string | null;
 }
+export interface AgentRunQuotaRecord {
+  /**
+   * agent_run_quota.id，Agent Run quota persistence 主键。
+   */
+  id: string;
+  /**
+   * Workbench 业务用户边界。
+   */
+  user_id: string;
+  /**
+   * 当前 quota 只覆盖 Agent Run。
+   */
+  quota_type: 'agent_run';
+  /**
+   * 本周期 Agent Run quota 上限。
+   */
+  quota_limit: number;
+  /**
+   * 本周期已使用 Agent Run quota 次数。
+   */
+  quota_used: number;
+  /**
+   * quota 周期开始时间。
+   */
+  period_start: string;
+  /**
+   * quota 周期结束时间。
+   */
+  period_end: string | null;
+  /**
+   * quota persistence metadata；不承载 Run / Tool / Source / Report / Evaluation 正式状态。
+   */
+  metadata: {
+    /**
+     * agent_run_quota.metadata 的服务端写入来源。
+     */
+    source?: 'cloudbase-agent-run-real';
+  };
+  /**
+   * agent_run_quota.created_at。
+   */
+  created_at: string;
+  /**
+   * agent_run_quota.updated_at。
+   */
+  updated_at: string;
+}
 export interface AgentRunRecord {
   /**
    * agent_runs.id，canonical runId。
@@ -1343,6 +1393,75 @@ export interface AgentRunRecord {
  */
 export interface EmptyObject {
   [k: string]: unknown;
+}
+export interface AgentRunUsageMetadata {
+  /**
+   * agent_run_usage.metadata 的服务端写入来源。
+   */
+  source?: 'cloudbase-agent-run-real';
+  /**
+   * 绑定 DB agent_runs.id 的 canonical runId。
+   */
+  runId?: string;
+  /**
+   * 请求幂等 ID；不替代 agent_run_usage.run_id。
+   */
+  clientRunId?: string | null;
+  /**
+   * Run 完成后写入的 assistant message id。
+   */
+  assistantMessageId?: string | null;
+  /**
+   * LangSmith 观测快照；不替代 canonical runId。
+   */
+  langSmithTrace?: LangSmithTrace | null;
+  /**
+   * 模型调用观测快照；不得在 usage metadata 顶层展开 provider / model / usage / costEstimate 等字段。
+   */
+  modelTrace?: ModelTrace | null;
+}
+export interface AgentRunUsageRecord {
+  /**
+   * agent_run_usage.id，Agent Run usage persistence 主键。
+   */
+  id: string;
+  /**
+   * Workbench 业务用户边界。
+   */
+  user_id: string;
+  /**
+   * 绑定 DB agent_runs.id；独立 quota basic loop 兼容路径可为空。
+   */
+  run_id: string | null;
+  /**
+   * 当前 usage 只覆盖 Agent Run 额度。
+   */
+  quota_type: 'agent_run';
+  /**
+   * Agent Run usage persistence 状态。
+   */
+  status: 'started' | 'completed' | 'failed' | 'stopped';
+  /**
+   * usage 开始时间。
+   */
+  started_at: string;
+  /**
+   * usage 完成、失败或停止时间；started 时为 null。
+   */
+  finished_at: string | null;
+  /**
+   * usage 失败或停止时的错误码。
+   */
+  error_code: string | null;
+  metadata: AgentRunUsageMetadata;
+  /**
+   * agent_run_usage.created_at。
+   */
+  created_at: string;
+  /**
+   * agent_run_usage.updated_at。
+   */
+  updated_at: string;
 }
 export interface EvaluationMetadata {
   /**

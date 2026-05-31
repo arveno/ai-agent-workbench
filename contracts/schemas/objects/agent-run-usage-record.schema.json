@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/agent-run-usage-record.schema.json",
+  "title": "AgentRunUsageRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "user_id",
+    "run_id",
+    "quota_type",
+    "status",
+    "started_at",
+    "finished_at",
+    "error_code",
+    "metadata",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "agent_run_usage.id，Agent Run usage persistence 主键。"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Workbench 业务用户边界。"
+    },
+    "run_id": {
+      "type": ["string", "null"],
+      "description": "绑定 DB agent_runs.id；独立 quota basic loop 兼容路径可为空。"
+    },
+    "quota_type": {
+      "type": "string",
+      "const": "agent_run",
+      "description": "当前 usage 只覆盖 Agent Run 额度。"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["started", "completed", "failed", "stopped"],
+      "description": "Agent Run usage persistence 状态。"
+    },
+    "started_at": {
+      "type": "string",
+      "description": "usage 开始时间。"
+    },
+    "finished_at": {
+      "type": ["string", "null"],
+      "description": "usage 完成、失败或停止时间；started 时为 null。"
+    },
+    "error_code": {
+      "type": ["string", "null"],
+      "description": "usage 失败或停止时的错误码。"
+    },
+    "metadata": {
+      "$ref": "agent-run-usage-metadata.schema.json"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "agent_run_usage.created_at。"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "agent_run_usage.updated_at。"
+    }
+  }
+}

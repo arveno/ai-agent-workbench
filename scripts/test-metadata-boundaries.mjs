@@ -276,6 +276,21 @@ const SOURCE_LINEAGE_METADATA_FORBIDDEN_FIELDS = [
   'report',
 ];
 
+const USAGE_METADATA_FORMAL_STATE_FORBIDDEN_FIELDS = [
+  'runStatus',
+  'toolInvocation',
+  'toolInvocations',
+  'sourceState',
+  'sources',
+  'runSources',
+  'ragSources',
+  'reportState',
+  'reportStatus',
+  'artifactStatus',
+  'evaluationStatus',
+  'report',
+];
+
 async function createSchemaValidators() {
   const ajv = new Ajv2020({
     allErrors: true,
@@ -939,6 +954,58 @@ function createRetrievalLogRecordFixture(overrides = {}) {
   };
 }
 
+function createAgentRunUsageMetadataFixture(overrides = {}) {
+  const metadata = {
+    source: 'cloudbase-agent-run-real',
+    runId: RUN_ID,
+    clientRunId: 'client-run-1',
+    ...overrides,
+  };
+
+  for (const [fieldName, fieldValue] of Object.entries(overrides)) {
+    if (fieldValue === undefined) {
+      delete metadata[fieldName];
+    }
+  }
+
+  return metadata;
+}
+
+function createAgentRunUsageRecordFixture(overrides = {}) {
+  return {
+    id: 'usage-1',
+    user_id: 'user-1',
+    run_id: RUN_ID,
+    quota_type: 'agent_run',
+    status: 'started',
+    started_at: CREATED_AT,
+    finished_at: null,
+    error_code: null,
+    metadata: createAgentRunUsageMetadataFixture(),
+    created_at: CREATED_AT,
+    updated_at: CREATED_AT,
+    ...overrides,
+  };
+}
+
+function createAgentRunQuotaRecordFixture(overrides = {}) {
+  return {
+    id: 'quota-1',
+    user_id: 'user-1',
+    quota_type: 'agent_run',
+    quota_limit: 20,
+    quota_used: 1,
+    period_start: '2026-05-01 00:00:00.000',
+    period_end: '2026-06-01 00:00:00.000',
+    metadata: {
+      source: 'cloudbase-agent-run-real',
+    },
+    created_at: CREATED_AT,
+    updated_at: UPDATED_AT,
+    ...overrides,
+  };
+}
+
 const SSE_EVENT_SCHEMA_CASES = [
   ['events/run-started-event.schema.json', 'run_started', createRunStartedEventFixture],
   ['events/run-reused-event.schema.json', 'run_reused', createRunReusedEventFixture],
@@ -1176,6 +1243,155 @@ function testAgentRunPersistenceContracts(validate) {
       provider: 'must-not-leak-at-top-level',
     }),
   }));
+}
+
+function testQuotaUsagePersistenceContracts(validate) {
+  const usageRecordSchema = validate.getSchema('objects/agent-run-usage-record.schema.json');
+  const usageMetadataSchema = validate.getSchema('objects/agent-run-usage-metadata.schema.json');
+  const quotaRecordSchema = validate.getSchema('objects/agent-run-quota-record.schema.json');
+
+  assert.equal(usageRecordSchema.properties.quota_type.const, 'agent_run');
+  assert.deepEqual(usageRecordSchema.properties.status.enum.toSorted(), ['completed', 'failed', 'started', 'stopped']);
+  assert.equal(usageRecordSchema.properties.metadata.$ref, 'agent-run-usage-metadata.schema.json');
+  assert.equal(usageMetadataSchema.properties.modelTrace.anyOf[0].$ref, 'model-trace.schema.json');
+  assert.equal(
+    usageMetadataSchema.properties.langSmithTrace.anyOf[0].$ref,
+    'agent-run-metadata.schema.json#/$defs/LangSmithTrace',
+  );
+  assert.equal(Object.hasOwn(usageMetadataSchema.properties, 'usage'), false);
+  assert.equal(Object.hasOwn(usageMetadataSchema.properties, 'costEstimate'), false);
+  assert.equal(quotaRecordSchema.properties.quota_type.const, 'agent_run');
+  assert.equal(quotaRecordSchema.properties.quota_limit.minimum, 0);
+  assert.equal(quotaRecordSchema.properties.quota_used.minimum, 0);
+  assert.equal(Object.hasOwn(quotaRecordSchema.properties, 'remaining'), false);
+
+  validate.assertValid('objects/agent-run-usage-metadata.schema.json', {});
+  validate.assertValid('objects/agent-run-usage-metadata.schema.json', createAgentRunUsageMetadataFixture());
+  validate.assertValid('objects/agent-run-usage-metadata.schema.json', createAgentRunUsageMetadataFixture({
+    clientRunId: null,
+  }));
+  validate.assertValid('objects/agent-run-usage-metadata.schema.json', createAgentRunUsageMetadataFixture({
+    clientRunId: undefined,
+    assistantMessageId: 'message-1',
+    langSmithTrace: LANGSMITH_TRACE,
+    modelTrace: MODEL_TRACE,
+  }));
+  validate.assertValid('objects/agent-run-usage-metadata.schema.json', createAgentRunUsageMetadataFixture({
+    clientRunId: undefined,
+    langSmithTrace: LANGSMITH_TRACE,
+    modelTrace: MODEL_TRACE,
+  }));
+  validate.assertValid('objects/model-trace.schema.json', MODEL_TRACE);
+
+  for (const fieldName of FORBIDDEN_METADATA_FIELDS) {
+    validate.assertInvalid('objects/agent-run-usage-metadata.schema.json', {
+      ...createAgentRunUsageMetadataFixture({
+        modelTrace: MODEL_TRACE,
+      }),
+      [fieldName]: 'must-not-leak-at-top-level',
+    });
+  }
+
+  for (const fieldName of USAGE_METADATA_FORMAL_STATE_FORBIDDEN_FIELDS) {
+    validate.assertInvalid('objects/agent-run-usage-metadata.schema.json', {
+      ...createAgentRunUsageMetadataFixture(),
+      [fieldName]: 'must-not-carry-formal-state',
+    });
+  }
+
+  validate.assertValid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture());
+  validate.assertValid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture({
+    id: 'usage-completed',
+    status: 'completed',
+    finished_at: UPDATED_AT,
+    metadata: createAgentRunUsageMetadataFixture({
+      clientRunId: undefined,
+      assistantMessageId: 'message-1',
+      langSmithTrace: LANGSMITH_TRACE,
+      modelTrace: MODEL_TRACE,
+    }),
+    updated_at: UPDATED_AT,
+  }));
+  validate.assertValid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture({
+    id: 'usage-failed',
+    status: 'failed',
+    finished_at: UPDATED_AT,
+    error_code: 'run_failed',
+    metadata: createAgentRunUsageMetadataFixture({
+      clientRunId: undefined,
+      langSmithTrace: LANGSMITH_TRACE,
+      modelTrace: MODEL_TRACE,
+    }),
+    updated_at: UPDATED_AT,
+  }));
+  validate.assertValid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture({
+    id: 'usage-stopped',
+    status: 'stopped',
+    finished_at: UPDATED_AT,
+    error_code: 'client_disconnected',
+    metadata: createAgentRunUsageMetadataFixture({
+      clientRunId: undefined,
+      langSmithTrace: LANGSMITH_TRACE,
+      modelTrace: MODEL_TRACE,
+    }),
+    updated_at: UPDATED_AT,
+  }));
+
+  validate.assertInvalid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture({
+    status: 'running',
+  }));
+  validate.assertInvalid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture({
+    quota_type: 'model_usage',
+  }));
+  validate.assertInvalid('objects/agent-run-usage-record.schema.json', createAgentRunUsageRecordFixture({
+    metadata: createAgentRunUsageMetadataFixture({
+      provider: 'must-not-leak-at-top-level',
+    }),
+  }));
+
+  validate.assertValid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture());
+  validate.assertValid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    id: 'quota-exhausted',
+    quota_used: 20,
+  }));
+  validate.assertValid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    id: 'quota-zero-used',
+    quota_used: 0,
+  }));
+  validate.assertValid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    id: 'quota-null-period-end',
+    period_end: null,
+    metadata: {},
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    quota_type: 'model_usage',
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    quota_limit: -1,
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    quota_used: -1,
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    runId: RUN_ID,
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    sources: [],
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    reportState: 'generated',
+  }));
+  validate.assertInvalid('objects/agent-run-quota-record.schema.json', createAgentRunQuotaRecordFixture({
+    metadata: {
+      source: 'cloudbase-agent-run-real',
+      runId: RUN_ID,
+    },
+  }));
+
+  // JSON Schema draft 2020-12 without $data cannot express quota_used <= quota_limit.
+  // The runtime consume boundary enforces that check before the CAS quota update.
+  const overLimitQuota = createAgentRunQuotaRecordFixture({ quota_limit: 1, quota_used: 2 });
+  assert.equal(overLimitQuota.quota_used > overLimitQuota.quota_limit, true);
 }
 
 function testRunEventPersistenceContracts(validate) {
@@ -1682,6 +1898,7 @@ testMapResult(validate);
 testModelLayerPricingSource(validate);
 testRunSnapshotCoreObjectSchemas(validate);
 testAgentRunPersistenceContracts(validate);
+testQuotaUsagePersistenceContracts(validate);
 testRunEventPersistenceContracts(validate);
 testToolInvocationPersistenceContracts(validate);
 testSourceRetrievalPersistenceContracts(validate);

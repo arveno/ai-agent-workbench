@@ -382,6 +382,24 @@ schemaObjectReferences:
     owner: "Agent Run runtime / persistence boundary"
     schema: "contracts/schemas/objects/agent-run-metadata.schema.json"
     summary: "agent_runs.metadata canonical persistence metadata schema；modelTrace 与 agentConclusion 保持嵌套对象，不在 metadata 顶层展开模型字段。"
+  AgentRunUsageRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "Agent Run quota / usage persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-usage-record.schema.json"
+    summary: "agent_run_usage persistence read/write record schema；表达工作台 Agent Run 额度扣减记录，不等同于 ModelTrace.usage 模型调用用量。"
+  AgentRunUsageMetadata:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "Agent Run quota / usage persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-usage-metadata.schema.json"
+    summary: "agent_run_usage.metadata schema；允许嵌套 modelTrace 观测快照，但不得在 metadata 顶层展开模型字段或承载 Run / Tool / Source / Report / Evaluation 正式状态。"
+  AgentRunQuotaRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "Agent Run quota / usage persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-quota-record.schema.json"
+    summary: "agent_run_quota persistence read/update record schema；remaining 属于 public computed shape，不进入 DB record schema。"
   RunEventRecord:
     lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
     coreObject: "Event"
