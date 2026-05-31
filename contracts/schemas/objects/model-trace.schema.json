@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/model-trace.schema.json",
+  "title": "ModelTrace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "selectedModelId",
+    "provider",
+    "model",
+    "latencyMs",
+    "usage",
+    "costEstimate",
+    "fallbackReason",
+    "modelErrorType",
+    "conclusionSource"
+  ],
+  "properties": {
+    "selectedModelId": {
+      "type": "string",
+      "description": "前端选择的 model catalog ID。"
+    },
+    "provider": {
+      "type": ["string", "null"],
+      "description": "后端通过 model catalog 解析出的 provider。"
+    },
+    "model": {
+      "type": ["string", "null"],
+      "description": "后端通过 model catalog 解析出的 provider model 名称。"
+    },
+    "latencyMs": {
+      "type": ["number", "null"],
+      "description": "模型调用耗时，单位为毫秒。"
+    },
+    "usage": {
+      "$ref": "#/$defs/ModelUsage"
+    },
+    "costEstimate": {
+      "$ref": "#/$defs/CostEstimate"
+    },
+    "fallbackReason": {
+      "type": ["string", "null"],
+      "description": "conclusionSource 为 fallback 时的兜底原因。"
+    },
+    "modelErrorType": {
+      "type": ["string", "null"],
+      "description": "标准化后的模型错误类型。"
+    },
+    "modelHttpStatus": {
+      "type": ["number", "null"],
+      "description": "provider 返回的 HTTP 状态码。"
+    },
+    "modelErrorMessage": {
+      "type": ["string", "null"],
+      "description": "经过安全处理的模型错误信息。"
+    },
+    "conclusionSource": {
+      "$ref": "#/$defs/ConclusionSource"
+    }
+  },
+  "$defs": {
+    "ConclusionSource": {
+      "type": "string",
+      "enum": ["model", "fallback", "mock", "none"],
+      "description": "Run 结论来源的 canonical 标记。"
+    },
+    "UsageSource": {
+      "type": "string",
+      "enum": ["provider", "unavailable", "none", "estimated"],
+      "description": "模型用量来源的 canonical 标记。"
+    },
+    "PricingSource": {
+      "type": "string",
+      "enum": ["catalog", "unavailable", "none"],
+      "description": "价格元数据来源。"
+    },
+    "ModelUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promptTokens",
+        "completionTokens",
+        "totalTokens",
+        "usageAvailable",
+        "usageSource",
+        "usageUnavailableReason"
+      ],
+      "properties": {
+        "promptTokens": {
+          "type": ["number", "null"],
+          "description": "provider 返回的 prompt token 数。"
+        },
+        "completionTokens": {
+          "type": ["number", "null"],
+          "description": "provider 返回的 completion token 数。"
+        },
+        "totalTokens": {
+          "type": ["number", "null"],
+          "description": "provider 返回的总 token 数。"
+        },
+        "usageAvailable": {
+          "type": "boolean",
+          "description": "provider usage 数据是否可用。"
+        },
+        "usageSource": {
+          "$ref": "#/$defs/UsageSource"
+        },
+        "usageUnavailableReason": {
+          "type": ["string", "null"],
+          "description": "usage 不可用时的明确原因。"
+        }
+      }
+    },
+    "CostEstimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimatedCost",
+        "currency",
+        "pricingUnit",
+        "isEstimated",
+        "pricingSource",
+        "costUnavailableReason"
+      ],
+      "properties": {
+        "estimatedCost": {
+          "type": ["number", "null"],
+          "description": "价格可用时的预估成本金额。"
+        },
+        "currency": {
+          "type": ["string", "null"],
+          "description": "预估成本使用的币种代码。"
+        },
+        "pricingUnit": {
+          "type": ["string", "null"],
+          "description": "预估成本使用的计价单位。"
+        },
+        "isEstimated": {
+          "type": "boolean",
+          "description": "成本金额是否为预估值。"
+        },
+        "pricingSource": {
+          "$ref": "#/$defs/PricingSource"
+        },
+        "costUnavailableReason": {
+          "type": ["string", "null"],
+          "description": "成本不可估算时的明确原因。"
+        }
+      }
+    }
+  }
+}

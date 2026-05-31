@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-chart-data.schema.json",
+  "title": "RunChartData",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "chartType", "labels", "series"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "图表标题。"
+    },
+    "chartType": {
+      "type": "string",
+      "enum": ["bar", "line"],
+      "description": "canonical 图表类型。runtime 当前输出 bar，demo seed 还覆盖 line。"
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "runtime 图表渲染配置快照。",
+      "properties": {
+        "xField": {
+          "type": "string",
+          "description": "图表 x 轴字段。"
+        },
+        "yField": {
+          "type": "string",
+          "description": "图表 y 轴字段。"
+        },
+        "metric": {
+          "type": "string",
+          "description": "图表对应的指标。"
+        },
+        "groupBy": {
+          "type": "string",
+          "description": "图表对应的聚合维度。"
+        }
+      }
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "图表横轴或维度标签。"
+    },
+    "series": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "values"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "系列名称。"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "系列数值。"
+          }
+        }
+      },
+      "description": "图表系列。"
+    },
+    "summary": {
+      "type": "string",
+      "description": "图表数据摘要。"
+    }
+  }
+}

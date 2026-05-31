@@ -51,7 +51,11 @@ export function ChatPanel() {
   const shouldAutoScrollRef = useRef(true);
   const lastBlock = chatBlocks[chatBlocks.length - 1];
   const lastMessageContent =
-    lastBlock?.type === 'message' ? lastBlock.message.content : currentRun?.conclusion ?? '';
+    lastBlock?.type === 'message'
+      ? lastBlock.message.content
+      : lastBlock?.type === 'streaming_assistant'
+        ? lastBlock.model.content
+        : '';
   const hasRunErrorBlock = chatBlocks.some((block) => block.type === 'run_error');
   const isDraftNewChat = !currentSession && !isMessagesLoading && !messagesError;
 
@@ -111,10 +115,7 @@ export function ChatPanel() {
     lastMessageContent,
     generationStatus,
     activeAssistantMessageId,
-    currentRun?.reportState,
-    currentRun?.status,
-    currentRun?.conclusion,
-    currentRun?.id,
+    currentRun,
     realModelNotice,
     errorMessage,
   ]);

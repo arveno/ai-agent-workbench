@@ -26,11 +26,14 @@ jobs:
           node <<'NODE'
           const requiredSections = [
             '# 关联 Issue',
+            '# Issue Decision Snapshot',
             '# 本次目标',
             '# 修改范围',
             '# 明确不做',
             '# 主要改动',
             '# 架构自检清单',
+            '# Data Contract 自检',
+            '# Review Comment 归因',
             '# 验证结果',
             '# 风险点',
             '# 后续建议',
@@ -47,6 +50,14 @@ jobs:
             if (!bodyLines.includes(section)) {
               errors.push(`Missing required PR template section: ${section}`);
             }
+          }
+
+          if (!/\b(?:Closes|Fixes|Resolves)\s+#\d+\b/i.test(body)) {
+            errors.push('PR body must link an issue with Closes #123, Fixes #123, or Resolves #123.');
+          }
+
+          if (/\|\s*-\s*\|\s*-\s*\|\s*-\s*\|/.test(body)) {
+            errors.push('PR body contains the default Review Comment attribution placeholder: | - | - | - |');
           }
 
           if (/- \[ \]/.test(body)) {

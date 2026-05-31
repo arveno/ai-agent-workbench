@@ -2,6 +2,15 @@
 
 Closes #
 
+# Issue Decision Snapshot
+
+- 关联 Issue：
+- Issue 是否完成 Canonical Decision：
+- 本 PR 是否涉及 schema / mapper / ViewModel / seed / DB 字段：
+- canonical 字段是什么：
+- 是否存在 oldField/newField、legacy fallback、兼容读取：
+- 是否按 Issue 决策执行：
+
 # 本次目标
 
 -
@@ -36,6 +45,28 @@ Closes #
 - [ ] 符合 LangGraph / LangChain / LangSmith 终态方向
 - [ ] 没有修改未确认的数据库字段
 - [ ] 已说明风险点和后续建议
+
+# Data Contract 自检
+
+- [ ] 已说明本 PR 是否涉及字段契约变更
+- [ ] 如涉及字段契约变更，已更新 `contracts/field-registry.yml`、`contracts/schemas/**` 和 generated 文件；如不涉及，已在 PR 中说明不适用
+- [ ] 如涉及运行字段，已确认后端输出、前端 type、mapper、ViewModel 同名同层级；如不涉及，已说明不适用
+- [ ] 未绕过 Contract Pack；未新增未登记字段
+
+# Review Comment 归因
+
+先归因，再处理。分类：
+
+- A. 当前 Issue 范围内，已修
+- B. 后置到已有 Issue
+- C. 新建 Issue
+- D. 真正孤立单点
+
+归因记录：
+
+| Review comment | 分类 | 处理方式 / Issue |
+| --- | --- | --- |
+| - | - | - |
 
 # 验证结果
 

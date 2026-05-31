@@ -5,59 +5,29 @@ import type {
   ToolInvocationRecord,
 } from '@/types/persistence';
 import type { RunSource, RunSourceType } from '@/types/rag';
+import { normalizeRunEvent, type NormalizedRunEvent } from '@/domain/run/boundary';
 import type {
-  AgentConclusion,
-  RunChartData,
-  RunConclusionSource,
-  RunDataSourceSnapshot,
-  RunEvent,
-  RunIntent,
-  RunModelTokenUsage,
-  RunModelTrace,
-  RunPlanSnapshot,
-  RunReportState,
+  CostEstimate,
+  ModelTrace,
+  ModelUsage,
   RunSnapshot,
-  RunStatus,
-} from '@/types/run';
-import { applyRunEventToSnapshot, normalizeAgentConclusion } from './runReducer';
+} from '../../contracts/generated/workbench-contract';
+import type {
+  RunViewModel,
+  RunViewModelAgentConclusion,
+  RunViewModelConclusionSource,
+  RunViewModelIntent,
+  RunViewModelReportState,
+} from '@/domain/run/view-model';
+import { RunViewModelFactory, normalizeAgentConclusion } from '@/domain/run/view-model';
+import { applyRunEventToViewModel } from './runEventReducer';
 import { toolInvocationRecordToRunTool } from './toolInvocationMapper';
-
-const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
-  'run_started',
-  'run_reused',
-  'step_started',
-  'step_completed',
-  'step_failed',
-  'tool_started',
-  'tool_completed',
-  'tool_failed',
-  'chart_ready',
-  'conclusion_delta',
-  'conclusion_completed',
-  'rag_sources_ready',
-  'report_pending',
-  'run_completed',
-  'run_failed',
-  'run_stopped',
-]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isRunEvent(value: unknown): value is RunEvent {
-  return isRecord(value) && typeof value.type === 'string' && RUN_EVENT_TYPES.has(value.type as RunEvent['type']);
-}
-
-function mapRunStatus(status: AgentRunRecord['status']): RunStatus {
-  if (status === 'completed') return 'success';
-  if (status === 'failed') return 'error';
-  if (status === 'stopped') return 'stopped';
-  if (status === 'pending') return 'pending';
-  return 'running';
-}
-
-function mapIntent(value: string | null): RunIntent {
+function mapIntent(value: string | null): RunViewModelIntent {
   if (
     value === 'capability_intro' ||
     value === 'data_analysis' ||
@@ -71,7 +41,7 @@ function mapIntent(value: string | null): RunIntent {
   return 'unknown';
 }
 
-function mapConclusionSource(value: string | null): RunConclusionSource {
+function mapConclusionSource(value: string | null): RunViewModelConclusionSource {
   if (value === 'model' || value === 'fallback' || value === 'mock' || value === 'none') {
     return value;
   }
@@ -79,15 +49,7 @@ function mapConclusionSource(value: string | null): RunConclusionSource {
   return 'none';
 }
 
-function mapReportState(value: string | null): RunReportState {
-  if (value === 'not_applicable') {
-    return 'hidden';
-  }
-
-  if (value === 'available') {
-    return 'pending';
-  }
-
+function mapReportState(value: string | null): RunViewModelReportState {
   if (
     value === 'hidden' ||
     value === 'pending' ||
@@ -110,18 +72,8 @@ function mapSourceType(value: string): RunSourceType {
   return 'knowledge';
 }
 
-function shouldPreferPersistedReportState(reportState: RunReportState): boolean {
+function shouldPreferPersistedReportState(reportState: RunViewModelReportState): boolean {
   return reportState !== 'hidden';
-}
-
-function getMetadataString(metadata: Record<string, unknown>, key: string): string {
-  const value = metadata[key];
-  return typeof value === 'string' ? value : '';
-}
-
-function getMetadataNumber(metadata: Record<string, unknown>, key: string): number | null {
-  const value = metadata[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function getNullableString(value: unknown): string | null {
@@ -132,11 +84,49 @@ function getNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function mapTraceConclusionSource(value: unknown): RunConclusionSource {
+function mapUsageSource(value: unknown): ModelUsage['usageSource'] {
+  if (value === 'provider' || value === 'unavailable' || value === 'estimated') {
+    return value;
+  }
+
+  return 'none';
+}
+
+function mapPricingSource(value: unknown): CostEstimate['pricingSource'] {
+  if (value === 'catalog' || value === 'unavailable') {
+    return value;
+  }
+
+  return 'none';
+}
+
+function createUnavailableModelUsage(reason = 'model_not_invoked'): ModelUsage {
+  return {
+    promptTokens: null,
+    completionTokens: null,
+    totalTokens: null,
+    usageAvailable: false,
+    usageSource: 'none',
+    usageUnavailableReason: reason,
+  };
+}
+
+function createUnavailableCostEstimate(reason = 'model_not_invoked'): CostEstimate {
+  return {
+    estimatedCost: null,
+    currency: null,
+    pricingUnit: null,
+    isEstimated: false,
+    pricingSource: 'none',
+    costUnavailableReason: reason,
+  };
+}
+
+function mapTraceConclusionSource(value: unknown): ModelTrace['conclusionSource'] {
   return mapConclusionSource(getNullableString(value));
 }
 
-function asTokenUsage(value: unknown): RunModelTokenUsage | null {
+function asModelUsage(value: unknown): ModelUsage | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -145,70 +135,62 @@ function asTokenUsage(value: unknown): RunModelTokenUsage | null {
     promptTokens: getNullableNumber(value.promptTokens),
     completionTokens: getNullableNumber(value.completionTokens),
     totalTokens: getNullableNumber(value.totalTokens),
+    usageAvailable: value.usageAvailable === true,
+    usageSource: mapUsageSource(value.usageSource),
+    usageUnavailableReason: getNullableString(value.usageUnavailableReason),
   };
 }
 
-function asModelTrace(value: unknown, fallbackConclusionSource: RunConclusionSource): RunModelTrace | undefined {
+function asCostEstimate(value: unknown): CostEstimate | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    estimatedCost: getNullableNumber(value.estimatedCost),
+    currency: getNullableString(value.currency),
+    pricingUnit: getNullableString(value.pricingUnit),
+    isEstimated: value.isEstimated === true,
+    pricingSource: mapPricingSource(value.pricingSource),
+    costUnavailableReason: getNullableString(value.costUnavailableReason),
+  };
+}
+
+function asModelTrace(value: unknown): ModelTrace | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
   return {
-    selectedModelId: getNullableString(value.selectedModelId),
+    selectedModelId: getNullableString(value.selectedModelId) ?? 'unknown',
     provider: getNullableString(value.provider),
     model: getNullableString(value.model),
     latencyMs: getNullableNumber(value.latencyMs),
-    tokenUsage: asTokenUsage(value.tokenUsage),
+    usage: asModelUsage(value.usage) ?? createUnavailableModelUsage(),
+    costEstimate: asCostEstimate(value.costEstimate) ?? createUnavailableCostEstimate(),
     fallbackReason: getNullableString(value.fallbackReason),
     modelErrorType: getNullableString(value.modelErrorType),
-    conclusionSource: mapTraceConclusionSource(value.conclusionSource) || fallbackConclusionSource,
+    modelHttpStatus: getNullableNumber(value.modelHttpStatus),
+    modelErrorMessage: getNullableString(value.modelErrorMessage),
+    conclusionSource: mapTraceConclusionSource(value.conclusionSource),
   };
 }
 
-function getRunModelTrace(record: AgentRunRecord, conclusionSource: RunConclusionSource): RunModelTrace | undefined {
-  const trace = asModelTrace(record.metadata.modelTrace, conclusionSource);
-
-  if (trace) {
-    return trace;
-  }
-
-  const selectedModelId = getMetadataString(record.metadata, 'selectedModelId');
-  const provider = getMetadataString(record.metadata, 'provider');
-  const model = getMetadataString(record.metadata, 'model');
-  const fallbackReason = getMetadataString(record.metadata, 'fallbackReason');
-  const modelErrorType = getMetadataString(record.metadata, 'modelErrorType');
-  const latencyMs = getMetadataNumber(record.metadata, 'latencyMs');
-
-  if (!selectedModelId && !provider && !model && !fallbackReason && !modelErrorType && latencyMs === null) {
-    return undefined;
-  }
-
-  return {
-    selectedModelId: selectedModelId || null,
-    provider: provider || null,
-    model: model || null,
-    latencyMs,
-    tokenUsage: asTokenUsage(record.metadata.tokenUsage),
-    fallbackReason: fallbackReason || null,
-    modelErrorType: modelErrorType || null,
-    conclusionSource,
-  };
+function getRunModelTrace(record: AgentRunRecord): ModelTrace | undefined {
+  return asModelTrace(record.metadata.modelTrace);
 }
 
-function asPlan(value: Record<string, unknown>): RunPlanSnapshot | undefined {
-  return Object.keys(value).length > 0 ? (value as unknown as RunPlanSnapshot) : undefined;
+function asCanonicalObject<T extends object>(value: Record<string, unknown>): T | undefined {
+  return Object.keys(value).length > 0 ? (value as T) : undefined;
 }
 
-function asDataSource(value: Record<string, unknown>): RunDataSourceSnapshot | undefined {
-  return Object.keys(value).length > 0 ? (value as unknown as RunDataSourceSnapshot) : undefined;
-}
-
-function asChartData(value: Record<string, unknown>): RunChartData | undefined {
-  return Object.keys(value).length > 0 ? (value as unknown as RunChartData) : undefined;
-}
-
-function eventRecordToRunEvent(record: RunEventRecord): RunEvent | null {
-  return isRunEvent(record.payload) ? record.payload : null;
+function runEventRecordToNormalizedRunEvent(record: RunEventRecord): NormalizedRunEvent | null {
+  return normalizeRunEvent(record.payload, {
+    source: 'persistence',
+    runId: record.run_id,
+    conversationId: record.conversation_id,
+    timestamp: record.created_at,
+  });
 }
 
 function toOptionalString(value: string | null): string | undefined {
@@ -238,11 +220,11 @@ function runSourceRecordToRunSource(record: RunSourceRecord): RunSource {
 }
 
 function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
-  RunSnapshot,
+  RunViewModel,
   'id' | 'clientRunId' | 'displayRunId'
 > {
   const runId = record.id;
-  const clientRunId = record.client_run_id ?? (getMetadataString(record.metadata, 'clientRunId') || undefined);
+  const clientRunId = record.client_run_id === null ? undefined : record.client_run_id;
 
   return {
     id: runId,
@@ -251,33 +233,25 @@ function getAgentRunRecordIdentity(record: AgentRunRecord): Pick<
   };
 }
 
-export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapshot {
-  const runIdentity = getAgentRunRecordIdentity(record);
-  const conclusionNotice = getMetadataString(record.metadata, 'conclusionNotice');
-  const conclusionSource = mapConclusionSource(record.conclusion_source);
-  const agentConclusion = normalizeAgentConclusion(
-    conclusionSource,
-    record.conclusion ?? '',
-    record.metadata.agentConclusion as AgentConclusion | undefined,
-  );
-
+function agentRunRecordToCanonicalRun(
+  record: AgentRunRecord,
+  agentConclusion: RunViewModelAgentConclusion | null,
+  modelTrace: ModelTrace | undefined,
+): RunSnapshot {
   return {
-    ...runIdentity,
-    sessionId: record.conversation_id,
+    id: record.id,
+    conversationId: record.conversation_id,
+    clientRunId: record.client_run_id,
+    usageId: record.usage_id,
     mode: record.mode,
-    status: mapRunStatus(record.status),
+    status: record.status,
     intent: mapIntent(record.intent),
     prompt: record.prompt ?? '',
-    plan: asPlan(record.plan),
-    dataSource: asDataSource(record.data_source_snapshot),
-    steps: [],
-    toolInvocations: [],
-    chartData: asChartData(record.chart_data),
-    conclusion: agentConclusion.plainText,
-    conclusionSource,
-    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    conclusionNotice: conclusionNotice || undefined,
-    modelTrace: getRunModelTrace(record, conclusionSource),
+    plan: asCanonicalObject<NonNullable<RunSnapshot['plan']>>(record.plan),
+    dataSource: asCanonicalObject<NonNullable<RunSnapshot['dataSource']>>(record.data_source_snapshot),
+    chartData: asCanonicalObject<NonNullable<RunSnapshot['chartData']>>(record.chart_data),
+    modelTrace: modelTrace ?? null,
+    agentConclusion,
     reportState: mapReportState(record.report_state),
     createdAt: record.started_at,
     updatedAt: record.completed_at ?? record.started_at,
@@ -288,45 +262,83 @@ export function agentRunRecordToBaseSnapshot(record: AgentRunRecord): RunSnapsho
   };
 }
 
-export function runEventsRecordToRunEvents(records: RunEventRecord[]): RunEvent[] {
+export function agentRunRecordToBaseViewModel(record: AgentRunRecord): RunViewModel {
+  const modelTrace = getRunModelTrace(record);
+  const agentConclusion = normalizeAgentConclusion(
+    record.conclusion ?? '',
+    record.metadata.agentConclusion,
+  );
+  const run = agentRunRecordToCanonicalRun(
+    record,
+    agentConclusion.plainText ? agentConclusion : null,
+    modelTrace,
+  );
+
+  return RunViewModelFactory.fromCanonicalRun({
+    run,
+    conversationId: record.conversation_id,
+    conclusion: agentConclusion.plainText,
+    agentConclusion: agentConclusion.plainText ? agentConclusion : null,
+    modelTrace,
+  });
+}
+
+export function runEventRecordsToNormalizedRunEvents(records: RunEventRecord[]): NormalizedRunEvent[] {
   return records
     .slice()
     .sort((left, right) => left.seq - right.seq)
-    .map((record) => eventRecordToRunEvent(record))
-    .filter((event): event is RunEvent => event !== null);
+    .map((record) => runEventRecordToNormalizedRunEvent(record))
+    .filter((event): event is NormalizedRunEvent => event !== null);
 }
 
-export function runPersistenceRecordsToSnapshot(params: {
+export function runPersistenceRecordsToViewModel(params: {
   run: AgentRunRecord;
   events: RunEventRecord[];
   tools: ToolInvocationRecord[];
   sources: RunSourceRecord[];
-}): RunSnapshot {
-  const runEvents = runEventsRecordToRunEvents(params.events);
-  const eventSnapshot = runEvents.reduce<RunSnapshot | null>(
-    (snapshot, event) => applyRunEventToSnapshot(snapshot, event),
+}): RunViewModel {
+  const runEvents = runEventRecordsToNormalizedRunEvents(params.events);
+  const eventViewModel = runEvents.reduce<RunViewModel | null>(
+    (viewModel, event) => applyRunEventToViewModel(viewModel, event),
     null,
   );
-  const baseSnapshot = agentRunRecordToBaseSnapshot(params.run);
-  const snapshot = eventSnapshot ? { ...baseSnapshot, ...eventSnapshot } : baseSnapshot;
+  const baseViewModel = agentRunRecordToBaseViewModel(params.run);
+  const viewModel = eventViewModel ? { ...baseViewModel, ...eventViewModel } : baseViewModel;
   const agentConclusion = normalizeAgentConclusion(
-    snapshot.conclusionSource,
-    snapshot.conclusion,
-    snapshot.agentConclusion,
+    viewModel.conclusion,
+    viewModel.agentConclusion,
   );
   const persistedTools = params.tools.map((tool) => toolInvocationRecordToRunTool(tool));
   const persistedSources = params.sources.map((source) => runSourceRecordToRunSource(source));
   const persistedReportState = mapReportState(params.run.report_state);
   const runIdentity = getAgentRunRecordIdentity(params.run);
+  const modelTrace = viewModel.modelTrace ?? getRunModelTrace(params.run);
 
-  return {
-    ...snapshot,
-    ...runIdentity,
+  return RunViewModelFactory.fromRestoredRunAdapter({
+    id: runIdentity.id,
+    conversationId: params.run.conversation_id,
+    clientRunId: runIdentity.clientRunId,
+    displayRunId: runIdentity.displayRunId,
+    mode: viewModel.mode,
+    status: viewModel.status,
+    intent: viewModel.intent,
+    prompt: viewModel.prompt,
+    plan: viewModel.plan,
+    dataSource: viewModel.dataSource,
+    steps: viewModel.steps,
+    chartData: viewModel.chartData,
+    createdAt: viewModel.createdAt,
+    updatedAt: viewModel.updatedAt,
+    startedAt: viewModel.startedAt,
+    completedAt: viewModel.completedAt,
+    elapsedMs: viewModel.elapsedMs,
+    errorMessage: viewModel.errorMessage,
     conclusion: agentConclusion.plainText,
-    agentConclusion: agentConclusion.plainText ? agentConclusion : undefined,
-    sessionId: params.run.conversation_id,
-    toolInvocations: persistedTools.length > 0 ? persistedTools : snapshot.toolInvocations,
+    conclusionSource: modelTrace?.conclusionSource ?? 'none',
+    agentConclusion: agentConclusion.plainText ? agentConclusion : null,
+    modelTrace,
+    toolInvocations: persistedTools.length > 0 ? persistedTools : viewModel.toolInvocations,
     sources: persistedSources,
-    reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : snapshot.reportState,
-  };
+    reportState: shouldPreferPersistedReportState(persistedReportState) ? persistedReportState : viewModel.reportState,
+  });
 }

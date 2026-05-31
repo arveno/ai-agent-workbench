@@ -1,0 +1,868 @@
+version: 1
+summary: "AI Agent Workbench 人读字段登记表。机器可读契约位于 contracts/schemas/**/*.schema.json；此处只保留字段说明、历史记录和高风险字段备注。"
+objects:
+  ModelUsage:
+    lifecycleNode: "11 Observability / Trace, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "CloudBase Function / mapper"
+    summary: "Canonical 模型用量状态，表达 usage 可用性和 token 数，不保留 legacy fallback 字段。"
+    fields:
+      promptTokens:
+        type: "number | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "provider 返回的 prompt token 数。"
+      completionTokens:
+        type: "number | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "provider 返回的 completion token 数。"
+      totalTokens:
+        type: "number | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "provider 返回的总 token 数。"
+      usageAvailable:
+        type: "boolean"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "provider usage 数据是否可用。"
+      usageSource:
+        type: "provider | unavailable | none | estimated"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "模型用量来源的 canonical 标记。"
+      usageUnavailableReason:
+        type: "string | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "usage 不可用时的明确原因。"
+  CostEstimate:
+    lifecycleNode: "19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "CloudBase Function / mapper"
+    summary: "Canonical 预估成本状态，仅作为 metadata，不是计费记录。"
+    fields:
+      estimatedCost:
+        type: "number | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "价格可用时的预估成本金额。"
+      currency:
+        type: "string | null"
+        required: "yes"
+        source: "model catalog"
+        description: "预估成本使用的币种代码。"
+      pricingUnit:
+        type: "string | null"
+        required: "yes"
+        source: "model catalog"
+        description: "预估成本使用的计价单位。"
+      isEstimated:
+        type: "boolean"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "成本金额是否为预估值。"
+      pricingSource:
+        type: "catalog | unavailable | none"
+        required: "yes"
+        source: "model catalog"
+        description: "价格元数据来源。"
+      costUnavailableReason:
+        type: "string | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "成本不可估算时的明确原因。"
+  ModelTrace:
+    lifecycleNode: "11 Observability / Trace, 19 Audit / Governance / Cost"
+    coreObject: "Run, Usage"
+    owner: "CloudBase Function / mapper"
+    summary: "绑定到 Run、report metadata、evaluation metadata 和 Run Trace 的 canonical model trace。"
+    fields:
+      selectedModelId:
+        type: "string"
+        required: "yes"
+        source: "request selectedModelId"
+        description: "前端选择的 model catalog ID。"
+      provider:
+        type: "string | null"
+        required: "yes"
+        source: "model catalog"
+        description: "后端通过 model catalog 解析出的 provider。"
+      model:
+        type: "string | null"
+        required: "yes"
+        source: "model catalog"
+        description: "后端通过 model catalog 解析出的 provider model 名称。"
+      latencyMs:
+        type: "number | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "模型调用耗时，单位为毫秒。"
+      usage:
+        type: "ModelUsage"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "canonical usage 对象。"
+      costEstimate:
+        type: "CostEstimate"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "canonical cost estimate 对象。"
+      fallbackReason:
+        type: "string | null"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "conclusionSource 为 fallback 时的兜底原因。"
+      modelErrorType:
+        type: "string | null"
+        required: "yes"
+        source: "LangChain model layer"
+        description: "标准化后的模型错误类型。"
+      modelHttpStatus:
+        type: "number | null"
+        required: "no"
+        source: "LangChain model layer"
+        description: "provider 返回的 HTTP 状态码。"
+      modelErrorMessage:
+        type: "string | null"
+        required: "no"
+        source: "LangChain model layer"
+        description: "经过安全处理的模型错误信息。"
+      conclusionSource:
+        type: "model | fallback | mock | none"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "Chat、Run Trace、Report 和 Evaluation 共用的 canonical 结论来源。"
+  AgentConclusion:
+    lifecycleNode: "12 Response, 13 Artifact / Source / Report"
+    coreObject: "Run, Message, Report"
+    owner: "CloudBase Function / mapper"
+    summary: "Canonical 结论信封，只拥有结论文本和提示；模型来源、兜底和模型错误状态属于 ModelTrace。"
+    fields:
+      markdownText:
+        type: "string"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "面向 assistant 消息展示的最终 markdown 结论。"
+      plainText:
+        type: "string"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "用于搜索、预览和非 markdown 场景的纯文本结论。"
+      sections:
+        type: "AgentConclusionSection[]"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "可选的结构化结论段落。"
+      notice:
+        type: "string | null"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "可选的用户可见结论提示，用于说明限制或展示上下文。"
+      rawText:
+        type: "string"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "可选的原始结论文本，仅用于 debug 或无损渲染。"
+  AgentConclusionSection:
+    lifecycleNode: "12 Response, 13 Artifact / Source / Report"
+    coreObject: "Run, Message, Report"
+    owner: "CloudBase Function / mapper"
+    summary: "AgentConclusion 内部的可选结构化段落。"
+    fields:
+      title:
+        type: "string | null"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "可选的段落标题。"
+      markdownText:
+        type: "string"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "段落 markdown 文本。"
+      plainText:
+        type: "string"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "段落纯文本。"
+  RunSnapshot:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run runtime / persistence mapper / API boundary"
+    summary: "runtime 与 persistence 边界上的 canonical RunSnapshot。UI-only sessionId、displayRunId、conclusionSource、steps、toolInvocations、sources 属于 RunViewModel。"
+    fields:
+      id:
+        type: "string"
+        required: "yes"
+        source: "agent_runs.id"
+        description: "canonical runId，只指向 DB agent_runs.id。"
+      conversationId:
+        type: "string"
+        required: "yes"
+        source: "conversations.id"
+        description: "拥有当前 Run 的 conversation。"
+      clientRunId:
+        type: "string | null"
+        required: "no"
+        source: "request idempotency"
+        description: "前端 pending 与请求幂等 ID，不作为业务外键。"
+      usageId:
+        type: "string | null"
+        required: "no"
+        source: "agent_runs.usage_id"
+        description: "持久化后的 usage 记录 ID。"
+      mode:
+        type: "mock | agent"
+        required: "yes"
+        source: "Agent Run runtime"
+        description: "runtime 与 persistence 边界上的 Run 执行模式。"
+      status:
+        type: "pending | running | completed | failed | stopped"
+        required: "yes"
+        source: "agent_runs.status / Agent Run runtime"
+        description: "runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。"
+      intent:
+        type: "capability_intro | data_analysis | knowledge_qa | unsupported | unknown"
+        required: "no"
+        source: "Agent Run planner"
+        description: "Agent Run planner 已识别的意图。"
+      prompt:
+        type: "string"
+        required: "no"
+        source: "Agent Run request"
+        description: "当前 Run 捕获的用户输入。"
+      plan:
+        type: "RunPlan"
+        required: "no"
+        source: "Agent Run planner"
+        description: "runtime plan 快照；plan 细节不是 UI ViewModel 契约。"
+      dataSource:
+        type: "RunDataSource"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "runtime 数据源快照。"
+      chartData:
+        type: "RunChartData"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "当前 Run 产出的 canonical 图表 payload。"
+      agentConclusion:
+        type: "AgentConclusion | null"
+        required: "no"
+        source: "Agent Run runtime"
+        description: "当前 Run 的 canonical 结论信封。"
+      modelTrace:
+        type: "ModelTrace | null"
+        required: "yes"
+        source: "agent_runs.metadata.modelTrace"
+        description: "当前 Run 的 canonical model trace。"
+      reportState:
+        type: "hidden | pending | generating | generated | skipped | failed"
+        required: "yes"
+        source: "Agent Run runtime / report_artifacts"
+        description: "绑定在当前 Run 上的 canonical report 可用性与生成状态。"
+      createdAt:
+        type: "string"
+        required: "yes"
+        source: "agent_runs.created_at"
+        description: "Run 创建时间。"
+      updatedAt:
+        type: "string"
+        required: "yes"
+        source: "agent_runs.updated_at"
+        description: "Run 更新时间。"
+      startedAt:
+        type: "string"
+        required: "no"
+        source: "agent_runs.started_at"
+        description: "Run 开始时间。"
+      completedAt:
+        type: "string"
+        required: "no"
+        source: "agent_runs.completed_at"
+        description: "Run 完成时间。"
+      elapsedMs:
+        type: "number"
+        required: "no"
+        source: "agent_runs.elapsed_ms"
+        description: "Run 耗时，单位为毫秒。"
+      errorMessage:
+        type: "string"
+        required: "no"
+        source: "agent_runs.error_message"
+        description: "Run 失败时可展示的安全错误信息。"
+  ReportMetadata:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Report"
+    owner: "workbench-reports / mapper"
+    summary: "Canonical report metadata。模型状态只能以单一 modelTrace 对象继承。"
+    fields:
+      runId:
+        type: "string"
+        required: "yes"
+        source: "report_artifacts.run_id"
+        description: "拥有该 report 的 canonical runId。"
+      source:
+        type: "string | null"
+        required: "no"
+        source: "Report metadata input allowlist"
+        description: "report metadata 来源；请求 metadata 只能通过显式 allowlist 设置。"
+      reportState:
+        type: "string | null"
+        required: "no"
+        source: "workbench-reports"
+        description: "用于持久化 report status artifact 的 report decision 状态。"
+      toolNames:
+        type: "string[]"
+        required: "no"
+        source: "Report metadata input allowlist"
+        description: "拥有该 report 的 Run 使用过的工具名列表；不是模型用量 metadata。"
+      modelTrace:
+        type: "ModelTrace | null"
+        required: "no"
+        source: "agent_runs.metadata.modelTrace"
+        description: "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"
+      langSmithTraceId:
+        type: "string | null"
+        required: "no"
+        source: "LangSmith metadata"
+        description: "外部 observability ID；不替代 canonical runId。"
+  EvaluationMetadata:
+    lifecycleNode: "15 Evaluation / Quality Gate"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations / mapper"
+    summary: "Canonical evaluation metadata。模型状态只能以单一 modelTrace 对象继承。"
+    fields:
+      runId:
+        type: "string"
+        required: "yes"
+        source: "eval_results.run_id"
+        description: "该 evaluation result 评估的 canonical runId。"
+      source:
+        type: "string"
+        required: "yes"
+        source: "workbench-evaluations"
+        description: "服务端设置的 evaluation metadata 来源。"
+      resultVersion:
+        type: "number"
+        required: "yes"
+        source: "workbench-evaluations"
+        description: "evaluation metadata 格式版本。"
+      modelTrace:
+        type: "ModelTrace | null"
+        required: "no"
+        source: "agent_runs.metadata.modelTrace"
+        description: "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"
+      evaluatorVersion:
+        type: "string | null"
+        required: "no"
+        source: "evaluation runtime"
+        description: "evaluator 或 rubric 版本。"
+      langSmithTraceId:
+        type: "string | null"
+        required: "no"
+        source: "LangSmith metadata"
+        description: "外部 observability ID；不替代 canonical runId。"
+      langSmithEvaluation:
+        type: "Record<string, unknown>"
+        required: "no"
+        source: "LangSmith feedback boundary"
+        description: "服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。"
+schemaObjectReferences:
+  AgentRunRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-record.schema.json"
+    summary: "agent_runs persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  AgentRunMetadata:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run runtime / persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-metadata.schema.json"
+    summary: "agent_runs.metadata canonical persistence metadata schema；modelTrace 与 agentConclusion 保持嵌套对象，不在 metadata 顶层展开模型字段。"
+  AgentRunUsageRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "Agent Run quota / usage persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-usage-record.schema.json"
+    summary: "agent_run_usage persistence read/write record schema；表达工作台 Agent Run 额度扣减记录，不等同于 ModelTrace.usage 模型调用用量。"
+  AgentRunUsageMetadata:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "Agent Run quota / usage persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-usage-metadata.schema.json"
+    summary: "agent_run_usage.metadata schema；允许嵌套 modelTrace 观测快照，但不得在 metadata 顶层展开模型字段或承载 Run / Tool / Source / Report / Evaluation 正式状态。"
+  AgentRunQuotaRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage, 19 Audit / Governance / Cost"
+    coreObject: "Usage"
+    owner: "Agent Run quota / usage persistence boundary"
+    schema: "contracts/schemas/objects/agent-run-quota-record.schema.json"
+    summary: "agent_run_quota persistence read/update record schema；remaining 属于 public computed shape，不进入 DB record schema。"
+  RunEventRecord:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Event"
+    owner: "Agent Run event persistence boundary"
+    schema: "contracts/schemas/objects/run-event-record.schema.json"
+    summary: "run_events persistence read record schema；payload 使用统一 SSE envelope，具体事件 payload 继续由 events/* schema 约束。"
+  ToolInvocationRecord:
+    lifecycleNode: "09 Tool Governance / Data Access, 10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Tool Invocation"
+    owner: "Agent Run tool persistence boundary"
+    schema: "contracts/schemas/objects/tool-invocation-record.schema.json"
+    summary: "tool_invocations persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  ToolInvocationMetadata:
+    lifecycleNode: "09 Tool Governance / Data Access, 10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Tool Invocation"
+    owner: "Agent Run tool persistence boundary"
+    schema: "contracts/schemas/objects/tool-invocation-metadata.schema.json"
+    summary: "tool_invocations.metadata schema；只承载工具 runtime/observability metadata，不承载 Run / Source / Report 正式状态。"
+  RunSourceRecord:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Source"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/run-source-record.schema.json"
+    summary: "run_sources persistence read record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunSourceMetadata:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Source"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/run-source-metadata.schema.json"
+    summary: "run_sources.metadata schema；只承载检索 provider/source 快照 metadata，不承载 Run / Source / Report / Evaluation 正式状态。"
+  RetrievalLogRecord:
+    lifecycleNode: "09 Tool Governance / Data Access, 13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Retrieval"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/retrieval-log-record.schema.json"
+    summary: "retrieval_logs persistence read/write record schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RetrievalLogMetadata:
+    lifecycleNode: "09 Tool Governance / Data Access, 13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Retrieval"
+    owner: "Source Lineage persistence boundary"
+    schema: "contracts/schemas/objects/retrieval-log-metadata.schema.json"
+    summary: "retrieval_logs.metadata schema；只承载检索策略与统计 metadata，不承载正式 source 列表或 UI sources。"
+  ReportArtifact:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Report"
+    owner: "workbench-reports / mapper"
+    schema: "contracts/schemas/objects/report-artifact.schema.json"
+    summary: "Report artifact boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  EvaluationResult:
+    lifecycleNode: "15 Evaluation / Quality Gate"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations / mapper"
+    schema: "contracts/schemas/objects/evaluation-result.schema.json"
+    summary: "Evaluation result boundary object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  ConversationRecord:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Conversation"
+    owner: "workbench-conversations HTTP API"
+    schema: "contracts/schemas/objects/conversation-record.schema.json"
+    summary: "Conversation HTTP API response object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  MessageRecord:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Message"
+    owner: "workbench-messages HTTP API"
+    schema: "contracts/schemas/objects/message-record.schema.json"
+    summary: "Message HTTP API response object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  EvaluationCase:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/objects/evaluation-case.schema.json"
+    summary: "Evaluation case HTTP API response object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  WorkbenchApiErrorResponse:
+    lifecycleNode: "16 HTTP API Boundary"
+    coreObject: "API"
+    owner: "Workbench HTTP APIs"
+    schema: "contracts/schemas/api/workbench-api-error-response.schema.json"
+    summary: "通用 HTTP API error response schema。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  AgentRunStreamRequest:
+    lifecycleNode: "10 Execution / Streaming, 16 HTTP API Boundary"
+    coreObject: "Run"
+    owner: "workbench-agent-run-stream HTTP API"
+    schema: "contracts/schemas/api/agent-run-stream-request.schema.json"
+    summary: "POST /api/agent/run/stream request schema；SSE response 仍由 events/* schema 负责。"
+  RunsRestoreQuery:
+    lifecycleNode: "14 Persistence / Lineage, 16 HTTP API Boundary"
+    coreObject: "Run"
+    owner: "workbench-runs HTTP API"
+    schema: "contracts/schemas/api/runs-restore-query.schema.json"
+    summary: "GET /api/workbench/runs query schema。"
+  RunsRestoreResponse:
+    lifecycleNode: "14 Persistence / Lineage, 16 HTTP API Boundary"
+    coreObject: "Run"
+    owner: "workbench-runs HTTP API"
+    schema: "contracts/schemas/api/runs-restore-response.schema.json"
+    summary: "GET /api/workbench/runs restore bundle response schema；通过 $ref 引用 #115 persistence record schema。"
+  ConversationCreateRequest:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Conversation"
+    owner: "workbench-conversations HTTP API"
+    schema: "contracts/schemas/api/conversation-create-request.schema.json"
+    summary: "POST /api/workbench/conversations request schema。"
+  ConversationUpdateRequest:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Conversation"
+    owner: "workbench-conversations HTTP API"
+    schema: "contracts/schemas/api/conversation-update-request.schema.json"
+    summary: "PATCH /api/workbench/conversations request schema；当前后端只更新 title。"
+  ConversationListQuery:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Conversation"
+    owner: "workbench-conversations HTTP API"
+    schema: "contracts/schemas/api/conversation-list-query.schema.json"
+    summary: "GET /api/workbench/conversations query schema。"
+  ConversationResponse:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Conversation"
+    owner: "workbench-conversations HTTP API"
+    schema: "contracts/schemas/api/conversation-response.schema.json"
+    summary: "Single conversation HTTP response schema；data 通过 $ref 引用 ConversationRecord。"
+  ConversationListResponse:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Conversation"
+    owner: "workbench-conversations HTTP API"
+    schema: "contracts/schemas/api/conversation-list-response.schema.json"
+    summary: "Conversation list HTTP response schema；items 通过 $ref 引用 ConversationRecord。"
+  MessageCreateRequest:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Message"
+    owner: "workbench-messages HTTP API"
+    schema: "contracts/schemas/api/message-create-request.schema.json"
+    summary: "POST /api/workbench/messages request schema。"
+  MessageListQuery:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Message"
+    owner: "workbench-messages HTTP API"
+    schema: "contracts/schemas/api/message-list-query.schema.json"
+    summary: "GET /api/workbench/messages query schema。"
+  MessageResponse:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Message"
+    owner: "workbench-messages HTTP API"
+    schema: "contracts/schemas/api/message-response.schema.json"
+    summary: "Single message HTTP response schema；data 通过 $ref 引用 MessageRecord。"
+  MessageListResponse:
+    lifecycleNode: "02 Conversation / Message, 16 HTTP API Boundary"
+    coreObject: "Message"
+    owner: "workbench-messages HTTP API"
+    schema: "contracts/schemas/api/message-list-response.schema.json"
+    summary: "Message list HTTP response schema；items 通过 $ref 引用 MessageRecord。"
+  ReportQuery:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-query.schema.json"
+    summary: "GET /api/workbench/reports query schema；覆盖 id 单报表读取与 conversationId 列表查询。"
+  ReportGenerateRequest:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-generate-request.schema.json"
+    summary: "POST /api/workbench/reports report create request schema。"
+  ReportResponse:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-response.schema.json"
+    summary: "Single report HTTP response schema；data 通过 $ref 引用 ReportArtifact。"
+  ReportListResponse:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-list-response.schema.json"
+    summary: "Report list HTTP response schema；items 通过 $ref 引用 ReportArtifact。"
+  ReportStatusUpdateQuery:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-status-update-query.schema.json"
+    summary: "POST /api/workbench/reports status update action query schema。"
+  ReportStatusUpdateRequest:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-status-update-request.schema.json"
+    summary: "POST /api/workbench/reports?action=run-report-state request schema。"
+  ReportStatusUpdateResponse:
+    lifecycleNode: "13 Artifact / Source / Report, 16 HTTP API Boundary"
+    coreObject: "Report"
+    owner: "workbench-reports HTTP API"
+    schema: "contracts/schemas/api/report-status-update-response.schema.json"
+    summary: "Run report state update HTTP response schema；不是 ReportArtifact。"
+  EvaluationCasesQuery:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/api/evaluation-cases-query.schema.json"
+    summary: "GET /api/workbench/evaluations?resource=cases query schema。"
+  EvaluationCasesResponse:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/api/evaluation-cases-response.schema.json"
+    summary: "Evaluation cases HTTP response schema；items 通过 $ref 引用 EvaluationCase。"
+  EvaluationListQuery:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/api/evaluation-list-query.schema.json"
+    summary: "GET /api/workbench/evaluations?resource=results query schema。"
+  EvaluationListResponse:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/api/evaluation-list-response.schema.json"
+    summary: "Evaluation result list HTTP response schema；items 通过 $ref 引用 EvaluationResult。"
+  EvaluationCreateRequest:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/api/evaluation-create-request.schema.json"
+    summary: "POST /api/workbench/evaluations create result request schema。"
+  EvaluationCreateResponse:
+    lifecycleNode: "15 Evaluation / Quality Gate, 16 HTTP API Boundary"
+    coreObject: "Evaluation"
+    owner: "workbench-evaluations HTTP API"
+    schema: "contracts/schemas/api/evaluation-create-response.schema.json"
+    summary: "Evaluation create HTTP response schema；result 通过 $ref 引用 EvaluationResult。"
+  AgentRunQuotaResponse:
+    lifecycleNode: "19 Audit / Governance / Cost, 16 HTTP API Boundary"
+    coreObject: "Usage"
+    owner: "workbench-quota HTTP API"
+    schema: "contracts/schemas/api/agent-run-quota-response.schema.json"
+    summary: "Public camelCase quota response object；不等同于 DB AgentRunQuotaRecord。"
+  AgentRunQuotaStatusResponse:
+    lifecycleNode: "19 Audit / Governance / Cost, 16 HTTP API Boundary"
+    coreObject: "Usage"
+    owner: "workbench-quota HTTP API"
+    schema: "contracts/schemas/api/agent-run-quota-status-response.schema.json"
+    summary: "GET /api/workbench/quota HTTP response schema。"
+  AgentRunQuotaConsumeRequest:
+    lifecycleNode: "19 Audit / Governance / Cost, 16 HTTP API Boundary"
+    coreObject: "Usage"
+    owner: "workbench-quota HTTP API"
+    schema: "contracts/schemas/api/agent-run-quota-consume-request.schema.json"
+    summary: "POST /api/workbench/quota action=consume request schema。"
+  AgentRunQuotaConsumeResponse:
+    lifecycleNode: "19 Audit / Governance / Cost, 16 HTTP API Boundary"
+    coreObject: "Usage"
+    owner: "workbench-quota HTTP API"
+    schema: "contracts/schemas/api/agent-run-quota-consume-response.schema.json"
+    summary: "POST /api/workbench/quota action=consume response schema；quota 使用 public camelCase shape。"
+  AgentRunQuotaFinishRequest:
+    lifecycleNode: "19 Audit / Governance / Cost, 16 HTTP API Boundary"
+    coreObject: "Usage"
+    owner: "workbench-quota HTTP API"
+    schema: "contracts/schemas/api/agent-run-quota-finish-request.schema.json"
+    summary: "POST /api/workbench/quota action=finish request schema。"
+  AgentRunQuotaFinishResponse:
+    lifecycleNode: "19 Audit / Governance / Cost, 16 HTTP API Boundary"
+    coreObject: "Usage"
+    owner: "workbench-quota HTTP API"
+    schema: "contracts/schemas/api/agent-run-quota-finish-response.schema.json"
+    summary: "POST /api/workbench/quota action=finish response schema；usage 通过 $ref 引用 AgentRunUsageRecord。"
+  DemoSeedMessage:
+    lifecycleNode: "02 Conversation / Message, 17 Fixture / Demo / Mock"
+    coreObject: "Message"
+    owner: "Demo conversation fixture"
+    schema: "contracts/schemas/objects/demo-seed-message.schema.json"
+    summary: "Demo seed message object；metadata 只允许明确 runId 关联，不承载 runtimeRunId、sessionId 或 UI-only 字段。"
+  DemoSeedReport:
+    lifecycleNode: "13 Artifact / Source / Report, 17 Fixture / Demo / Mock"
+    coreObject: "Report"
+    owner: "Demo conversation fixture"
+    schema: "contracts/schemas/objects/demo-seed-report.schema.json"
+    summary: "Demo seed report fixture object；通过 $ref 引用 ReportArtifact，不复制 report 字段细节。"
+  DemoConversationTemplate:
+    lifecycleNode: "02 Conversation / Message, 10 Execution / Streaming, 17 Fixture / Demo / Mock"
+    coreObject: "Conversation, Run"
+    owner: "Demo conversation fixture"
+    schema: "contracts/schemas/objects/demo-conversation-template.schema.json"
+    summary: "Demo conversation template fixture object；seed_runs.items 通过 $ref 引用 canonical RunSnapshot。"
+  RunSource:
+    lifecycleNode: "13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Source"
+    owner: "Source Lineage mapper"
+    schema: "contracts/schemas/objects/run-source.schema.json"
+    summary: "Run source canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunPlan:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Run"
+    owner: "Agent Run planner"
+    schema: "contracts/schemas/objects/run-plan.schema.json"
+    summary: "RunSnapshot.plan canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunDataSource:
+    lifecycleNode: "10 Execution / Streaming, 14 Persistence / Lineage"
+    coreObject: "Run"
+    owner: "Agent Run runtime"
+    schema: "contracts/schemas/objects/run-data-source.schema.json"
+    summary: "RunSnapshot.dataSource canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunChartData:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Run"
+    owner: "Agent Run runtime"
+    schema: "contracts/schemas/objects/run-chart-data.schema.json"
+    summary: "RunSnapshot.chartData 与 chart_ready.payload.chartData 共用的 canonical object。字段细节不在 field-registry.yml 中重复维护，以 schema 作为机器可读契约。"
+  RunSseEventEnvelope:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/run-sse-event-envelope.schema.json"
+    summary: "SSE event 公共 envelope schema，只定义 type / runId / conversationId / timestamp / payload 外壳，不定义具体业务字段。"
+  RunStartedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/run-started-event.schema.json"
+    summary: "run_started SSE boundary schema 使用统一 envelope，payload.run 通过 $ref 引用 canonical RunSnapshot，不重复定义 RunSnapshot 字段。"
+  RunReusedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/run-reused-event.schema.json"
+    summary: "run_reused SSE boundary schema 使用统一 envelope，payload 承载幂等复用状态和复用 Run 轻量快照。"
+  StepStartedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/step-started-event.schema.json"
+    summary: "step_started SSE boundary schema 使用统一 envelope，payload.step 承载 step 开始快照。"
+  StepCompletedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/step-completed-event.schema.json"
+    summary: "step_completed SSE boundary schema 使用统一 envelope，payload.stepDelta 承载 step 完成增量。"
+  StepFailedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/step-failed-event.schema.json"
+    summary: "step_failed SSE boundary schema 使用统一 envelope，payload.stepDelta 承载 step 失败增量。"
+  ToolStartedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Tool"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/tool-started-event.schema.json"
+    summary: "tool_started SSE boundary schema 使用统一 envelope，payload.toolInvocation 承载 Tool Invocation 开始快照。"
+  ToolCompletedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Tool"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/tool-completed-event.schema.json"
+    summary: "tool_completed SSE boundary schema 使用统一 envelope，payload.toolDelta 承载 Tool Invocation 完成增量。"
+  ToolFailedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Tool"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/tool-failed-event.schema.json"
+    summary: "tool_failed SSE boundary schema 使用统一 envelope，payload.toolDelta 承载 Tool Invocation 失败增量。"
+  ChartReadyEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/chart-ready-event.schema.json"
+    summary: "chart_ready SSE boundary schema 使用统一 envelope，payload.chartData 只在 runtime 产出图表数据时出现。"
+  ConclusionDeltaEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/conclusion-delta-event.schema.json"
+    summary: "conclusion_delta SSE boundary schema 使用统一 envelope，payload.delta 承载结论文本增量。"
+  ConclusionCompletedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/conclusion-completed-event.schema.json"
+    summary: "conclusion_completed SSE boundary schema 使用统一 envelope，payload.agentConclusion 和 payload.modelTrace 通过 $ref 引用 canonical object。"
+  RagSourcesReadyEvent:
+    lifecycleNode: "10 Execution / Streaming, 13 Artifact / Source / Report, 14 Persistence / Lineage"
+    coreObject: "Event, Source"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/rag-sources-ready-event.schema.json"
+    summary: "rag_sources_ready SSE boundary schema 使用统一 envelope，payload.sources 通过 $ref 引用 canonical RunSource，不进入 RunSnapshot。"
+  ReportPendingEvent:
+    lifecycleNode: "10 Execution / Streaming, 13 Artifact / Source / Report"
+    coreObject: "Event, Report"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/report-pending-event.schema.json"
+    summary: "report_pending SSE boundary schema 使用统一 envelope，payload.metadata 承载 report pending runtime metadata。"
+  RunCompletedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/run-completed-event.schema.json"
+    summary: "run_completed SSE boundary schema 使用统一 envelope，payload 承载完成时间、耗时、assistant message 和 ModelTrace。"
+  RunFailedEvent:
+    lifecycleNode: "10 Execution / Streaming, 11 Observability / Trace"
+    coreObject: "Event, Run"
+    owner: "Agent Run SSE boundary"
+    schema: "contracts/schemas/events/run-failed-event.schema.json"
+    summary: "run_failed SSE boundary schema 使用统一 envelope，payload 承载失败信息和 ModelTrace。"
+forbiddenFields:
+  tokenUsage:
+    pattern: "tokenUsage"
+    reason: "Legacy usage object. Use ModelTrace.usage."
+  conclusionNotice:
+    pattern: "conclusionNotice"
+    reason: "Legacy fallback notice. Use AgentConclusion.notice for user-facing notices and ModelTrace for fallback / model error state."
+  agentConclusionSource:
+    pattern: "agentConclusion.source"
+    reason: "AgentConclusion owns text and notice only. Use ModelTrace.conclusionSource."
+  agentConclusionConclusionSource:
+    pattern: "agentConclusion.conclusionSource"
+    reason: "Conclusion source belongs to ModelTrace.conclusionSource."
+  agentConclusionFallbackReason:
+    pattern: "agentConclusion.fallbackReason"
+    reason: "Fallback reason belongs to ModelTrace.fallbackReason."
+  agentConclusionModelErrorType:
+    pattern: "agentConclusion.modelErrorType"
+    reason: "Model error type belongs to ModelTrace.modelErrorType."
+  agentConclusionContent:
+    pattern: "agentConclusion.content"
+    reason: "Use AgentConclusion.markdownText and AgentConclusion.plainText."
+  agentConclusionSummary:
+    pattern: "agentConclusion.summary"
+    reason: "Use AgentConclusion.sections or AgentConclusion.notice."
+  metadataClientRunId:
+    pattern: "metadata.clientRunId"
+    reason: "clientRunId is only pending / idempotency state, not persisted metadata relationship."
+  modelTraceTokenUsage:
+    pattern: "modelTrace.tokenUsage"
+    reason: "Legacy model trace field. Use modelTrace.usage."
+  usageNullishTokenUsage:
+    pattern: "usage ?? tokenUsage"
+    reason: "Old/new fallback chain. Normalize usage once in mapper."
+  tokenUsageOrUsage:
+    pattern: "tokenUsage || usage"
+    reason: "Old/new fallback chain. Normalize usage once in mapper."
+  rawRunConclusionSourceMock:
+    pattern: "rawRun.conclusionSource ?? 'mock'"
+    reason: "Mock source must be explicit and not a raw fallback."
+  metadataProvider:
+    pattern: "metadata.provider"
+    reason: "Provider must come from canonical modelTrace."
+  metadataSelectedModelId:
+    pattern: "metadata.selectedModelId"
+    reason: "Selected model id must come from canonical modelTrace."
+  metadataModel:
+    pattern: "metadata.model"
+    reason: "Model must come from canonical modelTrace."
+  metadataConclusionSource:
+    pattern: "metadata.conclusionSource"
+    reason: "Conclusion source must come from canonical modelTrace.conclusionSource."
+  metadataUsage:
+    pattern: "metadata.usage"
+    reason: "Usage must come from canonical modelTrace.usage."
+  metadataCostEstimate:
+    pattern: "metadata.costEstimate"
+    reason: "Cost estimate must come from canonical modelTrace.costEstimate."
+  metadataFallbackReason:
+    pattern: "metadata.fallbackReason"
+    reason: "Fallback reason must come from canonical modelTrace.fallbackReason."
+  metadataModelErrorType:
+    pattern: "metadata.modelErrorType"
+    reason: "Model error type must come from canonical modelTrace.modelErrorType."

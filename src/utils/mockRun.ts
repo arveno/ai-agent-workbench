@@ -1,18 +1,25 @@
+import {
+  createLocalRunStoppedEvent,
+  type RunChartReadyEvent,
+  type RunCompletedEvent,
+  type RunConclusionCompletedEvent,
+  type RunEvent,
+  type RunReportPendingEvent,
+  type RunStartedEvent,
+  type RunStepCompletedEvent,
+  type RunStepStartedEvent,
+  type RunStoppedEvent,
+  type RunToolCompletedEvent,
+  type RunToolStartedEvent,
+} from '@/domain/run/boundary';
 import type {
-  RunChartData,
-  RunChartReadyEvent,
-  RunCompletedEvent,
-  RunConclusionCompletedEvent,
-  RunEvent,
-  RunReportPendingEvent,
-  RunStartedEvent,
-  RunStepCompletedEvent,
-  RunStepStartedEvent,
-  RunStoppedEvent,
-  RunToolCompletedEvent,
-  RunToolInvocation,
-  RunToolStartedEvent,
-} from '@/types/run';
+  RunViewModel,
+  RunViewModelChartData,
+  RunViewModelStep,
+  RunViewModelToolInvocation,
+  RunViewModelTrace,
+} from '@/domain/run/view-model';
+import { RunViewModelFactory } from '@/domain/run/view-model';
 import { createMockRagSources } from './ragSources';
 
 export const MOCK_RUN_STEP_IDS = {
@@ -39,50 +46,84 @@ const MOCK_RUN_STEPS = [
   { id: MOCK_RUN_STEP_IDS.generateConclusion, title: '生成最终结论' },
 ] as const;
 
+function createMockModelTrace(): RunViewModelTrace {
+  return {
+    selectedModelId: 'mock-agent',
+    provider: 'mock',
+    model: '本地模拟',
+    latencyMs: null,
+    usage: {
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      usageAvailable: false,
+      usageSource: 'none',
+      usageUnavailableReason: 'model_not_invoked',
+    },
+    costEstimate: {
+      estimatedCost: null,
+      currency: null,
+      pricingUnit: null,
+      isEstimated: false,
+      pricingSource: 'none',
+      costUnavailableReason: 'model_not_invoked',
+    },
+    fallbackReason: null,
+    modelErrorType: null,
+    conclusionSource: 'mock',
+  };
+}
+
+export function createMockRunViewModel(params: {
+  runId: string;
+  prompt: string;
+  conversationId: string;
+  timestamp?: string;
+}): RunViewModel {
+  const timestamp = params.timestamp ?? new Date().toISOString();
+  const steps: RunViewModelStep[] = MOCK_RUN_STEPS.map((step) => ({
+    ...step,
+    status: 'pending',
+  }));
+
+  return RunViewModelFactory.fromMockRun({
+    runId: params.runId,
+    prompt: params.prompt,
+    conversationId: params.conversationId,
+    plan: {
+      intent: 'data_analysis',
+      shouldUseDataAnalysis: true,
+      reason: '公开演示模式（Mock）使用本地模拟数据生成分析流程',
+      metric: 'avg_score',
+      groupBy: 'grade',
+    },
+    dataSource: {
+      provider: 'mock',
+      name: 'Mock 教学数据源',
+      typeLabel: '本地模拟数据',
+      schema: 'public',
+      tableCount: 3,
+    },
+    steps,
+    sources: createMockRagSources({
+      runId: params.runId,
+      conversationId: params.conversationId,
+    }),
+    modelTrace: createMockModelTrace(),
+    timestamp,
+  });
+}
+
 export function createMockRunStartedEvent(params: {
   runId: string;
   prompt: string;
-  sessionId?: string;
+  conversationId: string;
 }): RunStartedEvent {
-  const timestamp = new Date().toISOString();
-
   return {
     type: 'run_started',
-    run: {
-      id: params.runId,
-      displayRunId: params.runId,
-      sessionId: params.sessionId,
-      mode: 'mock',
-      status: 'running',
-      intent: 'data_analysis',
-      prompt: params.prompt,
-      plan: {
-        intent: 'data_analysis',
-        shouldUseDataAnalysis: true,
-        reason: '公开演示模式（Mock）使用本地模拟数据生成分析流程',
-        metric: 'avg_score',
-        groupBy: 'grade',
-      },
-      dataSource: {
-        provider: 'mock',
-        name: 'Mock 教学数据源',
-        typeLabel: '本地模拟数据',
-        schema: 'public',
-        tableCount: 3,
-      },
-      steps: MOCK_RUN_STEPS.map((step) => ({
-        ...step,
-        status: 'pending',
-      })),
-      toolInvocations: [],
-      sources: createMockRagSources(),
-      conclusion: '',
-      conclusionSource: 'mock',
-      reportState: 'hidden',
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      startedAt: timestamp,
-    },
+    runId: params.runId,
+    conversationId: params.conversationId,
+    run: createMockRunViewModel(params),
   };
 }
 
@@ -112,7 +153,7 @@ export function createMockStepCompletedEvent(
 
 export function createMockToolStartedEvent(
   runId: string,
-  tool: RunToolInvocation,
+  tool: RunViewModelToolInvocation,
 ): RunToolStartedEvent {
   return {
     type: 'tool_started',
@@ -153,7 +194,7 @@ export function createMockConclusionCompletedEvent(
     type: 'conclusion_completed',
     runId,
     conclusion,
-    conclusionSource: 'mock',
+    modelTrace: createMockModelTrace(),
   };
 }
 
@@ -174,13 +215,10 @@ export function createMockRunCompletedEvent(runId: string, elapsedMs?: number): 
 }
 
 export function createMockRunStoppedEvent(runId: string): RunStoppedEvent {
-  return {
-    type: 'run_stopped',
-    runId,
-  };
+  return createLocalRunStoppedEvent(runId);
 }
 
-export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS): RunToolInvocation {
+export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS): RunViewModelToolInvocation {
   const timestamp = new Date().toISOString();
 
   if (toolId === 'knowledgeSearch') {
@@ -221,7 +259,7 @@ export function createMockToolInvocation(toolId: keyof typeof MOCK_RUN_TOOL_IDS)
   };
 }
 
-export function createMockChartData(): RunChartData {
+export function createMockChartData(): RunViewModelChartData {
   return {
     title: '各年级平均分对比',
     chartType: 'bar',

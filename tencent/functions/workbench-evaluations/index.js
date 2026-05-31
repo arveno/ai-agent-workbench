@@ -86,6 +86,13 @@ const {
   extractLangSmithTraceFromMetadata,
   submitLangSmithEvaluationFeedback,
 } = loadSharedModule('langsmithObservability');
+const {
+  createAgentRunModelMetadata,
+} = loadSharedModule('agentRunModelMetadata');
+const {
+  createEvaluationMetadata,
+  mapResult,
+} = require('./metadata-boundary');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -264,6 +271,16 @@ function readOptionalRunId(value) {
 
   if (!UUID_PATTERN.test(runId)) {
     throw new RequestError(400, 'validation_error', 'runId must be a canonical UUID.');
+  }
+
+  return runId;
+}
+
+function readRequiredRunId(value) {
+  const runId = readOptionalRunId(value);
+
+  if (!runId) {
+    throw new RequestError(400, 'validation_error', 'runId is required.');
   }
 
   return runId;
@@ -454,24 +471,12 @@ function mapCase(row) {
   };
 }
 
-function mapResult(row) {
-  return {
-    id: String(row.id ?? ''),
-    caseId: String(row.case_id ?? ''),
-    conversationId: toNullableString(row.conversation_id),
-    runId: toNullableString(row.run_id),
-    verdict: String(row.verdict ?? 'unknown'),
-    badCaseReason: toNullableString(row.bad_case_reason),
-    humanNote: toNullableString(row.human_note),
-    actualSummary: parseJsonObject(row.actual_summary),
-    modelTrace: parseJsonObject(row.model_trace),
-    toolSummary: parseJsonArray(row.tool_summary),
-    ragSummary: parseJsonObject(row.rag_summary),
-    reportSummary: parseJsonObject(row.report_summary),
-    metadata: parseJsonObject(row.metadata),
-    createdAt: normalizeDateTime(row.created_at),
-    updatedAt: normalizeDateTime(row.updated_at),
-  };
+function hasCanonicalEvaluationRun(row) {
+  return UUID_PATTERN.test(String(row.run_id ?? ''));
+}
+
+function createEvaluationModelTrace(runModelMetadata) {
+  return isRecord(runModelMetadata.modelTrace) ? runModelMetadata.modelTrace : {};
 }
 
 async function fetchCases(params) {
@@ -575,6 +580,10 @@ async function fetchResults(currentUser, params) {
           return false;
         }
 
+        if (!hasCanonicalEvaluationRun(row)) {
+          return false;
+        }
+
         if (params.caseId && String(row.case_id ?? '') !== params.caseId) {
           return false;
         }
@@ -609,7 +618,9 @@ async function fetchResultById(db, currentUser, resultId) {
 
   assertNoQueryError(result);
 
-  const rows = extractRows(result).filter((row) => hasExpectedOwner(row, currentUser));
+  const rows = extractRows(result).filter(
+    (row) => hasExpectedOwner(row, currentUser) && hasCanonicalEvaluationRun(row),
+  );
   return rows.length > 0 ? mapResult(rows[0]) : null;
 }
 
@@ -619,12 +630,11 @@ function readCreateResultPayload(body) {
   return {
     caseId: readRequiredString(body, 'caseId'),
     conversationId: readOptionalString(body, 'conversationId'),
-    runId: readOptionalRunId(body.runId),
+    runId: readRequiredRunId(body.runId),
     verdict: readVerdict(body.verdict),
     badCaseReason: readOptionalString(body, 'badCaseReason', 128),
     humanNote: readOptionalString(body, 'humanNote'),
     actualSummary: readRequiredObject(body, 'actualSummary'),
-    modelTrace: readRequiredObject(body, 'modelTrace'),
     toolSummary: readRequiredArray(body, 'toolSummary'),
     ragSummary: readRequiredObject(body, 'ragSummary'),
     reportSummary: readRequiredObject(body, 'reportSummary'),
@@ -649,27 +659,26 @@ async function createResult(currentUser, body) {
     await assertConversationOwner(db, currentUser, payload.conversationId);
   }
 
-  let run = null;
+  const run = await fetchRunById(db, currentUser, payload.runId);
 
-  if (payload.runId) {
-    run = await fetchRunById(db, currentUser, payload.runId);
-  }
-
-  if (payload.runId && !run) {
+  if (!run) {
     throw new RequestError(404, 'run_not_found', 'Workbench run was not found.');
   }
 
-  const runConversationId = run ? toNullableString(run.conversation_id) : null;
+  const runConversationId = toNullableString(run.conversation_id);
 
   if (payload.conversationId && runConversationId !== payload.conversationId) {
     throw new RequestError(404, 'run_not_found', 'Workbench run was not found.');
   }
 
   const resultId = randomUUID();
-  const runMetadata = run ? parseJsonObject(run.metadata) : {};
+  const canonicalRunId = String(run.id ?? '');
+  const runMetadata = parseJsonObject(run.metadata);
+  const runModelMetadata = createAgentRunModelMetadata(runMetadata);
+  const modelTrace = createEvaluationModelTrace(runModelMetadata);
   const langSmithEvaluation = await submitLangSmithEvaluationFeedback({
     evaluationId: resultId,
-    runId: run ? String(run.id ?? '') : null,
+    runId: canonicalRunId,
     conversationId: payload.conversationId || runConversationId,
     caseId: payload.caseId,
     verdict: payload.verdict,
@@ -683,21 +692,23 @@ async function createResult(currentUser, body) {
     user_id: currentUser.userId,
     case_id: payload.caseId,
     conversation_id: payload.conversationId || runConversationId,
-    run_id: run ? String(run.id ?? '') : null,
+    run_id: canonicalRunId,
     verdict: payload.verdict,
     bad_case_reason: payload.badCaseReason,
     human_note: payload.humanNote,
     actual_summary: JSON.stringify(payload.actualSummary),
-    model_trace: JSON.stringify(payload.modelTrace),
+    model_trace: JSON.stringify(modelTrace),
     tool_summary: JSON.stringify(payload.toolSummary),
     rag_summary: JSON.stringify(payload.ragSummary),
     report_summary: JSON.stringify(payload.reportSummary),
-    metadata: JSON.stringify({
-      ...payload.metadata,
-      source: 'workbench-evaluation',
-      resultVersion: 1,
+    metadata: JSON.stringify(createEvaluationMetadata(
+      payload.metadata,
+      runModelMetadata,
       langSmithEvaluation,
-    }),
+      {
+        runId: canonicalRunId,
+      },
+    )),
   };
 
   const insertResult = await db.from('eval_results').insert(insertPayload);

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/tool-failed-event.schema.json",
+  "title": "ToolFailedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "tool_failed",
+          "description": "SSE event 类型，表示 Tool Invocation 执行失败。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["toolDelta"],
+          "description": "tool_failed 事件业务数据。",
+          "properties": {
+            "toolDelta": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["toolId", "errorMessage", "fallbackReason", "completedAt", "elapsedMs"],
+              "description": "Tool Invocation 失败状态增量。",
+              "properties": {
+                "toolId": {
+                  "type": "string",
+                  "description": "runtime tool invocation ID。"
+                },
+                "errorMessage": {
+                  "type": "string",
+                  "description": "用户可见的 Tool 失败信息。"
+                },
+                "fallbackReason": {
+                  "type": "string",
+                  "description": "Tool fallback 原因。"
+                },
+                "completedAt": {
+                  "type": "string",
+                  "description": "Tool Invocation 失败结束时间。"
+                },
+                "elapsedMs": {
+                  "type": "number",
+                  "description": "Tool Invocation 执行耗时，单位毫秒。"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

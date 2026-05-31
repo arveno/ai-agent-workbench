@@ -1,0 +1,32 @@
+name: Contract Pack Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'stage/**'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-pack-check:
+    name: Contract Pack Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check contracts
+        run: pnpm contract:check

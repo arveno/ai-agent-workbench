@@ -1,6 +1,6 @@
 # AI Agent Enterprise Lifecycle
 
-本文档是 AI Agent Workbench 的 AI Agent Enterprise Lifecycle 事实源，只定义生命周期节点、能力域和功能归位规则。架构见 `docs/architecture.md`，ID 见 `docs/id-contract.md`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`。
+本文档是 AI Agent Workbench 的 AI Agent Enterprise Lifecycle 事实源，只定义生命周期节点、能力域和功能归位规则。架构见 `docs/architecture.md`，ID 见 `docs/id-contract.md`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`，字段契约见 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json`。
 
 ## 1. 生命周期节点
 
@@ -74,6 +74,8 @@ Agent Runtime 边界必须遵守：
 - Agent Run 内部 planner、RAG、tool、model response、report decision、final response、error / fallback 编排归入 LangGraph。
 - Tool、Retriever 和模型调用能力归入 LangChain；旧模型网关调用链不继续扩展为新模型平台。
 - Run Trace / Source / Report / Usage / Evaluation 的业务主关系继续绑定 canonical `runId`。
+- Report / Evaluation 同步模型状态时，只继承项目 canonical run metadata 中的 `modelTrace`；其中 `modelTrace.usage` 是模型用量 canonical 字段，`modelTrace.costEstimate` 是 cost estimate canonical 字段。不得重新解析 LangChain raw payload，LangSmith 外部 ID 不替代项目 Evaluation 主关系。
+- Agent Run 结论正文、结构化段落、rawText 和结论提示统一归入 `agentConclusion`；提示使用 `agentConclusion.notice`。`modelTrace.conclusionSource` 表达模型 / 兜底 / 模拟来源，`modelTrace.fallbackReason` 表达兜底原因，不新增顶层结论提示状态字段。
 - 删除被替代旧逻辑，不保留 runtime wrapper / adapter / old-new 双轨兼容。
 - Mock、Real、Fallback 必须是明确状态，不能用 fallback 或 mock 伪装 real provider 结果。
 
@@ -96,7 +98,7 @@ User
           -> Usage
 ```
 
-`Run` 是执行中心。字段定义、主关系和禁止写法以 `docs/id-contract.md` 为准，本文不定义具体 ID 字段。
+`Run` 是执行中心。字段定义、主关系和禁止写法以 `docs/id-contract.md` 为准，本文不定义具体 ID 字段。Run / modelTrace / agentConclusion / report metadata / evaluation metadata 的字段契约以 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json` 为准，本文不重复维护字段表。
 
 ## 4. 功能归位规则
 

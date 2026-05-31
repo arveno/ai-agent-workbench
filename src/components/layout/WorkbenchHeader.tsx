@@ -1,12 +1,6 @@
 import { Fragment } from 'react';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import type { GenerationStatus, RunSnapshot } from '../../types/workbench';
-import {
-  formatRunElapsed,
-  getRunStatusLabel,
-  getRunStatusTone,
-  type RunStatusTone,
-} from '../../utils/runViewModel';
+import { createWorkbenchHeaderRunModel } from '../../utils/runPresentationModel';
 import {
   getOfficialWorkbenchToolSummaryItems,
   WORKBENCH_TOOL_DEFINITIONS,
@@ -19,64 +13,6 @@ import { HeaderCapabilityButton } from './HeaderCapabilityButton';
 
 const DEFAULT_HEADER_TITLE = '新聊天';
 
-function getGenerationLabel(status: GenerationStatus): string {
-  if (status === 'streaming') {
-    return '任务进行中';
-  }
-
-  if (status === 'done') {
-    return '已完成';
-  }
-
-  if (status === 'stopped') {
-    return '已停止';
-  }
-
-  if (status === 'error') {
-    return '执行失败';
-  }
-
-  return '待开始';
-}
-
-function getGenerationStatusTone(status: GenerationStatus): RunStatusTone {
-  if (status === 'streaming') {
-    return 'active';
-  }
-
-  if (status === 'done') {
-    return 'success';
-  }
-
-  if (status === 'stopped') {
-    return 'warning';
-  }
-
-  if (status === 'error') {
-    return 'danger';
-  }
-
-  return 'muted';
-}
-
-function getRunSummaryItems(currentRun: RunSnapshot | null): string[] {
-  if (!currentRun) {
-    return ['尚未开始 Run'];
-  }
-
-  const summaryItems = [
-    `工具 ${currentRun.toolInvocations.length}`,
-    `图表 ${currentRun.chartData ? 1 : 0}`,
-  ];
-  const elapsedText = formatRunElapsed(currentRun);
-
-  if (elapsedText !== '-') {
-    summaryItems.push(`耗时 ${elapsedText}`);
-  }
-
-  return summaryItems;
-}
-
 export function WorkbenchHeader() {
   const sessions = useWorkbenchStore((state) => state.sessions);
   const currentSessionId = useWorkbenchStore((state) => state.currentSessionId);
@@ -87,9 +23,10 @@ export function WorkbenchHeader() {
   const openWorkflowModal = useWorkbenchStore((state) => state.openWorkflowModal);
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   const headerTitle = currentSession?.title || DEFAULT_HEADER_TITLE;
-  const statusLabel = currentRun ? getRunStatusLabel(currentRun.status) : getGenerationLabel(generationStatus);
-  const statusTone = currentRun ? getRunStatusTone(currentRun.status) : getGenerationStatusTone(generationStatus);
-  const runSummaryItems = getRunSummaryItems(currentRun);
+  const headerRunModel = createWorkbenchHeaderRunModel({
+    run: currentRun,
+    generationStatus,
+  });
   const enabledToolCount = WORKBENCH_TOOL_DEFINITIONS.filter((tool) => tool.enabled).length;
   const serverToolCount = WORKBENCH_TOOL_DEFINITIONS.filter(
     (tool) => tool.enabled && tool.runtime === 'server' && tool.status === 'connected',
@@ -106,11 +43,11 @@ export function WorkbenchHeader() {
           <h2 className="header-title">{headerTitle}</h2>
         </div>
         <div className="workspace-status-row" aria-label="Run 状态摘要">
-          <Badge variant="outline" className={`workspace-status-badge workspace-status-badge-${statusTone}`}>
+          <Badge variant="outline" className={`workspace-status-badge workspace-status-badge-${headerRunModel.statusTone}`}>
             <span className="workspace-status-dot" aria-hidden="true"></span>
-            {statusLabel}
+            {headerRunModel.statusLabel}
           </Badge>
-          {runSummaryItems.map((item, index) => (
+          {headerRunModel.summaryItems.map((item, index) => (
             <Fragment key={item}>
               {index > 0 ? <Separator orientation="vertical" className="workspace-status-separator" /> : null}
               <span className="workspace-status-item">{item}</span>

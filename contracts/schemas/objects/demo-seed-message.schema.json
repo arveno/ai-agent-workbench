@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/demo-seed-message.schema.json",
+  "title": "DemoSeedMessage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role", "kind", "content", "status", "metadata"],
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": ["user", "assistant", "system"],
+      "description": "Demo seed message role."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["text", "tool_summary", "report", "error", "system_notice"],
+      "description": "Demo seed message kind."
+    },
+    "content": {
+      "type": "string",
+      "description": "Demo seed message content."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "streaming", "completed", "failed"],
+      "description": "Demo seed message status."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Associated canonical runId for the demo seed message."
+        }
+      },
+      "description": "Demo seed message metadata. Run association uses runId only; runtimeRunId and sessionId are not allowed."
+    }
+  }
+}

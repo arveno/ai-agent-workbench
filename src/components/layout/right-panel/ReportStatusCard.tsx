@@ -1,65 +1,36 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunReportState } from '../../../types/run';
-import {
-  getReportStatusDescription,
-  getReportStatusLabel,
-  getReportStatusTone,
-} from '../../../utils/observabilityLabels';
-import { shouldShowReportConfirm } from '../../../utils/run';
+import { createRunReportPanelModel } from '../../../utils/runPresentationModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 
-function getReportStateClass(reportState: RunReportState): string {
-  const tone = getReportStatusTone(reportState);
-
-  if (tone === 'active') {
-    return 'report-status-badge report-status-badge-pending';
-  }
-
-  if (tone === 'success') {
-    return 'report-status-badge report-status-badge-generated';
-  }
-
-  if (reportState === 'skipped') {
-    return 'report-status-badge report-status-badge-skipped';
-  }
-
-  if (tone === 'danger') {
-    return 'report-status-badge status-badge-error';
-  }
-
-  return 'report-status-badge report-status-badge-hidden';
-}
-
 export function ReportStatusCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
   const generateReportForRun = useWorkbenchStore((state) => state.generateReportForRun);
   const skipReportForRun = useWorkbenchStore((state) => state.skipReportForRun);
+  const panelModel = createRunReportPanelModel(currentRun);
 
-  if (!currentRun) {
+  if (panelModel.state === 'empty') {
     return (
       <Card size="sm" className="right-card right-section">
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.report} size={16} />
-            <span>报告</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>当前 Run 的报告状态</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
-            <strong>暂无报告上下文</strong>
-            完成一次数据分析 Run 后，这里会显示报告是否可生成以及绑定的 Run。
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         </CardContent>
       </Card>
     );
   }
-
-  const canGenerateReport = shouldShowReportConfirm(currentRun);
 
   return (
     <Card size="sm" className="right-card right-section">
@@ -67,38 +38,42 @@ export function ReportStatusCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.report} size={16} />
-            <span>报告</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>绑定当前选中 Run：{currentRun.id}</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </div>
-        <Badge variant="outline" className={getReportStateClass(currentRun.reportState)}>
-          {getReportStatusLabel(currentRun.reportState)}
+        <Badge variant="outline" className={panelModel.badgeClassName}>
+          {panelModel.badgeLabel}
         </Badge>
       </CardHeader>
 
       <CardContent className="right-card-content">
         <div className="report-status-card">
-          <p>{getReportStatusDescription(currentRun, canGenerateReport)}</p>
-          {canGenerateReport ? (
+          <p>{panelModel.statusDescription}</p>
+          {panelModel.canGenerateReport && panelModel.runId ? (
             <div className="report-status-actions">
               <Button
                 type="button"
                 size="sm"
                 onClick={() => {
-                  generateReportForRun(currentRun.id);
+                  if (panelModel.runId) {
+                    generateReportForRun(panelModel.runId);
+                  }
                 }}
               >
-                生成当前 Run 报告
+                {panelModel.generateLabel}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  skipReportForRun(currentRun.id);
+                  if (panelModel.runId) {
+                    skipReportForRun(panelModel.runId);
+                  }
                 }}
               >
-                暂不生成
+                {panelModel.skipLabel}
               </Button>
             </div>
           ) : null}

@@ -2,13 +2,14 @@ import type { StateCreator } from 'zustand';
 import {
   MOCK_RUN_STEP_IDS,
   createMockChartData,
-  createMockRunStartedEvent,
+  createMockRunViewModel,
   createMockToolInvocation,
 } from '../../utils/mockRun';
 import { createConversation, fetchConversations, updateConversation } from '../../services/conversationApi';
 import { createConversationMessage, fetchConversationMessages } from '../../services/messageApi';
+import type { RunViewModel } from '../../domain/run/view-model';
 import type { ConversationMode, ConversationRecord } from '../../types/persistence';
-import type { RunSnapshot, SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
+import type { SessionSlice, WorkbenchMessage, WorkbenchSession, WorkbenchStore } from '../../types/workbench';
 import { conversationRecordToSession } from '../../utils/conversationMapper';
 import { messageRecordToWorkbenchMessage, workbenchMessageToMessageCreateInput } from '../../utils/messageMapper';
 import { replaceWorkbenchUrl } from '../../utils/urlState';
@@ -154,18 +155,18 @@ function getRecoveredMockStepDescription(stepId: string, promptSummary: string):
   return '恢复本轮 Mock Run 的最终回复。';
 }
 
-function createCompletedMockRun(seed: MockRunSeed, sessionId: string): RunSnapshot {
+function createCompletedMockRun(seed: MockRunSeed, conversationId: string): RunViewModel {
   const createdAt = toIso(seed.createdAt);
   const updatedAt = toIso(seed.updatedAt);
   const promptSummary = summarizeMockPrompt(seed.prompt || seed.conclusion);
   const conclusion =
     seed.conclusion || `历史 Mock Run 未记录完整助手回复，已根据本轮问题恢复执行轨迹：${promptSummary}`;
   const hasCompletedReply = Boolean(seed.conclusion || seed.hasReport);
-  const startedRun = createMockRunStartedEvent({
+  const startedRun = createMockRunViewModel({
     runId: seed.runId,
     prompt: seed.prompt || promptSummary,
-    sessionId,
-  }).run;
+    conversationId,
+  });
   const stepElapsedById: Partial<Record<keyof typeof MOCK_RUN_STEP_IDS, number>> = {
     understandPrompt: 160,
     knowledgeSearch: 260,
@@ -284,7 +285,7 @@ function collectMockRunSeeds(messages: WorkbenchMessage[]): MockRunSeed[] {
   return [...seeds.values()];
 }
 
-function getRunUpdatedAt(run: RunSnapshot | undefined): number {
+function getRunUpdatedAt(run: RunViewModel | undefined): number {
   if (!run) {
     return 0;
   }
@@ -293,7 +294,7 @@ function getRunUpdatedAt(run: RunSnapshot | undefined): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function getLatestRunId(runsById: Record<string, RunSnapshot>): string | undefined {
+function getLatestRunId(runsById: Record<string, RunViewModel>): string | undefined {
   return Object.values(runsById).reduce<string | undefined>((latestRunId, run) => {
     const latestRun = latestRunId ? runsById[latestRunId] : undefined;
     return getRunUpdatedAt(run) >= getRunUpdatedAt(latestRun) ? run.id : latestRunId;
@@ -416,7 +417,7 @@ function createEmptyUiState() {
   };
 }
 
-function getReportActionStateFromRun(run: RunSnapshot | null | undefined): WorkbenchStore['reportActionState'] {
+function getReportActionStateFromRun(run: RunViewModel | null | undefined): WorkbenchStore['reportActionState'] {
   if (
     run?.reportState === 'pending' ||
     run?.reportState === 'generating' ||

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/chart-ready-event.schema.json",
+  "title": "ChartReadyEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "chart_ready",
+          "description": "SSE event 类型，表示 Run 已产出 chartData。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["chartData"],
+          "description": "chart_ready 事件业务数据。",
+          "properties": {
+            "chartData": {
+              "$ref": "../objects/run-chart-data.schema.json"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/run-reused-event.schema.json",
+  "title": "RunReusedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "run_reused",
+          "description": "SSE event 类型，表示当前请求复用了既有 Agent Run。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duplicate", "reused", "reason", "status", "reusedRun"],
+          "description": "run_reused 事件业务数据。",
+          "properties": {
+            "duplicate": {
+              "const": true,
+              "description": "当前请求命中了幂等复用。"
+            },
+            "reused": {
+              "const": true,
+              "description": "当前 SSE 流复用了既有 Run。"
+            },
+            "reason": {
+              "type": "string",
+              "description": "复用原因，例如 existing_run / in_flight / duplicate_key。"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pending", "running", "completed", "failed", "stopped"],
+              "description": "被复用 Run 的当前状态。"
+            },
+            "reusedRun": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["id", "status", "conclusionSource", "reportState", "completedAt"],
+              "description": "被复用 Run 的轻量快照；完整 canonical RunSnapshot 收口后再替换为对象引用。",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "被复用的 canonical runId。"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pending", "running", "completed", "failed", "stopped"],
+                  "description": "被复用 Run 的状态。"
+                },
+                "conclusionSource": {
+                  "type": ["string", "null"],
+                  "description": "被复用 Run 当前记录的结论来源。"
+                },
+                "reportState": {
+                  "type": ["string", "null"],
+                  "description": "被复用 Run 当前记录的 report 状态。"
+                },
+                "completedAt": {
+                  "type": ["string", "null"],
+                  "description": "被复用 Run 的完成时间。"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

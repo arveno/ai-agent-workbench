@@ -1,12 +1,15 @@
 import type { RunSource } from '@/types/rag';
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/domain/run/view-model';
 
-export function createMockRagSources(): RunSource[] {
+export function createMockRagSources(params: { runId?: string; conversationId?: string } = {}): RunSource[] {
+  const runId = params.runId ?? 'mock_run';
+  const conversationId = params.conversationId ?? 'mock_session';
+
   return [
     {
       id: 'mock_source_1',
-      runId: 'mock_run',
-      conversationId: 'mock_session',
+      runId,
+      conversationId,
       documentId: 'mock_doc_1',
       chunkId: 'mock_source_1',
       citationLabel: '[S1]',
@@ -23,8 +26,8 @@ export function createMockRagSources(): RunSource[] {
     },
     {
       id: 'mock_source_2',
-      runId: 'mock_run',
-      conversationId: 'mock_session',
+      runId,
+      conversationId,
       documentId: 'mock_doc_2',
       chunkId: 'mock_source_2',
       citationLabel: '[S2]',
@@ -41,8 +44,8 @@ export function createMockRagSources(): RunSource[] {
     },
     {
       id: 'mock_source_3',
-      runId: 'mock_run',
-      conversationId: 'mock_session',
+      runId,
+      conversationId,
       documentId: 'mock_doc_3',
       chunkId: 'mock_source_3',
       citationLabel: '[S3]',
@@ -60,8 +63,12 @@ export function createMockRagSources(): RunSource[] {
   ];
 }
 
-export function getRunRagSources(run: RunSnapshot | null): RunSource[] {
-  return run?.sources ?? [];
+export function getRunRagSources(run: RunViewModel | null): RunSource[] {
+  if (!run) {
+    return [];
+  }
+
+  return run.sources;
 }
 
 export function formatSourceScore(score?: number): string {

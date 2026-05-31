@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-snapshot.schema.json",
+  "title": "RunSnapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conversationId",
+    "mode",
+    "status",
+    "modelTrace",
+    "reportState",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "canonical runId，只指向 DB agent_runs.id。"
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "拥有当前 Run 的 conversation。"
+    },
+    "clientRunId": {
+      "type": ["string", "null"],
+      "description": "前端 pending 与请求幂等 ID，不作为业务外键。"
+    },
+    "usageId": {
+      "type": ["string", "null"],
+      "description": "持久化后的 usage 记录 ID。"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["mock", "agent"],
+      "description": "runtime 与 persistence 边界上的 Run 执行模式。"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "completed", "failed", "stopped"],
+      "description": "runtime 与 persistence 边界上的 canonical Run 状态；UI 状态由 RunViewModel 映射。"
+    },
+    "intent": {
+      "type": "string",
+      "enum": ["capability_intro", "data_analysis", "knowledge_qa", "unsupported", "unknown"],
+      "description": "Agent Run planner 已识别的意图。"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "当前 Run 捕获的用户输入。"
+    },
+    "plan": {
+      "$ref": "run-plan.schema.json"
+    },
+    "dataSource": {
+      "$ref": "run-data-source.schema.json"
+    },
+    "chartData": {
+      "$ref": "run-chart-data.schema.json"
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "当前 Run 的 canonical model trace。"
+    },
+    "agentConclusion": {
+      "anyOf": [
+        { "$ref": "agent-conclusion.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "当前 Run 的 canonical 结论信封。"
+    },
+    "reportState": {
+      "type": "string",
+      "enum": ["hidden", "pending", "generating", "generated", "skipped", "failed"],
+      "description": "绑定在当前 Run 上的 canonical report 可用性与生成状态。"
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "Run 创建时间。"
+    },
+    "updatedAt": {
+      "type": "string",
+      "description": "Run 更新时间。"
+    },
+    "startedAt": {
+      "type": "string",
+      "description": "Run 开始时间。"
+    },
+    "completedAt": {
+      "type": "string",
+      "description": "Run 完成时间。"
+    },
+    "elapsedMs": {
+      "type": "number",
+      "description": "Run 耗时，单位为毫秒。"
+    },
+    "errorMessage": {
+      "type": "string",
+      "description": "Run 失败时可展示的安全错误信息。"
+    }
+  }
+}

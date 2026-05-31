@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/evaluation-metadata.schema.json",
+  "title": "EvaluationMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId", "source", "resultVersion"],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "该 evaluation result 评估的 canonical runId。"
+    },
+    "source": {
+      "type": "string",
+      "const": "workbench-evaluation",
+      "description": "服务端设置的 evaluation metadata 来源。"
+    },
+    "resultVersion": {
+      "type": "number",
+      "description": "evaluation metadata 格式版本。"
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"
+    },
+    "evaluatorVersion": {
+      "type": ["string", "null"],
+      "description": "evaluator 或 rubric 版本。"
+    },
+    "langSmithTraceId": {
+      "type": ["string", "null"],
+      "description": "外部 observability ID；不替代 canonical runId。"
+    },
+    "langSmithEvaluation": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "服务端创建的 LangSmith feedback 状态 metadata；请求 metadata 不得设置。"
+    }
+  }
+}

@@ -1,30 +1,31 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunReportPanelModel } from '../../utils/runPresentationModel';
 import { useWorkbenchStore } from '../../stores/workbenchStore';
-import { shouldShowReportConfirm } from '../../utils/run';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
 
 interface ConfirmActionCardProps {
-  run: RunSnapshot;
+  model: RunReportPanelModel;
 }
 
-export function ConfirmActionCard({ run }: ConfirmActionCardProps) {
+export function ConfirmActionCard({ model }: ConfirmActionCardProps) {
   const generateReportForRun = useWorkbenchStore((state) => state.generateReportForRun);
   const skipReportForRun = useWorkbenchStore((state) => state.skipReportForRun);
 
-  if (!shouldShowReportConfirm(run)) {
+  if (!model.canGenerateReport || !model.runId) {
     return null;
   }
 
-  const runId = run.id;
-
   const handleGenerateReport = () => {
-    generateReportForRun(runId);
+    if (model.runId) {
+      generateReportForRun(model.runId);
+    }
   };
 
   const handleSkipReport = () => {
-    skipReportForRun(runId);
+    if (model.runId) {
+      skipReportForRun(model.runId);
+    }
   };
 
   return (
@@ -44,10 +45,10 @@ export function ConfirmActionCard({ run }: ConfirmActionCardProps) {
         </div>
         <div className="confirm-actions">
           <Button type="button" className="confirm-btn primary" onClick={handleGenerateReport} size="sm">
-            生成报告
+            {model.confirmGenerateLabel}
           </Button>
           <Button type="button" className="confirm-btn" onClick={handleSkipReport} variant="outline" size="sm">
-            暂不生成
+            {model.skipLabel}
           </Button>
         </div>
       </CardContent>

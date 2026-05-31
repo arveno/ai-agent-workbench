@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/conclusion-delta-event.schema.json",
+  "title": "ConclusionDeltaEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "conclusion_delta",
+          "description": "SSE event 类型，表示结论文本增量。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["delta"],
+          "description": "conclusion_delta 事件业务数据。",
+          "properties": {
+            "delta": {
+              "type": "string",
+              "description": "本次 SSE 推送的结论文本增量。"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,3 +1,8 @@
+import type {
+  DemoConversationTemplate,
+  DemoSeedMessage as ContractDemoSeedMessage,
+  DemoSeedReport,
+} from '../../contracts/generated/workbench-contract';
 import type { RunSource } from './rag';
 
 export type JsonObject = Record<string, unknown>;
@@ -84,29 +89,9 @@ export interface DemoTaskTemplateRecord {
   metadata: JsonObject;
 }
 
-export interface DemoSeedMessage {
-  role: MessageRole;
-  kind?: MessageKind;
-  content: string;
-  status?: MessageStatus;
-  metadata?: JsonObject;
-}
-
-export interface DemoConversationTemplateRecord {
-  id: string;
-  title: string;
-  description: string;
-  category: DemoTemplateCategory;
-  visibility: DemoTemplateVisibility;
-  seed_messages: DemoSeedMessage[];
-  seed_runs: JsonObject[];
-  seed_reports: JsonObject[];
-  sort_order: number;
-  is_enabled: boolean;
-  created_at: string;
-  updated_at: string;
-  metadata: JsonObject;
-}
+export type DemoSeedMessage = ContractDemoSeedMessage;
+export type { DemoSeedReport };
+export type DemoConversationTemplateRecord = DemoConversationTemplate;
 
 export interface ConversationListResult {
   conversations: ConversationRecord[];
@@ -148,7 +133,6 @@ export interface AgentRunRecord {
   data_source_snapshot: JsonObject;
   chart_data: JsonObject;
   conclusion: string | null;
-  conclusion_source: string | null;
   report_state: string | null;
   started_at: string;
   completed_at: string | null;
@@ -189,6 +173,8 @@ export interface ToolInvocationRecord {
   metadata: JsonObject;
 }
 
+export type RunSourceRecordSourceType = 'knowledge' | 'tool' | 'report' | 'manual';
+
 export interface RunSourceRecord {
   id: string;
   run_id: string;
@@ -203,9 +189,22 @@ export interface RunSourceRecord {
   title: string;
   preview: string;
   score: number | null;
-  source_type: string;
+  source_type: RunSourceRecordSourceType;
   used_in_answer: boolean;
   no_source_reason: string | null;
+  created_at: string;
+  metadata: JsonObject;
+}
+
+export interface RetrievalLogRecord {
+  id: string;
+  run_id: string;
+  conversation_id: string;
+  user_id: string;
+  tool_invocation_id: string | null;
+  query: string;
+  provider: 'knowledge_search';
+  matched_chunk_count: number;
   created_at: string;
   metadata: JsonObject;
 }
@@ -215,7 +214,7 @@ export type ReportArtifactStatus = 'draft' | 'generated' | 'archived';
 export interface ReportArtifactRecord {
   id: string;
   conversation_id: string;
-  run_id: string | null;
+  runId: string;
   user_id: string;
   title: string;
   content_markdown: string;

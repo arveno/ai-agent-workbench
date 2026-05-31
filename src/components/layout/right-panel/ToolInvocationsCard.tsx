@@ -1,35 +1,14 @@
 import { useWorkbenchStore } from '../../../stores/workbenchStore';
-import type { RunToolStatus } from '../../../types/run';
-import { formatToolInvocationForInspector } from '../../../utils/toolInvocationFormat';
+import { createRunToolsPanelModel } from '../../../utils/runPresentationModel';
 import { AppIcon } from '../../common/AppIcon';
 import { icons } from '../../common/iconMap';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/card';
 import { Separator } from '../../ui/separator';
 
-function getToolStatusClass(status: RunToolStatus): string {
-  if (status === 'success') {
-    return 'status-badge-success';
-  }
-
-  if (status === 'running') {
-    return 'status-badge-active';
-  }
-
-  if (status === 'error') {
-    return 'status-badge-error';
-  }
-
-  if (status === 'stopped') {
-    return 'status-badge-stopped';
-  }
-
-  return 'status-badge-muted';
-}
-
 export function ToolInvocationsCard() {
   const currentRun = useWorkbenchStore((state) => state.currentRun);
-  const runtimeTools = currentRun?.toolInvocations ?? [];
+  const panelModel = createRunToolsPanelModel(currentRun);
 
   if (!currentRun) {
     return (
@@ -37,14 +16,14 @@ export function ToolInvocationsCard() {
         <CardHeader className="right-card-header">
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.settings} size={16} />
-            <span>工具调用</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>服务端白名单工具的本轮执行记录</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </CardHeader>
         <CardContent className="right-card-content">
           <div className="right-panel-empty-state">
-            <strong>暂无工具调用</strong>
-            发送数据分析或知识问答请求后，这里会展示受控工具调用记录。
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         </CardContent>
       </Card>
@@ -57,53 +36,49 @@ export function ToolInvocationsCard() {
         <div>
           <CardTitle className="panel-section-title">
             <AppIcon icon={icons.settings} size={16} />
-            <span>工具调用</span>
+            <span>{panelModel.title}</span>
           </CardTitle>
-          <CardDescription>模型只选择工具意图，执行由服务端白名单控制</CardDescription>
+          <CardDescription>{panelModel.description}</CardDescription>
         </div>
-        {runtimeTools.length > 0 ? (
+        {panelModel.countLabel ? (
           <Badge variant="outline" className="right-card-count-badge">
-            {runtimeTools.length} 次调用
+            {panelModel.countLabel}
           </Badge>
         ) : null}
       </CardHeader>
 
       <CardContent className="right-card-content">
-        {runtimeTools.length === 0 ? (
+        {panelModel.state === 'empty' ? (
           <div className="right-panel-empty-state">
-            <strong>本次未调用工具</strong>
-            当前请求未进入工具链，或服务端工具尚未开始执行。
+            <strong>{panelModel.emptyTitle}</strong>
+            {panelModel.emptyDescription}
           </div>
         ) : (
           <div className="tool-invocation-list">
-            {runtimeTools.map((tool, index) => {
-              const formattedTool = formatToolInvocationForInspector(tool);
-
-              return (
-                <div key={tool.id}>
-                  {index > 0 ? <Separator className="tool-invocation-separator" /> : null}
-                  <div className="tool-invocation-row">
-                    <div className="tool-invocation-main">
-                      <div className="tool-invocation-name">{formattedTool.displayName}</div>
-                      <div className="tool-invocation-description">
-                        {formattedTool.categoryLabel} · {formattedTool.toolName}
-                      </div>
-                      <div className="tool-invocation-summary">输入：{formattedTool.inputText}</div>
-                      <div className="tool-invocation-summary">输出：{formattedTool.outputText}</div>
-                      {formattedTool.failureText ? (
-                        <div className="tool-invocation-summary">失败原因：{formattedTool.failureText}</div>
-                      ) : null}
+            {panelModel.tools.map((tool, index) => (
+              <div key={tool.id}>
+                {index > 0 ? <Separator className="tool-invocation-separator" /> : null}
+                <div className="tool-invocation-row">
+                  <div className="tool-invocation-main">
+                    <div className="tool-invocation-name">{tool.displayName}</div>
+                    <div className="tool-invocation-description">
+                      {tool.categoryLabel} · {tool.toolName}
                     </div>
-                    <div className="tool-invocation-meta">
-                      <Badge variant="outline" className={`status-badge ${getToolStatusClass(tool.status)}`}>
-                        {formattedTool.statusLabel}
-                      </Badge>
-                      <span>{formattedTool.elapsedText}</span>
-                    </div>
+                    <div className="tool-invocation-summary">输入：{tool.inputText}</div>
+                    <div className="tool-invocation-summary">输出：{tool.outputText}</div>
+                    {tool.failureText ? (
+                      <div className="tool-invocation-summary">失败原因：{tool.failureText}</div>
+                    ) : null}
+                  </div>
+                  <div className="tool-invocation-meta">
+                    <Badge variant="outline" className={`status-badge ${tool.statusClass}`}>
+                      {tool.statusLabel}
+                    </Badge>
+                    <span>{tool.elapsedText}</span>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
       </CardContent>

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-source-metadata.schema.json",
+  "title": "RunSourceMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provider",
+    "retrieverProvider",
+    "sourceName",
+    "documentTitle",
+    "chunkTitle",
+    "category",
+    "rawScore",
+    "updatedAt"
+  ],
+  "properties": {
+    "provider": {
+      "type": "string",
+      "const": "knowledge_search",
+      "description": "run_sources.metadata 的检索 provider；正式 source 类型仍以 run_sources.source_type 为准。"
+    },
+    "retrieverProvider": {
+      "type": "string",
+      "const": "langchain_retriever",
+      "description": "产生该 source 的 retriever runtime。"
+    },
+    "sourceName": {
+      "type": "string",
+      "description": "知识源名称快照。"
+    },
+    "documentTitle": {
+      "type": ["string", "null"],
+      "description": "知识库文档标题快照。"
+    },
+    "chunkTitle": {
+      "type": ["string", "null"],
+      "description": "知识库 chunk 标题快照。"
+    },
+    "category": {
+      "type": ["string", "null"],
+      "description": "知识库文档分类快照。"
+    },
+    "rawScore": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "retriever 原始匹配分数。"
+    },
+    "updatedAt": {
+      "type": ["string", "null"],
+      "description": "知识文档或 chunk 更新时间快照。"
+    }
+  }
+}

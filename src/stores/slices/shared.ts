@@ -2,11 +2,13 @@ import type {
   AssistantStreamState,
   GenerationStatus,
   ModelProviderId,
-  RunSnapshot,
   WorkbenchMessage,
   WorkbenchMessageKind,
   WorkbenchSession,
 } from '../../types/workbench';
+import type { RestoredRunAdapterInput, RunViewModel, RunViewModelConclusionSection } from '../../domain/run/view-model';
+import type { RunSource } from '../../types/rag';
+import { RunViewModelFactory } from '../../domain/run/view-model';
 import { isModelProviderId as isKnownModelProviderId } from '../../utils/modelCatalogMetadata';
 import { createSessionTitle } from '../../utils/sessionTitle';
 import { readSessionStorageJson, writeSessionStorageJson } from '../../utils/sessionStorage';
@@ -73,7 +75,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isRunStatus(value: unknown): value is RunSnapshot['status'] {
+function isRunStatus(value: unknown): value is RunViewModel['status'] {
   return (
     value === 'idle' ||
     value === 'pending' ||
@@ -84,7 +86,7 @@ function isRunStatus(value: unknown): value is RunSnapshot['status'] {
   );
 }
 
-function isRunStepStatus(value: unknown): value is RunSnapshot['steps'][number]['status'] {
+function isRunStepStatus(value: unknown): value is RunViewModel['steps'][number]['status'] {
   return (
     value === 'pending' ||
     value === 'running' ||
@@ -95,32 +97,165 @@ function isRunStepStatus(value: unknown): value is RunSnapshot['steps'][number][
   );
 }
 
-function isRunToolStatus(value: unknown): value is RunSnapshot['toolInvocations'][number]['status'] {
+function isRunToolStatus(value: unknown): value is RunViewModel['toolInvocations'][number]['status'] {
   return isRunStepStatus(value);
 }
 
-function isRunMode(value: unknown): value is RunSnapshot['mode'] {
+function isRunMode(value: unknown): value is RunViewModel['mode'] {
   return value === 'mock' || value === 'agent';
 }
 
-function isRunIntent(value: unknown): value is RunSnapshot['intent'] {
+function isRunIntent(value: unknown): value is RunViewModel['intent'] {
   return (
     value === 'capability_intro' ||
     value === 'data_analysis' ||
+    value === 'knowledge_qa' ||
     value === 'unsupported' ||
     value === 'unknown'
   );
 }
 
-function isRunConclusionSource(value: unknown): value is RunSnapshot['conclusionSource'] {
+function isRunConclusionSource(value: unknown): value is RunViewModel['conclusionSource'] {
   return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none';
 }
 
-function isRunReportState(value: unknown): value is RunSnapshot['reportState'] {
-  return value === 'hidden' || value === 'pending' || value === 'generated' || value === 'skipped';
+function isRunReportState(value: unknown): value is RunViewModel['reportState'] {
+  return (
+    value === 'hidden' ||
+    value === 'pending' ||
+    value === 'generating' ||
+    value === 'generated' ||
+    value === 'skipped' ||
+    value === 'failed'
+  );
 }
 
-function settleInterruptedRun(run: RunSnapshot): RunSnapshot {
+function isRunPlan(value: unknown): value is NonNullable<RunViewModel['plan']> {
+  return (
+    isRecord(value) &&
+    isRunIntent(value.intent) &&
+    typeof value.shouldUseDataAnalysis === 'boolean' &&
+    (value.reason === undefined || typeof value.reason === 'string') &&
+    (value.metric === undefined || typeof value.metric === 'string') &&
+    (value.groupBy === undefined || typeof value.groupBy === 'string') &&
+    (value.timeRangeLabel === undefined || typeof value.timeRangeLabel === 'string') &&
+    (value.comparison === undefined || value.comparison === 'none' || value.comparison === 'previous_month')
+  );
+}
+
+function isRunDataSource(value: unknown): value is NonNullable<RunViewModel['dataSource']> {
+  return (
+    isRecord(value) &&
+    (value.provider === 'mock' || value.provider === 'cloudbase_mysql') &&
+    typeof value.name === 'string' &&
+    typeof value.typeLabel === 'string' &&
+    (value.schema === undefined || typeof value.schema === 'string') &&
+    (value.tableCount === undefined || typeof value.tableCount === 'number')
+  );
+}
+
+function isRunChartData(value: unknown): value is NonNullable<RunViewModel['chartData']> {
+  return (
+    isRecord(value) &&
+    typeof value.title === 'string' &&
+    (value.chartType === 'bar' || value.chartType === 'line') &&
+    Array.isArray(value.labels) &&
+    value.labels.every((label) => typeof label === 'string') &&
+    Array.isArray(value.series) &&
+    value.series.every(
+      (series) =>
+        isRecord(series) &&
+        typeof series.name === 'string' &&
+        Array.isArray(series.values) &&
+        series.values.every((item) => typeof item === 'number'),
+    ) &&
+    (value.summary === undefined || typeof value.summary === 'string')
+  );
+}
+
+function isRunStep(value: unknown): value is RunViewModel['steps'][number] {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.title === 'string' &&
+    isRunStepStatus(value.status) &&
+    (value.description === undefined || typeof value.description === 'string') &&
+    (value.startedAt === undefined || typeof value.startedAt === 'string') &&
+    (value.completedAt === undefined || typeof value.completedAt === 'string') &&
+    (value.elapsedMs === undefined || typeof value.elapsedMs === 'number')
+  );
+}
+
+function isRunToolInvocation(value: unknown): value is RunViewModel['toolInvocations'][number] {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.toolId === 'string' &&
+    typeof value.toolName === 'string' &&
+    typeof value.displayName === 'string' &&
+    isRunToolStatus(value.status) &&
+    typeof value.inputSummary === 'string' &&
+    typeof value.outputSummary === 'string' &&
+    (value.startedAt === undefined || typeof value.startedAt === 'string') &&
+    (value.completedAt === undefined || typeof value.completedAt === 'string') &&
+    (value.elapsedMs === undefined || typeof value.elapsedMs === 'number')
+  );
+}
+
+function isRunSource(value: unknown): value is RunSource {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.runId === 'string' &&
+    typeof value.conversationId === 'string' &&
+    typeof value.sourceOrder === 'number' &&
+    typeof value.title === 'string' &&
+    typeof value.preview === 'string' &&
+    (value.sourceType === 'knowledge' ||
+      value.sourceType === 'tool' ||
+      value.sourceType === 'report' ||
+      value.sourceType === 'manual') &&
+    typeof value.createdAt === 'string'
+  );
+}
+
+function isRunConclusionSection(value: unknown): value is RunViewModelConclusionSection {
+  return (
+    isRecord(value) &&
+    (value.title === undefined || value.title === null || typeof value.title === 'string') &&
+    typeof value.markdownText === 'string' &&
+    typeof value.plainText === 'string'
+  );
+}
+
+function isRunAgentConclusion(value: unknown): value is NonNullable<RunViewModel['agentConclusion']> {
+  return (
+    isRecord(value) &&
+    typeof value.markdownText === 'string' &&
+    typeof value.plainText === 'string' &&
+    (value.sections === undefined ||
+      (Array.isArray(value.sections) && value.sections.every((section) => isRunConclusionSection(section)))) &&
+    (value.notice === undefined || value.notice === null || typeof value.notice === 'string') &&
+    (value.rawText === undefined || typeof value.rawText === 'string')
+  );
+}
+
+function isRunModelTrace(value: unknown): value is NonNullable<RunViewModel['modelTrace']> {
+  return (
+    isRecord(value) &&
+    typeof value.selectedModelId === 'string' &&
+    (typeof value.provider === 'string' || value.provider === null) &&
+    (typeof value.model === 'string' || value.model === null) &&
+    (typeof value.latencyMs === 'number' || value.latencyMs === null) &&
+    isRecord(value.usage) &&
+    isRecord(value.costEstimate) &&
+    (value.fallbackReason === null || typeof value.fallbackReason === 'string') &&
+    (value.modelErrorType === null || typeof value.modelErrorType === 'string') &&
+    isRunConclusionSource(value.conclusionSource)
+  );
+}
+
+function settleInterruptedRun(run: RunViewModel): RunViewModel {
   if (run.status !== 'running' && run.status !== 'pending') {
     return run;
   }
@@ -152,38 +287,29 @@ function settleInterruptedRun(run: RunSnapshot): RunSnapshot {
   };
 }
 
-function normalizeRunSnapshot(rawValue: unknown): RunSnapshot | null {
+function normalizeRunViewModel(rawValue: unknown, conversationId: string): RunViewModel | null {
   if (!isRecord(rawValue)) {
     return null;
   }
 
-  const run = rawValue as Partial<RunSnapshot>;
+  const run = rawValue;
+  const steps = run.steps;
+  const toolInvocations = run.toolInvocations;
+  const sources = run.sources;
 
   if (
     typeof run.id !== 'string' ||
-    (run.sessionId !== undefined && typeof run.sessionId !== 'string') ||
+    (run.conversationId !== undefined && typeof run.conversationId !== 'string') ||
+    (run.displayRunId !== undefined && typeof run.displayRunId !== 'string') ||
     !isRunMode(run.mode) ||
     !isRunStatus(run.status) ||
     !isRunIntent(run.intent) ||
     typeof run.prompt !== 'string' ||
-    !Array.isArray(run.steps) ||
-    !run.steps.every(
-      (step) =>
-        isRecord(step) &&
-        typeof step.id === 'string' &&
-        typeof step.title === 'string' &&
-        isRunStepStatus(step.status),
-    ) ||
-    !Array.isArray(run.toolInvocations) ||
-    !run.toolInvocations.every(
-      (tool) =>
-        isRecord(tool) &&
-        typeof tool.id === 'string' &&
-        typeof tool.toolId === 'string' &&
-        typeof tool.toolName === 'string' &&
-        typeof tool.displayName === 'string' &&
-        isRunToolStatus(tool.status),
-    ) ||
+    !Array.isArray(steps) ||
+    !steps.every((step) => isRunStep(step)) ||
+    !Array.isArray(toolInvocations) ||
+    (sources !== undefined && (!Array.isArray(sources) || !sources.every((source) => isRunSource(source)))) ||
+    !toolInvocations.every((tool) => isRunToolInvocation(tool)) ||
     typeof run.conclusion !== 'string' ||
     !isRunConclusionSource(run.conclusionSource) ||
     !isRunReportState(run.reportState) ||
@@ -193,18 +319,48 @@ function normalizeRunSnapshot(rawValue: unknown): RunSnapshot | null {
     return null;
   }
 
-  return settleInterruptedRun(run as RunSnapshot);
+  const restoredRun: RestoredRunAdapterInput = {
+    id: run.id,
+    conversationId,
+    clientRunId: typeof run.clientRunId === 'string' ? run.clientRunId : undefined,
+    displayRunId: typeof run.displayRunId === 'string' ? run.displayRunId : undefined,
+    mode: run.mode,
+    status: run.status,
+    intent: run.intent,
+    prompt: run.prompt,
+    plan: isRunPlan(run.plan) ? run.plan : undefined,
+    dataSource: isRunDataSource(run.dataSource) ? run.dataSource : undefined,
+    steps,
+    toolInvocations,
+    sources,
+    chartData: isRunChartData(run.chartData) ? run.chartData : undefined,
+    conclusion: run.conclusion,
+    conclusionSource: run.conclusionSource,
+    agentConclusion: isRunAgentConclusion(run.agentConclusion) ? run.agentConclusion : undefined,
+    modelTrace: isRunModelTrace(run.modelTrace) ? run.modelTrace : undefined,
+    reportState: run.reportState,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+    startedAt: typeof run.startedAt === 'string' ? run.startedAt : undefined,
+    completedAt: typeof run.completedAt === 'string' ? run.completedAt : undefined,
+    elapsedMs: typeof run.elapsedMs === 'number' ? run.elapsedMs : undefined,
+    errorMessage: typeof run.errorMessage === 'string' ? run.errorMessage : undefined,
+  };
+
+  return settleInterruptedRun(
+    RunViewModelFactory.fromRestoredRunAdapter(restoredRun),
+  );
 }
 
-function normalizeRunsById(rawValue: unknown): Record<string, RunSnapshot> | null {
+function normalizeRunsById(rawValue: unknown, conversationId: string): Record<string, RunViewModel> | null {
   if (!isRecord(rawValue)) {
     return null;
   }
 
-  const runsById: Record<string, RunSnapshot> = {};
+  const runsById: Record<string, RunViewModel> = {};
 
   for (const [runId, rawRun] of Object.entries(rawValue)) {
-    const normalizedRun = normalizeRunSnapshot(rawRun);
+    const normalizedRun = normalizeRunViewModel(rawRun, conversationId);
 
     if (!normalizedRun || normalizedRun.id !== runId) {
       return null;
@@ -216,7 +372,7 @@ function normalizeRunsById(rawValue: unknown): Record<string, RunSnapshot> | nul
   return runsById;
 }
 
-export function getSessionLatestRun(session: WorkbenchSession | undefined): RunSnapshot | null {
+export function getSessionLatestRun(session: WorkbenchSession | undefined): RunViewModel | null {
   if (!session?.latestRunId) {
     return null;
   }
@@ -227,7 +383,7 @@ export function getSessionLatestRun(session: WorkbenchSession | undefined): RunS
 export function upsertRunIntoSessions(
   sessions: WorkbenchSession[],
   currentSessionId: string,
-  run: RunSnapshot,
+  run: RunViewModel,
 ): WorkbenchSession[] {
   let didUpdate = false;
   const timestamp = Date.now();
@@ -238,19 +394,15 @@ export function upsertRunIntoSessions(
     }
 
     didUpdate = true;
-    const runWithSession: RunSnapshot = {
-      ...run,
-      sessionId: run.sessionId ?? currentSessionId,
-    };
 
     return {
       ...session,
       updatedAt: timestamp,
       runsById: {
         ...session.runsById,
-        [runWithSession.id]: runWithSession,
+        [run.id]: run,
       },
-      latestRunId: runWithSession.id,
+      latestRunId: run.id,
     };
   });
 
@@ -299,14 +451,17 @@ function normalizeWorkbenchSession(rawValue: unknown): WorkbenchSession | null {
 
   const session = rawValue as Partial<WorkbenchSession>;
 
-  const runsById = normalizeRunsById(session.runsById);
-
   if (
     typeof session.id !== 'string' ||
     typeof session.title !== 'string' ||
-    !runsById ||
     (session.latestRunId !== undefined && typeof session.latestRunId !== 'string')
   ) {
+    return null;
+  }
+
+  const runsById = normalizeRunsById(session.runsById, session.id);
+
+  if (!runsById) {
     return null;
   }
 

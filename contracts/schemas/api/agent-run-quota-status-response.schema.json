@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/agent-run-quota-status-response.schema.json",
+  "title": "AgentRunQuotaStatusResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quota"],
+      "properties": {
+        "quota": {
+          "$ref": "agent-run-quota-response.schema.json"
+        }
+      }
+    }
+  }
+}

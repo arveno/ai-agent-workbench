@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/report-list-response.schema.json",
+  "title": "ReportListResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reports"],
+      "properties": {
+        "reports": {
+          "type": "array",
+          "items": { "$ref": "../objects/report-artifact.schema.json" }
+        }
+      }
+    }
+  }
+}

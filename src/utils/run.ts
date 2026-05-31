@@ -1,18 +1,18 @@
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/domain/run/view-model';
 
-export function isDataAnalysisRun(run: RunSnapshot | null): boolean {
+export function isDataAnalysisRun(run: RunViewModel | null): boolean {
   return run?.intent === 'data_analysis';
 }
 
-export function shouldUseMockRun(selectedModelId: string, run: RunSnapshot | null): run is RunSnapshot {
+export function shouldUseMockRun(selectedModelId: string, run: RunViewModel | null): run is RunViewModel {
   return selectedModelId === 'mock-agent' && run?.mode === 'mock';
 }
 
-export function shouldUseUnifiedRun(run: RunSnapshot | null): run is RunSnapshot {
+export function shouldUseUnifiedRun(run: RunViewModel | null): run is RunViewModel {
   return run?.mode === 'mock' || run?.mode === 'agent';
 }
 
-export function shouldShowReportConfirm(run: RunSnapshot | null): boolean {
+export function shouldShowReportConfirm(run: RunViewModel | null): boolean {
   return Boolean(
     run &&
       run.intent === 'data_analysis' &&

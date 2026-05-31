@@ -24,9 +24,10 @@
 | --- | --- |
 | `_shared/mysql.js` | 初始化 `@cloudbase/node-sdk`、返回 `app.rdb()`，提供 MySQL 结果和 JSON 字段兜底处理。 |
 | `_shared/auth.js` | 解析 CloudBase token / Bearer token payload，获取 `_openid` / `user_id`，查询或创建 `app_profiles`，并返回统一 `currentUser`。 |
-| `_shared/langchainModelLayer.js` | 当前 LangChain Model Layer；承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。 |
+| `_shared/langchainModelLayer.js` | 当前 LangChain Model Layer；承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类契约。 |
 | `_shared/langgraphRuntime.js` | LangGraph Run State / node / edge / canonical event mapper 边界。 |
 | `_shared/langsmithObservability.js` | LangSmith Trace / Evaluation 上报边界；失败或未配置时显式返回状态。 |
+| `_shared/agentRunModelMetadata.js` | Report / Evaluation 复用的 Agent Run canonical `modelTrace` metadata 读取边界，只读取项目 `agent_runs.metadata.modelTrace`。 |
 
 后续私有 CloudBase HTTP Function 应复用已验证的 `_shared/auth.js` 获取 `currentUser`，再对私有表显式追加 `_openid` 与 `user_id` 过滤。`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 已按该方式实现基础验证；当前不替换前端 `authStore`。
 
@@ -67,6 +68,8 @@ CloudBase HTTP 访问服务不支持 `/api/workbench/demo-conversations/:id/copy
 ## 打包上传
 
 每个函数目录独立打包。上传源码包即可，不默认把 `node_modules` 打进 zip，也不提交或上传 `package-lock.json`。在 CloudBase 创建 HTTP 云函数时开启“自动安装依赖”，由 CloudBase 根据函数目录内的 `package.json` 安装依赖。
+
+手动打包时，除入口 `index.js` 外，函数目录下同级的本地 `.js` helper 也必须复制到 zip 根目录；自动打包脚本 `pnpm cloudbase:package` 会按这个规则复制。当前示例包括 `workbench-reports/metadata-boundary.js` 和 `workbench-evaluations/metadata-boundary.js`，否则函数启动时会因为 `require('./metadata-boundary')` 缺文件失败。
 
 公开 demo templates 函数不依赖 `_shared`，可直接在函数目录打包：
 
@@ -133,8 +136,8 @@ if (Test-Path $stage) {
   Remove-Item -LiteralPath $stage -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
-Copy-Item workbench-reports/index.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
-Copy-Item _shared/mysql.js,_shared/auth.js -Destination (Join-Path $stage '_shared')
+Copy-Item workbench-reports/index.js,workbench-reports/metadata-boundary.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
+Copy-Item _shared/mysql.js,_shared/auth.js,_shared/agentRunModelMetadata.js -Destination (Join-Path $stage '_shared')
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-reports.zip') -Force
 ```
 
@@ -177,7 +180,7 @@ chmod +x "$stage/scf_bootstrap"
 (cd "$stage" && zip -r workbench-runs.zip index.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先在 CloudBase MySQL 执行 `tencent/migrations/007_agent_runs_client_run_id.sql`，为 `agent_runs(user_id, client_run_id)` 增加唯一约束。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。当前 Agent Run 主链路进入 LangGraph runtime；正式工具通过 LangChain Tool / Structured Tool 执行，`knowledge_search` 通过 LangChain Retriever / Document 输出边界；模型调用走 `_shared/langchainModelLayer.js`。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`、`@langchain/core`、`@langchain/langgraph`、`@langchain/openai` 和 `zod`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
+`workbench-agent-run-stream` 依赖 `_shared`。部署当前版函数前，必须先按 `tencent/migrations/README.md` 执行 canonical baseline，确保 `agent_runs(user_id, client_run_id)` 唯一约束存在。它使用固定路由 `/api/agent/run/stream`，路径透传关闭；`POST` 从 JSON body 读取 `conversationId`，复用 `_shared/auth.js` 获取 `currentUser`，校验会话归属后执行 CloudBase Agent Run 流式验证：按 `user_id + clientRunId` 做服务端幂等检查，先创建 `agent_runs(status = pending)` 建立数据库幂等边界，再 consume quota、绑定 `usage_id`、写入 `run_events`、写入 `tool_invocations`、写入 assistant message，并 finish usage。当前 Agent Run 主链路进入 LangGraph runtime；正式工具通过 LangChain Tool / Structured Tool 执行，`knowledge_search` 通过 LangChain Retriever / Document 输出边界；模型调用走 `_shared/langchainModelLayer.js`。该函数的 `package.json` 依赖 `@cloudbase/node-sdk`、`@langchain/core`、`@langchain/langgraph`、`@langchain/openai` 和 `zod`，需要 CloudBase 自动安装依赖。打包说明使用 Git Bash：
 
 ```bash
 cd tencent/functions
@@ -207,13 +210,13 @@ cd tencent/functions
 stage="$HOME/Desktop/cloudbase-workbench-evaluations-package"
 rm -rf "$stage"
 mkdir -p "$stage/_shared"
-cp workbench-evaluations/index.js workbench-evaluations/package.json workbench-evaluations/scf_bootstrap workbench-evaluations/README.md "$stage/"
-cp _shared/mysql.js _shared/auth.js _shared/langsmithObservability.js "$stage/_shared/"
+cp workbench-evaluations/index.js workbench-evaluations/metadata-boundary.js workbench-evaluations/package.json workbench-evaluations/scf_bootstrap workbench-evaluations/README.md "$stage/"
+cp _shared/mysql.js _shared/auth.js _shared/langsmithObservability.js _shared/agentRunModelMetadata.js "$stage/_shared/"
 chmod +x "$stage/scf_bootstrap"
-(cd "$stage" && zip -r workbench-evaluations.zip index.js package.json README.md scf_bootstrap _shared)
+(cd "$stage" && zip -r workbench-evaluations.zip index.js metadata-boundary.js package.json README.md scf_bootstrap _shared)
 ```
 
-`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 的 zip 根目录都应包含：
+`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy`、`workbench-quota`、`workbench-runs`、`workbench-agent-run-stream` 和 `workbench-evaluations` 的 zip 根目录至少应包含：
 
 ```txt
 _shared/
@@ -222,6 +225,8 @@ package.json
 README.md
 scf_bootstrap
 ```
+
+如果函数目录下存在入口外的本地 `.js` helper，zip 根目录也必须包含这些 helper，例如 `workbench-reports` 和 `workbench-evaluations` 当前都必须包含 `metadata-boundary.js`。
 
 `workbench-agent-run-stream` 通过 CloudBase 函数运行时、`@cloudbase/node-sdk` 和 `app.rdb()` 访问 CloudBase MySQL。Agent Run 主链路进入 LangGraph runtime；Tool / Retriever 进入 LangChain Tool / Retriever 边界。当前模型链路由前端 `selectedModelId` 进入 `_shared/langchainModelLayer.js`，通过 catalog 白名单映射到 LangChain Chat Model 和 SiliconFlow / Zhipu OpenAI-compatible API。推荐配置：
 
@@ -251,7 +256,7 @@ LANGSMITH_PROJECT=ai-agent-workbench
 LANGSMITH_TIMEOUT_MS=3000
 ```
 
-模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
+模型 Key 和 LangSmith Key 只放 CloudBase 函数环境变量，不放 EdgeOne / 前端 `VITE_*` 变量。未配置模型时应走 `modelTrace.fallbackReason = "model_not_configured"`，不应再出现 `data_tool_failed`。Agent Run Tool / Retriever 只读取 CloudBase MySQL 受控表。`knowledge_qa` 使用 CloudBase MySQL `knowledge_documents` / `knowledge_chunks` 和受控 `knowledge_search`，不接外部向量库，不让模型直接查 SQL。`_shared/langchainModelLayer.js` 是当前模型调用边界，并在现有 JSON metadata 中输出 canonical `modelTrace.usage` / `modelTrace.costEstimate`，不新增数据库字段；旧模型网关不得恢复为 Agent Run runtime fallback。LangSmith 未配置或上报失败时必须显式记录未上报 / 上报失败，不能伪装真实 trace。
 
 上传时选择 CloudBase HTTP 云函数，运行时建议 Node.js 18.x。压缩包应包含函数目录内的文件，不要把上级目录一起打进 zip。
 
@@ -387,7 +392,7 @@ curl -N -i -X POST \
   https://<your-domain>/api/agent/run/stream
 ```
 
-未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。有效请求应以 SSE 格式输出 LangGraph runtime 映射后的 canonical events，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。数据分析问题应输出 `schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `provider`、`model`、`modelErrorType`、`modelHttpStatus`。LangSmith 未配置或上报失败时 metadata 应显式记录未上报 / 上报失败。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 `007_agent_runs_client_run_id.sql` 已先执行。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
+未带 token 时应由 CloudBase 网关返回 `401 MISSING_CREDENTIALS`。带 token 但缺少或传入不属于当前用户的 `conversationId` 时应返回 `validation_error` 或 `not_found`。有效请求应以 SSE 格式输出 LangGraph runtime 映射后的 canonical events，并能在 `run_completed` 中看到 `runId`、`usageId` 和 `assistantMessageId`。数据分析问题应输出 `schema_inspect` / `aggregate_table` / `chart_render` tool completion、chart、conclusion 和 run completion 相关事件；知识类问题应输出 `knowledge_search` tool completion、可选 `rag_sources_ready`、conclusion 和 run completion 相关事件。模型未配置且受控工具成功时应返回 `conclusionSource = "fallback"` 和 `modelTrace.fallbackReason = "model_not_configured"`，不应返回 `data_tool_failed` 或 500。知识库未建表 / 查询失败 / 无数据 / 无命中时应分别返回 `rag_table_not_found`、`rag_query_failed`、`rag_empty`、`rag_no_match`。模型失败时 SSE 和 metadata 应包含 `modelTrace.provider`、`modelTrace.model`、`modelTrace.modelErrorType`、`modelTrace.modelHttpStatus`。LangSmith 未配置或上报失败时 metadata 应显式记录未上报 / 上报失败。随后读取 quota 应看到 `demo_user` 的 `quotaUsed` 增加，读取当前会话 messages 应能看到 assistant message，`agent_runs`、`run_events` 和 `tool_invocations` 应出现对应记录。使用相同 `clientRunId` 重复请求时应返回 `run_reused`，且 quota 不再增加、assistant message 不重复、run_events/tool_invocations 不重放；该断言依赖 canonical baseline 中的 `uk_agent_runs_user_client_run` 已存在。该验证不应影响 `demo-tasks`、`demo-conversations`、`auth-me`、`workbench-conversations`、`workbench-messages`、`workbench-reports`、`workbench-demo-copy` 或 `workbench-quota`。
 
 ## 安全说明
 

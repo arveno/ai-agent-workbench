@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/evaluation-list-query.schema.json",
+  "title": "EvaluationListQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resource"],
+  "properties": {
+    "resource": {
+      "type": "string",
+      "const": "results",
+      "description": "Evaluation results resource selector."
+    },
+    "category": {
+      "type": ["string", "null"],
+      "description": "Ignored for result list by the current endpoint; reserved for case listing."
+    },
+    "caseId": {
+      "type": ["string", "null"],
+      "description": "Optional evaluation case ID filter."
+    },
+    "runId": {
+      "type": ["string", "null"],
+      "description": "Optional canonical runId filter."
+    },
+    "conversationId": {
+      "type": ["string", "null"],
+      "description": "Optional conversation ID filter."
+    },
+    "limit": {
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "pattern": "^[1-9][0-9]*$" }
+      ],
+      "description": "Requested result page size."
+    }
+  }
+}

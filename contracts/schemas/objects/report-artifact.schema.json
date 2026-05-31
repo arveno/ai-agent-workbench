@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/report-artifact.schema.json",
+  "title": "ReportArtifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conversation_id",
+    "runId",
+    "user_id",
+    "title",
+    "content_markdown",
+    "status",
+    "version",
+    "created_at",
+    "updated_at",
+    "metadata",
+    "sources",
+    "sourceCount",
+    "sourceLineage",
+    "sourceNoSourceReason"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Report artifact 主 ID。"
+    },
+    "conversation_id": {
+      "type": "string",
+      "description": "拥有该 report artifact 的 conversation。"
+    },
+    "runId": {
+      "type": "string",
+      "description": "拥有该 report artifact 的 canonical runId。"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "拥有该 report artifact 的 Workbench user ID。"
+    },
+    "title": {
+      "type": "string",
+      "description": "report 标题。"
+    },
+    "content_markdown": {
+      "type": "string",
+      "description": "markdown 格式的 report 内容。"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "generated", "archived"],
+      "description": "report artifact 状态。"
+    },
+    "version": {
+      "type": "integer",
+      "description": "report artifact 版本。"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "report 创建时间。"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "report 更新时间。"
+    },
+    "metadata": {
+      "$ref": "report-metadata.schema.json"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "run-source.schema.json"
+      },
+      "description": "从 run_sources 填充的 canonical report sources。"
+    },
+    "sourceCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "已填充的 canonical report source 数量。"
+    },
+    "sourceLineage": {
+      "type": "string",
+      "const": "run_sources",
+      "description": "用于填充 report sources 的 lineage 来源。"
+    },
+    "sourceNoSourceReason": {
+      "type": ["string", "null"],
+      "description": "没有可用 report sources 时的明确原因。"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/step-failed-event.schema.json",
+  "title": "StepFailedEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "step_failed",
+          "description": "SSE event 类型，表示 Run step 执行失败。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stepDelta"],
+          "description": "step_failed 事件业务数据。",
+          "properties": {
+            "stepDelta": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["stepId", "errorMessage", "completedAt", "elapsedMs", "fallbackReason"],
+              "description": "step 失败状态增量。",
+              "properties": {
+                "stepId": {
+                  "type": "string",
+                  "description": "runtime step 稳定 ID。"
+                },
+                "errorMessage": {
+                  "type": "string",
+                  "description": "用户可见的 step 失败信息。"
+                },
+                "completedAt": {
+                  "type": "string",
+                  "description": "step 失败结束时间。"
+                },
+                "elapsedMs": {
+                  "type": "number",
+                  "description": "step 执行耗时，单位毫秒。"
+                },
+                "fallbackReason": {
+                  "type": "string",
+                  "description": "step fallback 原因。"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

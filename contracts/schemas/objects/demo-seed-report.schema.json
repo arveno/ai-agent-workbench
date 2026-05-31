@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/demo-seed-report.schema.json",
+  "title": "DemoSeedReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifact"],
+  "properties": {
+    "artifact": {
+      "$ref": "report-artifact.schema.json"
+    }
+  }
+}

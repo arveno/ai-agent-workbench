@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { createLocalRunFailedEvent, createLocalRunStoppedEvent } from '../../domain/run/boundary';
 import { streamAgentRunAnalysis } from '../../services/agentRunStreamApi';
 import type { UiSlice, WorkbenchStore } from '../../types/workbench';
 import { createAgentPendingRunStartedEvent } from '../../utils/agentRunMapping';
@@ -122,22 +123,20 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
     const state = get();
     const requestId = createAgentRunRequestId();
-    const sessionId = state.currentSessionId;
+    const conversationId = state.currentSessionId;
     const runId = createRunId('agent_run');
     const abortController = new AbortController();
     const previousAbortController = state.activeAgentRunAbortController;
     const pendingRunEvent = createAgentPendingRunStartedEvent({
       runId,
       prompt,
-      sessionId,
+      conversationId,
     });
     let hasFailed = false;
+    let activeRunId = runId;
 
     if (state.currentRun?.mode === 'agent' && state.currentRun.status === 'running') {
-      get().applyRunEvent({
-        type: 'run_stopped',
-        runId: state.currentRun.id,
-      });
+      get().applyRunEvent(createLocalRunStoppedEvent(state.currentRun.id));
     }
 
     try {
@@ -148,10 +147,10 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
       });
 
       if (userMessage && get().isPersistentMode) {
-        await get().persistMessageToConversation(sessionId, userMessage);
+        await get().persistMessageToConversation(conversationId, userMessage);
       }
 
-      if (get().currentSessionId !== sessionId) {
+      if (get().currentSessionId !== conversationId) {
         return;
       }
 
@@ -182,7 +181,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
 
       await streamAgentRunAnalysis({
         prompt,
-        conversationId: sessionId,
+        conversationId,
         selectedModelId: state.selectedModelId,
         clientRunId: runId,
         accessToken,
@@ -190,7 +189,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         onEvent: (event) => {
           const current = get();
 
-          if (current.activeAgentRunRequestId !== requestId || current.currentSessionId !== sessionId) {
+          if (current.activeAgentRunRequestId !== requestId || current.currentSessionId !== conversationId) {
             return;
           }
 
@@ -199,8 +198,12 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
               ? {
                   ...event,
                   errorMessage: withDemoFallbackHint(event.errorMessage),
-                }
+              }
               : event;
+
+          if (normalizedEvent.type === 'run_started') {
+            activeRunId = normalizedEvent.runId;
+          }
 
           get().applyRunEvent(normalizedEvent);
 
@@ -227,7 +230,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         },
       });
 
-      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
+      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== conversationId) {
         return;
       }
 
@@ -242,7 +245,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         });
 
         if (get().isPersistentMode) {
-          await get().loadPersistentMessagesForSession(sessionId);
+          await get().loadPersistentMessagesForSession(conversationId);
         }
 
         return;
@@ -253,7 +256,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         activeAgentRunAbortController: null,
       });
     } catch (error) {
-      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== sessionId) {
+      if (get().activeAgentRunRequestId !== requestId || get().currentSessionId !== conversationId) {
         return;
       }
 
@@ -261,10 +264,7 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         const activeRun = get().currentRun;
 
         if (activeRun?.mode === 'agent' && activeRun.status === 'running') {
-          get().applyRunEvent({
-            type: 'run_stopped',
-            runId: activeRun.id,
-          });
+          get().applyRunEvent(createLocalRunStoppedEvent(activeRun.id));
         }
 
         set({
@@ -278,14 +278,9 @@ export const createUiSlice: StateCreator<WorkbenchStore, [], [], UiSlice> = (set
         return;
       }
 
-      const activeRunId = get().currentRun?.id ?? pendingRunEvent.run.id;
       const errorMessage = withDemoFallbackHint(getAgentRunErrorMessage(error));
 
-      get().applyRunEvent({
-        type: 'run_failed',
-        runId: activeRunId,
-        errorMessage,
-      });
+      get().applyRunEvent(createLocalRunFailedEvent({ runId: activeRunId, errorMessage }));
 
       set({
         agentRunStatus: 'error',

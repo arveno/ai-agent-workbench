@@ -5,9 +5,12 @@ import type {
   DemoConversationTemplateRecord,
   ConversationVisibility,
 } from './persistence';
-import type { RunEvent, RunSnapshot } from './run';
+import type { RunEvent } from '../domain/run/boundary';
+import type { RunViewModel } from '../domain/run/view-model';
 import type { ModelProviderId } from '../utils/modelCatalogMetadata';
 
+// Workbench store/session state keeps UI-safe RunViewModel only.
+// Canonical RunSnapshot stays at contract, runtime, persistence, and mapper boundaries.
 export type SessionId = string;
 
 export type {
@@ -21,25 +24,8 @@ export type {
 } from './chatBlocks';
 
 export type {
-  RunChartData,
-  RunChartSeries,
-  RunChartType,
-  RunConclusionSource,
-  RunDataSourceSnapshot,
   RunEvent,
-  RunIntent,
-  RunModelTrace,
-  RunModelTokenUsage,
-  RunMode,
-  RunPlanSnapshot,
-  RunReportState,
-  RunSnapshot,
-  RunStatus,
-  RunStep,
-  RunStepStatus,
-  RunToolInvocation,
-  RunToolStatus,
-} from './run';
+} from '../domain/run/boundary';
 
 export type { RunSource, RunSourceType } from './rag';
 
@@ -77,7 +63,7 @@ export interface WorkbenchSession {
   updatedAt: number;
   messages: WorkbenchMessage[];
   taskId?: string;
-  runsById: Record<string, RunSnapshot>;
+  runsById: Record<string, RunViewModel>;
   latestRunId?: string;
   mode?: ConversationMode;
   status?: ConversationStatus;
@@ -299,7 +285,7 @@ export interface UiSlice {
 }
 
 export interface RunSlice {
-  currentRun: RunSnapshot | null;
+  currentRun: RunViewModel | null;
   selectedRunId: string | null;
   runEventLog: RunEvent[];
   isLatestRunLoading: boolean;
@@ -310,7 +296,7 @@ export interface RunSlice {
   reportArtifactsError: string | null;
   isRagSourcesLoading: boolean;
   ragSourcesError: string | null;
-  setCurrentRun: (run: RunSnapshot | null) => void;
+  setCurrentRun: (run: RunViewModel | null) => void;
   clearCurrentRun: () => void;
   applyRunEvent: (event: RunEvent) => void;
   selectRunForCurrentSession: (runId: string) => Promise<void>;

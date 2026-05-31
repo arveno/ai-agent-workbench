@@ -1,14 +1,16 @@
 import type {
-  RunConclusionSource,
   RunEvent,
-  RunIntent,
-  RunReportState,
-  RunSnapshot,
-  RunStatus,
-  RunStepStatus,
-  RunToolInvocation,
-  RunToolStatus,
-} from '@/types/run';
+} from '@/domain/run/boundary';
+import type {
+  RunViewModel,
+  RunViewModelConclusionSource,
+  RunViewModelIntent,
+  RunViewModelReportState,
+  RunViewModelStatus,
+  RunViewModelStepStatus,
+  RunViewModelToolInvocation,
+  RunViewModelToolStatus,
+} from '@/domain/run/view-model';
 
 export type ObservabilityTone = 'muted' | 'active' | 'success' | 'warning' | 'danger';
 
@@ -82,7 +84,7 @@ export function getModelErrorTypeLabel(errorType: string | null | undefined): st
   return getKnownOrFallbackLabel(errorType, MODEL_ERROR_LABELS);
 }
 
-export function getRunStatusLabel(status: RunStatus): string {
+export function getRunStatusLabel(status: RunViewModelStatus): string {
   if (status === 'idle') return '未开始';
   if (status === 'pending') return '等待中';
   if (status === 'running') return '运行中';
@@ -91,7 +93,7 @@ export function getRunStatusLabel(status: RunStatus): string {
   return '已停止';
 }
 
-export function getRunStatusTone(status: RunStatus): ObservabilityTone {
+export function getRunStatusTone(status: RunViewModelStatus): ObservabilityTone {
   if (status === 'running' || status === 'pending') return 'active';
   if (status === 'success') return 'success';
   if (status === 'error') return 'danger';
@@ -99,7 +101,7 @@ export function getRunStatusTone(status: RunStatus): ObservabilityTone {
   return 'muted';
 }
 
-export function getStepStatusLabel(status: RunStepStatus): string {
+export function getStepStatusLabel(status: RunViewModelStepStatus): string {
   if (status === 'pending') return '待执行';
   if (status === 'running') return '进行中';
   if (status === 'success') return '已完成';
@@ -108,7 +110,7 @@ export function getStepStatusLabel(status: RunStepStatus): string {
   return '已停止';
 }
 
-export function getToolStatusLabel(status: RunToolStatus): string {
+export function getToolStatusLabel(status: RunViewModelToolStatus): string {
   if (status === 'pending') return '待执行';
   if (status === 'running') return '执行中';
   if (status === 'success') return '已完成';
@@ -117,14 +119,16 @@ export function getToolStatusLabel(status: RunToolStatus): string {
   return '已停止';
 }
 
-export function getConclusionSourceLabel(source: RunConclusionSource): string {
+export function getConclusionSourceLabel(source: RunViewModelConclusionSource): string {
   if (source === 'model') return '模型生成';
   if (source === 'fallback') return 'Fallback 结论';
   if (source === 'mock') return 'Mock 生成';
   return '未生成';
 }
 
-export function getReportStatusLabel(reportState: RunReportState): string {
+export function getReportStatusLabel(
+  reportState: RunViewModelReportState,
+): string {
   if (reportState === 'pending') return '可生成';
   if (reportState === 'generating') return '生成中';
   if (reportState === 'generated') return '已生成';
@@ -133,7 +137,7 @@ export function getReportStatusLabel(reportState: RunReportState): string {
   return '不适用';
 }
 
-export function getReportStatusTone(reportState: RunReportState): ObservabilityTone {
+export function getReportStatusTone(reportState: RunViewModelReportState): ObservabilityTone {
   if (reportState === 'pending' || reportState === 'generating') return 'active';
   if (reportState === 'generated') return 'success';
   if (reportState === 'skipped') return 'muted';
@@ -141,7 +145,7 @@ export function getReportStatusTone(reportState: RunReportState): ObservabilityT
   return 'muted';
 }
 
-export function getReportStatusDescription(run: RunSnapshot, canGenerateReport: boolean): string {
+export function getReportStatusDescription(run: RunViewModel, canGenerateReport: boolean): string {
   if (run.reportState === 'generated') {
     return '当前选中 Run 已生成报告，可在聊天记录中查看和恢复。';
   }
@@ -174,15 +178,15 @@ export interface RagEmptyStateLabel {
   description: string;
 }
 
-function getRunFallbackReason(run: RunSnapshot): string | null {
+function getRunFallbackReason(run: RunViewModel): string | null {
   return normalizeCode(run.modelTrace?.fallbackReason) || null;
 }
 
-function isRagIntent(intent: RunIntent): boolean {
+function isRagIntent(intent: RunViewModelIntent): boolean {
   return intent === 'knowledge_qa';
 }
 
-export function getRagEmptyStateLabel(run: RunSnapshot | null): RagEmptyStateLabel {
+export function getRagEmptyStateLabel(run: RunViewModel | null): RagEmptyStateLabel {
   if (!run) {
     return {
       title: '暂无 RAG 来源',
@@ -233,7 +237,7 @@ export function getRagEmptyStateLabel(run: RunSnapshot | null): RagEmptyStateLab
   };
 }
 
-export function getRagSourcesDescription(run: RunSnapshot | null, usedSourceCount: number, sourceCount: number): string {
+export function getRagSourcesDescription(run: RunViewModel | null, usedSourceCount: number, sourceCount: number): string {
   if (!run) {
     return 'CloudBase knowledge_search 返回的来源、引用与证据链';
   }
@@ -265,7 +269,7 @@ function getRecordString(record: Record<string, unknown> | null, key: string): s
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function getToolFailureLabel(invocation: RunToolInvocation): string {
+export function getToolFailureLabel(invocation: RunViewModelToolInvocation): string {
   if (invocation.status !== 'error') {
     return '';
   }
@@ -286,20 +290,12 @@ export function getToolFailureLabel(invocation: RunToolInvocation): string {
   return outputSummary || getFallbackReasonLabel('tool_failed');
 }
 
-function mapBackendRunStatus(status: string | null | undefined): RunStatus {
-  if (status === 'completed' || status === 'success') return 'success';
-  if (status === 'failed' || status === 'error') return 'error';
-  if (status === 'stopped') return 'stopped';
-  if (status === 'pending') return 'pending';
-  return 'running';
-}
-
 export function getRunReuseNotice(event: Extract<RunEvent, { type: 'run_reused' }> | null): string | null {
   if (!event) {
     return null;
   }
 
-  const statusLabel = getRunStatusLabel(mapBackendRunStatus(event.status));
+  const statusLabel = getRunStatusLabel(event.status ?? 'running');
 
   if (event.reason === 'duplicate_in_flight') {
     return `检测到重复请求，已复用进行中的 Run（${statusLabel}）。`;

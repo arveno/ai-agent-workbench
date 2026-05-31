@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/report-query.schema.json",
+  "title": "ReportQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "anyOf": [
+    {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["conversationId"],
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        }
+      }
+    }
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Report ID used by GET /api/workbench/reports to read a single report."
+    },
+    "conversationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Conversation ID used by GET /api/workbench/reports to list reports."
+    },
+    "action": {
+      "type": "string",
+      "description": "Optional action query marker accepted by the endpoint router; report read/list queries are selected by id or conversationId."
+    }
+  }
+}

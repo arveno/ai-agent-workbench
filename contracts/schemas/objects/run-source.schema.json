@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/run-source.schema.json",
+  "title": "RunSource",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "runId",
+    "conversationId",
+    "sourceOrder",
+    "title",
+    "preview",
+    "sourceType",
+    "createdAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Run source 主 ID。"
+    },
+    "runId": {
+      "type": "string",
+      "description": "拥有该 source 的 canonical runId。"
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "拥有该 source 的 conversation。"
+    },
+    "toolInvocationId": {
+      "type": "string",
+      "description": "产生该 source 的 Tool Invocation。"
+    },
+    "retrievalLogId": {
+      "type": "string",
+      "description": "该 source 关联的 retrieval log。"
+    },
+    "documentId": {
+      "type": "string",
+      "description": "知识库文档快照 ID。"
+    },
+    "chunkId": {
+      "type": "string",
+      "description": "知识库 chunk 快照 ID。"
+    },
+    "citationLabel": {
+      "type": "string",
+      "description": "仅用于展示的 citation label。"
+    },
+    "sourceOrder": {
+      "type": "integer",
+      "description": "稳定的 source 展示顺序。"
+    },
+    "title": {
+      "type": "string",
+      "description": "source 标题快照。"
+    },
+    "preview": {
+      "type": "string",
+      "description": "source 内容预览文本。"
+    },
+    "score": {
+      "type": "number",
+      "description": "retriever 返回的相关性分数。"
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": ["knowledge", "tool", "report", "manual"],
+      "description": "canonical source 类型。"
+    },
+    "usedInAnswer": {
+      "type": "boolean",
+      "description": "该 source 是否被最终回答引用。"
+    },
+    "noSourceReason": {
+      "type": "string",
+      "description": "无 source 时的明确原因。"
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "source 创建时间。"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "用于检索策略、provider 和 debug 上下文的 source metadata。"
+    }
+  }
+}

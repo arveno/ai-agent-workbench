@@ -1,19 +1,25 @@
 import type { ChatBlock } from '@/types/chatBlocks';
-import type { RunSnapshot } from '@/types/run';
+import type { RunViewModel } from '@/domain/run/view-model';
 import type { WorkbenchMessage, WorkbenchSession } from '@/types/workbench';
 import { createConclusionViewModel } from './runConclusionViewModel';
 import { shouldShowReportConfirm } from './run';
+import {
+  createRunErrorBlockModel,
+  createRunReportPanelModel,
+  createRunStoppedBlockModel,
+  createRunStreamingAssistantModel,
+} from './runPresentationModel';
 
 export interface BuildChatBlocksParams {
   session: WorkbenchSession | null;
-  currentRun: RunSnapshot | null;
+  currentRun: RunViewModel | null;
 }
 
 function getRunForMessage(
   message: WorkbenchMessage,
   session: WorkbenchSession,
-  currentRun: RunSnapshot | null,
-): RunSnapshot | null {
+  currentRun: RunViewModel | null,
+): RunViewModel | null {
   if (!message.runId) {
     return null;
   }
@@ -47,7 +53,7 @@ function hasReportMessage(messages: WorkbenchMessage[], runId: string): boolean 
 
 function getCurrentRunAnchorMessageId(
   messages: WorkbenchMessage[],
-  currentRun: RunSnapshot | null,
+  currentRun: RunViewModel | null,
 ): string | null {
   if (!currentRun) {
     return null;
@@ -63,8 +69,8 @@ function getCurrentRunAnchorMessageId(
 }
 
 function createRunFollowUpBlocks(params: {
-  run: RunSnapshot;
-  currentRun: RunSnapshot | null;
+  run: RunViewModel;
+  currentRun: RunViewModel | null;
   messages: WorkbenchMessage[];
   insertedStreamingRunIds: Set<string>;
   insertedErrorRunIds: Set<string>;
@@ -83,7 +89,7 @@ function createRunFollowUpBlocks(params: {
     blocks.push({
       type: 'streaming_assistant',
       id: `streaming:${run.id}`,
-      run,
+      model: createRunStreamingAssistantModel(run),
     });
     insertedStreamingRunIds.add(run.id);
   }
@@ -92,7 +98,7 @@ function createRunFollowUpBlocks(params: {
     blocks.push({
       type: 'run_error',
       id: `run_error:${run.id}`,
-      run,
+      model: createRunErrorBlockModel(run),
     });
     insertedErrorRunIds.add(run.id);
   }
@@ -101,7 +107,7 @@ function createRunFollowUpBlocks(params: {
     blocks.push({
       type: 'run_stopped',
       id: `run_stopped:${run.id}`,
-      run,
+      model: createRunStoppedBlockModel(run),
     });
     insertedStoppedRunIds.add(run.id);
   }
@@ -170,7 +176,7 @@ export function buildChatBlocks(params: BuildChatBlocksParams): ChatBlock[] {
       blocks.push({
         type: 'report_confirm',
         id: `report_confirm:${followUpRun.id}`,
-        run: followUpRun,
+        model: createRunReportPanelModel(followUpRun),
       });
       insertedReportConfirmRunIds.add(followUpRun.id);
     }

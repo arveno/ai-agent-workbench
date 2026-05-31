@@ -1,4 +1,9 @@
-import type { RunSnapshot } from './run';
+import type {
+  RunErrorBlockModel,
+  RunReportPanelModel,
+  RunStoppedBlockModel,
+  RunStreamingAssistantModel,
+} from '../utils/runPresentationModel';
 import type { WorkbenchMessage } from './workbench';
 
 export type ChatBlockType =
@@ -17,25 +22,25 @@ export interface MessageChatBlock {
 export interface StreamingAssistantChatBlock {
   type: 'streaming_assistant';
   id: string;
-  run: RunSnapshot;
+  model: RunStreamingAssistantModel;
 }
 
 export interface ReportConfirmChatBlock {
   type: 'report_confirm';
   id: string;
-  run: RunSnapshot;
+  model: RunReportPanelModel;
 }
 
 export interface RunErrorChatBlock {
   type: 'run_error';
   id: string;
-  run: RunSnapshot;
+  model: RunErrorBlockModel;
 }
 
 export interface RunStoppedChatBlock {
   type: 'run_stopped';
   id: string;
-  run: RunSnapshot;
+  model: RunStoppedBlockModel;
 }
 
 export type ChatBlock =

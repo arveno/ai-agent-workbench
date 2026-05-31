@@ -64,7 +64,7 @@ The current path is:
 1. Authenticate request and resolve `currentUser`.
 2. Read and validate `conversationId`.
 3. Check idempotency by `user_id + clientRunId` when `clientRunId` is provided. Existing runs return a `run_reused` SSE event and do not consume quota or write trace rows again.
-4. Insert `agent_runs(status = pending)` first. Migration `007_agent_runs_client_run_id.sql` adds the hard unique boundary on `(user_id, client_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
+4. Insert `agent_runs(status = pending)` first. The canonical baseline adds the hard unique boundary on `(user_id, client_run_id)`, so concurrent duplicate requests are rejected before quota is consumed.
 5. Consume one Agent Run quota with a compare-and-set update and create `agent_run_usage(status = started)`.
 6. Attach `usage_id` to the pending run, mark it `running`, and update the conversation latest run.
 7. Start LangSmith trace when server-side LangSmith config is available; otherwise record explicit not-configured / failed status.
@@ -90,7 +90,7 @@ Tencent-24 adds service-side idempotency for `POST /api/agent/run/stream`:
 
 - `user_id + clientRunId` is the idempotency key when `clientRunId` is provided.
 - A duplicate request that finds an existing `agent_runs.client_run_id` for the current user returns `run_reused` over SSE and does not consume quota, create another run, write another assistant message, or replay `run_events` / `tool_invocations`.
-- Migration `007_agent_runs_client_run_id.sql` must be executed before deploying this function. It adds `UNIQUE KEY uk_agent_runs_user_client_run (user_id, client_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
+- The canonical baseline must be executed before deploying this function. It adds `UNIQUE KEY uk_agent_runs_user_client_run (user_id, client_run_id)` and prevents two CloudBase function instances from creating duplicate runs for the same user and `clientRunId`.
 - The function inserts a pending run before quota consumption. If the insert hits the unique key, it queries the existing run and returns `run_reused` instead of treating the duplicate as a 500.
 - A same-process in-flight guard reduces duplicate work from double clicks and local retries before the first run row is visible.
 - If `clientRunId` is missing, the function still runs with a generated id and records `clientRunIdMissing = true` in run metadata, but full idempotency is not possible.
@@ -120,6 +120,7 @@ If quota consumption fails after the pending run is inserted, the function keeps
 - `conclusionSource = "model"` means `_shared/langchainModelLayer.js` generated the final conclusion through the selected catalog model.
 - `conclusionSource = "fallback"` means the final conclusion was generated locally, and `fallbackReason` explains why.
 - `conclusionSource = "mock"` is reserved for explicit mock/demo data and must not be emitted as a real provider result.
+- `agentConclusion` is the structured conclusion object for markdown text, plain text, optional sections, raw text, and `notice`.
 - `knowledge_qa` runs the controlled `knowledge_search` tool through LangChain Retriever / Document against CloudBase MySQL `knowledge_documents` / `knowledge_chunks`.
 - `runId` / `agent_runs.id` is the only business run relationship. `clientRunId` / `agent_runs.client_run_id` is used for frontend pending state, idempotency, duplicate request handling, and request tracing.
 - `tool_invocations` remains the Tool Invocation fact source.
@@ -157,6 +158,8 @@ Agent Run data tools use CloudBase MySQL through the CloudBase function runtime,
 Model and LangSmith keys must be CloudBase function environment variables only. Do not put `SILICONFLOW_API_KEY`, `ZHIPU_API_KEY`, `LANGSMITH_API_KEY`, or `LANGCHAIN_API_KEY` in EdgeOne / frontend `VITE_*` variables.
 
 When no model provider is configured, the function should still return SSE and complete the run through explicit fallback instead of returning 500. `_shared/langchainModelLayer.js` is the current execution boundary; `MODEL_GATEWAY_TIMEOUT_MS` remains the timeout environment variable name to keep existing server configuration stable.
+
+The model layer writes model observability through a single `modelTrace` object. `modelTrace.usage` is the canonical model usage shape and `modelTrace.costEstimate` is the canonical cost estimate shape across Run Trace events, assistant message metadata, and `agent_run_usage.metadata`. If a provider succeeds but does not return usage, `usage.usageAvailable = false` and `usage.usageUnavailableReason = "provider_no_usage"`; model output is still accepted. Cost is an estimate-only metadata shape and is not a real billing record. Current free / unknown pricing returns `estimatedCost = null`, `isEstimated = false`, and an explicit `costUnavailableReason`.
 
 Fallback reasons used by the real data-analysis path:
 
@@ -240,15 +243,36 @@ Example event:
   "conversationId": "...",
   "timestamp": "2026-05-15T00:00:00.000Z",
   "conclusionSource": "model",
-  "fallbackReason": null,
-  "selectedModelId": "siliconflow-qwen-free",
-  "provider": "siliconflow",
-  "model": "Qwen/Qwen2.5-7B-Instruct",
-  "latencyMs": 1280,
-  "tokenUsage": {
-    "promptTokens": 320,
-    "completionTokens": 180,
-    "totalTokens": 500
+  "agentConclusion": {
+    "source": "model",
+    "markdownText": "...",
+    "plainText": "...",
+    "notice": null
+  },
+  "modelTrace": {
+    "selectedModelId": "siliconflow-qwen-free",
+    "provider": "siliconflow",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "latencyMs": 1280,
+    "usage": {
+      "promptTokens": 320,
+      "completionTokens": 180,
+      "totalTokens": 500,
+      "usageAvailable": true,
+      "usageSource": "provider",
+      "usageUnavailableReason": null
+    },
+    "costEstimate": {
+      "estimatedCost": null,
+      "currency": null,
+      "pricingUnit": null,
+      "isEstimated": false,
+      "pricingSource": "model_catalog.billingType",
+      "costUnavailableReason": "free_pricing"
+    },
+    "fallbackReason": null,
+    "modelErrorType": null,
+    "conclusionSource": "model"
   }
 }
 ```
@@ -276,7 +300,7 @@ JSON fields are written with `JSON.stringify(...)`:
 - `tool_invocations.metadata`
 - `messages.metadata`
 
-This function uses CAS-style atomic quota update plus migration `007_agent_runs_client_run_id.sql` for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public high-concurrency traffic, review quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
+This function uses CAS-style atomic quota update plus the canonical baseline unique key for cross-instance Agent Run idempotency. It still does not add a full MySQL transaction or `SELECT ... FOR UPDATE`; before switching public high-concurrency traffic, review quota behavior and consider a transaction, row lock, or stored procedure for the quota counter.
 
 ## Package
 
@@ -325,9 +349,9 @@ Expected result:
 - Without token: CloudBase gateway returns `401 MISSING_CREDENTIALS`.
 - With token but missing or foreign `conversationId`: the function returns `validation_error` or `not_found`.
 - Current Agent Run streams LangGraph-backed canonical events, including `schema_inspect` / `aggregate_table` / `chart_render` or `knowledge_search` tool completions where applicable.
-- If the model provider succeeds after data tools succeed, the run returns `conclusionSource = "model"` with `selectedModelId`, `provider`, `model`, `tokenUsage`, and `latencyMs`.
+- If the model provider succeeds after data tools succeed, the run returns `conclusionSource = "model"` with `modelTrace.selectedModelId`, `modelTrace.provider`, `modelTrace.model`, canonical `modelTrace.usage`, `modelTrace.costEstimate`, and `modelTrace.latencyMs`.
 - If the model provider fails after data tools succeed, the run returns `conclusionSource = "fallback"` and a specific `fallbackReason`, such as `model_unauthorized`, `model_forbidden`, `model_not_found`, `model_rate_limited`, `model_timeout`, `model_network_error`, `model_response_parse_failed`, or `model_failed`.
-- `conclusion_completed` and `run_completed` include `provider`, `model`, `modelErrorType`, `modelHttpStatus`, and redacted `modelErrorMessage` when available; neither event includes raw tokens or request headers.
+- `conclusion_completed` and `run_completed` include `modelTrace.provider`, `modelTrace.model`, `modelTrace.modelErrorType`, `modelTrace.modelHttpStatus`, and redacted `modelTrace.modelErrorMessage` when available; neither event includes raw tokens or request headers.
 - LangSmith trace status is explicit in metadata: started, completed, not configured, failed, or timed out.
 - `quotaUsed` increases for `demo_user`.
 - `messages` contains the assistant message.

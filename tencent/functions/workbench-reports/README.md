@@ -84,7 +84,7 @@ When both `id` and `conversationId` exist, `id` takes priority.
 Supported fields:
 
 - `conversationId`: required conversation id.
-- `runId`: optional UUID. Omit it for Tencent-11 browser verification because Agent Run is not migrated in this step.
+- `runId`: required canonical Agent Run UUID.
 - `title`: optional string. Empty values default to `分析报告`.
 - `contentMarkdown`: required non-empty string.
 - `status`: optional. Allowed values are `draft`, `generated`, and `archived`; invalid values default to `generated`.
@@ -101,13 +101,15 @@ Response:
 }
 ```
 
-`metadata` is `JSON.stringify(...)` before writing to MySQL and safely parsed before returning.
+`metadata` is allowlisted before `JSON.stringify(...)`, then safely parsed before returning. Request metadata may only keep report business fields registered in the Contract Pack, currently `source`, `runId`, `reportState`, and `toolNames`.
+
+The response uses canonical API fields such as `runId`, `sources`, `sourceCount`, `sourceLineage`, and `sourceNoSourceReason`. DB snake_case fields stay inside the DB / mapper boundary. The function reads the owned `agent_runs.metadata.modelTrace` row through `_shared/agentRunModelMetadata.js` and copies only the project canonical `modelTrace` object into `report_artifacts.metadata`. Request metadata cannot backfill model fields, and the report chain does not add columns or consume LangChain raw payloads. `modelTrace.usage` is the canonical model usage field and `modelTrace.costEstimate` is the canonical cost estimate field.
 
 ## Package
 
 Upload a source package only. Do not include `node_modules`, and do not submit or upload `package-lock.json`. Enable CloudBase automatic dependency installation.
 
-Because this function uses shared helpers, stage the source package in a Desktop temporary directory and include `_shared` in the zip. Do not commit the zip.
+Because this function uses shared helpers, stage the source package in a Desktop temporary directory and include `_shared` in the zip. Manual packages must also copy local `.js` helpers beside `index.js` into the zip root; this function requires `metadata-boundary.js`. Do not commit the zip.
 
 ```powershell
 cd tencent/functions
@@ -116,8 +118,8 @@ if (Test-Path $stage) {
   Remove-Item -LiteralPath $stage -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $stage '_shared') | Out-Null
-Copy-Item workbench-reports/index.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
-Copy-Item _shared/mysql.js,_shared/auth.js -Destination (Join-Path $stage '_shared')
+Copy-Item workbench-reports/index.js,workbench-reports/metadata-boundary.js,workbench-reports/package.json,workbench-reports/scf_bootstrap,workbench-reports/README.md -Destination $stage
+Copy-Item _shared/mysql.js,_shared/auth.js,_shared/agentRunModelMetadata.js -Destination (Join-Path $stage '_shared')
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $stage 'workbench-reports.zip') -Force
 ```
 
@@ -126,6 +128,7 @@ Zip root must contain:
 ```txt
 _shared/
 index.js
+metadata-boundary.js
 package.json
 README.md
 scf_bootstrap

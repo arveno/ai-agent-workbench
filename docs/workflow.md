@@ -123,13 +123,74 @@ Tracking Issue
 - 不混入无关文件。
 - 工作区已有未提交代码时，只能显式 `git add` 本任务文件，不能 `git add .`。
 
+## 4.1 端到端闭环流程
+
+```text
+需求提出
+↓
+ChatGPT 整理需求
+↓
+判断任务类型
+↓
+建立 Issue
+↓
+Issue Gate / Canonical Decision
+↓
+Codex 执行
+↓
+PR
+↓
+CI / Contract / Review
+↓
+Review comment 归因
+↓
+Release Gate
+↓
+Deploy / Smoke
+↓
+merge 后更新 Tracking Issue / 后置 Issue
+```
+
+职责分工：
+
+- `AGENTS.md` 定义 Codex 必须 / 禁止遵守的硬规则。
+- Issue 模板承载任务准入信息。
+- PR 模板承载按 Issue 执行的验收证明。
+- PR Template Check 只做机械检查。
+- 本文档只描述执行顺序。
+
+## 4.2 任务类型与 Issue 模板
+
+任务进入 Codex 前必须先判断类型，并使用对应 Issue 模板：
+
+- Phase Task：阶段内功能、体验或工程任务，使用 `.github/ISSUE_TEMPLATE/phase_task.yml`。
+- Bug Fix：缺陷修复，必须先完成问题归因，使用 `.github/ISSUE_TEMPLATE/bug_fix.yml`。
+- Architecture Change：架构、职责、主链路或迁移策略变更，使用 `.github/ISSUE_TEMPLATE/architecture_change.yml`。
+- Contract Change：字段、对象或数据契约变更，使用 `.github/ISSUE_TEMPLATE/contract_change.yml`。
+- Governance Task：流程、模板、AGENTS、workflow、CI、GitHub ruleset 等治理任务，使用 `.github/ISSUE_TEMPLATE/governance_task.yml`。
+- Release Gate：stage -> main、main -> deploy、deploy -> smoke，使用 `.github/ISSUE_TEMPLATE/release_gate.yml`。
+
+## 4.3 Issue Gate / Canonical Decision
+
+Issue Gate 是 Codex 执行前的准入步骤：
+
+- 按任务类型填写对应 Issue 模板。
+- Contract Change 使用 `.github/ISSUE_TEMPLATE/contract_change.yml` 承载 Canonical Decision。
+- Phase / Bug / Architecture 任务如涉及契约或数据链路，在各自模板的 Canonical Decision 区块中说明；不涉及时写“不涉及”。
+
+## 4.4 Review Comment 归因
+
+Review comment 归因在 PR 模板中记录。归因后按结果在当前 Issue、已有后置 Issue 或新 Issue 中处理；Codex 硬规则见 `AGENTS.md`。
+
+## 4.5 Release Gate
+
+Release Gate 用于 stage -> main、main -> deploy、deploy -> smoke。
+
+Release Gate 使用 `.github/ISSUE_TEMPLATE/release_gate.yml` 承载发布目标、base / head、检查项、blocker 处理和用户最终 merge 决策。
+
 ## 5. 任务准入
 
-- 代码任务没有可读取的关联 Issue，不进入 Codex 执行。
-- 代码任务 Issue 读取失败时，Codex 必须停止，不允许修改文件。
-- 流程事实源纠偏可由用户明确 prompt 直接发起，仍必须走任务分支和 PR。
-- prompt 与仓库文档冲突时，停止执行并报告冲突。
-- 需要超出 Issue 范围时，停止并说明原因。
+Codex 准入硬规则见 `AGENTS.md`。进入执行前，Issue 或明确授权的 bootstrap 收口任务必须提供以下信息：
 
 Codex 指令必须明确：
 

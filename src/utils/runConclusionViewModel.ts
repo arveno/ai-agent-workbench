@@ -1,4 +1,8 @@
-import type { AgentConclusionSection, AgentConclusionSource, RunConclusionSource, RunSnapshot } from '@/types/run';
+import type {
+  RunViewModel,
+  RunViewModelConclusionSection,
+  RunViewModelConclusionSource,
+} from '@/domain/run/view-model';
 
 export interface ConclusionSectionView {
   title: string;
@@ -10,7 +14,8 @@ export interface ConclusionViewModel {
   plainText: string;
   compactSections: ConclusionSectionView[];
   compactMarkdownText: string;
-  source: AgentConclusionSource;
+  source: RunViewModelConclusionSource;
+  notice: string | null;
 }
 
 const COMPACT_SECTION_TITLES = ['关键发现', '可能原因', '下一步建议'];
@@ -21,13 +26,9 @@ function normalizeText(value: string | null | undefined): string {
   return typeof value === 'string' ? value.replace(/\\n/g, '\n').trim() : '';
 }
 
-function toConclusionSource(source: AgentConclusionSource | RunConclusionSource | undefined): AgentConclusionSource {
-  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
-}
-
-function normalizeSection(section: AgentConclusionSection): ConclusionSectionView | null {
+function normalizeSection(section: RunViewModelConclusionSection): ConclusionSectionView | null {
   const title = normalizeText(section.title);
-  const content = normalizeText(section.content);
+  const content = normalizeText(section.plainText) || normalizeText(section.markdownText);
 
   if (!title || !content) {
     return null;
@@ -39,7 +40,7 @@ function normalizeSection(section: AgentConclusionSection): ConclusionSectionVie
   };
 }
 
-function getCompactSections(sections: AgentConclusionSection[] | undefined): ConclusionSectionView[] {
+function getCompactSections(sections: RunViewModelConclusionSection[] | undefined): ConclusionSectionView[] {
   const normalizedSections = (sections ?? [])
     .map((section) => normalizeSection(section))
     .filter((section): section is ConclusionSectionView => section !== null);
@@ -78,7 +79,7 @@ function createMarkdownFromSections(sections: ConclusionSectionView[]): string {
   return sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n');
 }
 
-export function createConclusionViewModel(run: RunSnapshot): ConclusionViewModel {
+export function createConclusionViewModel(run: RunViewModel): ConclusionViewModel {
   const conclusion = run.agentConclusion;
   const fullMarkdownText = normalizeText(conclusion?.markdownText) || normalizeText(run.conclusion);
   const plainText = normalizeText(conclusion?.plainText) || normalizeText(run.conclusion);
@@ -90,6 +91,7 @@ export function createConclusionViewModel(run: RunSnapshot): ConclusionViewModel
     compactSections,
     compactMarkdownText:
       compactSections.length > 0 ? createMarkdownFromSections(compactSections) : createCompactMarkdownText(fullMarkdownText, plainText),
-    source: toConclusionSource(conclusion?.source ?? run.conclusionSource),
+    source: run.modelTrace?.conclusionSource ?? run.conclusionSource,
+    notice: normalizeText(conclusion?.notice) || null,
   };
 }

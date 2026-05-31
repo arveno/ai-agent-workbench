@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/evaluation-case.schema.json",
+  "title": "EvaluationCase",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "question",
+    "category",
+    "expectedIntent",
+    "expectedTools",
+    "expectedRag",
+    "expectedReport",
+    "expectedConclusionPoints",
+    "metadata",
+    "sortOrder"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Evaluation case ID."
+    },
+    "title": {
+      "type": "string",
+      "description": "Evaluation case title."
+    },
+    "question": {
+      "type": "string",
+      "description": "Evaluation case prompt/question."
+    },
+    "category": {
+      "type": "string",
+      "description": "Evaluation case category."
+    },
+    "expectedIntent": {
+      "type": ["string", "null"],
+      "description": "Expected planner intent."
+    },
+    "expectedTools": {
+      "type": "array",
+      "items": {},
+      "description": "Expected tool behavior summary."
+    },
+    "expectedRag": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Expected RAG behavior summary."
+    },
+    "expectedReport": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Expected report behavior summary."
+    },
+    "expectedConclusionPoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Expected conclusion points."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Evaluation case metadata."
+    },
+    "sortOrder": {
+      "type": "integer",
+      "description": "Evaluation case display order."
+    }
+  }
+}

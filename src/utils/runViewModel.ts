@@ -1,14 +1,16 @@
 import type {
-  RunConclusionSource,
-  RunDataSourceSnapshot,
   RunEvent,
-  RunIntent,
-  RunMode,
-  RunSnapshot,
-  RunStatus,
-  RunStepStatus,
-  RunToolStatus,
-} from '@/types/run';
+} from '@/domain/run/boundary';
+import type {
+  RunViewModel,
+  RunViewModelConclusionSource,
+  RunViewModelDataSource,
+  RunViewModelIntent,
+  RunViewModelMode,
+  RunViewModelStatus,
+  RunViewModelStepStatus,
+  RunViewModelToolStatus,
+} from '@/domain/run/view-model';
 import {
   getConclusionSourceLabel as getObservabilityConclusionSourceLabel,
   getRunStatusLabel as getObservabilityRunStatusLabel,
@@ -29,11 +31,11 @@ export interface RunDataSourceViewModel {
   }>;
 }
 
-export function getRunModeLabel(mode: RunMode): string {
+export function getRunModeLabel(mode: RunViewModelMode): string {
   return mode === 'mock' ? '公开演示模式（Mock）' : '真实 Agent';
 }
 
-export function getRunIntentLabel(intent: RunIntent): string {
+export function getRunIntentLabel(intent: RunViewModelIntent): string {
   if (intent === 'capability_intro') {
     return '能力说明';
   }
@@ -49,37 +51,37 @@ export function getRunIntentLabel(intent: RunIntent): string {
   return '待判断';
 }
 
-export function getRunStatusLabel(status: RunStatus): string {
+export function getRunStatusLabel(status: RunViewModelStatus): string {
   return getObservabilityRunStatusLabel(status);
 }
 
-export function getRunStatusTone(status: RunStatus): RunStatusTone {
+export function getRunStatusTone(status: RunViewModelStatus): RunStatusTone {
   return getObservabilityRunStatusTone(status);
 }
 
-export function getStepStatusLabel(status: RunStepStatus): string {
+export function getStepStatusLabel(status: RunViewModelStepStatus): string {
   return getObservabilityStepStatusLabel(status);
 }
 
-export function getToolStatusLabel(status: RunToolStatus): string {
+export function getToolStatusLabel(status: RunViewModelToolStatus): string {
   return getObservabilityToolStatusLabel(status);
 }
 
-export function getConclusionSourceLabel(source: RunConclusionSource): string {
+export function getConclusionSourceLabel(source: RunViewModelConclusionSource): string {
   return getObservabilityConclusionSourceLabel(source);
 }
 
-export function getRunDisplayId(run: Pick<RunSnapshot, 'id' | 'displayRunId'> | null): string {
+export function getRunDisplayId(run: Pick<RunViewModel, 'id' | 'displayRunId'> | null): string {
   if (!run) {
     return '-';
   }
 
-  return run.displayRunId?.trim() || run.id;
+  return run.displayRunId.trim();
 }
 
 export function isRunEventForRun(
   event: Pick<RunEvent, 'runId'> & { clientRunId?: string | null },
-  run: Pick<RunSnapshot, 'id' | 'clientRunId'> | null,
+  run: Pick<RunViewModel, 'id' | 'clientRunId'> | null,
 ): boolean {
   if (!run) {
     return false;
@@ -93,7 +95,7 @@ export function isRunEventForRun(
 }
 
 export function getLatestRunReusedEventForRun(
-  run: Pick<RunSnapshot, 'id' | 'clientRunId'> | null,
+  run: Pick<RunViewModel, 'id' | 'clientRunId'> | null,
   events: RunEvent[],
 ): Extract<RunEvent, { type: 'run_reused' }> | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -107,7 +109,7 @@ export function getLatestRunReusedEventForRun(
   return null;
 }
 
-export function formatRunElapsed(run: RunSnapshot | null): string {
+export function formatRunElapsed(run: RunViewModel | null): string {
   if (!run) {
     return '-';
   }
@@ -126,7 +128,7 @@ export function formatRunElapsed(run: RunSnapshot | null): string {
   return `${completedAt - startedAt}ms`;
 }
 
-export function getRunTitle(run: RunSnapshot | null): string {
+export function getRunTitle(run: RunViewModel | null): string {
   if (!run) {
     return '暂无 Run';
   }
@@ -146,7 +148,7 @@ export function getRunTitle(run: RunSnapshot | null): string {
   return run.mode === 'mock' ? 'Mock Run' : 'Agent Run';
 }
 
-function getDataSourceBusinessName(run: Pick<RunSnapshot, 'mode' | 'intent'>): string {
+function getDataSourceBusinessName(run: Pick<RunViewModel, 'mode' | 'intent'>): string {
   if (run.mode === 'mock') {
     return '演示数据源';
   }
@@ -158,11 +160,11 @@ function getDataSourceBusinessName(run: Pick<RunSnapshot, 'mode' | 'intent'>): s
   return '教学质量数据源';
 }
 
-function getDataSourceSubtitle(run: Pick<RunSnapshot, 'mode'>): string {
+function getDataSourceSubtitle(run: Pick<RunViewModel, 'mode'>): string {
   return run.mode === 'mock' ? '本地演示数据' : '服务端受控数据源';
 }
 
-function getDataSourceScope(source: RunDataSourceSnapshot | undefined): string {
+function getDataSourceScope(source: RunViewModelDataSource | undefined): string {
   if (typeof source?.tableCount === 'number' && source.tableCount > 0) {
     return `${source.tableCount} 个受控数据对象`;
   }
@@ -171,7 +173,7 @@ function getDataSourceScope(source: RunDataSourceSnapshot | undefined): string {
 }
 
 export function createRunDataSourceViewModel(
-  run: Pick<RunSnapshot, 'mode' | 'intent' | 'status' | 'dataSource'>,
+  run: Pick<RunViewModel, 'mode' | 'intent' | 'status' | 'dataSource'>,
 ): RunDataSourceViewModel {
   return {
     name: getDataSourceBusinessName(run),

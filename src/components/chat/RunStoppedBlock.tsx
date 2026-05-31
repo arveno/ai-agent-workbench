@@ -1,12 +1,12 @@
-import type { RunSnapshot } from '../../types/run';
+import type { RunStoppedBlockModel } from '../../utils/runPresentationModel';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 
 interface RunStoppedBlockProps {
-  run: RunSnapshot;
+  model: RunStoppedBlockModel;
 }
 
-export function RunStoppedBlock({ run }: RunStoppedBlockProps) {
+export function RunStoppedBlock({ model }: RunStoppedBlockProps) {
   return (
     <Card size="sm" className="run-state-card run-stopped-card">
       <CardContent className="run-state-card-content">
@@ -15,7 +15,7 @@ export function RunStoppedBlock({ run }: RunStoppedBlockProps) {
         </Badge>
         <div className="run-state-card-copy">
           <h3>本轮生成已停止</h3>
-          <p>{run.conclusion.trim() ? '已生成的部分内容已保留。' : '本轮未生成可保留的结论内容。'}</p>
+          <p>{model.message}</p>
         </div>
       </CardContent>
     </Card>

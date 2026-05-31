@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/evaluation-cases-query.schema.json",
+  "title": "EvaluationCasesQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["resource"],
+  "properties": {
+    "resource": {
+      "type": "string",
+      "const": "cases",
+      "description": "Evaluation cases resource selector."
+    },
+    "category": {
+      "type": ["string", "null"],
+      "description": "Optional evaluation case category filter."
+    }
+  }
+}

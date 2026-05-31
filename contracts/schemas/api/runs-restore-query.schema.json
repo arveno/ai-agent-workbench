@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/runs-restore-query.schema.json",
+  "title": "RunsRestoreQuery",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "anyOf": [
+    {
+      "type": "object",
+      "required": ["runId"],
+      "properties": {
+        "runId": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["conversationId"],
+      "properties": {
+        "conversationId": {
+          "type": "string"
+        }
+      }
+    }
+  ],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Specific canonical runId to restore."
+    },
+    "conversationId": {
+      "type": "string",
+      "description": "Conversation ID used to restore the latest run."
+    },
+    "latest": {
+      "anyOf": [
+        { "type": "integer", "const": 1 },
+        { "type": "string", "const": "1" }
+      ],
+      "description": "Latest-run marker used by the current HTTP query."
+    }
+  }
+}

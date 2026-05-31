@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/events/report-pending-event.schema.json",
+  "title": "ReportPendingEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "runId", "conversationId", "timestamp", "payload"],
+  "properties": {
+    "type": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/type"
+    },
+    "runId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/runId"
+    },
+    "conversationId": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/conversationId"
+    },
+    "timestamp": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/timestamp"
+    },
+    "payload": {
+      "$ref": "run-sse-event-envelope.schema.json#/properties/payload"
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "run-sse-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "const": "report_pending",
+          "description": "SSE event 类型，表示 Run 后续报告生成进入 pending 状态。"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["metadata"],
+          "description": "report_pending 事件业务数据。",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "report pending runtime metadata。"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

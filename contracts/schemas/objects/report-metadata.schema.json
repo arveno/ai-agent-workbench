@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/report-metadata.schema.json",
+  "title": "ReportMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["runId"],
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "拥有该 report 的 canonical runId。"
+    },
+    "source": {
+      "type": ["string", "null"],
+      "description": "report metadata 来源；请求 metadata 只能通过显式 allowlist 设置。"
+    },
+    "reportState": {
+      "type": ["string", "null"],
+      "description": "用于持久化 report status artifact 的 report decision 状态。"
+    },
+    "toolNames": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "拥有该 report 的 Run 使用过的工具名列表；不是模型用量 metadata。"
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "继承自 Run 的单一 model trace 对象；不得在 metadata 顶层展开模型字段。"
+    },
+    "langSmithTraceId": {
+      "type": ["string", "null"],
+      "description": "外部 observability ID；不替代 canonical runId。"
+    }
+  }
+}

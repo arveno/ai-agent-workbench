@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/agent-run-quota-response.schema.json",
+  "title": "AgentRunQuotaResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["quotaType", "quotaLimit", "quotaUsed", "remaining", "periodStart", "periodEnd"],
+  "properties": {
+    "quotaType": {
+      "type": "string",
+      "const": "agent_run",
+      "description": "Public quota type."
+    },
+    "quotaLimit": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Public quota limit."
+    },
+    "quotaUsed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Public quota usage count."
+    },
+    "remaining": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Computed public remaining quota."
+    },
+    "periodStart": {
+      "type": "string",
+      "description": "Quota period start."
+    },
+    "periodEnd": {
+      "type": ["string", "null"],
+      "description": "Quota period end."
+    }
+  }
+}

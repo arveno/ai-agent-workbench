@@ -68,7 +68,6 @@ const AGENT_RUN_COLUMNS = [
   'usage_id',
   'client_run_id',
   'status',
-  'conclusion_source',
   'report_state',
   'completed_at',
   'metadata',
@@ -99,6 +98,7 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const {
+  createUsageCostMetadata,
   DEFAULT_LANGCHAIN_MODEL_ID: DEFAULT_REAL_MODEL_ID,
   getLangChainModelLayerConfig,
   normalizeLangChainModelError,
@@ -344,17 +344,24 @@ async function fetchConversationRecord(db, currentUser, conversationId) {
   return rows.length > 0 ? rows[0] : null;
 }
 
+function normalizeRunConclusionSource(value) {
+  return value === 'model' || value === 'fallback' || value === 'mock' || value === 'none' ? value : 'none';
+}
+
 function mapAgentRun(row) {
+  const metadata = parseJsonObject(row.metadata);
+  const modelTrace = isRecord(metadata.modelTrace) ? metadata.modelTrace : null;
+
   return {
     id: String(row.id ?? ''),
     conversationId: String(row.conversation_id ?? ''),
     usageId: row.usage_id ? String(row.usage_id) : null,
     clientRunId: row.client_run_id ? String(row.client_run_id) : null,
     status: String(row.status ?? 'running'),
-    conclusionSource: row.conclusion_source ? String(row.conclusion_source) : null,
+    conclusionSource: normalizeRunConclusionSource(modelTrace?.conclusionSource),
     reportState: row.report_state ? String(row.report_state) : null,
     completedAt: row.completed_at ? String(row.completed_at) : null,
-    metadata: parseJsonObject(row.metadata),
+    metadata,
     createdAt: row.created_at ? String(row.created_at) : null,
     updatedAt: row.updated_at ? String(row.updated_at) : null,
   };
@@ -416,24 +423,26 @@ function releaseIdempotencyGuard(key) {
 }
 
 function createRunReusePayload(context, existingRun, reason) {
+  const reusedRun = existingRun ? {
+    id: existingRun.id,
+    status: existingRun.status,
+    conclusionSource: existingRun.conclusionSource,
+    reportState: existingRun.reportState,
+    completedAt: existingRun.completedAt,
+  } : null;
+
   return {
     type: 'run_reused',
-    runId: existingRun?.id || null,
-    usageId: existingRun?.usageId || null,
-    clientRunId: context.clientRunId,
-    conversationId: existingRun?.conversationId || context.conversationId,
+    runId: existingRun?.id ?? context.runId,
+    conversationId: existingRun?.conversationId ?? context.conversationId,
     timestamp: new Date().toISOString(),
-    duplicate: true,
-    reused: true,
-    reason,
-    status: existingRun?.status || 'running',
-    existingRun: existingRun ? {
-      id: existingRun.id,
-      status: existingRun.status,
-      conclusionSource: existingRun.conclusionSource,
-      reportState: existingRun.reportState,
-      completedAt: existingRun.completedAt,
-    } : null,
+    payload: {
+      duplicate: true,
+      reused: true,
+      reason,
+      status: existingRun?.status ?? 'running',
+      reusedRun,
+    },
   };
 }
 
@@ -635,13 +644,9 @@ function createAgentRunMetadata(context, extra = {}) {
     langSmithTrace,
     clientRunId: context.clientRunId,
     clientRunIdMissing: Boolean(context.clientRunIdMissing),
-    provider: context.provider || 'cloudbase_mysql',
     dataProvider: context.provider || 'cloudbase_mysql',
-    selectedModelId: context.selectedModelId || null,
     modelTrace: context.modelTrace || null,
-    conclusionSource: context.conclusionSource || null,
     agentConclusion: context.agentConclusion || null,
-    fallbackReason: context.fallbackReason || null,
     ...extra,
   };
 }
@@ -663,7 +668,6 @@ async function createAgentRun(db, currentUser, context, options = {}) {
       data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || getDataSourceSnapshot()),
       chart_data: JSON.stringify({}),
       conclusion: null,
-      conclusion_source: null,
       report_state: context.reportState || 'hidden',
       metadata: JSON.stringify(createAgentRunMetadata(context)),
     });
@@ -764,15 +768,12 @@ async function completeAgentRun(db, currentUser, context, elapsedMs, conclusion,
       plan: JSON.stringify(context.planSnapshot || {}),
       data_source_snapshot: JSON.stringify(context.dataSourceSnapshot || {}),
       conclusion,
-      conclusion_source: options.conclusionSource || context.conclusionSource || 'fallback',
       report_state: options.reportState || context.reportState || 'hidden',
       chart_data: JSON.stringify(options.chartData || {}),
       metadata: JSON.stringify(createAgentRunMetadata(context, {
         assistantMessageId,
         modelTrace: context.modelTrace || null,
-        conclusionSource: options.conclusionSource || context.conclusionSource || 'fallback',
         agentConclusion: context.agentConclusion || null,
-        fallbackReason: context.fallbackReason || null,
       })),
     })
     .eq('id', context.runId)
@@ -921,21 +922,11 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
       client_message_id: clientMessageId,
       status: 'completed',
       metadata: JSON.stringify({
-        source: metadata.source || context.conclusionSource || 'fallback',
+        source: metadata.source || 'agent-run',
         retrievedChunkCount: Number.isInteger(metadata.retrievedChunkCount) ? metadata.retrievedChunkCount : null,
         sourceDocumentIds: Array.isArray(metadata.sourceDocumentIds) ? metadata.sourceDocumentIds : [],
-        conclusionSource: metadata.conclusionSource || context.conclusionSource || 'fallback',
-        fallbackReason: metadata.fallbackReason || null,
-        selectedModelId: metadata.selectedModelId || context.modelTrace?.selectedModelId || context.selectedModelId || null,
-        provider: metadata.provider || context.modelTrace?.provider || null,
-        model: metadata.model || context.modelTrace?.model || null,
-        latencyMs: Number.isInteger(metadata.latencyMs) ? metadata.latencyMs : (context.modelTrace?.latencyMs ?? null),
-        tokenUsage: metadata.tokenUsage || context.modelTrace?.tokenUsage || null,
-        modelTrace: metadata.modelTrace || context.modelTrace || null,
+        modelTrace: context.modelTrace || null,
         agentConclusion: metadata.agentConclusion || context.agentConclusion || null,
-        modelErrorType: metadata.modelErrorType || context.modelDiagnostics?.modelErrorType || null,
-        modelHttpStatus: metadata.modelHttpStatus || context.modelDiagnostics?.modelHttpStatus || null,
-        modelErrorMessage: metadata.modelErrorMessage || context.modelDiagnostics?.modelErrorMessage || null,
         agentMode: 'real',
         clientRunId: context.clientRunId || null,
       }),
@@ -973,15 +964,141 @@ async function createAssistantMessage(db, currentUser, context, conversation, co
 }
 
 function createRunEvent(type, context, extra = {}) {
+  const timestamp = new Date().toISOString();
+
   return {
     type,
     runId: context.runId,
-    usageId: context.usageId,
-    clientRunId: context.clientRunId,
     conversationId: context.conversationId,
-    timestamp: new Date().toISOString(),
-    ...extra,
+    timestamp,
+    payload: createRunEventPayload(type, extra),
   };
+}
+
+function createRunEventPayload(type, extra = {}) {
+  if (type === 'run_started') {
+    return {
+      run: extra.run,
+    };
+  }
+
+  if (type === 'step_started') {
+    return {
+      step: {
+        stepId: extra.stepId,
+        title: extra.title,
+        description: extra.description,
+        startedAt: extra.startedAt,
+        ...(extra.metadata ? { metadata: extra.metadata } : {}),
+      },
+    };
+  }
+
+  if (type === 'step_completed') {
+    return {
+      stepDelta: {
+        stepId: extra.stepId,
+        completedAt: extra.completedAt,
+        ...(typeof extra.elapsedMs === 'number' ? { elapsedMs: extra.elapsedMs } : {}),
+        ...(extra.plannerSource ? { plannerSource: extra.plannerSource } : {}),
+        ...(Object.prototype.hasOwnProperty.call(extra, 'fallbackReason') ? { fallbackReason: extra.fallbackReason ?? null } : {}),
+        ...(extra.metadata ? { metadata: extra.metadata } : {}),
+      },
+    };
+  }
+
+  if (type === 'step_failed') {
+    return {
+      stepDelta: {
+        stepId: extra.stepId,
+        errorMessage: extra.errorMessage,
+        completedAt: extra.completedAt,
+        elapsedMs: extra.elapsedMs,
+        fallbackReason: extra.fallbackReason,
+      },
+    };
+  }
+
+  if (type === 'tool_started') {
+    return {
+      toolInvocation: extra.toolInvocation,
+    };
+  }
+
+  if (type === 'tool_completed') {
+    return {
+      toolDelta: {
+        toolId: extra.toolId,
+        outputSummary: extra.outputSummary,
+        completedAt: extra.completedAt,
+        elapsedMs: extra.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'tool_failed') {
+    return {
+      toolDelta: {
+        toolId: extra.toolId,
+        errorMessage: extra.errorMessage,
+        fallbackReason: extra.fallbackReason,
+        completedAt: extra.completedAt,
+        elapsedMs: extra.elapsedMs,
+      },
+    };
+  }
+
+  if (type === 'chart_ready') {
+    return {
+      chartData: extra.chartData,
+    };
+  }
+
+  if (type === 'conclusion_delta') {
+    return {
+      delta: extra.delta,
+    };
+  }
+
+  if (type === 'conclusion_completed') {
+    return {
+      conclusion: extra.conclusion,
+      agentConclusion: extra.agentConclusion,
+      modelTrace: extra.modelTrace,
+    };
+  }
+
+  if (type === 'rag_sources_ready') {
+    return {
+      sources: Array.isArray(extra.sources) ? extra.sources : [],
+    };
+  }
+
+  if (type === 'report_pending') {
+    return {
+      metadata: isRecord(extra.metadata) ? extra.metadata : {},
+    };
+  }
+
+  if (type === 'run_completed') {
+    return {
+      completedAt: extra.completedAt,
+      elapsedMs: extra.elapsedMs,
+      assistantMessageId: extra.assistantMessageId,
+      metadata: isRecord(extra.metadata) ? extra.metadata : {},
+      modelTrace: extra.modelTrace,
+    };
+  }
+
+  if (type === 'run_failed') {
+    return {
+      errorMessage: extra.errorMessage,
+      metadata: isRecord(extra.metadata) ? extra.metadata : {},
+      modelTrace: extra.modelTrace,
+    };
+  }
+
+  return {};
 }
 
 function nowIso() {
@@ -1025,14 +1142,23 @@ function planToRunSnapshot(plan) {
 }
 
 function createRunSnapshot(context, options = {}) {
-  const createdAt = context.createdAt || nowIso();
-  const plan = options.plan || context.plan;
-  const intent = plan?.intent || context.intent || 'unknown';
-
-  return {
+  const createdAt = context.createdAt ?? nowIso();
+  const plan = options.plan ?? context.plan;
+  const intent = plan?.intent ?? context.intent ?? 'unknown';
+  const modelTrace = options.modelTrace ?? context.modelTrace ?? null;
+  const chartData = Object.prototype.hasOwnProperty.call(options, 'chartData')
+    ? options.chartData
+    : context.chartData;
+  const agentConclusion = Object.prototype.hasOwnProperty.call(options, 'agentConclusion')
+    ? options.agentConclusion
+    : context.agentConclusion;
+  const snapshot = {
     id: context.runId,
+    conversationId: context.conversationId,
+    ...(context.clientRunId ? { clientRunId: context.clientRunId } : {}),
+    ...(context.usageId ? { usageId: context.usageId } : {}),
     mode: 'agent',
-    status: options.status || 'running',
+    status: options.status ?? 'running',
     intent,
     prompt: context.prompt,
     plan: plan ? planToRunSnapshot(plan) : {
@@ -1040,20 +1166,23 @@ function createRunSnapshot(context, options = {}) {
       shouldUseDataAnalysis: false,
       reason: '正在判断任务类型',
     },
-    dataSource: context.dataSourceSnapshot || getDataSourceSnapshot(),
-    steps: options.steps || context.steps || [],
-    toolInvocations: options.toolInvocations || context.toolInvocations || [],
-    chartData: options.chartData || context.chartData,
-    conclusion: options.conclusion || context.conclusion || '',
-    conclusionSource: options.conclusionSource || context.conclusionSource || 'none',
-    agentConclusion: options.agentConclusion || context.agentConclusion,
-    conclusionNotice: options.conclusionNotice || context.conclusionNotice,
-    modelTrace: options.modelTrace || context.modelTrace,
-    reportState: options.reportState || context.reportState || 'hidden',
+    dataSource: context.dataSourceSnapshot ?? getDataSourceSnapshot(),
+    modelTrace,
+    ...(agentConclusion ? { agentConclusion } : {}),
+    reportState: options.reportState ?? context.reportState ?? 'hidden',
     createdAt,
     updatedAt: nowIso(),
     startedAt: createdAt,
+    ...(options.completedAt ? { completedAt: options.completedAt } : {}),
+    ...(typeof options.elapsedMs === 'number' ? { elapsedMs: options.elapsedMs } : {}),
+    ...(options.errorMessage ? { errorMessage: options.errorMessage } : {}),
   };
+
+  if (isRecord(chartData)) {
+    snapshot.chartData = chartData;
+  }
+
+  return snapshot;
 }
 
 function createRunStep(id, title, status, description) {
@@ -2496,6 +2625,40 @@ function normalizeModelTraceNumber(value) {
   return Number.isInteger(value) ? value : null;
 }
 
+function resolveUsageUnavailableReason(params = {}) {
+  if (params.usage?.usageAvailable === true) {
+    return null;
+  }
+
+  if (params.usage?.usageAvailable === false && params.usage.usageUnavailableReason) {
+    return params.usage.usageUnavailableReason;
+  }
+
+  if (params.usageUnavailableReason) {
+    return params.usageUnavailableReason;
+  }
+
+  if (params.conclusionSource === 'model') {
+    return 'provider_no_usage';
+  }
+
+  const fallbackReason = params.fallbackReason || null;
+
+  if (
+    fallbackReason === 'invalid_model' ||
+    fallbackReason === 'model_disabled' ||
+    fallbackReason === 'model_not_configured'
+  ) {
+    return fallbackReason;
+  }
+
+  if (params.modelErrorType || isModelFallbackReason(fallbackReason)) {
+    return 'model_failed';
+  }
+
+  return 'model_not_invoked';
+}
+
 const CONCLUSION_SECTION_FIELDS = [
   { title: '关键发现', keys: ['keyFindings', 'key_findings', 'findings'] },
   { title: '可能原因', keys: ['possibleCauses', 'possible_causes', 'causes'] },
@@ -2504,10 +2667,6 @@ const CONCLUSION_SECTION_FIELDS = [
   { title: '结论', keys: ['conclusion'] },
 ];
 const CONCLUSION_SECTION_TITLES = CONCLUSION_SECTION_FIELDS.map((field) => field.title);
-
-function toAgentConclusionSource(source) {
-  return source === 'model' || source === 'fallback' || source === 'mock' ? source : 'fallback';
-}
 
 function stripConclusionJsonFence(value) {
   return String(value || '')
@@ -2620,21 +2779,28 @@ function parseConclusionJson(value) {
 
 function normalizeConclusionSections(sections) {
   const normalizedSections = sections
-    .map((section) => ({
-      title: cleanConclusionText(section.title),
-      content: cleanConclusionText(section.content),
-    }))
-    .filter((section) => section.title && section.content);
+    .map((section) => {
+      const markdownText = normalizeConclusionMarkdownText(section.markdownText);
+      const plainText = cleanConclusionText(section.plainText) || createPlainTextFromMarkdown(markdownText);
+      const title = typeof section.title === 'string' ? cleanConclusionText(section.title) : '';
+
+      return {
+        ...(title ? { title } : {}),
+        markdownText,
+        plainText,
+      };
+    })
+    .filter((section) => section.markdownText || section.plainText);
 
   return normalizedSections.length > 0 ? normalizedSections : null;
 }
 
 function createConclusionPlainText(sections) {
-  return sections ? sections.map((section) => `${section.title}：${section.content}`).join('\n\n') : '';
+  return sections ? sections.map((section) => (section.title ? `${section.title}：${section.plainText}` : section.plainText)).join('\n\n') : '';
 }
 
 function createConclusionMarkdownText(sections) {
-  return sections ? sections.map((section) => `**${section.title}**：${section.content}`).join('\n\n') : '';
+  return sections ? sections.map((section) => (section.title ? `**${section.title}**：${section.markdownText}` : section.markdownText)).join('\n\n') : '';
 }
 
 function extractConclusionSectionsFromMarkdown(value) {
@@ -2646,7 +2812,7 @@ function extractConclusionSectionsFromMarkdown(value) {
     const matchedSection = matchConclusionSectionLine(line);
 
     if (matchedSection) {
-      if (currentSection && currentSection.content.trim()) {
+      if (currentSection && (currentSection.plainText.trim() || currentSection.markdownText.trim())) {
         sections.push(currentSection);
       }
 
@@ -2655,14 +2821,18 @@ function extractConclusionSectionsFromMarkdown(value) {
     }
 
     if (currentSection && line.trim()) {
+      const markdownText = normalizeConclusionMarkdownText(line);
+      const plainText = cleanConclusionText(line);
+
       currentSection = {
         ...currentSection,
-        content: [currentSection.content, cleanConclusionText(line)].filter(Boolean).join(' '),
+        markdownText: [currentSection.markdownText, markdownText].filter(Boolean).join('\n'),
+        plainText: [currentSection.plainText, plainText].filter(Boolean).join(' '),
       };
     }
   }
 
-  if (currentSection && currentSection.content.trim()) {
+  if (currentSection && (currentSection.plainText.trim() || currentSection.markdownText.trim())) {
     sections.push(currentSection);
   }
 
@@ -2703,10 +2873,15 @@ function normalizeParsedConclusion(value) {
   }
 
   const sections = normalizeConclusionSections(
-    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => ({
-      title,
-      content: stringifyConclusionValue(getConclusionFieldValue(value, keys)),
-    })),
+    CONCLUSION_SECTION_FIELDS.map(({ title, keys }) => {
+      const fieldValue = getConclusionFieldValue(value, keys);
+
+      return {
+        title,
+        markdownText: stringifyConclusionMarkdownValue(fieldValue),
+        plainText: stringifyConclusionValue(fieldValue),
+      };
+    }),
   );
 
   if (sections) {
@@ -2736,9 +2911,12 @@ function matchConclusionSectionLine(line) {
   const labelMatch = line.match(labelPattern);
 
   if (labelMatch) {
+    const sectionText = labelMatch[2] || '';
+
     return {
       title: labelMatch[1],
-      content: labelMatch[2] || '',
+      markdownText: normalizeConclusionMarkdownText(sectionText),
+      plainText: cleanConclusionText(sectionText),
     };
   }
 
@@ -2747,7 +2925,8 @@ function matchConclusionSectionLine(line) {
   if (headingMatch) {
     return {
       title: headingMatch[1],
-      content: '',
+      markdownText: '',
+      plainText: '',
     };
   }
 
@@ -2765,24 +2944,29 @@ function normalizeConclusionText(value) {
   };
 }
 
-function normalizeAgentConclusion(source, rawText) {
+function normalizeAgentNotice(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeAgentConclusion(rawText, notice) {
   const rawValue = typeof rawText === 'string' ? rawText.trim() : '';
   const parsedJson = rawValue ? parseConclusionJson(rawValue) : null;
   const normalized = parsedJson === null ? normalizeConclusionText(rawValue) : normalizeParsedConclusion(parsedJson);
   const markdownText = normalized.markdownText || normalizeConclusionMarkdownText(rawValue);
   const plainText = normalized.plainText || createPlainTextFromMarkdown(markdownText);
+  const normalizedNotice = normalizeAgentNotice(notice);
 
   return {
-    source: toAgentConclusionSource(source),
     markdownText,
     plainText,
     ...(normalized.sections ? { sections: normalized.sections } : {}),
+    ...(normalizedNotice ? { notice: normalizedNotice } : {}),
     ...(rawValue && rawValue !== markdownText ? { rawText: rawValue } : {}),
   };
 }
 
-function setCanonicalConclusion(context, rawText, source) {
-  const agentConclusion = normalizeAgentConclusion(source, rawText);
+function setCanonicalConclusion(context, rawText, source, notice) {
+  const agentConclusion = normalizeAgentConclusion(rawText, notice);
 
   context.agentConclusion = agentConclusion;
   context.conclusion = agentConclusion.markdownText;
@@ -2792,15 +2976,32 @@ function setCanonicalConclusion(context, rawText, source) {
 }
 
 function createModelTrace(params = {}) {
+  const conclusionSource = params.conclusionSource || 'none';
+  const usageUnavailableReason = resolveUsageUnavailableReason({
+    ...params,
+    conclusionSource,
+  });
+  const { usage, costEstimate } = createUsageCostMetadata({
+    usage: params.usage || null,
+    costEstimate: params.costEstimate || null,
+    billingType: params.billingType || null,
+    usageSource: params.usageSource || (params.usage?.usageAvailable === true ? 'provider' : 'none'),
+    usageUnavailableReason,
+    costUnavailableReason: params.costUnavailableReason,
+  });
+
   return {
-    selectedModelId: params.selectedModelId || null,
+    selectedModelId: params.selectedModelId || 'unknown',
     provider: params.provider || null,
     model: params.model || null,
     latencyMs: normalizeModelTraceNumber(params.latencyMs),
-    tokenUsage: params.tokenUsage || null,
+    usage,
+    costEstimate,
     fallbackReason: params.fallbackReason || null,
     modelErrorType: params.modelErrorType || null,
-    conclusionSource: params.conclusionSource || 'none',
+    modelHttpStatus: Number.isInteger(params.modelHttpStatus) ? params.modelHttpStatus : null,
+    modelErrorMessage: params.modelErrorMessage || null,
+    conclusionSource,
   };
 }
 
@@ -2808,9 +3009,12 @@ function createInitialModelTrace(selectedModelId) {
   const config = getLangChainModelLayerConfig(selectedModelId);
 
   return createModelTrace({
-    selectedModelId: config.selectedModelId || selectedModelId || null,
+    selectedModelId: config.selectedModelId || selectedModelId || 'unknown',
     provider: config.provider || null,
     model: config.model || null,
+    billingType: config.billingType || null,
+    usageUnavailableReason: 'model_not_invoked',
+    costUnavailableReason: 'model_not_invoked',
     conclusionSource: 'none',
   });
 }
@@ -2819,12 +3023,15 @@ function createConfiguredModelDiagnostics(selectedModelId, errorType, errorMessa
   const config = getLangChainModelLayerConfig(selectedModelId);
 
   return {
-    selectedModelId: config.selectedModelId || selectedModelId || null,
+    selectedModelId: config.selectedModelId || selectedModelId || 'unknown',
     provider: config.provider || null,
     model: config.model || null,
+    billingType: config.billingType || null,
     modelErrorType: errorType || null,
     modelHttpStatus: null,
     modelErrorMessage: errorMessage || null,
+    usageUnavailableReason: errorType || 'model_not_configured',
+    costUnavailableReason: errorType || 'model_not_configured',
   };
 }
 
@@ -2832,14 +3039,16 @@ function createFailedModelDiagnostics(error) {
   const modelError = normalizeLangChainModelError(error);
 
   return {
-    selectedModelId: modelError.selectedModelId || null,
+    selectedModelId: modelError.selectedModelId || 'unknown',
     provider: modelError.provider || null,
     model: modelError.model || null,
+    billingType: modelError.billingType || null,
     modelErrorType: modelError.errorType || 'model_failed',
     modelHttpStatus: modelError.httpStatus,
     modelErrorMessage: modelError.message || null,
     latencyMs: normalizeModelTraceNumber(modelError.latencyMs),
-    tokenUsage: null,
+    usageUnavailableReason: 'model_failed',
+    costUnavailableReason: 'model_failed',
     hasModelApiKey: Boolean(modelError.hasApiKey),
     modelApiKeyLength: Number(modelError.apiKeyLength) || 0,
   };
@@ -2851,13 +3060,21 @@ function createModelEventMetadata(context, diagnostics = {}) {
   const modelErrorType = diagnostics.modelErrorType ?? existingTrace.modelErrorType ?? null;
   const conclusionSource = diagnostics.conclusionSource || context?.conclusionSource || existingTrace.conclusionSource || 'none';
   const modelTrace = createModelTrace({
-    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || null,
+    selectedModelId: diagnostics.selectedModelId || existingTrace.selectedModelId || context?.selectedModelId || 'unknown',
     provider: diagnostics.provider || existingTrace.provider || null,
     model: diagnostics.model || existingTrace.model || null,
     latencyMs: normalizeModelTraceNumber(diagnostics.latencyMs) ?? existingTrace.latencyMs ?? null,
-    tokenUsage: diagnostics.tokenUsage || existingTrace.tokenUsage || null,
+    usage: diagnostics.usage || existingTrace.usage || null,
+    costEstimate: diagnostics.costEstimate || existingTrace.costEstimate || null,
+    billingType: diagnostics.billingType || existingTrace.billingType || null,
+    usageUnavailableReason: diagnostics.usageUnavailableReason,
+    costUnavailableReason: diagnostics.costUnavailableReason,
     fallbackReason,
     modelErrorType,
+    modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus)
+      ? diagnostics.modelHttpStatus
+      : (Number.isInteger(existingTrace.modelHttpStatus) ? existingTrace.modelHttpStatus : null),
+    modelErrorMessage: diagnostics.modelErrorMessage || existingTrace.modelErrorMessage || null,
     conclusionSource,
   });
 
@@ -2867,15 +3084,6 @@ function createModelEventMetadata(context, diagnostics = {}) {
 
   return {
     modelTrace,
-    selectedModelId: modelTrace.selectedModelId,
-    provider: modelTrace.provider,
-    model: modelTrace.model,
-    latencyMs: modelTrace.latencyMs,
-    tokenUsage: modelTrace.tokenUsage,
-    fallbackReason: modelTrace.fallbackReason,
-    modelErrorType: modelTrace.modelErrorType,
-    modelHttpStatus: Number.isInteger(diagnostics.modelHttpStatus) ? diagnostics.modelHttpStatus : null,
-    modelErrorMessage: diagnostics.modelErrorMessage || null,
   };
 }
 
@@ -2998,7 +3206,7 @@ function writeSseEvent(res, event) {
   }
 
   res.write(`data: ${JSON.stringify(event)}\n\n`);
-  debugLog('[workbench-agent-run-stream] event', event.type, event.runId ?? event.run?.id);
+  debugLog('[workbench-agent-run-stream] event', event.type, event.runId);
   return true;
 }
 
@@ -3048,10 +3256,8 @@ async function emitConclusionDeltas(db, currentUser, context, res, disconnect, t
 
 async function streamStaticConclusion(db, currentUser, context, res, disconnect, params) {
   const conclusionSource = params.conclusionSource || context.conclusionSource || 'fallback';
-  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource);
+  const agentConclusion = params.agentConclusion || setCanonicalConclusion(context, params.conclusion, conclusionSource, params.notice);
   const conclusion = agentConclusion.markdownText;
-
-  context.conclusionNotice = params.conclusionNotice || context.conclusionNotice || null;
 
   const ok = await emitConclusionDeltas(db, currentUser, context, res, disconnect, conclusion);
 
@@ -3067,19 +3273,8 @@ async function streamStaticConclusion(db, currentUser, context, res, disconnect,
     disconnect,
     createRunEvent('conclusion_completed', context, {
       conclusion,
-      conclusionSource,
       agentConclusion,
-      conclusionNotice: params.conclusionNotice,
-      fallbackReason: params.fallbackReason,
-      modelTrace: params.modelTrace,
-      selectedModelId: params.selectedModelId,
-      provider: params.provider,
-      model: params.model,
-      latencyMs: params.latencyMs,
-      tokenUsage: params.tokenUsage,
-      modelErrorType: params.modelErrorType,
-      modelHttpStatus: params.modelHttpStatus,
-      modelErrorMessage: params.modelErrorMessage,
+      modelTrace: params.modelTrace || context.modelTrace || null,
     }),
   );
 }
@@ -3105,7 +3300,7 @@ async function runControlledTool(db, currentUser, context, res, disconnect, para
     res,
     disconnect,
     createRunEvent('tool_started', context, {
-      tool: createToolEventTool({
+      toolInvocation: createToolEventTool({
         runtimeToolId: params.runtimeToolId,
         toolName: params.toolName,
         displayName: params.displayName,
@@ -3378,27 +3573,27 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   let conclusion = '';
   let conclusionSource = 'fallback';
   let fallbackReason = toolContext.fallbackReason;
-  let conclusionNotice = null;
+  let notice = null;
   const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
 
   if (fallbackReason) {
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '数据工具不可用，当前结论由明确 fallback 生成。';
+    notice = '数据工具不可用，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
   } else if (!toolContext.aggregateResult || toolContext.aggregateResult.totalRecords === 0) {
     fallbackReason = 'data_empty';
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
+    notice = '受控工具未返回可分析数据，当前结论由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
@@ -3410,11 +3605,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
       modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-    conclusionNotice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
+    notice = '未配置 LangChain 模型层，当前结论由本地工具结果摘要生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, {
         ...context.modelDiagnostics,
@@ -3442,8 +3637,10 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         selectedModelId: modelResult.selectedModelId || context.selectedModelId,
         provider: modelResult.provider || modelConfig.provider || null,
         model: modelResult.model || modelConfig.model || null,
+        billingType: modelResult.billingType || modelConfig.billingType || null,
         latencyMs: modelResult.latencyMs,
-        tokenUsage: modelResult.tokenUsage,
+        usage: modelResult.usage,
+        costEstimate: modelResult.costEstimate,
         conclusionSource,
         fallbackReason,
         modelErrorType: null,
@@ -3477,11 +3674,11 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
         modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
       }));
       conclusion = buildFallbackConclusion(context.plan, toolContext.chartResult, fallbackReason);
-      conclusionNotice = '模型生成失败，当前结论由本地工具结果摘要生成。';
+      notice = '模型生成失败，当前结论由本地工具结果摘要生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
-        conclusionNotice,
+        notice,
         fallbackReason,
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
@@ -3493,7 +3690,6 @@ async function generateRealConclusion(db, currentUser, context, res, disconnect,
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
-  context.conclusionNotice = conclusionNotice;
 
   await persistAndWriteRawEvent(
     db,
@@ -3645,18 +3841,18 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   let conclusion = '';
   let conclusionSource = 'fallback';
   let fallbackReason = ragContext.fallbackReason;
-  let conclusionNotice = null;
+  let notice = null;
   const modelConfig = getLangChainModelLayerConfig(context.selectedModelId);
   const hasMatches = Boolean(ragContext.searchResult && ragContext.searchResult.retrievedChunkCount > 0);
 
   if (!hasMatches) {
     fallbackReason = fallbackReason || 'rag_no_match';
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
+    notice = '知识库未返回可用片段，当前回答由明确 fallback 生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, { conclusionSource, fallbackReason }),
     });
@@ -3668,11 +3864,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
       modelConfig.configErrorMessage || 'LangChain model layer is not configured.',
     );
     conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-    conclusionNotice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
+    notice = '未配置 LangChain 模型层，当前知识回答由检索片段结构化生成。';
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource,
-      conclusionNotice,
+      notice,
       fallbackReason,
       ...createModelEventMetadata(context, {
         ...context.modelDiagnostics,
@@ -3695,8 +3891,10 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         selectedModelId: modelResult.selectedModelId || context.selectedModelId,
         provider: modelResult.provider || modelConfig.provider || null,
         model: modelResult.model || modelConfig.model || null,
+        billingType: modelResult.billingType || modelConfig.billingType || null,
         latencyMs: modelResult.latencyMs,
-        tokenUsage: modelResult.tokenUsage,
+        usage: modelResult.usage,
+        costEstimate: modelResult.costEstimate,
         conclusionSource,
         fallbackReason,
         modelErrorType: null,
@@ -3730,11 +3928,11 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
         modelApiKeyLength: modelDiagnostics.modelApiKeyLength,
       }));
       conclusion = buildKnowledgeFallbackAnswer(ragContext.searchResult, fallbackReason);
-      conclusionNotice = '模型生成失败，当前知识回答由检索片段结构化生成。';
+      notice = '模型生成失败，当前知识回答由检索片段结构化生成。';
       await streamStaticConclusion(db, currentUser, context, res, disconnect, {
         conclusion,
         conclusionSource,
-        conclusionNotice,
+        notice,
         fallbackReason,
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
@@ -3744,7 +3942,6 @@ async function generateKnowledgeConclusion(db, currentUser, context, res, discon
   context.conclusion = conclusion;
   context.conclusionSource = conclusionSource;
   context.fallbackReason = fallbackReason;
-  context.conclusionNotice = conclusionNotice;
   context.assistantMessageMetadata = {
     source: 'knowledge_qa',
     retrievedChunkCount: ragContext.searchResult?.retrievedChunkCount ?? 0,
@@ -3858,7 +4055,7 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource: 'fallback',
-      conclusionNotice: '能力说明由 CloudBase 本地逻辑生成。',
+      notice: '能力说明由 CloudBase 本地逻辑生成。',
       fallbackReason: context.fallbackReason,
       ...createModelEventMetadata(context, {
         conclusionSource: 'fallback',
@@ -3872,7 +4069,7 @@ async function runLangGraphProcessingNode(db, currentUser, context, res, disconn
     await streamStaticConclusion(db, currentUser, context, res, disconnect, {
       conclusion,
       conclusionSource: 'fallback',
-      conclusionNotice: '不支持问题由 CloudBase 本地逻辑生成。',
+      notice: '不支持问题由 CloudBase 本地逻辑生成。',
       fallbackReason: context.fallbackReason,
       ...createModelEventMetadata(context, {
         conclusionSource: 'fallback',
@@ -3988,7 +4185,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     plan: null,
     planSnapshot: {},
     dataSourceSnapshot: getDataSourceSnapshot(provider),
-    chartData: null,
+    chartData: undefined,
     conclusion: '',
     conclusionSource: 'none',
     agentConclusion: null,
@@ -4076,32 +4273,22 @@ async function runRealAgentFlow(req, res, currentUser, body) {
         context,
         res,
         disconnect,
-        {
-          type: 'run_started',
-          runId: context.runId,
+        createRunEvent('run_started', context, {
           run: createRunSnapshot(context),
-          usageId: context.usageId,
-          clientRunId: context.clientRunId,
-          conversationId: context.conversationId,
-          metadata: {
-            langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
-          },
-        },
+        }),
       );
 
       const conclusion = await runAgentFlowThroughLangGraph(db, currentUser, context, res, disconnect);
       assistantMessageId = await createAssistantMessage(db, currentUser, context, conversation, conclusion, {
-        source: context.conclusionSource,
-        fallbackReason: context.fallbackReason,
         agentConclusion: context.agentConclusion,
         ...(context.assistantMessageMetadata || {}),
         ...createModelEventMetadata(context, context.modelDiagnostics),
       });
       const elapsedMs = Math.max(Date.now() - startedAt, 1);
+      const completionModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
       context.langSmithTrace = await completeLangSmithTrace(context.langSmithTrace, {
         outputs: {
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          modelTrace: completionModelMetadata.modelTrace,
           reportState: context.reportState,
           elapsedMs,
         },
@@ -4109,9 +4296,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           runtime: context.langGraphRuntime,
           intent: context.intent,
           reportState: context.reportState,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
-          modelTrace: context.modelTrace || null,
+          ...completionModelMetadata,
         },
       });
       await completeAgentRun(db, currentUser, context, elapsedMs, conclusion, assistantMessageId, {
@@ -4130,12 +4315,10 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           completedAt: nowIso(),
           elapsedMs,
           assistantMessageId,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
           metadata: {
             langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
           },
-          ...createModelEventMetadata(context, context.modelDiagnostics),
+          ...completionModelMetadata,
         }),
       );
 
@@ -4144,10 +4327,8 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           assistantMessageId,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
-          ...createModelEventMetadata(context, context.modelDiagnostics),
+          ...completionModelMetadata,
         });
         context.usageFinished = true;
       } catch (finishError) {
@@ -4163,20 +4344,19 @@ async function runRealAgentFlow(req, res, currentUser, body) {
     } catch (error) {
       const disconnected = error && error.errorCode === 'client_disconnected';
       const finalStatus = disconnected ? 'stopped' : 'failed';
+      const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
 
       context.langSmithTrace = await failLangSmithTrace(context.langSmithTrace, {
         error,
         outputs: {
           finalStatus,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          modelTrace: failureModelMetadata.modelTrace,
         },
         metadata: {
           runtime: context.langGraphRuntime,
           intent: context.intent,
           finalStatus,
-          conclusionSource: context.conclusionSource,
-          fallbackReason: context.fallbackReason,
+          ...failureModelMetadata,
         },
       });
 
@@ -4191,6 +4371,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          ...failureModelMetadata,
         });
         context.usageFinished = true;
       } catch (cleanupError) {
@@ -4203,6 +4384,7 @@ async function runRealAgentFlow(req, res, currentUser, body) {
           metadata: {
             langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
           },
+          ...failureModelMetadata,
         });
 
         try {
@@ -4222,10 +4404,12 @@ async function runRealAgentFlow(req, res, currentUser, body) {
   } catch (error) {
     if (context.usageId && !context.usageFinished) {
       try {
+        const failureModelMetadata = createModelEventMetadata(context, context.modelDiagnostics);
         await finishUsage(db, currentUser, context.usageId, 'failed', 'run_failed', {
           source: 'cloudbase-agent-run-real',
           runId: context.runId,
           langSmithTrace: toPublicLangSmithTrace(context.langSmithTrace),
+          ...failureModelMetadata,
         });
         context.usageFinished = true;
       } catch (finishError) {

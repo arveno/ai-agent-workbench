@@ -19,6 +19,7 @@ class LangChainModelLayerError extends Error {
     this.selectedModelId = options.selectedModelId || null;
     this.provider = options.provider || null;
     this.model = options.model || null;
+    this.billingType = options.billingType || null;
     this.hasApiKey = Boolean(options.hasApiKey);
     this.apiKeyLength = Number.isInteger(options.apiKeyLength) ? options.apiKeyLength : 0;
     this.latencyMs = Number.isInteger(options.latencyMs) ? options.latencyMs : null;
@@ -189,6 +190,7 @@ function createModelLayerError(errorType, message, config, options = {}) {
     selectedModelId: config?.selectedModelId || config?.id || null,
     provider: config?.provider || null,
     model: config?.model || null,
+    billingType: config?.billingType || null,
     hasApiKey: Boolean(config?.hasApiKey),
     apiKeyLength: Number(config?.apiKeyLength) || 0,
     latencyMs: options.latencyMs,
@@ -294,7 +296,7 @@ function normalizeUsageNumber(value) {
   return Number.isFinite(numberValue) && numberValue >= 0 ? Math.trunc(numberValue) : null;
 }
 
-function normalizeTokenUsage(usage) {
+function normalizeUsageShape(usage) {
   if (!usage || typeof usage !== 'object') {
     return null;
   }
@@ -324,6 +326,133 @@ function normalizeTokenUsage(usage) {
   };
 }
 
+function normalizeUsageUnavailableReason(value, fallback = 'provider_no_usage') {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeUsageSource(value, fallback = 'none') {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function normalizePricingSource(value) {
+  if (value === 'catalog' || value === 'model_catalog.billingType') {
+    return 'catalog';
+  }
+
+  if (value === 'unavailable' || value === 'none') {
+    return value;
+  }
+
+  return null;
+}
+
+function createCanonicalUsage(usageInput, options = {}) {
+  const normalized = normalizeUsageShape(usageInput);
+
+  if (!normalized) {
+    return {
+      promptTokens: null,
+      completionTokens: null,
+      totalTokens: null,
+      usageAvailable: false,
+      usageSource: normalizeUsageSource(options.usageSource || usageInput?.usageSource, 'none'),
+      usageUnavailableReason: normalizeUsageUnavailableReason(
+        options.usageUnavailableReason || usageInput?.usageUnavailableReason,
+        'provider_no_usage',
+      ),
+    };
+  }
+
+  const totalTokens = normalized.totalTokens ?? (
+    normalized.promptTokens !== null && normalized.completionTokens !== null
+      ? normalized.promptTokens + normalized.completionTokens
+      : null
+  );
+
+  return {
+    promptTokens: normalized.promptTokens,
+    completionTokens: normalized.completionTokens,
+    totalTokens,
+    usageAvailable: true,
+    usageSource: normalizeUsageSource(options.usageSource || usageInput?.usageSource, 'provider'),
+    usageUnavailableReason: null,
+  };
+}
+
+function normalizeCostEstimate(costEstimate) {
+  if (!costEstimate || typeof costEstimate !== 'object') {
+    return null;
+  }
+
+  const estimatedCost = costEstimate.estimatedCost === null || costEstimate.estimatedCost === undefined
+    ? null
+    : Number(costEstimate.estimatedCost);
+
+  return {
+    estimatedCost: estimatedCost !== null && Number.isFinite(estimatedCost) && estimatedCost >= 0 ? estimatedCost : null,
+    currency: typeof costEstimate.currency === 'string' && costEstimate.currency.trim()
+      ? costEstimate.currency.trim()
+      : null,
+    pricingUnit: typeof costEstimate.pricingUnit === 'string' && costEstimate.pricingUnit.trim()
+      ? costEstimate.pricingUnit.trim()
+      : null,
+    isEstimated: costEstimate.isEstimated === true,
+    pricingSource: normalizePricingSource(costEstimate.pricingSource),
+    costUnavailableReason: typeof costEstimate.costUnavailableReason === 'string' && costEstimate.costUnavailableReason.trim()
+      ? costEstimate.costUnavailableReason.trim()
+      : null,
+  };
+}
+
+function createCostEstimate(params = {}) {
+  const usage = params.usage || createCanonicalUsage(null, {
+    usageSource: params.usageSource,
+    usageUnavailableReason: params.usageUnavailableReason,
+  });
+  const billingType = typeof params.billingType === 'string' ? params.billingType.trim() : '';
+  const pricingSource = billingType ? 'catalog' : 'none';
+  const usageUnavailableReason = usage?.usageAvailable === false ? usage.usageUnavailableReason : null;
+  let costUnavailableReason = 'unknown_pricing';
+
+  if (params.costUnavailableReason) {
+    costUnavailableReason = normalizeUsageUnavailableReason(params.costUnavailableReason, 'unknown_pricing');
+  } else if (
+    usageUnavailableReason &&
+    usageUnavailableReason !== 'provider_no_usage'
+  ) {
+    costUnavailableReason = usageUnavailableReason;
+  } else if (billingType === 'free') {
+    costUnavailableReason = 'free_pricing';
+  } else if (usage?.usageAvailable === false) {
+    costUnavailableReason = 'usage_unavailable';
+  }
+
+  return {
+    estimatedCost: null,
+    currency: null,
+    pricingUnit: null,
+    isEstimated: false,
+    pricingSource,
+    costUnavailableReason,
+  };
+}
+
+function createUsageCostMetadata(params = {}) {
+  const usage = createCanonicalUsage(params.usage, {
+    usageSource: params.usageSource,
+    usageUnavailableReason: params.usageUnavailableReason,
+  });
+  const normalizedCostEstimate = normalizeCostEstimate(params.costEstimate);
+
+  return {
+    usage,
+    costEstimate: normalizedCostEstimate || createCostEstimate({
+      ...params,
+      usage,
+    }),
+  };
+}
+
 function getChunkText(chunk) {
   const content = chunk?.content;
 
@@ -350,13 +479,24 @@ function getChunkText(chunk) {
   return '';
 }
 
-function getChunkUsage(chunk) {
-  return normalizeTokenUsage(
+function extractProviderRawUsage(chunk) {
+  const responseMetadataTokenUsage = chunk?.response_metadata && chunk.response_metadata.tokenUsage;
+
+  return (
     chunk?.usage_metadata ||
-    chunk?.response_metadata?.tokenUsage ||
     chunk?.response_metadata?.token_usage ||
-    chunk?.additional_kwargs?.usage,
+    responseMetadataTokenUsage ||
+    chunk?.additional_kwargs?.usage ||
+    null
   );
+}
+
+function normalizeProviderUsage(rawUsage) {
+  return normalizeUsageShape(rawUsage);
+}
+
+function getChunkUsage(chunk) {
+  return normalizeProviderUsage(extractProviderRawUsage(chunk));
 }
 
 function createChatModel(config, params = {}) {
@@ -387,7 +527,7 @@ async function streamLangChainChatCompletion(params = {}) {
   const startedAt = Date.now();
   const model = createChatModel(config, params);
   let text = '';
-  let tokenUsage = null;
+  let providerUsage = null;
 
   try {
     const stream = await model.stream(params.messages || []);
@@ -397,7 +537,7 @@ async function streamLangChainChatCompletion(params = {}) {
       const usage = getChunkUsage(chunk);
 
       if (usage) {
-        tokenUsage = usage;
+        providerUsage = usage;
       }
 
       if (delta) {
@@ -420,6 +560,12 @@ async function streamLangChainChatCompletion(params = {}) {
   }
 
   const latencyMs = Math.max(Date.now() - startedAt, 1);
+  const { usage, costEstimate } = createUsageCostMetadata({
+    usage: providerUsage,
+    billingType: config.billingType,
+    usageSource: providerUsage ? 'provider' : 'none',
+    usageUnavailableReason: providerUsage ? null : 'provider_no_usage',
+  });
 
   if (!text.trim()) {
     throw createModelLayerError(
@@ -438,7 +584,8 @@ async function streamLangChainChatCompletion(params = {}) {
     displayName: config.displayName,
     billingType: config.billingType,
     latencyMs,
-    tokenUsage,
+    usage,
+    costEstimate,
   };
 }
 
@@ -451,6 +598,7 @@ function normalizeLangChainModelError(error) {
       message: sanitizeMessage(error.message),
       provider: error.provider || null,
       model: error.model || null,
+      billingType: error.billingType || null,
       hasApiKey: error.hasApiKey,
       apiKeyLength: error.apiKeyLength,
       latencyMs: error.latencyMs,
@@ -471,6 +619,7 @@ function normalizeLangChainModelError(error) {
     message: sanitizeMessage(message),
     provider: null,
     model: null,
+    billingType: null,
     hasApiKey: false,
     apiKeyLength: 0,
     latencyMs: null,
@@ -484,7 +633,7 @@ function describeLangChainModelLayerBoundary() {
       'Frontend only submits selectedModelId.',
       'Server-side catalog resolves provider, model, apiKeyEnv, baseUrl and timeout.',
       'Provider keys stay in CloudBase function environment variables.',
-      'Outputs keep modelTrace, tokenUsage, latencyMs, fallbackReason and modelErrorType contracts stable.',
+      'Outputs keep modelTrace.usage, modelTrace.costEstimate, latencyMs, fallbackReason and modelErrorType contracts stable.',
       'LangChain raw messages, chunks and metadata stay inside the server boundary.',
     ],
     replaceLater: [],
@@ -494,9 +643,14 @@ function describeLangChainModelLayerBoundary() {
 module.exports = {
   DEFAULT_LANGCHAIN_MODEL_ID,
   LangChainModelLayerError,
+  createCanonicalUsage,
+  createCostEstimate,
+  createUsageCostMetadata,
   describeLangChainModelLayerBoundary,
+  extractProviderRawUsage,
   getLangChainModelCatalog,
   getLangChainModelLayerConfig,
+  normalizeProviderUsage,
   normalizeLangChainModelError,
   streamLangChainChatCompletion,
 };

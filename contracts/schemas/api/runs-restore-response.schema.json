@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/runs-restore-response.schema.json",
+  "title": "RunsRestoreResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "data"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run", "events", "toolInvocations", "sources"],
+      "properties": {
+        "run": {
+          "anyOf": [
+            { "$ref": "../objects/agent-run-record.schema.json" },
+            { "type": "null" }
+          ]
+        },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "../objects/run-event-record.schema.json" }
+        },
+        "toolInvocations": {
+          "type": "array",
+          "items": { "$ref": "../objects/tool-invocation-record.schema.json" }
+        },
+        "sources": {
+          "type": "array",
+          "items": { "$ref": "../objects/run-source-record.schema.json" }
+        }
+      },
+      "description": "Run restore bundle returned by /api/workbench/runs."
+    }
+  }
+}

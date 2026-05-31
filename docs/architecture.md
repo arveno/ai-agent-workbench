@@ -1,6 +1,6 @@
 # Architecture
 
-本文档只定义 AI Agent Workbench 的架构分层、模块职责、数据流和前后端边界。生命周期主线见 `docs/agent-run-lifecycle.md`，ID 语义见 `docs/id-contract.md`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`。
+本文档只定义 AI Agent Workbench 的架构分层、模块职责、数据流和前后端边界。生命周期主线见 `docs/agent-run-lifecycle.md`，ID 语义见 `docs/id-contract.md`，字段契约见 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json`，Source / RAG lineage 见 `docs/source-lineage.md`，Tool Governance 见 `docs/tool-governance.md`。
 
 ## 1. 主链路
 
@@ -22,10 +22,10 @@ selectedModelId
   -> _shared/langchainModelLayer.js
   -> LangChain Chat Model
   -> provider client
-  -> modelTrace / tokenUsage / latency / fallbackReason
+  -> modelTrace
 ```
 
-LangChain model layer 承担模型调用、错误归类和 usage 归集。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
+LangChain model layer 承担模型调用、错误归类、canonical usage 归集和 cost estimate 标准化。前端只传 `selectedModelId`。provider / model / apiKeyEnv 由后端 catalog 决定，模型 Key 不进入前端。
 
 当前 Agent Runtime 链路：
 
@@ -246,7 +246,7 @@ message 的写入和读取。
 
 ### `workbench-reports`
 
-report artifact 的生成状态、保存和读取。
+report artifact 的生成状态、保存和读取。写入 `report_artifacts.metadata` 时，报告链路只从项目 canonical `agent_runs.metadata.modelTrace` 同步单一 `modelTrace` 对象，仍使用现有 JSON metadata，不新增数据库字段，不消费 LangChain raw payload，不把模型字段展开到 report metadata 顶层。
 
 ### `workbench-demo-copy`
 
@@ -262,7 +262,7 @@ quota / usage 状态读取。
 
 ### `workbench-evaluations`
 
-Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。
+Evaluation 结果读取和写入。Evaluation 的推进顺序以 `docs/agent-run-lifecycle.md` 为准。写入 `eval_results.metadata` 和 `model_trace` 时，Evaluation 链路以 canonical `runId` 读取项目 `agent_runs.metadata.modelTrace`，同步单一 `modelTrace` 对象；LangSmith feedback / trace id 只作为外部观测 metadata，不替代 `eval_results.run_id` 或项目主事实源。
 
 ### `workbench-agent-run-stream`
 
@@ -304,10 +304,10 @@ selectedModelId
   -> model
   -> apiKeyEnv
   -> LangChain Chat Model
-  -> tokenUsage / latency / fallbackReason
+  -> modelTrace / usage / costEstimate / latency / fallbackReason
 ```
 
-该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage 和错误归类契约。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
+该模块承载 catalog、provider、model、apiKeyEnv、timeout、usage、cost estimate 和错误归类边界。模型状态字段契约以 `contracts/field-registry.yml` 和 `contracts/schemas/model-trace.schema.json` 为准，不在架构文档重复字段表。这些字段写入现有 JSON metadata / Run Trace payload，不新增数据库字段。旧模型网关调用链不得恢复为 Agent Run runtime 调用链。
 
 ## 7. 核心对象关系
 
@@ -326,6 +326,7 @@ Conversation
 ```
 
 字段、主外键和 ID 禁止项以 `docs/id-contract.md` 为准。Source / retrieval 关系以 `docs/source-lineage.md` 为准。
+Run / modelTrace / agentConclusion / report metadata / evaluation metadata 字段以 `contracts/field-registry.yml` 和 `contracts/schemas/*.schema.json` 为准。
 
 ## 8. Run Trace
 
@@ -339,16 +340,18 @@ Run Trace 是执行过程视图，不是 raw JSON dump 面板。
 执行步骤
 工具调用
 数据源
-provider
-model
-tokenUsage
+模型状态
+usage / cost
 latency
-fallbackReason
-modelErrorType
-conclusion summary
+fallback / model error
+结论内容 / 提示
 ```
 
 raw payload 只进入调试详情或可展开区域。工具展示字段和工具名以 `docs/tool-governance.md` 为准。
+
+Run Trace / 右侧工作台展示模型状态时，前端必须先由 mapper 按 `contracts/field-registry.yml` 和 `contracts/schemas/model-trace.schema.json` 将模型 trace 标准化进入 `RunSnapshot`，再由 ViewModel 输出展示字段；组件不得直接解析 raw metadata 或 LangChain payload。
+
+结论字段契约以 `contracts/field-registry.yml` 和 `contracts/schemas/agent-conclusion.schema.json` 为准；模型来源、fallback 和 model error 只归 `modelTrace`，结论提示只归 `agentConclusion`。
 
 ## 9. 安全边界
 

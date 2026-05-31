@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand';
+import { createLocalRunStoppedEvent } from '../../domain/run/boundary';
+import type { RunViewModel, RunViewModelReportState } from '../../domain/run/view-model';
 import type {
   GenerationSlice,
-  RunReportState,
-  RunSnapshot,
   WorkbenchMessage,
   WorkbenchSession,
   WorkbenchStore,
@@ -87,7 +87,7 @@ function insertReportMessageAfterRunAssistant(
   return [...messages, reportMessage];
 }
 
-function settleReportDecisionSteps(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
+function settleReportDecisionSteps(run: RunViewModel, reportState: RunViewModelReportState): RunViewModel {
   if (reportState !== 'generated' && reportState !== 'skipped') {
     return run;
   }
@@ -115,7 +115,7 @@ function settleReportDecisionSteps(run: RunSnapshot, reportState: RunReportState
   return didUpdateStep ? { ...run, steps } : run;
 }
 
-function updateRunReportState(run: RunSnapshot, reportState: RunReportState): RunSnapshot {
+function updateRunReportState(run: RunViewModel, reportState: RunViewModelReportState): RunViewModel {
   return settleReportDecisionSteps(
     {
       ...run,
@@ -129,7 +129,7 @@ function updateRunReportState(run: RunSnapshot, reportState: RunReportState): Ru
 function updateSessionRunReportState(params: {
   session: WorkbenchSession;
   runId: string;
-  nextRun: RunSnapshot;
+  nextRun: RunViewModel;
   nextMessages?: WorkbenchMessage[];
 }): WorkbenchSession {
   return {
@@ -276,7 +276,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
       const runStartedEvent = createMockRunStartedEvent({
         runId,
         prompt: trimmedPrompt,
-        sessionId: snapshot.currentSessionId,
+        conversationId: snapshot.currentSessionId,
       });
       get().applyRunEvent(runStartedEvent);
     }
@@ -637,10 +637,7 @@ export const createGenerationSlice: StateCreator<WorkbenchStore, [], [], Generat
     agentAbortController?.abort();
 
     if (shouldStopAgentRun) {
-      get().applyRunEvent({
-        type: 'run_stopped',
-        runId: currentRun.id,
-      });
+      get().applyRunEvent(createLocalRunStoppedEvent(currentRun.id));
     }
 
     if (partialAgentConclusion && currentRun) {

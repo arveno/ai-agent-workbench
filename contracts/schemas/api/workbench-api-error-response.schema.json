@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/api/workbench-api-error-response.schema.json",
+  "title": "WorkbenchApiErrorResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "errorCode", "message"],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "const": false,
+      "description": "Workbench HTTP API error marker."
+    },
+    "errorCode": {
+      "type": "string",
+      "description": "Stable public error code returned by the HTTP API."
+    },
+    "message": {
+      "type": "string",
+      "description": "Safe public error message."
+    }
+  }
+}

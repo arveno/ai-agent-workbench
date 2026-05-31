@@ -1,38 +1,9 @@
-import type { RunEvent } from '@/types/workbench';
+import { normalizeRunEvent, type NormalizedRunEvent } from '@/domain/run/boundary';
 import { buildApiPath, requestCloudBasePrivateApi } from './cloudbaseApiClient';
 import { ensureCloudBaseAccessToken } from './cloudbaseAuthClient';
 
-const RUN_EVENT_TYPES = new Set<RunEvent['type']>([
-  'run_started',
-  'run_reused',
-  'step_started',
-  'step_completed',
-  'step_failed',
-  'tool_started',
-  'tool_completed',
-  'tool_failed',
-  'chart_ready',
-  'conclusion_delta',
-  'conclusion_completed',
-  'rag_sources_ready',
-  'report_pending',
-  'run_completed',
-  'run_failed',
-  'run_stopped',
-]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isRunEvent(value: unknown): value is RunEvent {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  const eventType = value.type;
-
-  return typeof eventType === 'string' && RUN_EVENT_TYPES.has(eventType as RunEvent['type']);
 }
 
 function parseSseBlock(block: string): unknown | null {
@@ -54,66 +25,27 @@ function parseSseBlock(block: string): unknown | null {
   }
 }
 
-function consumeSseBlocks(buffer: string, onEvent: (event: RunEvent) => void): string {
+function consumeSseBlocks(
+  buffer: string,
+  clientRunId: string | undefined,
+  onEvent: (event: NormalizedRunEvent) => void,
+): string {
   const blocks = buffer.split(/\r?\n\r?\n/);
   const remainingBuffer = blocks.pop() ?? '';
 
   for (const block of blocks) {
     const parsedEvent = parseSseBlock(block);
+    const normalizedEvent = normalizeRunEvent(parsedEvent, {
+      source: 'runtime',
+      clientRunId,
+    });
 
-    if (isRunEvent(parsedEvent)) {
-      onEvent(parsedEvent);
+    if (normalizedEvent) {
+      onEvent(normalizedEvent);
     }
   }
 
   return remainingBuffer;
-}
-
-function normalizeOptionalId(value: string | null | undefined): string | undefined {
-  const normalizedValue = value?.trim();
-  return normalizedValue || undefined;
-}
-
-function normalizeRunEventForClient(event: RunEvent, clientRunId?: string): RunEvent {
-  const normalizedClientRunId = clientRunId?.trim();
-
-  if (event.type === 'run_started') {
-    const eventRunId = normalizeOptionalId(event.runId);
-    const eventSnapshotId = normalizeOptionalId(event.run.id);
-    const runId =
-      eventRunId ??
-      (eventSnapshotId && eventSnapshotId !== normalizedClientRunId ? eventSnapshotId : undefined);
-    const eventClientRunId =
-      normalizeOptionalId(event.clientRunId) ??
-      normalizeOptionalId(event.run.clientRunId) ??
-      normalizedClientRunId;
-    const displayRunId = normalizeOptionalId(event.run.displayRunId) ?? runId;
-
-    if (!runId) {
-      return event;
-    }
-
-    return {
-      ...event,
-      runId,
-      clientRunId: eventClientRunId,
-      run: {
-        ...event.run,
-        id: runId,
-        clientRunId: eventClientRunId,
-        displayRunId,
-      },
-    };
-  }
-
-  if (!normalizedClientRunId || 'clientRunId' in event) {
-    return event;
-  }
-
-  return {
-    ...event,
-    clientRunId: normalizedClientRunId,
-  } as RunEvent;
 }
 
 async function readAgentRunStreamError(response: Response): Promise<string> {
@@ -171,7 +103,7 @@ export async function streamAgentRunAnalysis(params: {
   clientRunId?: string;
   accessToken?: string | null;
   signal?: AbortSignal;
-  onEvent: (event: RunEvent) => void;
+  onEvent: (event: NormalizedRunEvent) => void;
 }): Promise<void> {
   const body = JSON.stringify({
     prompt: params.prompt,
@@ -213,13 +145,9 @@ export async function streamAgentRunAnalysis(params: {
     }
 
     buffer += decoder.decode(value, { stream: true });
-    buffer = consumeSseBlocks(buffer, (event) => {
-      params.onEvent(normalizeRunEventForClient(event, params.clientRunId));
-    });
+    buffer = consumeSseBlocks(buffer, params.clientRunId, params.onEvent);
   }
 
   buffer += decoder.decode();
-  consumeSseBlocks(`${buffer}\n\n`, (event) => {
-    params.onEvent(normalizeRunEventForClient(event, params.clientRunId));
-  });
+  consumeSseBlocks(`${buffer}\n\n`, params.clientRunId, params.onEvent);
 }

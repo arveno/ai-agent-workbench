@@ -43,6 +43,13 @@ const RUN_SOURCE_COLUMNS = [
   'created_at',
   'metadata',
 ].join(',');
+const AGENT_RUN_COLUMNS = [
+  'id',
+  '_openid',
+  'user_id',
+  'conversation_id',
+  'metadata',
+].join(',');
 
 const VALID_STATUSES = new Set(['draft', 'generated', 'archived']);
 const VALID_RUN_REPORT_STATES = new Set(['hidden', 'pending', 'generating', 'generated', 'skipped', 'failed']);
@@ -57,6 +64,11 @@ function loadSharedModule(name) {
 
 const { authenticateRequest } = loadSharedModule('auth');
 const { assertNoQueryError, extractRows, getDb, parseJsonObject } = loadSharedModule('mysql');
+const { createAgentRunModelMetadata } = loadSharedModule('agentRunModelMetadata');
+const {
+  createReportMetadata,
+  mapReport,
+} = require('./metadata-boundary');
 
 class RequestError extends Error {
   constructor(statusCode, errorCode, publicMessage) {
@@ -317,20 +329,6 @@ function mapRunSource(row) {
   };
 }
 
-function createReportMetadata(metadata) {
-  const nextMetadata = isRecord(metadata) ? { ...metadata } : {};
-
-  delete nextMetadata.sources;
-  delete nextMetadata.sourceCount;
-  delete nextMetadata.source_count;
-  delete nextMetadata.sourceLineage;
-  delete nextMetadata.source_lineage;
-  delete nextMetadata.sourceNoSourceReason;
-  delete nextMetadata.source_no_source_reason;
-
-  return nextMetadata;
-}
-
 function toUuidOrNull(value) {
   if (typeof value !== 'string') {
     return null;
@@ -350,26 +348,6 @@ function readRequiredRunId(value) {
   return runId;
 }
 
-function mapReport(row) {
-  return {
-    id: String(row.id ?? ''),
-    conversation_id: String(row.conversation_id ?? ''),
-    run_id: toNullableString(row.run_id),
-    user_id: String(row.user_id ?? ''),
-    title: String(row.title ?? '分析报告'),
-    content_markdown: String(row.content_markdown ?? ''),
-    status: String(row.status ?? 'generated'),
-    version: normalizeNumber(row.version),
-    created_at: normalizeDateTime(row.created_at),
-    updated_at: normalizeDateTime(row.updated_at),
-    metadata: createReportMetadata(parseJsonObject(row.metadata)),
-    sources: [],
-    sourceCount: 0,
-    sourceLineage: 'run_sources',
-    sourceNoSourceReason: null,
-  };
-}
-
 function hasExpectedConversationOwner(row, currentUser) {
   return (
     String(row._openid ?? '') === currentUser.openid &&
@@ -380,6 +358,15 @@ function hasExpectedConversationOwner(row, currentUser) {
 
 function hasExpectedReportOwner(row, currentUser) {
   return String(row._openid ?? '') === currentUser.openid && String(row.user_id ?? '') === currentUser.userId;
+}
+
+function hasExpectedAgentRunOwner(row, currentUser, conversationId, runId) {
+  return (
+    String(row.id ?? '') === runId &&
+    String(row.conversation_id ?? '') === conversationId &&
+    String(row._openid ?? '') === currentUser.openid &&
+    String(row.user_id ?? '') === currentUser.userId
+  );
 }
 
 async function fetchConversationRecord(db, currentUser, conversationId) {
@@ -462,8 +449,33 @@ async function readRunSourceSnapshot(db, currentUser, conversationId, runId) {
   }
 }
 
+async function readAgentRunModelMetadata(db, currentUser, conversationId, runId) {
+  if (!runId) {
+    return {};
+  }
+
+  const result = await db
+    .from('agent_runs')
+    .select(AGENT_RUN_COLUMNS)
+    .eq('id', runId)
+    .eq('conversation_id', conversationId)
+    .eq('_openid', currentUser.openid)
+    .eq('user_id', currentUser.userId);
+
+  assertNoQueryError(result);
+
+  const rows = extractRows(result).filter((row) => hasExpectedAgentRunOwner(row, currentUser, conversationId, runId));
+  const run = rows.length > 0 ? rows[0] : null;
+
+  if (!run) {
+    return {};
+  }
+
+  return createAgentRunModelMetadata(parseJsonObject(run.metadata));
+}
+
 async function hydrateReportSources(db, currentUser, report) {
-  const runId = toUuidOrNull(report.run_id);
+  const runId = toUuidOrNull(report.runId);
 
   if (!runId) {
     return {
@@ -544,16 +556,18 @@ async function markAgentRunReportState(db, currentUser, conversationId, runId, r
   assertNoQueryError(updateByIdResult);
 }
 
-async function createReportStateMarker(db, currentUser, conversationId, runId, reportState) {
+async function createReportStateMarker(db, currentUser, conversationId, runId, reportState, runModelMetadata = {}) {
   if (reportState !== 'skipped') {
     return null;
   }
 
-  const metadata = {
+  const metadata = createReportMetadata({
     source: 'agent-run-report-state',
     reportState,
     runId,
-  };
+  }, runModelMetadata, {
+    runId,
+  });
 
   const reportId = randomUUID();
   const insertResult = await db.from('report_artifacts').insert({
@@ -586,9 +600,10 @@ async function updateRunReportState(currentUser, body) {
 
   const reportState = readRunReportState(body.reportState);
   const runId = readRequiredRunId(body.runId);
+  const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
 
   await markAgentRunReportState(db, currentUser, conversationId, runId, reportState);
-  await createReportStateMarker(db, currentUser, conversationId, runId, reportState);
+  await createReportStateMarker(db, currentUser, conversationId, runId, reportState, runModelMetadata);
 
   return {
     runId,
@@ -609,7 +624,10 @@ async function createReport(currentUser, body) {
   const reportId = randomUUID();
   const requestMetadata = readMetadata(body.metadata);
   const runId = readRequiredRunId(body.runId);
-  const metadata = createReportMetadata(requestMetadata);
+  const runModelMetadata = await readAgentRunModelMetadata(db, currentUser, conversationId, runId);
+  const metadata = createReportMetadata(requestMetadata, runModelMetadata, {
+    runId,
+  });
   const insertPayload = {
     id: reportId,
     _openid: currentUser.openid,

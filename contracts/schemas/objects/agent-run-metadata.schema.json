@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/agent-run-metadata.schema.json",
+  "title": "AgentRunMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source",
+    "runtime",
+    "langGraphThreadId",
+    "langGraphCheckpointId",
+    "langSmithTraceId",
+    "langSmithRunId",
+    "langSmithTraceStatus",
+    "langSmithProjectName",
+    "langSmithTrace",
+    "clientRunId",
+    "clientRunIdMissing",
+    "dataProvider",
+    "modelTrace",
+    "agentConclusion"
+  ],
+  "properties": {
+    "source": {
+      "type": "string",
+      "const": "cloudbase-agent-run-real",
+      "description": "agent_runs.metadata 的服务端写入来源。"
+    },
+    "runtime": {
+      "type": "string",
+      "description": "Agent Run runtime 版本，例如 langgraph-agent-run-v1。"
+    },
+    "langGraphThreadId": {
+      "type": ["string", "null"],
+      "description": "LangGraph thread id。"
+    },
+    "langGraphCheckpointId": {
+      "type": ["string", "null"],
+      "description": "LangGraph checkpoint id。"
+    },
+    "langSmithTraceId": {
+      "type": ["string", "null"],
+      "description": "LangSmith trace id。"
+    },
+    "langSmithRunId": {
+      "type": ["string", "null"],
+      "description": "LangSmith run id。"
+    },
+    "langSmithTraceStatus": {
+      "type": "string",
+      "description": "LangSmith trace 状态。"
+    },
+    "langSmithProjectName": {
+      "type": "string",
+      "description": "LangSmith project 名称。"
+    },
+    "langSmithTrace": {
+      "$ref": "#/$defs/LangSmithTrace"
+    },
+    "clientRunId": {
+      "type": ["string", "null"],
+      "description": "请求幂等 ID。"
+    },
+    "clientRunIdMissing": {
+      "type": "boolean",
+      "description": "请求是否缺少 clientRunId。"
+    },
+    "dataProvider": {
+      "type": "string",
+      "const": "cloudbase_mysql",
+      "description": "Agent Run runtime 当前使用的数据 provider。"
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "当前 Run 的 canonical model trace；不得在 metadata 顶层展开模型字段。"
+    },
+    "agentConclusion": {
+      "anyOf": [
+        { "$ref": "agent-conclusion.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "当前 Run 的 canonical agent conclusion。"
+    },
+    "assistantMessageId": {
+      "type": ["string", "null"],
+      "description": "Run 完成后写入的 assistant message id。"
+    },
+    "errorCode": {
+      "type": ["string", "null"],
+      "description": "Run 启动前失败时写入的错误码。"
+    },
+    "errorMessage": {
+      "type": ["string", "null"],
+      "description": "Run 失败时写入的安全错误信息。"
+    }
+  },
+  "$defs": {
+    "LangSmithTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "status",
+        "reason",
+        "projectName",
+        "traceId",
+        "runId",
+        "runName",
+        "startedAt",
+        "completedAt",
+        "errorType",
+        "errorMessage",
+        "timeoutMs",
+        "externalReference"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "const": "langsmith"
+        },
+        "status": {
+          "type": "string"
+        },
+        "reason": {
+          "type": ["string", "null"]
+        },
+        "projectName": {
+          "type": "string"
+        },
+        "traceId": {
+          "type": ["string", "null"]
+        },
+        "runId": {
+          "type": ["string", "null"]
+        },
+        "runName": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": ["string", "null"]
+        },
+        "completedAt": {
+          "type": ["string", "null"]
+        },
+        "errorType": {
+          "type": ["string", "null"]
+        },
+        "errorMessage": {
+          "type": ["string", "null"]
+        },
+        "timeoutMs": {
+          "type": ["integer", "null"]
+        },
+        "externalReference": {
+          "$ref": "#/$defs/LangSmithExternalReference"
+        }
+      }
+    },
+    "LangSmithExternalReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "workbenchRunId": {
+          "type": ["string", "null"]
+        },
+        "conversationId": {
+          "type": ["string", "null"]
+        },
+        "clientRunId": {
+          "type": ["string", "null"]
+        },
+        "selectedModelId": {
+          "type": ["string", "null"]
+        },
+        "langGraphThreadId": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

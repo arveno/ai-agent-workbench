@@ -1,52 +1,74 @@
 # CloudBase MySQL Migration 执行说明
 
-本目录保存腾讯云单轨实现的 CloudBase MySQL migration。当前 schema 文件为：
+本目录保存当前 CloudBase MySQL canonical baseline。W3 Governance 采用 baseline rewrite + dev reset：当前 migrations 从零执行后必须得到最新契约 schema，不再为旧 POC 数据保留 runtime 兼容字段或 cleanup migration。
+
+当前 active migration 文件为：
 
 ```txt
 001_cloudbase_mysql_schema.sql
 002_cloudbase_teaching_metrics.sql
-003_agent_run_idempotency.sql（历史幂等 migration）
 004_cloudbase_knowledge_base.sql
 005_cloudbase_evaluations.sql
 006_cloudbase_source_lineage.sql
-007_agent_runs_client_run_id.sql
 ```
 
-当前阶段只说明执行方式，不实现自动化脚本，不引入腾讯云 SDK，不在仓库中写入任何腾讯云密钥。
+已移除历史迁移：
+
+- `003_agent_run_idempotency.sql`：旧 `runtime_run_id` 幂等链路。
+- `007_agent_runs_client_run_id.sql`：旧 baseline 迁移到 `client_run_id` 的过渡脚本。
+
+当前 baseline 已直接包含 `agent_runs.client_run_id`、`uk_agent_runs_user_client_run`、canonical Report / Evaluation run 外键，以及 Source Lineage 表。旧 `runtime_run_id` 和独立 `conclusion_source` DB 字段不属于当前 schema。
+
+如本地或云端已有旧 POC 数据库，请重建 / 重置开发库后按当前 active migrations 重新执行；不要在 runtime 中增加旧字段 fallback，也不要用 cleanup migration 伪造旧数据。
 
 ## 执行原则
 
 - 不通过可视化界面手动建表。
 - 不在控制台逐个点字段、逐个配置索引或外键。
-- 优先使用 SQL migration，保证 schema 可审查、可复用、可回滚设计。
+- 优先使用 SQL migration，保证 schema 可审查、可复用。
 - CloudBase RunSql / API Explorer 可用于 POC 和小规模验证。
 - 正式迁移后续应提供脚本化执行方式，避免依赖控制台手动复制 SQL。
 
 ## RunSql 分段执行建议
 
-CloudBase RunSql 更适合单条或分段 SQL 执行，不建议一次性粘贴完整长 SQL。执行 `001_cloudbase_mysql_schema.sql` 时，建议每个 `CREATE TABLE ... ENGINE=InnoDB ...;` 语句单独执行。`002_cloudbase_teaching_metrics.sql` 独立创建公开演示数据源表，可在 `001` 全部完成后执行。`003_agent_run_idempotency.sql` 是历史幂等 migration，不作为当前 Agent Run 单轨部署前置条件；当前 Run ID 单轨以 `007_agent_runs_client_run_id.sql` 的 `(user_id, client_run_id)` 唯一约束为准。
+CloudBase RunSql 更适合单条或分段 SQL 执行，不建议一次性粘贴完整长 SQL。执行 `001_cloudbase_mysql_schema.sql` 时，建议每个 `CREATE TABLE ... ENGINE=InnoDB ...;` 语句单独执行。
 
 执行顺序必须遵守外键依赖：
 
-1. `app_profiles`
-2. `agent_run_quota`
-3. `agent_run_usage`
-4. `conversations`
-5. `agent_runs`
-6. `messages`
-7. `run_events`
-8. `tool_invocations`
-9. `report_artifacts`
-10. `demo_task_templates`
-11. `demo_conversation_templates`
-12. `teaching_metrics`（来自 `002_cloudbase_teaching_metrics.sql`，无外键依赖）
-13. `knowledge_documents` / `knowledge_chunks`（来自 `004_cloudbase_knowledge_base.sql`）
-14. `source_lineage` 相关表（来自 `006_cloudbase_source_lineage.sql`）
-15. `agent_runs` 当前幂等唯一约束（来自 `007_agent_runs_client_run_id.sql`）
+1. `001_cloudbase_mysql_schema.sql`
+   - `app_profiles`
+   - `agent_run_quota`
+   - `agent_run_usage`
+   - `conversations`
+   - `agent_runs`
+   - `messages`
+   - `run_events`
+   - `tool_invocations`
+   - `report_artifacts`
+   - `demo_task_templates`
+   - `demo_conversation_templates`
+2. `002_cloudbase_teaching_metrics.sql`
+3. `004_cloudbase_knowledge_base.sql`
+4. `005_cloudbase_evaluations.sql`
+   - `eval_cases`
+   - `eval_results`
+5. `006_cloudbase_source_lineage.sql`
+   - `retrieval_logs`
+   - `run_sources`
 
 执行时每次只复制一段完整 `CREATE TABLE` 语句，确认成功后再执行下一段。不要在控制台拆开单个建表语句，也不要跳过依赖表。
 
-执行 `007_agent_runs_client_run_id.sql` 前先运行文件内的 preflight 查询；如果返回重复的 `user_id + client_run_id`，需要先人工确认并清理重复 run，再添加唯一约束。该 migration 会先把空字符串 `client_run_id` 规整为 `NULL`，避免没有 `clientRunId` 的历史记录被唯一约束误伤。
+## Canonical 字段边界
+
+- `agent_runs.id` 是 canonical `runId`。
+- `agent_runs.client_run_id` 只用于 pending / 幂等，不是业务主关系。
+- `agent_runs.metadata.modelTrace` 是模型状态事实源。
+- `agent_runs` 不保留 `runtime_run_id`。
+- `agent_runs` 不保留独立 `conclusion_source`；结论来源只在 `metadata.modelTrace.conclusionSource`。
+- `report_artifacts.run_id` 必须指向 `agent_runs.id`，外键使用 `ON DELETE CASCADE`。
+- `eval_results.run_id` 必须指向 `agent_runs.id`，外键使用 `ON DELETE CASCADE`。
+- `eval_results.model_trace` 保存 canonical modelTrace 快照。
+- Report / Evaluation metadata 不展开顶层模型字段。
 
 ## Seed 执行说明
 
@@ -57,6 +79,7 @@ tencent/seeds/001_demo_task_templates_seed.sql
 tencent/seeds/002_demo_conversation_templates_seed.sql
 tencent/seeds/003_teaching_metrics_seed.sql
 tencent/seeds/004_knowledge_base_seed.sql
+tencent/seeds/005_evaluation_cases_seed.sql
 ```
 
 每个 seed 文件只包含一个 `INSERT ... ON DUPLICATE KEY UPDATE` 语句，可整段复制到 CloudBase RunSql。
@@ -76,10 +99,6 @@ DESCRIBE app_profiles;
 ```
 
 ```sql
-SELECT COUNT(*) FROM app_profiles;
-```
-
-```sql
 SELECT TABLE_NAME
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = DATABASE()
@@ -89,24 +108,19 @@ ORDER BY TABLE_NAME;
 可选地检查关键索引：
 
 ```sql
-SHOW INDEX FROM run_events;
-```
-
-```sql
 SHOW INDEX FROM agent_runs;
 ```
 
 ```sql
-SHOW INDEX FROM conversations;
+SHOW INDEX FROM report_artifacts;
 ```
 
 ```sql
-DESCRIBE teaching_metrics;
+SHOW INDEX FROM eval_results;
 ```
 
 ```sql
-SELECT COUNT(*) AS teaching_metrics_count
-FROM teaching_metrics;
+SHOW INDEX FROM run_sources;
 ```
 
 ## JSON 字段注意事项
@@ -159,7 +173,7 @@ TENCENT_REGION
 
 脚本设计建议：
 
-- 从 `tencent/migrations/` 按文件名排序读取 migration。
+- 从 `tencent/migrations/` 按文件名排序读取 active migration。
 - 从 `tencent/seeds/` 按文件名排序读取 seed，并在 schema 验证通过后执行。
 - 将 SQL 按完整语句分段执行，至少以 `CREATE TABLE ...;` 为基本执行单元。
 - 每段执行前输出 migration 文件名和语句序号，不输出密钥、连接串或 token。
