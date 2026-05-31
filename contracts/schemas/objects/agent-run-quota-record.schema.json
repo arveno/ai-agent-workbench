@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/agent-run-quota-record.schema.json",
+  "title": "AgentRunQuotaRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "user_id",
+    "quota_type",
+    "quota_limit",
+    "quota_used",
+    "period_start",
+    "period_end",
+    "metadata",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "agent_run_quota.id，Agent Run quota persistence 主键。"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Workbench 业务用户边界。"
+    },
+    "quota_type": {
+      "type": "string",
+      "const": "agent_run",
+      "description": "当前 quota 只覆盖 Agent Run。"
+    },
+    "quota_limit": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "本周期 Agent Run quota 上限。"
+    },
+    "quota_used": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "本周期已使用 Agent Run quota 次数。"
+    },
+    "period_start": {
+      "type": "string",
+      "description": "quota 周期开始时间。"
+    },
+    "period_end": {
+      "type": ["string", "null"],
+      "description": "quota 周期结束时间。"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "cloudbase-agent-run-real",
+          "description": "agent_run_quota.metadata 的服务端写入来源。"
+        }
+      },
+      "description": "quota persistence metadata；不承载 Run / Tool / Source / Report / Evaluation 正式状态。"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "agent_run_quota.created_at。"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "agent_run_quota.updated_at。"
+    }
+  }
+}

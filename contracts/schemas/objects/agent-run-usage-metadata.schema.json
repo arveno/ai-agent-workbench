@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-agent-workbench.local/contracts/objects/agent-run-usage-metadata.schema.json",
+  "title": "AgentRunUsageMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+    "source": {
+      "type": "string",
+      "const": "cloudbase-agent-run-real",
+      "description": "agent_run_usage.metadata 的服务端写入来源。"
+    },
+    "runId": {
+      "type": "string",
+      "description": "绑定 DB agent_runs.id 的 canonical runId。"
+    },
+    "clientRunId": {
+      "type": ["string", "null"],
+      "description": "请求幂等 ID；不替代 agent_run_usage.run_id。"
+    },
+    "assistantMessageId": {
+      "type": ["string", "null"],
+      "description": "Run 完成后写入的 assistant message id。"
+    },
+    "langSmithTrace": {
+      "anyOf": [
+        { "$ref": "agent-run-metadata.schema.json#/$defs/LangSmithTrace" },
+        { "type": "null" }
+      ],
+      "description": "LangSmith 观测快照；不替代 canonical runId。"
+    },
+    "modelTrace": {
+      "anyOf": [
+        { "$ref": "model-trace.schema.json" },
+        { "type": "null" }
+      ],
+      "description": "模型调用观测快照；不得在 usage metadata 顶层展开 provider / model / usage / costEstimate 等字段。"
+    }
+  },
+  "dependentRequired": {
+    "source": ["runId"],
+    "runId": ["source"],
+    "clientRunId": ["source", "runId"],
+    "assistantMessageId": ["source", "runId"],
+    "langSmithTrace": ["source", "runId"],
+    "modelTrace": ["source", "runId"]
+  }
+}
